@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Version>0.1.0</Version>
+    <Authors>guitarrapc</Authors>
+    <Company />
+    <Title>QrCode for .NET Standard</Title>
+    <Summary>QrCode for .NET Standard with Skia.Sharp.</Summary>
+    <Description>QrCode for .NET Standard with Skia.Sharp. No GDI, no System.Drawing.</Description>
+    <Copyright>guitarrapc</Copyright>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageProjectUrl>https://github.com/guitarrapc/Skia.QrCode</PackageProjectUrl>
+    <PackageLicenseUrl>https://github.com/guitarrapc/Skia.QrCode/blob/master/LICENSE.md</PackageLicenseUrl>
+    <RepositoryUrl>https://github.com/guitarrapc/Skia.QrCode</RepositoryUrl>
+    <PackageTags>skia, skiasharp, qrcode</PackageTags>
+    <NeutralLanguage>en</NeutralLanguage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" Version="1.68.0" />
+  </ItemGroup>
+</Project>
