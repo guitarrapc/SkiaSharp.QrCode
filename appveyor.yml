@@ -1,0 +1,26 @@
+image: Ubuntu1804
+version: '1.0.{build}'
+shallow_clone: false
+skip_branch_with_pr: true
+services:
+- docker
+
+environment:
+  nuget_api_key:
+    secure: uLbsU9zHQNqoFLVXzPqk5QyoKVXu/vj6LIZEkCjqm5h+MPXR/2bQG0p8bjnnE0Oz
+branches:
+  only:
+    - master
+
+install:
+
+build: off
+
+build_script:
+  - docker build -t skiasharp.qrcode -f Dockerfile .
+  - docker run -i --rm -v ${APPVEYOR_BUILD_FOLDER}/pack:/app/pack skiasharp.qrcode
+
+test_script:
+
+deploy_script:
+  - if [ ${APPVEYOR_REPO_TAG} = "true" ]; then dotnet nuget push ${APPVEYOR_BUILD_FOLDER}/pack/*.nupkg -k ${nuget_api_key} -s https://api.nuget.org/v3/index.json -ss https://nuget.smbsrc.net ; fi
