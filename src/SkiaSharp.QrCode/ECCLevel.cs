@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace SkiaQrCode
+namespace SkiaSharp.QrCode
 {
     public enum ECCLevel
     {

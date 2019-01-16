@@ -1,6 +1,6 @@
 ﻿using SkiaSharp;
 
-namespace SkiaQrCode
+namespace SkiaSharp.QrCode
 {
     public static class QrCodeExtensions
     {

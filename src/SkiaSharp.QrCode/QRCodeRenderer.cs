@@ -2,7 +2,7 @@
 using System;
 using System.Linq;
 
-namespace SkiaQrCode
+namespace SkiaSharp.QrCode
 {
     public class QRCodeRenderer : IDisposable
     {
