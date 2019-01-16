@@ -2,6 +2,20 @@
 
 Qr Code generator with [Skia.Sharp](https://github.com/mono/SkiaSharp).
 
+## Install
+
+.NET CLI
+
+```
+$ dotnet add package SkiaQrCode
+```
+
+Package Manager
+
+```
+PM> Install-Pacakge Skia.QrCode
+```
+
 ## Motivation
 
 There are many ZXing.Net + System.Drawing samples to generate Qr.
