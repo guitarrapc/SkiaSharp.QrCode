@@ -7,8 +7,8 @@ RUN dotnet restore
 
 # build
 COPY src/SkiaSharp.QrCode/. /app
-RUN dotnet build -c Release -o out
-RUN dotnet publish -c Release -o out
+RUN dotnet build -c Release
+RUN dotnet publish -c Release
 
 # pack
 WORKDIR /app
