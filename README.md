@@ -69,6 +69,12 @@ namespace SkiaQrCodeSampleConsole
 
 ```
 
+## Build
+
+```
+docker build -t skiasharp.qrcode .
+```
+
 ## License
 
 MIT

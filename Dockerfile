@@ -1,4 +1,4 @@
-FROM microsoft/dotnet:2.2-sdk-bionic AS build
+FROM microsoft/dotnet:2.2-sdk AS build
 WORKDIR /app
 
 # restore

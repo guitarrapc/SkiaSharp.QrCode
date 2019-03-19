@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -11,12 +11,12 @@
     <Copyright>guitarrapc</Copyright>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageProjectUrl>https://github.com/guitarrapc/Skia.QrCode</PackageProjectUrl>
-    <PackageLicenseUrl>https://github.com/guitarrapc/Skia.QrCode/blob/master/LICENSE.md</PackageLicenseUrl>
+    <PackageLicenseUrl>https://github.com/guitarrapc/SkiaSharp.QrCode/blob/master/LICENSE.md</PackageLicenseUrl>
     <RepositoryUrl>https://github.com/guitarrapc/Skia.QrCode</RepositoryUrl>
     <PackageTags>skia, skiasharp, qrcode</PackageTags>
     <NeutralLanguage>en</NeutralLanguage>
-    <AssemblyVersion>0.2.0.0</AssemblyVersion>
-    <FileVersion>0.2.0.0</FileVersion>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
