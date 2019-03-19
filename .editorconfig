@@ -1,0 +1,10 @@
+root = true
+
+[*]
+trim_trailing_whitespace = true
+charset = utf-8
+
+[*.{cs,vb,csproj,sln,sh}]
+end_of_line = lf
+indent_size = 4
+insert_final_newline = true

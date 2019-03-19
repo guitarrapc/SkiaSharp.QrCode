@@ -22,5 +22,5 @@ build_script:
 
 test_script:
 
-deploy_script:
-  - if [ ${APPVEYOR_REPO_TAG} = "true" ]; then dotnet nuget push ${APPVEYOR_BUILD_FOLDER}/pack/*.nupkg -k ${nuget_api_key} -s https://api.nuget.org/v3/index.json -ss https://nuget.smbsrc.net ; fi
+# deploy_script:
+#   - if [ ${APPVEYOR_REPO_TAG} = "true" ]; then dotnet nuget push ${APPVEYOR_BUILD_FOLDER}/pack/*.nupkg -k ${nuget_api_key} -s https://api.nuget.org/v3/index.json -ss https://nuget.smbsrc.net ; fi
