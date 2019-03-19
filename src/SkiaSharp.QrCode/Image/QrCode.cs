@@ -20,8 +20,11 @@ namespace SkiaSharp.QrCode.Image
         /// Generate QR Code and output to stream
         /// </summary>
         /// <param name="outputImage"></param>
-        public void GenerateImage(Stream outputImage)
+        public void GenerateImage(Stream outputImage, bool resetStreamPosition = true)
         {
+            if (outputImage.CanSeek && resetStreamPosition)
+                outputImage.Seek(0, SeekOrigin.Begin);
+
             using (var generator = new QRCodeGenerator())
             {
                 var qr = generator.CreateQrCode(content, ECCLevel.L);
@@ -46,8 +49,13 @@ namespace SkiaSharp.QrCode.Image
         /// <param name="baseImage"></param>
         /// <param name="baseQrSize"></param>
         /// <param name="qrPosition"></param>
-        public void GenerateImage(Stream outputImage, Stream baseImage, Vector2Slim baseQrSize, Vector2Slim qrPosition)
+        public void GenerateImage(Stream outputImage, Stream baseImage, Vector2Slim baseQrSize, Vector2Slim qrPosition, bool resetStreamPosition = true)
         {
+            if (outputImage.CanSeek && resetStreamPosition)
+                outputImage.Seek(0, SeekOrigin.Begin);
+            if (baseImage.CanSeek && resetStreamPosition)
+                baseImage.Seek(0, SeekOrigin.Begin);
+
             using (var generator = new QRCodeGenerator())
             {
                 var qr = generator.CreateQrCode(content, ECCLevel.L);
@@ -71,8 +79,11 @@ namespace SkiaSharp.QrCode.Image
         /// <param name="baseImage"></param>
         /// <param name="baseQrSize"></param>
         /// <param name="qrPosition"></param>
-        public void GenerateImage(Stream outputImage, byte[] baseImage, Vector2Slim baseQrSize, Vector2Slim qrPosition)
+        public void GenerateImage(Stream outputImage, byte[] baseImage, Vector2Slim baseQrSize, Vector2Slim qrPosition, bool resetStreamPosition = true)
         {
+            if (outputImage.CanSeek && resetStreamPosition)
+                outputImage.Seek(0, SeekOrigin.Begin);
+
             using (var generator = new QRCodeGenerator())
             {
                 var qr = generator.CreateQrCode(content, ECCLevel.L);
@@ -90,12 +101,11 @@ namespace SkiaSharp.QrCode.Image
             }
         }
 
-
-        private void Save(SKImage qrImage, Stream output)
+        private void Save(SKImage qrImage, Stream outputImage)
         {
             using (var data = qrImage.Encode(outputFormat, quality))
             {
-                data.SaveTo(output);
+                data.SaveTo(outputImage);
             }
         }
 
