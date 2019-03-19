@@ -1,39 +1,20 @@
-﻿using System.IO;
+using System.IO;
 
 namespace SkiaSharp.QrCode.Image
 {
     public class QrCode
     {
-        /// <summary>
-        /// The various formats used by a SkiaSharp.SKCodec.
-        /// </summary>
-        public enum ImageFormat { Bmp = 0, Jpeg, Png }
-
         private readonly string content;
         private readonly SKImageInfo qrInfo;
-        private readonly SKEncodedImageFormat imageFormat = SKEncodedImageFormat.Png;
+        private readonly SKEncodedImageFormat outputFormat = SKEncodedImageFormat.Png;
         private readonly int quality = 100;
 
         public QrCode(string content, Vector2Slim qrSize)
             => (this.content, this.qrInfo) = (content, new SKImageInfo(qrSize.X, qrSize.Y));
-        public QrCode(string content, Vector2Slim qrSize, ImageFormat outputFormat) : this(content, qrSize)
-        {
-            switch (outputFormat)
-            {
-                case ImageFormat.Bmp:
-                    this.imageFormat = SKEncodedImageFormat.Bmp;
-                    break;
-                case ImageFormat.Jpeg:
-                    this.imageFormat = SKEncodedImageFormat.Jpeg;
-                    break;
-                case ImageFormat.Png:
-                    this.imageFormat = SKEncodedImageFormat.Png;
-                    break;
-            }
-        }
-        public QrCode(string content, Vector2Slim qrSize, ImageFormat outputFormat, int quality) : this(content, qrSize, outputFormat)
+        public QrCode(string content, Vector2Slim qrSize, SKEncodedImageFormat outputFormat) : this(content, qrSize)
+            => this.outputFormat = outputFormat;
+        public QrCode(string content, Vector2Slim qrSize, SKEncodedImageFormat outputFormat, int quality) : this(content, qrSize, outputFormat)
             => this.quality = quality;
-
 
         /// <summary>
         /// Generate QR Code and output to stream
