@@ -1,4 +1,6 @@
-[![CircleCI](https://circleci.com/gh/guitarrapc/SkiaSharp.QrCode.svg?style=svg)](https://circleci.com/gh/guitarrapc/SkiaSharp.QrCode) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![NuGet](https://img.shields.io/nuget/v/SkiaSharp.QrCode.svg)](https://www.nuget.org/packages/SkiaSharp.QrCode)
+[![CircleCI](https://circleci.com/gh/guitarrapc/SkiaSharp.QrCode.svg?style=svg)](https://circleci.com/gh/guitarrapc/SkiaSharp.QrCode) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+[![NuGet](https://img.shields.io/nuget/v/SkiaSharp.QrCode.svg?label=SkiaSharp%2EQrCode%20nuget)](https://www.nuget.org/packages/SkiaSharp.QrCode)
 
 ## Skia.QrCode
 
@@ -20,12 +22,13 @@ PM> Install-Pacakge Skia.QrCode
 
 ## Motivation
 
-There are many ZXing.Net + System.Drawing samples to generate Qr.
-If you want avoid System.Drawing, you may use [ImageSharp](https://github.com/SixLabors/ImageSharp) or [Core.Compat.System.Drawing](https://github.com/CoreCompat/System.Drawing).
+There are many System.Drawing samples to generate QRCode, and there are a lot of cases I want avoid System.Drawing for GDI+ issue. However, you may require many conding to generate QRCode using [ZXing.Net](https://github.com/micjahn/ZXing.Net) or [ImageSharp](https://github.com/SixLabors/ImageSharp) or [Core.Compat.System.Drawing](https://github.com/CoreCompat/System.Drawing).
 
-However using these code required much coding, I just want to create QR!
+I just want to create QR in much simpler way.
 
 ## Why Skia?
+
+Performance and size and .NET Core support status.
 
 > [.NET Core Image Processing](https://blogs.msdn.microsoft.com/dotnet/2017/01/19/net-core-image-processing/)
 
@@ -45,22 +48,15 @@ namespace SimpleGenerate
     {
         static void Main(string[] args)
         {
-            if (args.Length < 2)
+            var content = "testtesttest";
+            using (var output = new FileStream(@"output/hoge.png", FileMode.OpenOrCreate))
             {
-                Console.WriteLine("Usage: dotnet SimpleGenerate.dll your_message output_path");
-                return;
-            }
-            var content = args[0];
-            var path = args[1];
+                // generate QRCode
+                var qrCode = new QrCode(content, new Vector2Slim(256, 256), SKEncodedImageFormat.Png);
 
-            // generate qr code
-            var qrCode = new QrCode(content, new Vector2Slim(256, 256), SKEncodedImageFormat.Png);
-            using (var output = new FileStream(path, FileMode.OpenOrCreate))
-            {
+                // output to file
                 qrCode.GenerateImage(output);
             }
-
-            Console.WriteLine($"Successfully output QRCode in {path}");
         }
     }
 }
