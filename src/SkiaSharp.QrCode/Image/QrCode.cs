@@ -93,7 +93,7 @@ namespace SkiaSharp.QrCode.Image
 
         private void Save(SKImage qrImage, Stream output)
         {
-            using (var data = qrImage.Encode(imageFormat, quality))
+            using (var data = qrImage.Encode(outputFormat, quality))
             {
                 data.SaveTo(output);
             }
@@ -111,7 +111,7 @@ namespace SkiaSharp.QrCode.Image
                 baseCanvas.DrawImage(qrImage, qrPosition.X, qrPosition.Y);
 
                 using (var image = baseSurface.Snapshot())
-                using (var data = image.Encode(imageFormat, quality))
+                using (var data = image.Encode(outputFormat, quality))
                 {
                     data.SaveTo(output);
                 }
@@ -130,7 +130,7 @@ namespace SkiaSharp.QrCode.Image
                 baseCanvas.DrawImage(qrImage, qrPosition.X, qrPosition.Y);
 
                 using (var image = baseSurface.Snapshot())
-                using (var data = image.Encode(imageFormat, quality))
+                using (var data = image.Encode(outputFormat, quality))
                 {
                     data.SaveTo(output);
                 }
