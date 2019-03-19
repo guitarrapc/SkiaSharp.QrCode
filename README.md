@@ -1,3 +1,5 @@
+[![CircleCI](https://circleci.com/gh/guitarrapc/SkiaSharp.QrCode.svg?style=svg)](https://circleci.com/gh/guitarrapc/SkiaSharp.QrCode) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![NuGet](https://img.shields.io/nuget/v/SkiaSharp.QrCode.svg)](https://www.nuget.org/packages/SkiaSharp.QrCode)
+
 ## Skia.QrCode
 
 Qr Code generator with [Skia.Sharp](https://github.com/mono/SkiaSharp).
