@@ -20,14 +20,14 @@ namespace SkiaSharp.QrCode.Image
         /// Generate QR Code and output to stream
         /// </summary>
         /// <param name="outputImage"></param>
-        public void GenerateImage(Stream outputImage, bool resetStreamPosition = true)
+        public void GenerateImage(Stream outputImage, bool resetStreamPosition = true, ECCLevel eccLevel = ECCLevel.L)
         {
             if (outputImage.CanSeek && resetStreamPosition)
                 outputImage.Seek(0, SeekOrigin.Begin);
 
             using (var generator = new QRCodeGenerator())
             {
-                var qr = generator.CreateQrCode(content, ECCLevel.L);
+                var qr = generator.CreateQrCode(content, eccLevel);
 
                 using (var qrSurface = SKSurface.Create(qrInfo))
                 {
@@ -49,7 +49,7 @@ namespace SkiaSharp.QrCode.Image
         /// <param name="baseImage"></param>
         /// <param name="baseQrSize"></param>
         /// <param name="qrPosition"></param>
-        public void GenerateImage(Stream outputImage, Stream baseImage, Vector2Slim baseQrSize, Vector2Slim qrPosition, bool resetStreamPosition = true)
+        public void GenerateImage(Stream outputImage, Stream baseImage, Vector2Slim baseQrSize, Vector2Slim qrPosition, bool resetStreamPosition = true, ECCLevel eccLevel = ECCLevel.L)
         {
             if (outputImage.CanSeek && resetStreamPosition)
                 outputImage.Seek(0, SeekOrigin.Begin);
@@ -58,7 +58,7 @@ namespace SkiaSharp.QrCode.Image
 
             using (var generator = new QRCodeGenerator())
             {
-                var qr = generator.CreateQrCode(content, ECCLevel.L);
+                var qr = generator.CreateQrCode(content, eccLevel);
 
                 using (var qrSurface = SKSurface.Create(qrInfo))
                 {
@@ -79,14 +79,14 @@ namespace SkiaSharp.QrCode.Image
         /// <param name="baseImage"></param>
         /// <param name="baseQrSize"></param>
         /// <param name="qrPosition"></param>
-        public void GenerateImage(Stream outputImage, byte[] baseImage, Vector2Slim baseQrSize, Vector2Slim qrPosition, bool resetStreamPosition = true)
+        public void GenerateImage(Stream outputImage, byte[] baseImage, Vector2Slim baseQrSize, Vector2Slim qrPosition, bool resetStreamPosition = true, ECCLevel eccLevel = ECCLevel.L)
         {
             if (outputImage.CanSeek && resetStreamPosition)
                 outputImage.Seek(0, SeekOrigin.Begin);
 
             using (var generator = new QRCodeGenerator())
             {
-                var qr = generator.CreateQrCode(content, ECCLevel.L);
+                var qr = generator.CreateQrCode(content, eccLevel);
 
                 using (var qrSurface = SKSurface.Create(qrInfo))
                 {
