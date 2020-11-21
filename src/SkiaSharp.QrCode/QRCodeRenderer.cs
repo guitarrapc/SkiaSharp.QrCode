@@ -18,10 +18,13 @@ namespace SkiaSharp.QrCode
         /// <param name="canvas">The canvas.</param>
         /// <param name="area">The area.</param>
         /// <param name="data">The data.</param>
-        public void Render(SKCanvas canvas, SKRect area, QRCodeData data)
+        /// <param name="qrColor">The color.</param>
+
+        public void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? qrColor)
         {
             if (data != null)
             {
+                if (qrColor != null) Paint.Color = (SKColor) qrColor;
 
                 var rows = data.ModuleMatrix.Count;
                 var columns = data.ModuleMatrix.Select(x => x.Length).Max();
