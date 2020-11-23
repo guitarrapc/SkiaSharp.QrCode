@@ -45,7 +45,7 @@ namespace SkiaSharp.QrCode
                     }
                 }
 
-                if (iconData.Icon != null)
+                if (iconData?.Icon != null)
                 {
                     var iconWidth = (area.Width / 100) * iconData.IconSizePercent;
                     var iconHeight = (area.Height / 100) * iconData.IconSizePercent;
