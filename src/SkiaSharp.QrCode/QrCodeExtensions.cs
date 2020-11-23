@@ -1,4 +1,5 @@
 using SkiaSharp;
+using SkiaSharp.QrCode.Models;
 
 namespace SkiaSharp.QrCode
 {
@@ -26,6 +27,17 @@ namespace SkiaSharp.QrCode
             }
         }
 
+        public static void Render(this SKCanvas canvas, QRCodeData data, int width, int hight, SKColor clearColor, SKColor codeColor, IconData iconData)
+        {
+            canvas.Clear(clearColor);
+
+            using (var renderer = new QRCodeRenderer())
+            {
+                var area = SKRect.Create(0, 0, width, hight);
+                renderer.Render(canvas, area, data, codeColor, iconData);
+            }
+        }
+
         public static void Render(this SKCanvas canvas, QRCodeData data, SKRect area, SKColor clearColor, SKColor codeColor)
         {
             canvas.Clear(clearColor);
@@ -33,6 +45,16 @@ namespace SkiaSharp.QrCode
             using (var renderer = new QRCodeRenderer())
             {
                 renderer.Render(canvas, area, data, codeColor);
+            }
+        }
+
+        public static void Render(this SKCanvas canvas, QRCodeData data, SKRect area, SKColor clearColor, SKColor codeColor, IconData iconData)
+        {
+            canvas.Clear(clearColor);
+
+            using (var renderer = new QRCodeRenderer())
+            {
+                renderer.Render(canvas, area, data, codeColor, iconData);
             }
         }
     }
