@@ -1,8 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <Version>0.2.0</Version>
+    <Version>0.4.0</Version>
     <Authors>guitarrapc</Authors>
     <Company />
     <Title>QrCode for .NET Standard</Title>
@@ -20,6 +20,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SkiaSharp" Version="1.68.0" />
+    <PackageReference Include="SkiaSharp" Version="2.80.2" />
   </ItemGroup>
 </Project>
