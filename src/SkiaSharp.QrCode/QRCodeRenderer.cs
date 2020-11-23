@@ -1,4 +1,5 @@
 using SkiaSharp;
+using SkiaSharp.QrCode.Models;
 using System;
 using System.Linq;
 
@@ -19,9 +20,8 @@ namespace SkiaSharp.QrCode
         /// <param name="area">The area.</param>
         /// <param name="data">The data.</param>
         /// <param name="qrColor">The color.</param>
-        /// <param name="icon">The icon.</param>
-        /// <param name="iconSizePercent">The icon size.</param>
-        public void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? qrColor, SKBitmap icon = null, int iconSizePercent = 15)
+        /// <param name="iconData">The icon settings</param>
+        public void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? qrColor, IconData iconData = null)
         {
             if (data != null)
             {
@@ -45,15 +45,15 @@ namespace SkiaSharp.QrCode
                     }
                 }
 
-                if (icon != null)
+                if (iconData.Icon != null)
                 {
-                    var iconWidth = (area.Width / 100) * iconSizePercent;
-                    var iconHeight = (area.Height / 100) * iconSizePercent;
+                    var iconWidth = (area.Width / 100) * iconData.IconSizePercent;
+                    var iconHeight = (area.Height / 100) * iconData.IconSizePercent;
 
                     var x = (area.Width / 2) - (iconWidth / 2);
                     var y = (area.Height / 2) - (iconHeight / 2);
 
-                    canvas.DrawBitmap(icon, SKRect.Create(x, y, iconWidth, iconHeight));
+                    canvas.DrawBitmap(iconData.Icon, SKRect.Create(x, y, iconWidth, iconHeight));
                 }
             }
         }
