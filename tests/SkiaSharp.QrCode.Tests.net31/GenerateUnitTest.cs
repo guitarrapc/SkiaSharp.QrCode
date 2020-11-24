@@ -6,17 +6,22 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace SkiaSharp.QrCodeUnitTest
+namespace SkiaSharp.QrCode.Tests.Shared
 {
     public class GenerateUnitTest
     {
         private readonly string content = "testtesttest";
+#if NET5_0
+        private readonly string netcore = "net5.0";
+#else
+        private readonly string netcore = "net3.1";
+#endif
 
         [Fact]
         public void SimpleGenerateUnitTest()
         {
             var actual = GenerateQrCode(content, null);
-            var expect = File.ReadAllBytes("samples/net3.1/testtesttest_white.png");
+            var expect = File.ReadAllBytes($"samples/{netcore}/testtesttest_white.png");
             Assert.True(actual.SequenceEqual(expect));
         }
 
@@ -30,7 +35,7 @@ namespace SkiaSharp.QrCodeUnitTest
                 })
             {
                 var actual = GenerateQrCode(content, item.color);
-                var expect = File.ReadAllBytes($"samples/net3.1/testtesttest_{item.name}.png");
+                var expect = File.ReadAllBytes($"samples/{netcore}/testtesttest_{item.name}.png");
                 Assert.True(actual.SequenceEqual(expect));
             }
         }
@@ -46,7 +51,7 @@ namespace SkiaSharp.QrCodeUnitTest
                 IconSizePercent = 10,
             };
             var actual = GenerateQrCode(content, SKColor.Parse("000000"), icon);
-            var expect = File.ReadAllBytes($"samples/net3.1/testtesttest_icon.png");
+            var expect = File.ReadAllBytes($"samples/{netcore}/testtesttest_icon.png");
             Assert.True(actual.SequenceEqual(expect));
         }
 
