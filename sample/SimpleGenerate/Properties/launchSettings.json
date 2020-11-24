@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "SimpleGenerate": {
-      "commandName": "Project",
-      "commandLineArgs": "hogemoge %UserProfile%\\Downloads\\TestQR.png"
-    }
-  }
-}
