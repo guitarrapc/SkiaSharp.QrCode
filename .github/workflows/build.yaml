@@ -1,0 +1,42 @@
+name: dotnet-build
+
+on:
+  push:
+    branches:
+      - "master"
+  pull_request:
+    branches:
+      - "master"
+
+jobs:
+  build-dotnet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+      NUGET_XMLDOC_MODE: skip
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: 5.0.x
+      - uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: 3.1.x
+      - uses: actions/setup-dotnet@v1
+        with:
+          dotnet-version: 2.2.x
+      - run: dotnet build ./src/SkiaSharp.QrCode/ -c Debug
+      - run: dotnet build ./samples/ManualGenerate/ -c Debug
+      - run: dotnet build ./samples/NanoServerGenerate.2.2/ -c Debug
+      - run: dotnet build ./samples/NanoServerGenerate.3.1/ -c Debug
+      - run: dotnet build ./samples/SimpleGenerate/ -c Debug
+      - run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net31/ -c Debug
+      - run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net50/ -c Debug -p:CollectCoverage=true -p:CoverletOutputFormat=opencover
+      - uses: codecov/codecov-action@v1
+        with:
+          file: ./src/SkiaSharp.QrCode.Tests/coverage.opencover.xml
+          flags: unittests
+          fail_ci_if_error: true
+          verbose: true
