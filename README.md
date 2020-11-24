@@ -1,4 +1,4 @@
-[![CircleCI](https://circleci.com/gh/guitarrapc/SkiaSharp.QrCode.svg?style=svg)](https://circleci.com/gh/guitarrapc/SkiaSharp.QrCode) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+ ![dotnet-build](https://github.com/guitarrapc/SkiaSharp.QrCode/workflows/dotnet-build/badge.svg) ![release](https://github.com/guitarrapc/SkiaSharp.QrCode/workflows/release/badge.svg) [![codecov](https://codecov.io/gh/guitarrapc/SkiaSharp.QrCode/branch/master/graph/badge.svg?token=L5LHltghbd)](https://codecov.io/gh/guitarrapc/SkiaSharp.QrCode) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [![NuGet](https://img.shields.io/nuget/v/SkiaSharp.QrCode.svg?label=SkiaSharp%2EQrCode%20nuget)](https://www.nuget.org/packages/SkiaSharp.QrCode)
 
