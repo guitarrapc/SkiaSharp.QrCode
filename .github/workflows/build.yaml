@@ -34,7 +34,7 @@ jobs:
       - run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net50/ -c Debug -p:CollectCoverage=true -p:CoverletOutputFormat=opencover
       - uses: codecov/codecov-action@v1
         with:
-          file: ./src/SkiaSharp.QrCode.Tests/coverage.opencover.xml
+          file: ./tests/SkiaSharp.QrCode.Tests.net50/coverage.opencover.xml
           flags: unittests
           fail_ci_if_error: true
           verbose: true
