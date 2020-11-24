@@ -9,13 +9,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{8C639322-95F
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ManualGenerate", "sample\ManualGenerate\ManualGenerate.csproj", "{72A72621-F8FA-4A0F-845C-06F2BA2DB114}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ManualGenerate", "samples\ManualGenerate\ManualGenerate.csproj", "{72A72621-F8FA-4A0F-845C-06F2BA2DB114}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleGenerate", "sample\SimpleGenerate\SimpleGenerate.csproj", "{096520D5-85EC-4AC5-BDE4-7F11B5874EDA}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleGenerate", "samples\SimpleGenerate\SimpleGenerate.csproj", "{096520D5-85EC-4AC5-BDE4-7F11B5874EDA}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NanoServerGenerate.2.2", "sample\NanoServerGenerate.2.2\NanoServerGenerate.2.2.csproj", "{BB6B4CE2-A9AA-4CBA-A0EA-CA9EEC6024D9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NanoServerGenerate.2.2", "samples\NanoServerGenerate.2.2\NanoServerGenerate.2.2.csproj", "{BB6B4CE2-A9AA-4CBA-A0EA-CA9EEC6024D9}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NanoServerGenerate.3.1", "sample\NanoServerGenerate.3.1\NanoServerGenerate.3.1.csproj", "{2FCFFF3C-FBA0-42A2-942C-8CB6E5835CE3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NanoServerGenerate.3.1", "samples\NanoServerGenerate.3.1\NanoServerGenerate.3.1.csproj", "{2FCFFF3C-FBA0-42A2-942C-8CB6E5835CE3}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{D411A8A1-96FC-495F-9583-4C154DF25240}"
 EndProject

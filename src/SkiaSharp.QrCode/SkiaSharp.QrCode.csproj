@@ -2,24 +2,35 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Version>0.4.0</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
     <Authors>guitarrapc</Authors>
     <Company />
     <Title>QrCode for .NET Standard</Title>
     <Summary>QrCode for .NET Standard with Skia.Sharp.</Summary>
     <Description>QrCode for .NET Standard with Skia.Sharp. No GDI, no System.Drawing.</Description>
     <Copyright>guitarrapc</Copyright>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageProjectUrl>https://github.com/guitarrapc/Skia.QrCode</PackageProjectUrl>
-    <PackageLicenseUrl>https://github.com/guitarrapc/SkiaSharp.QrCode/blob/master/LICENSE.md</PackageLicenseUrl>
-    <RepositoryUrl>https://github.com/guitarrapc/Skia.QrCode</RepositoryUrl>
+    <RepositoryUrl>$(PackageProjectUrl)</RepositoryUrl>
     <PackageTags>skia, skiasharp, qrcode</PackageTags>
     <NeutralLanguage>en</NeutralLanguage>
-    <AssemblyVersion>$(Version)</AssemblyVersion>
-    <FileVersion>$(Version)</FileVersion>
+    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="SkiaSharp" Version="2.80.2" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.80.2" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\LICENSE.md">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+  </ItemGroup>
+
 </Project>
