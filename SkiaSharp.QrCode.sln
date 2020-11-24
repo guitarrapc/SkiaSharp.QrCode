@@ -19,7 +19,14 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NanoServerGenerate.3.1", "s
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{D411A8A1-96FC-495F-9583-4C154DF25240}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SkiaSharp.QrCodeUnitTest", "tests\SkiaSharp.QrCodeUnitTest\SkiaSharp.QrCodeUnitTest.csproj", "{DECFF371-3592-4855-A465-1845DEF972A1}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{AF981C34-65A3-48DB-BBFB-52EFE0F824AB}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SkiaSharp.QrCode.Tests.net50", "tests\SkiaSharp.QrCode.Tests.net50\SkiaSharp.QrCode.Tests.net50.csproj", "{975C9157-6E43-44DE-9405-C2CF8C217AE6}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SkiaSharp.QrCode.Tests.net31", "tests\SkiaSharp.QrCode.Tests.net31\SkiaSharp.QrCode.Tests.net31.csproj", "{4960D7EB-2B2B-4B27-ADA1-923AB06DBC72}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -47,10 +54,14 @@ Global
 		{2FCFFF3C-FBA0-42A2-942C-8CB6E5835CE3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2FCFFF3C-FBA0-42A2-942C-8CB6E5835CE3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2FCFFF3C-FBA0-42A2-942C-8CB6E5835CE3}.Release|Any CPU.Build.0 = Release|Any CPU
-		{DECFF371-3592-4855-A465-1845DEF972A1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{DECFF371-3592-4855-A465-1845DEF972A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{DECFF371-3592-4855-A465-1845DEF972A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{DECFF371-3592-4855-A465-1845DEF972A1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{975C9157-6E43-44DE-9405-C2CF8C217AE6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{975C9157-6E43-44DE-9405-C2CF8C217AE6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{975C9157-6E43-44DE-9405-C2CF8C217AE6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{975C9157-6E43-44DE-9405-C2CF8C217AE6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4960D7EB-2B2B-4B27-ADA1-923AB06DBC72}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4960D7EB-2B2B-4B27-ADA1-923AB06DBC72}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4960D7EB-2B2B-4B27-ADA1-923AB06DBC72}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4960D7EB-2B2B-4B27-ADA1-923AB06DBC72}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -61,7 +72,8 @@ Global
 		{096520D5-85EC-4AC5-BDE4-7F11B5874EDA} = {C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}
 		{BB6B4CE2-A9AA-4CBA-A0EA-CA9EEC6024D9} = {C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}
 		{2FCFFF3C-FBA0-42A2-942C-8CB6E5835CE3} = {C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}
-		{DECFF371-3592-4855-A465-1845DEF972A1} = {D411A8A1-96FC-495F-9583-4C154DF25240}
+		{975C9157-6E43-44DE-9405-C2CF8C217AE6} = {D411A8A1-96FC-495F-9583-4C154DF25240}
+		{4960D7EB-2B2B-4B27-ADA1-923AB06DBC72} = {D411A8A1-96FC-495F-9583-4C154DF25240}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {D0A3AD8D-B614-4A6D-AB7E-6A6993495E0F}
