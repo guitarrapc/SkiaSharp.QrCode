@@ -44,4 +44,4 @@ jobs:
       - run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f net5.0
       - run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f netcoreapp3.1
       - run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f net5.0
-      - run: docker-compose up -f ./samples/LinuxRunSamples/docker-compose.yaml
+      - run: docker-compose -f ./samples/LinuxRunSamples/docker-compose.yaml up
