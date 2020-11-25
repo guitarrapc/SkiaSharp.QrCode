@@ -105,10 +105,70 @@ namespace SkiaQrCodeSampleConsole
 
 ```
 
-## Build
+## TIPS
 
+### Linux support
+
+You have 2 choice to run on Linux. If you don't need font operation, use `SkiaSharp.NativeAssets.Linux.NoDependencies`.
+
+1. Use `SkiaSharp.NativeAssets.Linux` package. In this case, you need to install `libfontconfig1` via apt or others.
+1. Use `SkiaSharp.NativeAssets.Linux.NoDependencies` 2.80.2 or above. In this case, you don't need `libfontconfig1`.
+
+SkiaSharp.NativeAssets.Linux.NoDependencies still can draw text, however can't search font cased on character or other fonts.
+
+> Detail: https://github.com/mono/SkiaSharp/issues/964#issuecomment-549385484
+
+**SkiaSharp.NativeAssets.Linux sample**
+
+```shell
+sudo apt update && apt install -y libfontconfig1
 ```
+
+```csproj
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp.QrCode" Version="0.4.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.80.2" />
+  </ItemGroup>
+</Project>
+```
+
+**SkiaSharp.NativeAssets.Linux.NoDependencies sample**
+
+```csproj
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp.QrCode" Version="0.4.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.80.2" />
+  </ItemGroup>
+</Project>
+```
+
+### Docker Build & Run
+
+Test Build lib.
+
+```shell
 docker build -t skiasharp.qrcode .
+```
+
+Test Run on linux.
+
+```shell
+cd samples/RunTest
+docker-compose up
 ```
 
 ## License
