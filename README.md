@@ -167,7 +167,7 @@ docker build -t skiasharp.qrcode .
 Test Run on linux.
 
 ```shell
-cd samples/RunTest
+cd samples/LinuxRunSamples
 docker-compose up
 ```
 

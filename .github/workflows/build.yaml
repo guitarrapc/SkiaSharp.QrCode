@@ -30,6 +30,7 @@ jobs:
       - run: dotnet build ./src/SkiaSharp.QrCode/ -c Debug
       - run: dotnet build ./samples/ManualGenerate/ -c Debug
       - run: dotnet build ./samples/SimpleGenerate/ -c Debug
+      # tests
       - run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net31/ -c Debug
       - run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net50/ -c Debug -p:CollectCoverage=true -p:CoverletOutputFormat=opencover
       - uses: codecov/codecov-action@v1
@@ -38,3 +39,9 @@ jobs:
           flags: unittests
           fail_ci_if_error: true
           verbose: true
+      # run
+      - run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug
+      - run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug
+      # todo: add LinuxRunSamples
+      # - run: docker-compose up
+      #   working-directory: ./samples/LinuxRunSamples
