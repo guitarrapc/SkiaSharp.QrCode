@@ -6,7 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="SkiaSharp" Version="2.80.2" />
     <PackageReference Include="SkiaSharp.QrCode" Version="0.4.0" />
+    <PackageReference Include="SkaiSharp.NativeAssets.Linux.NoDependencies" Version="2.80.2" />
   </ItemGroup>
 
   <ItemGroup>
