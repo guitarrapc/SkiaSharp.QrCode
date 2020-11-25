@@ -6,7 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\SkiaSharp.QrCode\SkiaSharp.QrCode.csproj" />
+    <PackageReference Include="SkiaSharp.QrCode" Version="0.4.0" />
   </ItemGroup>
 
   <ItemGroup>

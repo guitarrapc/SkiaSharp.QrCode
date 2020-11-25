@@ -8,10 +8,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.9.10" />
-    <PackageReference Include="SkiaSharp" ExcludeAssets="native" Version="1.68.1.1" />
-    <PackageReference Include="SkiaSharp.QrCode" Version="0.3.0" />
-    <PackageReference Include="SkiaSharp.NativeAssets.NanoServer" Version="1.68.1.1" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.10.8" />
+    <PackageReference Include="SkiaSharp.QrCode" Version="0.4.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.NanoServer" Version="2.80.2" />
   </ItemGroup>
 
 </Project>
