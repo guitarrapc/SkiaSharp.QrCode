@@ -55,6 +55,25 @@ namespace SkiaSharp.QrCode.Tests.Shared
             Assert.True(actual.SequenceEqual(expect));
         }
 
+        [Fact]
+        public void SKImageInfoTest()
+        {
+            var a = new SKImageInfo();
+            Assert.NotNull(a);
+            var b = new SKImageInfo(100, 100);
+            Assert.NotNull(b);
+            foreach (SKColorType colorType in Enum.GetValues(typeof(SKColorType)))
+            {
+                var c = new SKImageInfo(100, 100, colorType);
+                Assert.NotNull(c);
+                foreach (SKAlphaType alphaType in Enum.GetValues(typeof(SKAlphaType)))
+                {
+                    var d = new SKImageInfo(100, 100, colorType, alphaType);
+                    Assert.NotNull(d);
+                }
+            }
+        }
+
         private byte[] GenerateQrCode(string content, SKColor? color)
         {
             // Generate QrCode
