@@ -11,13 +11,13 @@ Qr Code generator with [Skia.Sharp](https://github.com/mono/SkiaSharp).
 .NET CLI
 
 ```
-$ dotnet add package SkiaQrCode
+$ dotnet add package SkiaSharp.QrCode
 ```
 
 Package Manager
 
 ```
-PM> Install-Pacakge Skia.QrCode
+PM> Install-Package SkiaSharp.QrCode
 ```
 
 ## Motivation
