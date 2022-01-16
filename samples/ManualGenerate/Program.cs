@@ -16,7 +16,7 @@ namespace SkiaQrCodeSampleConsole
             using (var generator = new QRCodeGenerator())
             {
                 // Generate QrCode
-                var qr = generator.CreateQrCode(content, ECCLevel.L);
+                var qr = generator.CreateQrCode(content, ECCLevel.L, quietZoneSize:1);
 
                 // Render to canvas
                 var info = new SKImageInfo(512, 512);
