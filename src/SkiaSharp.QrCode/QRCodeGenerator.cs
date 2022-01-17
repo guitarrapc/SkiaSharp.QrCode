@@ -39,7 +39,7 @@ namespace SkiaSharp.QrCode
             this.CreateAlignmentPatternTable();
         }
 
-        public QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, bool forceUtf8 = false, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1)
+        public QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, bool forceUtf8 = false, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
         {
             EncodingMode encoding = GetEncodingFromPlaintext(plainText, forceUtf8);
             var codedText = this.PlainTextToBinary(plainText, encoding, eciMode, utf8BOM, forceUtf8);
@@ -154,7 +154,7 @@ namespace SkiaSharp.QrCode
             }
 
 
-            ModulePlacer.AddQuietZone(ref qr);
+            ModulePlacer.AddQuietZone(ref qr, quietZoneSize);
             return qr;
         }
 
@@ -205,18 +205,23 @@ namespace SkiaSharp.QrCode
 
         private static class ModulePlacer
         {
-            public static void AddQuietZone(ref QRCodeData qrCode)
+            public static void AddQuietZone(ref QRCodeData qrCode, int quietZoneSize)
             {
-                var quietLine = new bool[qrCode.ModuleMatrix.Count + 8];
+                if (quietZoneSize <= 0)
+                {
+                    return;
+                }
+
+                var quietLine = new bool[qrCode.ModuleMatrix.Count + quietZoneSize * 2];
                 for (var i = 0; i < quietLine.Length; i++)
                     quietLine[i] = false;
-                for (var i = 0; i < 4; i++)
+                for (var i = 0; i < quietZoneSize; i++)
                     qrCode.ModuleMatrix.Insert(0, new BitArray(quietLine));
-                for (var i = 0; i < 4; i++)
+                for (var i = 0; i < quietZoneSize; i++)
                     qrCode.ModuleMatrix.Add(new BitArray(quietLine));
-                for (var i = 4; i < qrCode.ModuleMatrix.Count - 4; i++)
+                for (var i = quietZoneSize; i < qrCode.ModuleMatrix.Count - quietZoneSize; i++)
                 {
-                    bool[] quietPart = { false, false, false, false };
+                    bool[] quietPart = new bool[quietZoneSize];
                     var tmpLine = new List<bool>(quietPart);
                     tmpLine.AddRange(qrCode.ModuleMatrix[i].Cast<bool>());
                     tmpLine.AddRange(quietPart);
