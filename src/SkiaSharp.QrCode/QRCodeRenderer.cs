@@ -8,12 +8,6 @@ namespace SkiaSharp.QrCode
     public class QRCodeRenderer : IDisposable
     {
         /// <summary>
-        /// Gets the paint.
-        /// </summary>
-        /// <value>The paint.</value>
-        public SKPaint Paint { get; } = new SKPaint();
-
-        /// <summary>
         /// Render the specified data into the given area of the target canvas.
         /// </summary>
         /// <param name="canvas">The canvas.</param>
@@ -25,35 +19,31 @@ namespace SkiaSharp.QrCode
         {
             if (data != null)
             {
-                if (qrColor != null) Paint.Color = (SKColor) qrColor;
+                using (var lightPaint = new SKPaint() { Color = SKColors.White, Style = SKPaintStyle.StrokeAndFill })
+                using (var darkPaint = new SKPaint() { Color = (qrColor.HasValue ? qrColor.Value : SKColors.Black), Style = SKPaintStyle.StrokeAndFill }) {
 
-                var rows = data.ModuleMatrix.Count;
-                var columns = data.ModuleMatrix.Select(x => x.Length).Max();
-                var cellHeight = area.Height / rows;
-                var cellWidth = area.Width / columns;
+                    var rows = data.ModuleMatrix.Count;
+                    var columns = data.ModuleMatrix.Select(x => x.Length).Max();
+                    var cellHeight = area.Height / rows;
+                    var cellWidth = area.Width / columns;
 
-                for (int y = 0; y < rows; y++)
-                {
-                    var row = data.ModuleMatrix.ElementAt(y);
-                    for (int x = 0; x < row.Length; x++)
+                    for (int y = 0; y < rows; y++)
                     {
-                        if (row[x])
-                        {
-                            var rect = SKRect.Create(area.Left + x * cellWidth, area.Top + y * cellHeight, cellWidth, cellHeight);
-                            canvas.DrawRect(rect, this.Paint);
-                        }
+                        var row = data.ModuleMatrix.ElementAt(y);
+                        for (int x = 0; x < row.Length; x++)
+                            canvas.DrawRect(SKRect.Create(area.Left + x * cellWidth, area.Top + y * cellHeight, cellWidth, cellHeight), (row[x] ? darkPaint : lightPaint));
                     }
-                }
 
-                if (iconData?.Icon != null)
-                {
-                    var iconWidth = (area.Width / 100) * iconData.IconSizePercent;
-                    var iconHeight = (area.Height / 100) * iconData.IconSizePercent;
+                    if (iconData?.Icon != null)
+                    {
+                        var iconWidth = (area.Width / 100) * iconData.IconSizePercent;
+                        var iconHeight = (area.Height / 100) * iconData.IconSizePercent;
 
-                    var x = (area.Width / 2) - (iconWidth / 2);
-                    var y = (area.Height / 2) - (iconHeight / 2);
+                        var x = (area.Width / 2) - (iconWidth / 2);
+                        var y = (area.Height / 2) - (iconHeight / 2);
 
-                    canvas.DrawBitmap(iconData.Icon, SKRect.Create(x, y, iconWidth, iconHeight));
+                        canvas.DrawBitmap(iconData.Icon, SKRect.Create(x, y, iconWidth, iconHeight));
+                    }
                 }
             }
         }
@@ -68,8 +58,6 @@ namespace SkiaSharp.QrCode
         /// <see cref="T:SkiaSharp.QRCodeGeneration.QRCodeRenderer"/> so the garbage collector can reclaim the memory
         /// that the <see cref="T:SkiaSharp.QRCodeGeneration.QRCodeRenderer"/> was occupying.</remarks>
         public void Dispose()
-        {
-            this.Paint.Dispose();
-        }
+        {}
     }
 }
