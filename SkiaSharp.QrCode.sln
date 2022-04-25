@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.29613.14
+# Visual Studio Version 17
+VisualStudioVersion = 17.1.32407.343
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SkiaSharp.QrCode", "src\SkiaSharp.QrCode\SkiaSharp.QrCode.csproj", "{0850349B-4894-4190-B04C-EB6986529185}"
 EndProject
@@ -13,10 +13,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ManualGenerate", "samples\M
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SimpleGenerate", "samples\SimpleGenerate\SimpleGenerate.csproj", "{096520D5-85EC-4AC5-BDE4-7F11B5874EDA}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NanoServerGenerate.2.2", "samples\NanoServerGenerate.2.2\NanoServerGenerate.2.2.csproj", "{BB6B4CE2-A9AA-4CBA-A0EA-CA9EEC6024D9}"
-EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NanoServerGenerate.3.1", "samples\NanoServerGenerate.3.1\NanoServerGenerate.3.1.csproj", "{2FCFFF3C-FBA0-42A2-942C-8CB6E5835CE3}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{D411A8A1-96FC-495F-9583-4C154DF25240}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{AF981C34-65A3-48DB-BBFB-52EFE0F824AB}"
@@ -27,6 +23,8 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SkiaSharp.QrCode.Tests.net50", "tests\SkiaSharp.QrCode.Tests.net50\SkiaSharp.QrCode.Tests.net50.csproj", "{975C9157-6E43-44DE-9405-C2CF8C217AE6}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SkiaSharp.QrCode.Tests.net31", "tests\SkiaSharp.QrCode.Tests.net31\SkiaSharp.QrCode.Tests.net31.csproj", "{4960D7EB-2B2B-4B27-ADA1-923AB06DBC72}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NanoServerGenerate31", "samples\NanoServerGenerate31\NanoServerGenerate31.csproj", "{B721726D-4F32-4695-8860-F6922C577F38}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -46,14 +44,6 @@ Global
 		{096520D5-85EC-4AC5-BDE4-7F11B5874EDA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{096520D5-85EC-4AC5-BDE4-7F11B5874EDA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{096520D5-85EC-4AC5-BDE4-7F11B5874EDA}.Release|Any CPU.Build.0 = Release|Any CPU
-		{BB6B4CE2-A9AA-4CBA-A0EA-CA9EEC6024D9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{BB6B4CE2-A9AA-4CBA-A0EA-CA9EEC6024D9}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{BB6B4CE2-A9AA-4CBA-A0EA-CA9EEC6024D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{BB6B4CE2-A9AA-4CBA-A0EA-CA9EEC6024D9}.Release|Any CPU.Build.0 = Release|Any CPU
-		{2FCFFF3C-FBA0-42A2-942C-8CB6E5835CE3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{2FCFFF3C-FBA0-42A2-942C-8CB6E5835CE3}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{2FCFFF3C-FBA0-42A2-942C-8CB6E5835CE3}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{2FCFFF3C-FBA0-42A2-942C-8CB6E5835CE3}.Release|Any CPU.Build.0 = Release|Any CPU
 		{975C9157-6E43-44DE-9405-C2CF8C217AE6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{975C9157-6E43-44DE-9405-C2CF8C217AE6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{975C9157-6E43-44DE-9405-C2CF8C217AE6}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -62,6 +52,10 @@ Global
 		{4960D7EB-2B2B-4B27-ADA1-923AB06DBC72}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4960D7EB-2B2B-4B27-ADA1-923AB06DBC72}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4960D7EB-2B2B-4B27-ADA1-923AB06DBC72}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B721726D-4F32-4695-8860-F6922C577F38}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B721726D-4F32-4695-8860-F6922C577F38}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B721726D-4F32-4695-8860-F6922C577F38}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B721726D-4F32-4695-8860-F6922C577F38}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -70,10 +64,9 @@ Global
 		{0850349B-4894-4190-B04C-EB6986529185} = {8C639322-95F9-438F-8B71-1890FB797E25}
 		{72A72621-F8FA-4A0F-845C-06F2BA2DB114} = {C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}
 		{096520D5-85EC-4AC5-BDE4-7F11B5874EDA} = {C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}
-		{BB6B4CE2-A9AA-4CBA-A0EA-CA9EEC6024D9} = {C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}
-		{2FCFFF3C-FBA0-42A2-942C-8CB6E5835CE3} = {C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}
 		{975C9157-6E43-44DE-9405-C2CF8C217AE6} = {D411A8A1-96FC-495F-9583-4C154DF25240}
 		{4960D7EB-2B2B-4B27-ADA1-923AB06DBC72} = {D411A8A1-96FC-495F-9583-4C154DF25240}
+		{B721726D-4F32-4695-8860-F6922C577F38} = {C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {D0A3AD8D-B614-4A6D-AB7E-6A6993495E0F}
