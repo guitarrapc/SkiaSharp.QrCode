@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "NanoServerGenerate60": {
+      "commandName": "Project"
+    },
+    "Docker": {
+      "commandName": "Docker"
+    }
+  }
+}
