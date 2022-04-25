@@ -1,4 +1,4 @@
- ![dotnet-build](https://github.com/guitarrapc/SkiaSharp.QrCode/workflows/dotnet-build/badge.svg) ![release](https://github.com/guitarrapc/SkiaSharp.QrCode/workflows/release/badge.svg) [![codecov](https://codecov.io/gh/guitarrapc/SkiaSharp.QrCode/branch/master/graph/badge.svg?token=L5LHltghbd)](https://codecov.io/gh/guitarrapc/SkiaSharp.QrCode) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+ [![dotnet-build](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/dotnet-build.yaml/badge.svg)](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/dotnet-build.yaml) [![release](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/release.yaml/badge.svg)](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/release.yaml) [![codecov](https://codecov.io/gh/guitarrapc/SkiaSharp.QrCode/branch/master/graph/badge.svg?token=L5LHltghbd)](https://codecov.io/gh/guitarrapc/SkiaSharp.QrCode) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [![NuGet](https://img.shields.io/nuget/v/SkiaSharp.QrCode.svg?label=SkiaSharp%2EQrCode%20nuget)](https://www.nuget.org/packages/SkiaSharp.QrCode)
 
@@ -42,25 +42,13 @@ using SkiaSharp.QrCode.Image;
 using System;
 using System.IO;
 
-namespace SimpleGenerate
-{
-    class Program
-    {
-        static void Main(string[] args)
-        {
-            var content = "testtesttest";
-            using (var output = new FileStream(@"output/hoge.png", FileMode.OpenOrCreate))
-            {
-                // generate QRCode
-                var qrCode = new QrCode(content, new Vector2Slim(256, 256), SKEncodedImageFormat.Png);
+var content = "testtesttest";
+using var output = new FileStream(@"output/hoge.png", FileMode.OpenOrCreate);
 
-                // output to file
-                qrCode.GenerateImage(output);
-            }
-        }
-    }
-}
-
+// generate QRCode
+var qrCode = new QrCode(content, new Vector2Slim(256, 256), SKEncodedImageFormat.Png);
+// output to file
+qrCode.GenerateImage(output);
 ```
 
 If you want specify detail, you can generate manually.
@@ -71,38 +59,25 @@ using SkiaSharp;
 using System;
 using System.IO;
 
-namespace SkiaQrCodeSampleConsole
-{
-    class Program
-    {
-        static void Main(string[] args)
-        {
-            var content = "testtesttest";
-            using (var generator = new QRCodeGenerator())
-            {
-                // Generate QrCode
-                var qr = generator.CreateQrCode(content, ECCLevel.L);
+namespace SkiaQrCodeSampleConsole;
 
-                // Render to canvas
-                var info = new SKImageInfo(512, 512);
-                using (var surface = SKSurface.Create(info))
-                {
-                    var canvas = surface.Canvas;
-                    canvas.Render(qr, info.Width, info.Height);
+var content = "testtesttest";
+using var generator = new QRCodeGenerator();
 
-                    // Output to Stream -> File
-                    using (var image = surface.Snapshot())
-                    using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
-                    using (var stream = File.OpenWrite(@"output/hoge.png"))
-                    {
-                        data.SaveTo(stream);
-                    }
-                }
-            }
-        }
-    }
-}
+// Generate QrCode
+var qr = generator.CreateQrCode(content, ECCLevel.L);
 
+// Render to canvas
+var info = new SKImageInfo(512, 512);
+using var surface = SKSurface.Create(info);
+var canvas = surface.Canvas;
+canvas.Render(qr, info.Width, info.Height);
+
+// Output to Stream -> File
+using var image = surface.Snapshot();
+using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+using var stream = File.OpenWrite(@"output/hoge.png");
+data.SaveTo(stream);
 ```
 
 ## TIPS
@@ -129,11 +104,11 @@ sudo apt update && apt install -y libfontconfig1
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SkiaSharp.QrCode" Version="0.4.1" />
+    <PackageReference Include="SkiaSharp.QrCode" Version="0.5.0" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.80.2" />
   </ItemGroup>
 </Project>
@@ -146,11 +121,11 @@ sudo apt update && apt install -y libfontconfig1
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SkiaSharp.QrCode" Version="0.4.1" />
+    <PackageReference Include="SkiaSharp.QrCode" Version="0.5.0" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.80.2" />
   </ItemGroup>
 </Project>
