@@ -25,13 +25,20 @@ jobs:
             6.0.x
             5.0.x
             3.1.x
-      - run: dotnet build ./src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj -c Debug
-      - run: dotnet build ./samples/ManualGenerate/ManualGenerate.csproj -c Debug
-      - run: dotnet build ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug
+      # build
+      - name: Build
+        run: dotnet build ./src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj -c Debug
+      - name: Build (ManualGenerate)
+        run: dotnet build ./samples/ManualGenerate/ManualGenerate.csproj -c Debug
+      - name: Build (SimpleGenerate)
+        run: dotnet build ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug
       # tests
-      - run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net31/ -c Debug
-      - run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net50/ -c Debug
-      - run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net60/ -c Debug -p:CollectCoverage=true -p:CoverletOutputFormat=opencover
+      - name: Test (net3.1)
+        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net31/ -c Debug
+      - name: Test (net5.0)
+        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net50/ -c Debug
+      - name: Test (net6.0)
+        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net60/ -c Debug -p:CollectCoverage=true -p:CoverletOutputFormat=opencover
       - uses: codecov/codecov-action@v1
         with:
           file: ./tests/SkiaSharp.QrCode.Tests.net60/coverage.opencover.xml
@@ -51,33 +58,17 @@ jobs:
             5.0.x
             3.1.x
       # run
-      - run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f netcoreapp3.1
-      - run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f netcoreapp3.1
-      - run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f net5.0
-      - run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f net5.0
-      - run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f net6.0
-      - run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f net6.0
-      - run: docker-compose -f ./samples/LinuxRunSamples/compose.yaml up
-
-  run-windows:
-    runs-on: windows-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-dotnet@v2
-        with:
-          dotnet-version: |
-            6.0.x
-            5.0.x
-            3.1.x
-      # run
-      - run: dotnet run --project ./samples/NanoServerGenerate31/NanoServerGenerate31.csproj -c Debug -f net3.1
-      - run: dotnet run --project ./samples/NanoServerGenerate60/NanoServerGenerate60.csproj -c Debug -f net6.0
-      - run: |
-          docker build -t sample3.1 -f .\sample\NanoServerGenerate31\Dockerfile .
-          docker run -it --rm sample3.1
-          dir
-      - run: |
-          docker build -t sample6.0 -f .\sample\NanoServerGenerate60\Dockerfile .
-          docker run -it --rm sample6.0
-          dir
+      - name: ManualGenerate (net3.1)
+        run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f netcoreapp3.1
+      - name: SimpleGenerate (net3.1)
+        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f netcoreapp3.1
+      - name: ManualGenerate (net5.0)
+        run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f net5.0
+      - name: SimpleGenerate (net5.0)
+        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f net5.0
+      - name: ManualGenerate (net6.0)
+        run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f net6.0
+      - name: SimpleGenerate (net6.0)
+        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f net6.0
+      - name: Linux Docker Compose Run
+        run: docker-compose -f ./samples/LinuxRunSamples/compose.yaml up
