@@ -20,4 +20,4 @@ RUN dotnet publish "NanoServerGenerate60.csproj" -c Release -o /app/publish
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "NanoServerGenerate60.dll"]
+ENTRYPOINT ["dotnet", "NanoServerGenerate60.dll", "sample_message", "hoge.png"]

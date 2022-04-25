@@ -39,7 +39,7 @@ jobs:
           fail_ci_if_error: true
           verbose: true
 
-  run-dotnet:
+  run-linux:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -58,3 +58,26 @@ jobs:
       - run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f net6.0
       - run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f net6.0
       - run: docker-compose -f ./samples/LinuxRunSamples/compose.yaml up
+
+  run-windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: |
+            6.0.x
+            5.0.x
+            3.1.x
+      # run
+      - run: dotnet run --project ./samples/NanoServerGenerate31/NanoServerGenerate31.csproj -c Debug -f net3.1
+      - run: dotnet run --project ./samples/NanoServerGenerate60/NanoServerGenerate60.csproj -c Debug -f net6.0
+      - run: |
+          docker build -t sample3.1 -f .\sample\NanoServerGenerate31\Dockerfile .
+          docker run -it --rm sample3.1
+          dir
+      - run: |
+          docker build -t sample6.0 -f .\sample\NanoServerGenerate60\Dockerfile .
+          docker run -it --rm sample6.0
+          dir
