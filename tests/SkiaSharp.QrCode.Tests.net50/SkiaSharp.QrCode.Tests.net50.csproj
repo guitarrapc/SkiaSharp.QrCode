@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
-    <RootNamespace>SkiaSharp.QrCode.Tests._50</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
