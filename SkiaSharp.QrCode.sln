@@ -28,6 +28,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NanoServerGenerate31", "sam
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NanoServerGenerate60", "samples\NanoServerGenerate60\NanoServerGenerate60.csproj", "{DE7C59CA-B61E-4D96-9EE5-E4526DB7AC68}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SkiaSharp.QrCode.Tests.net60", "tests\SkiaSharp.QrCode.Tests.net60\SkiaSharp.QrCode.Tests.net60.csproj", "{C921D5DC-9121-463F-8665-7AC184E68DD9}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -62,6 +64,10 @@ Global
 		{DE7C59CA-B61E-4D96-9EE5-E4526DB7AC68}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{DE7C59CA-B61E-4D96-9EE5-E4526DB7AC68}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{DE7C59CA-B61E-4D96-9EE5-E4526DB7AC68}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C921D5DC-9121-463F-8665-7AC184E68DD9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C921D5DC-9121-463F-8665-7AC184E68DD9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C921D5DC-9121-463F-8665-7AC184E68DD9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C921D5DC-9121-463F-8665-7AC184E68DD9}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -74,6 +80,7 @@ Global
 		{4960D7EB-2B2B-4B27-ADA1-923AB06DBC72} = {D411A8A1-96FC-495F-9583-4C154DF25240}
 		{B721726D-4F32-4695-8860-F6922C577F38} = {C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}
 		{DE7C59CA-B61E-4D96-9EE5-E4526DB7AC68} = {C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}
+		{C921D5DC-9121-463F-8665-7AC184E68DD9} = {D411A8A1-96FC-495F-9583-4C154DF25240}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {D0A3AD8D-B614-4A6D-AB7E-6A6993495E0F}
