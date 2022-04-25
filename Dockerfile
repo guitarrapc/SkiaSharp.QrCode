@@ -1,16 +1,16 @@
-FROM microsoft/dotnet:2.2-sdk AS build
-WORKDIR /app
-
-# restore
-COPY src/SkiaSharp.QrCode/*.csproj ./
-RUN dotnet restore
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build
+WORKDIR /src
 
 # build
-COPY src/SkiaSharp.QrCode/. /app
-RUN dotnet build -c Release
-RUN dotnet publish -c Release
+COPY src/SkiaSharp.QrCode/. /src/SkiaSharp.QrCode
+COPY LICENSE.md /
+
+WORKDIR /src/SkiaSharp.QrCode
+RUN dotnet restore
+RUN dotnet build -c Release -f netstandard2.1
+RUN dotnet publish -c Release -f netstandard2.1
+RUN dotnet publish -c Release -f netstandard2.0
 
 # pack
-WORKDIR /app
-VOLUME /app/pack
+VOLUME /src/SkiaSharp.QrCode/pack
 CMD ["dotnet", "pack", "--include-symbols", "-c", "Release", "-o", "pack"]
