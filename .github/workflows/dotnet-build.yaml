@@ -1,0 +1,74 @@
+name: dotnet-build
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    branches:
+      - "main"
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  NUGET_XMLDOC_MODE: skip
+
+jobs:
+  build-dotnet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: |
+            6.0.x
+            5.0.x
+            3.1.x
+      # build
+      - name: Build
+        run: dotnet build ./src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj -c Debug
+      - name: Build (ManualGenerate)
+        run: dotnet build ./samples/ManualGenerate/ManualGenerate.csproj -c Debug
+      - name: Build (SimpleGenerate)
+        run: dotnet build ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug
+      # tests
+      - name: Test (net3.1)
+        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net31/ -c Debug
+      - name: Test (net5.0)
+        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net50/ -c Debug
+      - name: Test (net6.0)
+        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net60/ -c Debug -p:CollectCoverage=true -p:CoverletOutputFormat=opencover
+      - uses: codecov/codecov-action@v1
+        with:
+          file: ./tests/SkiaSharp.QrCode.Tests.net60/coverage.opencover.xml
+          flags: unittests
+          fail_ci_if_error: true
+          verbose: true
+
+  run-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: |
+            6.0.x
+            5.0.x
+            3.1.x
+      # run
+      - name: ManualGenerate (net3.1)
+        run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f netcoreapp3.1
+      - name: SimpleGenerate (net3.1)
+        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f netcoreapp3.1
+      - name: ManualGenerate (net5.0)
+        run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f net5.0
+      - name: SimpleGenerate (net5.0)
+        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f net5.0
+      - name: ManualGenerate (net6.0)
+        run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f net6.0
+      - name: SimpleGenerate (net6.0)
+        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f net6.0
+      - name: Linux Docker Compose Run
+        run: docker-compose -f ./samples/LinuxRunSamples/compose.yaml up

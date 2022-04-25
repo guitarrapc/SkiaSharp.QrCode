@@ -11,17 +11,19 @@ namespace SkiaSharp.QrCode.Tests.Shared
     public class GenerateUnitTest
     {
         private readonly string content = "testtesttest";
-#if NET5_0
-        private readonly string netcore = "net5.0";
+#if NET6_0
+        private readonly string version = "net6.0";
+#elif NET5_0
+        private readonly string version = "net5.0";
 #else
-        private readonly string netcore = "net3.1";
+        private readonly string version = "net3.1";
 #endif
 
         [Fact]
         public void SimpleGenerateUnitTest()
         {
             var actual = GenerateQrCode(content, null);
-            var expect = File.ReadAllBytes($"samples/{netcore}/testtesttest_white.png");
+            var expect = File.ReadAllBytes($"samples/{version}/testtesttest_white.png");
             Assert.True(actual.SequenceEqual(expect));
         }
 
@@ -35,7 +37,7 @@ namespace SkiaSharp.QrCode.Tests.Shared
                 })
             {
                 var actual = GenerateQrCode(content, item.color);
-                var expect = File.ReadAllBytes($"samples/{netcore}/testtesttest_{item.name}.png");
+                var expect = File.ReadAllBytes($"samples/{version}/testtesttest_{item.name}.png");
                 Assert.True(actual.SequenceEqual(expect));
             }
         }
@@ -51,7 +53,7 @@ namespace SkiaSharp.QrCode.Tests.Shared
                 IconSizePercent = 10,
             };
             var actual = GenerateQrCode(content, SKColor.Parse("000000"), icon);
-            var expect = File.ReadAllBytes($"samples/{netcore}/testtesttest_icon.png");
+            var expect = File.ReadAllBytes($"samples/{version}/testtesttest_icon.png");
             Assert.True(actual.SequenceEqual(expect));
         }
 
