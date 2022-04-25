@@ -1,7 +1,8 @@
 {
   "profiles": {
     "NanoServerGenerate60": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "commandLineArgs": "your_message ./hoge.png"
     },
     "Docker": {
       "commandName": "Docker"
