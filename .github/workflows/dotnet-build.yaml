@@ -14,7 +14,7 @@ env:
   NUGET_XMLDOC_MODE: skip
 
 jobs:
-  build:
+  build-dotnet:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -39,7 +39,7 @@ jobs:
           fail_ci_if_error: true
           verbose: true
 
-  run:
+  run-dotnet:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
