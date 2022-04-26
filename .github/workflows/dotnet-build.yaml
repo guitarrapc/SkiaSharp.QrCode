@@ -46,6 +46,7 @@ jobs:
           flags: unittests
           fail_ci_if_error: true
           verbose: true
+        continue-on-error: true
 
   run-linux:
     runs-on: ubuntu-latest
