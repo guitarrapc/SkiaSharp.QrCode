@@ -40,7 +40,7 @@ jobs:
       - name: Test (net5.0)
         run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net50/ -c ${{ env.DOTNET_BUILD_CONFIG }} --logger GitHubActions --logger console;verbosity=normal
       - name: Test (net6.0)
-        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net60/ -c ${{ env.DOTNET_BUILD_CONFIG }} --logger GitHubActions --logger console;verbosity=normal -p:CollectCoverage=true -p:CoverletOutputFormat=opencover
+        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net60/ -c ${{ env.DOTNET_BUILD_CONFIG }} -p:CollectCoverage=true -p:CoverletOutputFormat=opencover --logger GitHubActions --logger console;verbosity=normal
       - uses: codecov/codecov-action@v1
         with:
           file: ./tests/SkiaSharp.QrCode.Tests.net60/coverage.opencover.xml
