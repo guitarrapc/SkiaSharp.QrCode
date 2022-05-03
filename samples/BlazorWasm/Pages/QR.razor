@@ -34,6 +34,42 @@
 
         <p>
             <label>
+                ClearColor:
+                <CustomInputSelect @bind-Value="@Model.ClearColor">
+                    @foreach (var color in typeof(SKColors).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static).Select(x => (x.Name, Value: x.GetValue(Model.ClearColor))).ToArray())
+                    {
+                        <option value="@color.Value">@color.Name</option>
+                    }
+                </CustomInputSelect>
+            </label>
+        </p>
+
+        <p>
+            <label>
+                CodeColor:
+                <CustomInputSelect @bind-Value="@Model.CodeColor">
+                    @foreach (var color in typeof(SKColors).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static).Select(x => (x.Name, Value: x.GetValue(Model.CodeColor))).ToArray())
+                    {
+                        <option value="@color.Value">@color.Name</option>
+                    }
+                </CustomInputSelect>
+            </label>
+        </p>
+
+        <p>
+            <label>
+                BackgroundColor:
+                <CustomInputSelect @bind-Value="@Model.BackgroundColor">
+                    @foreach (var color in typeof(SKColors).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static).Select(x => (x.Name, Value: x.GetValue(Model.BackgroundColor))).ToArray())
+                    {
+                        <option value="@color.Value">@color.Name</option>
+                    }
+                </CustomInputSelect>
+            </label>
+        </p>
+
+        <p>
+            <label>
                 Content:
                 <InputText @bind-Value="@Model.Content" />
             </label>
@@ -74,7 +110,7 @@
         // Render to canvas
         var info = new SKImageInfo(512, 512); // Make sure match with SKCanvasView width & height.
         using var surface = SKSurface.Create(info);
-        canvas.Render(qr, info.Width, info.Height);
+        canvas.Render(qr, info.Width, info.Height, Model.ClearColor, Model.CodeColor, Model.BackgroundColor);
     }
 
     public class QrGenerateModel
@@ -84,6 +120,9 @@
         [Range(0, 10)]
         public int QuietZoneSize { get; set; } = 4;
         public ECCLevel EccLevel { get; set; } = ECCLevel.L;
+        public SKColor ClearColor { get; set; } = SKColors.Transparent;
+        public SKColor CodeColor { get; set; } = SKColors.Black;
+        public SKColor BackgroundColor { get; set; } = SKColors.White;
     }
 }
 
