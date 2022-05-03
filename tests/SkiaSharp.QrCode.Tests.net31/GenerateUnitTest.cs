@@ -9,19 +9,12 @@ namespace SkiaSharp.QrCode.Tests.Shared
     public class GenerateUnitTest
     {
         private readonly string content = "testtesttest";
-#if NET6_0
-        private readonly string version = "net6.0";
-#elif NET5_0
-        private readonly string version = "net5.0";
-#else
-        private readonly string version = "net3.1";
-#endif
 
         [Fact]
         public void SimpleGenerateUnitTest()
         {
             var actual = GenerateQrCode(content, null);
-            var expect = File.ReadAllBytes($"samples/{version}/testtesttest_white.png");
+            var expect = File.ReadAllBytes($"samples/testtesttest_white.png");
             Assert.True(actual.SequenceEqual(expect));
         }
 
@@ -36,7 +29,7 @@ namespace SkiaSharp.QrCode.Tests.Shared
             {
                 var actual = GenerateQrCode(content, item.color);
                 var actual2 = GenerateQrCode(content, item.color, true);
-                var expect = File.ReadAllBytes($"samples/{version}/testtesttest_{item.name}.png");
+                var expect = File.ReadAllBytes($"samples/testtesttest_{item.name}.png");
                 Assert.True(actual.SequenceEqual(expect));
                 Assert.True(actual2.SequenceEqual(expect));
             }
@@ -52,7 +45,7 @@ namespace SkiaSharp.QrCode.Tests.Shared
             {
                 var actual = GenerateQrCode(content, item.codeColor, item.backgroundColor);
                 var actual2 = GenerateQrCode(content, item.codeColor, item.backgroundColor, true);
-                var expect = File.ReadAllBytes($"samples/{version}/testtesttest_inverse_{item.name}.png");
+                var expect = File.ReadAllBytes($"samples/testtesttest_inverse_{item.name}.png");
                 Assert.True(actual.SequenceEqual(expect));
                 Assert.True(actual2.SequenceEqual(expect));
             }
@@ -70,7 +63,7 @@ namespace SkiaSharp.QrCode.Tests.Shared
             };
             var actual = GenerateQrCode(content, SKColor.Parse("000000"), icon);
             var actual2 = GenerateQrCode(content, SKColor.Parse("000000"), icon, true);
-            var expect = File.ReadAllBytes($"samples/{version}/testtesttest_icon.png");
+            var expect = File.ReadAllBytes($"samples/testtesttest_icon.png");
             Assert.True(actual.SequenceEqual(expect));
             Assert.True(actual2.SequenceEqual(expect));
         }
@@ -87,7 +80,7 @@ namespace SkiaSharp.QrCode.Tests.Shared
             };
             var actual = GenerateQrCode(content, SKColors.White, SKColors.Black, icon);
             var actual2 = GenerateQrCode(content, SKColors.White, SKColors.Black, icon, true);
-            var expect = File.ReadAllBytes($"samples/{version}/testtesttest_inverse_icon.png");
+            var expect = File.ReadAllBytes($"samples/testtesttest_inverse_icon.png");
             Assert.True(actual.SequenceEqual(expect));
             Assert.True(actual2.SequenceEqual(expect));
         }
