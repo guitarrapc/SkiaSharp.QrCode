@@ -1,9 +1,7 @@
-using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Models;
 using System;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using Xunit;
 
 namespace SkiaSharp.QrCode.Tests.Shared
@@ -58,20 +56,176 @@ namespace SkiaSharp.QrCode.Tests.Shared
         }
 
         [Fact]
-        public void SKImageInfoTest()
+        public void SKImageInfoBaseTest()
         {
+            // no param
             var a = new SKImageInfo();
-            Assert.NotNull(a);
+            Assert.Equal(0, a.Size.Height);
+            Assert.Equal(0, a.Size.Width);
+            Assert.Equal(0, a.BytesSize);
+            Assert.Equal(SKAlphaType.Unknown, a.AlphaType);
+            Assert.Equal(SKColorType.Unknown, a.ColorType);
+
+            // size
             var b = new SKImageInfo(100, 100);
-            Assert.NotNull(b);
+            Assert.Equal(100, b.Size.Height);
+            Assert.Equal(100, b.Size.Width);
+            Assert.Equal(40000, b.BytesSize);
+            Assert.Equal(SKAlphaType.Premul, b.AlphaType);
+            Assert.Equal(SKColorType.Bgra8888, b.ColorType);
+        }
+
+        [Fact]
+        public void SKImageInfoColorTest()
+        {
             foreach (SKColorType colorType in Enum.GetValues(typeof(SKColorType)))
             {
                 var c = new SKImageInfo(100, 100, colorType);
-                Assert.NotNull(c);
+                Assert.Equal(100, c.Size.Height);
+                Assert.Equal(100, c.Size.Width);
+                Assert.Equal(SKAlphaType.Premul, c.AlphaType);
+                Assert.Equal(colorType, c.ColorType);
+
+                switch (colorType)
+                {
+                    case SKColorType.Unknown:
+                        Assert.Equal(0, c.BytesSize);
+                        break;
+                    case SKColorType.Alpha8:
+                        Assert.Equal(10000, c.BytesSize);
+                        break;
+                    case SKColorType.Rgb565:
+                        Assert.Equal(20000, c.BytesSize);
+                        break;
+                    case SKColorType.Argb4444:
+                        Assert.Equal(20000, c.BytesSize);
+                        break;
+                    case SKColorType.Rgba8888:
+                        Assert.Equal(40000, c.BytesSize);
+                        break;
+                    case SKColorType.Rgb888x:
+                        Assert.Equal(40000, c.BytesSize);
+                        break;
+                    case SKColorType.Bgra8888:
+                        Assert.Equal(40000, c.BytesSize);
+                        break;
+                    case SKColorType.Rgba1010102:
+                        Assert.Equal(40000, c.BytesSize);
+                        break;
+                    case SKColorType.Rgb101010x:
+                        Assert.Equal(40000, c.BytesSize);
+                        break;
+                    case SKColorType.Gray8:
+                        Assert.Equal(10000, c.BytesSize);
+                        break;
+                    case SKColorType.RgbaF16:
+                        Assert.Equal(80000, c.BytesSize);
+                        break;
+                    case SKColorType.RgbaF16Clamped:
+                        Assert.Equal(80000, c.BytesSize);
+                        break;
+                    case SKColorType.RgbaF32:
+                        Assert.Equal(160000, c.BytesSize);
+                        break;
+                    case SKColorType.Rg88:
+                        Assert.Equal(20000, c.BytesSize);
+                        break;
+                    case SKColorType.AlphaF16:
+                        Assert.Equal(20000, c.BytesSize);
+                        break;
+                    case SKColorType.RgF16:
+                        Assert.Equal(40000, c.BytesSize);
+                        break;
+                    case SKColorType.Alpha16:
+                        Assert.Equal(20000, c.BytesSize);
+                        break;
+                    case SKColorType.Rg1616:
+                        Assert.Equal(40000, c.BytesSize);
+                        break;
+                    case SKColorType.Rgba16161616:
+                        Assert.Equal(80000, c.BytesSize);
+                        break;
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+        }
+
+        [Fact]
+        public void SKImageInfoAlphaTest()
+        {
+            foreach (SKColorType colorType in Enum.GetValues(typeof(SKColorType)))
+            {
                 foreach (SKAlphaType alphaType in Enum.GetValues(typeof(SKAlphaType)))
                 {
                     var d = new SKImageInfo(100, 100, colorType, alphaType);
-                    Assert.NotNull(d);
+                    Assert.Equal(100, d.Size.Height);
+                    Assert.Equal(100, d.Size.Width);
+                    Assert.Equal(alphaType, d.AlphaType);
+                    Assert.Equal(colorType, d.ColorType);
+
+                    switch (colorType)
+                    {
+                        case SKColorType.Unknown:
+                            Assert.Equal(0, d.BytesSize);
+                            break;
+                        case SKColorType.Alpha8:
+                            Assert.Equal(10000, d.BytesSize);
+                            break;
+                        case SKColorType.Rgb565:
+                            Assert.Equal(20000, d.BytesSize);
+                            break;
+                        case SKColorType.Argb4444:
+                            Assert.Equal(20000, d.BytesSize);
+                            break;
+                        case SKColorType.Rgba8888:
+                            Assert.Equal(40000, d.BytesSize);
+                            break;
+                        case SKColorType.Rgb888x:
+                            Assert.Equal(40000, d.BytesSize);
+                            break;
+                        case SKColorType.Bgra8888:
+                            Assert.Equal(40000, d.BytesSize);
+                            break;
+                        case SKColorType.Rgba1010102:
+                            Assert.Equal(40000, d.BytesSize);
+                            break;
+                        case SKColorType.Rgb101010x:
+                            Assert.Equal(40000, d.BytesSize);
+                            break;
+                        case SKColorType.Gray8:
+                            Assert.Equal(10000, d.BytesSize);
+                            break;
+                        case SKColorType.RgbaF16:
+                            Assert.Equal(80000, d.BytesSize);
+                            break;
+                        case SKColorType.RgbaF16Clamped:
+                            Assert.Equal(80000, d.BytesSize);
+                            break;
+                        case SKColorType.RgbaF32:
+                            Assert.Equal(160000, d.BytesSize);
+                            break;
+                        case SKColorType.Rg88:
+                            Assert.Equal(20000, d.BytesSize);
+                            break;
+                        case SKColorType.AlphaF16:
+                            Assert.Equal(20000, d.BytesSize);
+                            break;
+                        case SKColorType.RgF16:
+                            Assert.Equal(40000, d.BytesSize);
+                            break;
+                        case SKColorType.Alpha16:
+                            Assert.Equal(20000, d.BytesSize);
+                            break;
+                        case SKColorType.Rg1616:
+                            Assert.Equal(40000, d.BytesSize);
+                            break;
+                        case SKColorType.Rgba16161616:
+                            Assert.Equal(80000, d.BytesSize);
+                            break;
+                        default:
+                            throw new NotImplementedException();
+                    }
                 }
             }
         }

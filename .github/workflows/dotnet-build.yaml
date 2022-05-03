@@ -13,6 +13,7 @@ env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
   NUGET_XMLDOC_MODE: skip
   DOCKER_BUILDKIT: 1
+  DOTNET_BUILD_CONFIG: Debug
 
 jobs:
   build-dotnet:
@@ -28,18 +29,18 @@ jobs:
             3.1.x
       # build
       - name: Build
-        run: dotnet build ./src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj -c Debug
+        run: dotnet build ./src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj -c ${{ env.DOTNET_BUILD_CONFIG }}
       - name: Build (ManualGenerate)
-        run: dotnet build ./samples/ManualGenerate/ManualGenerate.csproj -c Debug
+        run: dotnet build ./samples/ManualGenerate/ManualGenerate.csproj -c ${{ env.DOTNET_BUILD_CONFIG }}
       - name: Build (SimpleGenerate)
-        run: dotnet build ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug
+        run: dotnet build ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.DOTNET_BUILD_CONFIG }}
       # tests
       - name: Test (net3.1)
-        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net31/ -c Debug
+        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net31/ -c ${{ env.DOTNET_BUILD_CONFIG }} --logger GitHubActions --logger console;verbosity=normal
       - name: Test (net5.0)
-        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net50/ -c Debug
+        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net50/ -c ${{ env.DOTNET_BUILD_CONFIG }} --logger GitHubActions --logger console;verbosity=normal
       - name: Test (net6.0)
-        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net60/ -c Debug -p:CollectCoverage=true -p:CoverletOutputFormat=opencover
+        run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net60/ -c ${{ env.DOTNET_BUILD_CONFIG }} -p:CollectCoverage=true -p:CoverletOutputFormat=opencover --logger GitHubActions --logger console;verbosity=normal
       - uses: codecov/codecov-action@v1
         with:
           file: ./tests/SkiaSharp.QrCode.Tests.net60/coverage.opencover.xml
@@ -61,16 +62,16 @@ jobs:
             3.1.x
       # run
       - name: ManualGenerate (net3.1)
-        run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f netcoreapp3.1
+        run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c ${{ env.DOTNET_BUILD_CONFIG }} -f netcoreapp3.1
       - name: SimpleGenerate (net3.1)
-        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f netcoreapp3.1
+        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.DOTNET_BUILD_CONFIG }} -f netcoreapp3.1
       - name: ManualGenerate (net5.0)
-        run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f net5.0
+        run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c ${{ env.DOTNET_BUILD_CONFIG }} -f net5.0
       - name: SimpleGenerate (net5.0)
-        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f net5.0
+        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.DOTNET_BUILD_CONFIG }} -f net5.0
       - name: ManualGenerate (net6.0)
-        run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c Debug -f net6.0
+        run: dotnet run --project ./samples/ManualGenerate/ManualGenerate.csproj -c ${{ env.DOTNET_BUILD_CONFIG }} -f net6.0
       - name: SimpleGenerate (net6.0)
-        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Debug -f net6.0
+        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.DOTNET_BUILD_CONFIG }} -f net6.0
       - name: Linux Docker Compose Run
         run: docker-compose -f ./samples/LinuxRunSamples/compose.yaml up
