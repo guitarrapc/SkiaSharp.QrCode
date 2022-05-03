@@ -26,9 +26,11 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SkiaSharp.QrCode.Tests.net3
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NanoServerGenerate31", "samples\NanoServerGenerate31\NanoServerGenerate31.csproj", "{B721726D-4F32-4695-8860-F6922C577F38}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NanoServerGenerate60", "samples\NanoServerGenerate60\NanoServerGenerate60.csproj", "{DE7C59CA-B61E-4D96-9EE5-E4526DB7AC68}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NanoServerGenerate60", "samples\NanoServerGenerate60\NanoServerGenerate60.csproj", "{DE7C59CA-B61E-4D96-9EE5-E4526DB7AC68}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SkiaSharp.QrCode.Tests.net60", "tests\SkiaSharp.QrCode.Tests.net60\SkiaSharp.QrCode.Tests.net60.csproj", "{C921D5DC-9121-463F-8665-7AC184E68DD9}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "BlazorWasm", "samples\BlazorWasm\BlazorWasm.csproj", "{7414BA6D-5ABF-49A6-98C8-DFB8A0BD5B27}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -68,6 +70,10 @@ Global
 		{C921D5DC-9121-463F-8665-7AC184E68DD9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C921D5DC-9121-463F-8665-7AC184E68DD9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C921D5DC-9121-463F-8665-7AC184E68DD9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7414BA6D-5ABF-49A6-98C8-DFB8A0BD5B27}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7414BA6D-5ABF-49A6-98C8-DFB8A0BD5B27}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7414BA6D-5ABF-49A6-98C8-DFB8A0BD5B27}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7414BA6D-5ABF-49A6-98C8-DFB8A0BD5B27}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -81,6 +87,7 @@ Global
 		{B721726D-4F32-4695-8860-F6922C577F38} = {C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}
 		{DE7C59CA-B61E-4D96-9EE5-E4526DB7AC68} = {C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}
 		{C921D5DC-9121-463F-8665-7AC184E68DD9} = {D411A8A1-96FC-495F-9583-4C154DF25240}
+		{7414BA6D-5ABF-49A6-98C8-DFB8A0BD5B27} = {C4DBE18B-7128-4E6E-B5C6-F18E4DA5D616}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {D0A3AD8D-B614-4A6D-AB7E-6A6993495E0F}
