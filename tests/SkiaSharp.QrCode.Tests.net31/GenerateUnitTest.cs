@@ -35,8 +35,26 @@ namespace SkiaSharp.QrCode.Tests.Shared
                 })
             {
                 var actual = GenerateQrCode(content, item.color);
+                var actual2 = GenerateQrCode(content, item.color, true);
                 var expect = File.ReadAllBytes($"samples/{version}/testtesttest_{item.name}.png");
                 Assert.True(actual.SequenceEqual(expect));
+                Assert.True(actual2.SequenceEqual(expect));
+            }
+        }
+
+        [Fact]
+        public void ColorInverseGenerateUnitTest()
+        {
+            // yellow, red
+            foreach (var item in new (string name, SKColor codeColor, SKColor backgroundColor)[] {
+                ("black", SKColors.White, SKColors.Black)
+                })
+            {
+                var actual = GenerateQrCode(content, item.codeColor, item.backgroundColor);
+                var actual2 = GenerateQrCode(content, item.codeColor, item.backgroundColor, true);
+                var expect = File.ReadAllBytes($"samples/{version}/testtesttest_inverse_{item.name}.png");
+                Assert.True(actual.SequenceEqual(expect));
+                Assert.True(actual2.SequenceEqual(expect));
             }
         }
 
@@ -51,8 +69,27 @@ namespace SkiaSharp.QrCode.Tests.Shared
                 IconSizePercent = 10,
             };
             var actual = GenerateQrCode(content, SKColor.Parse("000000"), icon);
+            var actual2 = GenerateQrCode(content, SKColor.Parse("000000"), icon, true);
             var expect = File.ReadAllBytes($"samples/{version}/testtesttest_icon.png");
             Assert.True(actual.SequenceEqual(expect));
+            Assert.True(actual2.SequenceEqual(expect));
+        }
+
+        [Fact]
+        public void IconInverseGenerateUnitTest()
+        {
+            // github icon
+            var logo = File.ReadAllBytes("samples/icon.png");
+            var icon = new IconData
+            {
+                Icon = SKBitmap.Decode(logo),
+                IconSizePercent = 10,
+            };
+            var actual = GenerateQrCode(content, SKColors.White, SKColors.Black, icon);
+            var actual2 = GenerateQrCode(content, SKColors.White, SKColors.Black, icon, true);
+            var expect = File.ReadAllBytes($"samples/{version}/testtesttest_inverse_icon.png");
+            Assert.True(actual.SequenceEqual(expect));
+            Assert.True(actual2.SequenceEqual(expect));
         }
 
         [Fact]
@@ -230,7 +267,7 @@ namespace SkiaSharp.QrCode.Tests.Shared
             }
         }
 
-        private byte[] GenerateQrCode(string content, SKColor? color)
+        private byte[] GenerateQrCode(string content, SKColor? codeColor, bool useRect = false)
         {
             // Generate QrCode
             using var generator = new QRCodeGenerator();
@@ -240,13 +277,20 @@ namespace SkiaSharp.QrCode.Tests.Shared
             var info = new SKImageInfo(512, 512);
             using var surface = SKSurface.Create(info);
             var canvas = surface.Canvas;
-            if (color == null)
+            if (!codeColor.HasValue)
             {
                 canvas.Render(qr, info.Width, info.Height);
             }
             else
             {
-                canvas.Render(qr, info.Width, info.Height, SKColor.Empty, color.Value);
+                if (useRect)
+                {
+                    canvas.Render(qr, new SKRect(0, 0, info.Width, info.Height), SKColor.Empty, codeColor.Value);
+                }
+                else
+                {
+                    canvas.Render(qr, info.Width, info.Height, SKColor.Empty, codeColor.Value);
+                }
             }
 
             using var image = surface.Snapshot();
@@ -255,7 +299,7 @@ namespace SkiaSharp.QrCode.Tests.Shared
             return data.ToArray();
         }
 
-        private byte[] GenerateQrCode(string content, SKColor? color, IconData iconData)
+        private byte[] GenerateQrCode(string content, SKColor codeColor, SKColor backgroundColor, bool useRect = false)
         {
             // Generate QrCode
             using var generator = new QRCodeGenerator();
@@ -265,7 +309,64 @@ namespace SkiaSharp.QrCode.Tests.Shared
             var info = new SKImageInfo(512, 512);
             using var surface = SKSurface.Create(info);
             var canvas = surface.Canvas;
-            canvas.Render(qr, info.Width, info.Height, SKColor.Empty, color.Value, iconData);
+            if (useRect)
+            {
+                canvas.Render(qr, new SKRect(0, 0, info.Width, info.Height), SKColor.Empty, codeColor, backgroundColor);
+            }
+            else
+            {
+                canvas.Render(qr, info.Width, info.Height, SKColor.Empty, codeColor, backgroundColor);
+            }
+
+            using var image = surface.Snapshot();
+            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+
+            return data.ToArray();
+        }
+
+        private byte[] GenerateQrCode(string content, SKColor? codeColor, IconData iconData, bool useRect = false)
+        {
+            // Generate QrCode
+            using var generator = new QRCodeGenerator();
+            var qr = generator.CreateQrCode(content, ECCLevel.L);
+
+            // Render to canvas
+            var info = new SKImageInfo(512, 512);
+            using var surface = SKSurface.Create(info);
+            var canvas = surface.Canvas;
+            if (useRect)
+            {
+                canvas.Render(qr, new SKRect(0, 0, info.Width, info.Height), SKColor.Empty, codeColor.Value, iconData);
+            }
+            else
+            {
+                canvas.Render(qr, info.Width, info.Height, SKColor.Empty, codeColor.Value, iconData);
+            }
+
+            using var image = surface.Snapshot();
+            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+
+            return data.ToArray();
+        }
+
+        private byte[] GenerateQrCode(string content, SKColor codeColor, SKColor backgroundColor, IconData iconData, bool useRect = false)
+        {
+            // Generate QrCode
+            using var generator = new QRCodeGenerator();
+            var qr = generator.CreateQrCode(content, ECCLevel.L);
+
+            // Render to canvas
+            var info = new SKImageInfo(512, 512);
+            using var surface = SKSurface.Create(info);
+            var canvas = surface.Canvas;
+            if (useRect)
+            {
+                canvas.Render(qr, new SKRect(0, 0, info.Width, info.Height), SKColor.Empty, codeColor, backgroundColor, iconData);
+            }
+            else
+            {
+                canvas.Render(qr, info.Width, info.Height, SKColor.Empty, codeColor, backgroundColor, iconData);
+            }
 
             using var image = surface.Snapshot();
             using var data = image.Encode(SKEncodedImageFormat.Png, 100);
