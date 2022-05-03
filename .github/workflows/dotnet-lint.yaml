@@ -1,0 +1,125 @@
+name: dotnet lint
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: 0 1 * * 1 # At AM10:00 JST on Monday
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  NUGET_XMLDOC_MODE: skip
+  SLN_ROOT: .
+  IGNORE_CSPROJ: NanoServer
+  # colour output
+  DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION: 1
+  TERM: xterm
+
+jobs:
+  lint_csharp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: 6.0.x
+
+      # dotnet list
+      - name: Obtain csproj to lint
+        run: |
+          projects=$(dotnet sln list | tail -n +3 | grep -v "${{ env.IGNORE_CSPROJ }}" | sort | xargs -n 1 echo '  *')
+          {
+            echo "FORMAT_PROJECTS<<EOF"
+            echo "${projects}"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+        working-directory: ${{ env.SLN_ROOT }}
+
+      - name: Add dotnet-format problem matcher
+        uses: xt0rted/dotnet-format-problem-matcher@v1
+
+      # dotnet format is build-in from dotnet 6.0 sdk
+      - name: Dotnet Format
+        run: |
+          for csproj in $(dotnet sln list | tail -n +3 | grep -v "${{ env.IGNORE_CSPROJ }}"); do
+            dotnet format "$csproj" --verbosity diagnostic --exclude "console-fail-tests"
+          done
+        working-directory: ${{ env.SLN_ROOT }}
+
+      # is change happen?
+      - name: Check for modified files
+        id: git-check
+        run: echo "::set-output name=modified::$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)"
+
+      # get directory stats
+      - name: List modified directories
+        if: steps.git-check.outputs.modified == 'true'
+        run: |
+          dirs=$(git diff --dirstat=files)
+          {
+            echo "CHANGED_DIRS<<EOF"
+            echo "${dirs}"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      # get files stats
+      - name: List modified files
+        if: steps.git-check.outputs.modified == 'true'
+        run: |
+          files=$(git diff --name-only)
+          {
+            echo "CHANGED_FILES<<EOF"
+            echo "${files}"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      # Commit if change happen, then craete PR. force push when branch/pr already exists.
+      - name: Create PullRequest
+        if: steps.git-check.outputs.modified == 'true'
+        id: cpr
+        uses: peter-evans/create-pull-request@v3
+        with:
+          base: "main"
+          branch: "auto-pr/dotnet-format"
+          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          committer: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          delete-branch: true
+          commit-message: "[dotnet format] Automated changes"
+          title: "[dotnet format] Automated changes"
+          body: |
+            ## tl;dr;
+            dotnet format generated changes based on .editorconfig
+
+            ## Stats
+
+            changed directories
+
+            ```
+            ${{ env.CHANGED_DIRS }}
+            ```
+
+            ## Files
+
+            <details>
+            <summary>Click to show.</summary>
+
+            ```
+            ${{ env.CHANGED_FILES }}
+            ```
+
+            </details>
+
+            ## Target Projects
+
+            ${{ env.FORMAT_PROJECTS }}
+
+          labels: |
+            automated pr
+
+      - name: Check outputs
+        if: steps.git-check.outputs.modified == 'true'
+        run: |
+          echo "Pull Request Number - ${{ steps.cpr.outputs.pull-request-number }}"
+          echo "Pull Request URL - ${{ steps.cpr.outputs.pull-request-url }}"
