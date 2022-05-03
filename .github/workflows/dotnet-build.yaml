@@ -30,10 +30,6 @@ jobs:
       # build
       - name: Build
         run: dotnet build ./src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj -c ${{ env.DOTNET_BUILD_CONFIG }}
-      - name: Build (ManualGenerate)
-        run: dotnet build ./samples/ManualGenerate/ManualGenerate.csproj -c ${{ env.DOTNET_BUILD_CONFIG }}
-      - name: Build (SimpleGenerate)
-        run: dotnet build ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.DOTNET_BUILD_CONFIG }}
       # tests
       - name: Test (net3.1)
         run: dotnet test ./tests/SkiaSharp.QrCode.Tests.net31/ -c ${{ env.DOTNET_BUILD_CONFIG }} --logger GitHubActions --logger console;verbosity=normal
@@ -60,12 +56,14 @@ jobs:
             6.0.x
             5.0.x
             3.1.x
+      - name: Install wasm-tools
+        run: dotnet workload install wasm-tools
       # build
-      - name: Build ManualGenerate
+      - name: Build (ManualGenerate)
         run: dotnet build ./samples/ManualGenerate/ManualGenerate.csproj -c ${{ env.DOTNET_BUILD_CONFIG }}
-      - name: Build SimpleGenerate
+      - name: Build (SimpleGenerate)
         run: dotnet build ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.DOTNET_BUILD_CONFIG }}
-      - name: Build BlazorWasm
+      - name: Build (BlazorWasm)
         run: dotnet build ./samples/BlazorWasm/BlazorWasm.csproj -c ${{ env.DOTNET_BUILD_CONFIG }}
       # netcoreapp3.1
       - name: Run ManualGenerate (netcoreapp3.1)
