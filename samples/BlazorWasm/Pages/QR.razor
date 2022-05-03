@@ -9,11 +9,25 @@
 <h1>QR Code</h1>
 
 <p>Input Text <input type="text" @bind="Text" /></p>
+<button class="btn btn-primary" @onclick="ToggleQrStatus">@State QR Code</button>
+
 <!-- SkiaSharp.Views.Blazor work on WebAssembly workload. You need `dotnet workload install wasm-tools` before run Blazor WASM. -->
-<SKCanvasView width="512" height="512" OnPaintSurface="OnPaintSurfaceQr" />
+@if (ShowQr)
+{
+    // Re-render will regenerate QR Code with new contents.
+    <SKCanvasView width="512" height="512" OnPaintSurface="OnPaintSurfaceQr" />
+}
 
 @code {
-    public string? Text { get; set; } = "https://github.com/guitarrapc/SkiaSharp.QrCode";
+    public string State { get; set; } = "Render";
+    public string Text { get; set; } = "https://github.com/guitarrapc/SkiaSharp.QrCode";
+    public bool ShowQr { get; set; }
+
+    void ToggleQrStatus()
+    {
+        ShowQr = !ShowQr;
+        State = ShowQr ? "Hide" : "Generate";
+    }
 
     void OnPaintSurfaceQr(SKPaintSurfaceEventArgs e)
     {
