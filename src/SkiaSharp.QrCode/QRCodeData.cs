@@ -27,29 +27,25 @@ namespace SkiaSharp.QrCode
             if (compressMode.Equals(Compression.Deflate))
             {
                 using (var input = new MemoryStream(bytes.ToArray()))
+                using (var output = new MemoryStream())
                 {
-                    using (var output = new MemoryStream())
+                    using (var dstream = new DeflateStream(input, CompressionMode.Decompress))
                     {
-                        using (var dstream = new DeflateStream(input, CompressionMode.Decompress))
-                        {
-                            dstream.CopyTo(output);
-                        }
-                        bytes = new List<byte>(output.ToArray());
+                        dstream.CopyTo(output);
                     }
+                    bytes = new List<byte>(output.ToArray());
                 }
             }
             else if (compressMode.Equals(Compression.GZip))
             {
                 using (var input = new MemoryStream(bytes.ToArray()))
+                using (var output = new MemoryStream())
                 {
-                    using (var output = new MemoryStream())
+                    using (var dstream = new GZipStream(input, CompressionMode.Decompress))
                     {
-                        using (var dstream = new GZipStream(input, CompressionMode.Decompress))
-                        {
-                            dstream.CopyTo(output);
-                        }
-                        bytes = new List<byte>(output.ToArray());
+                        dstream.CopyTo(output);
                     }
+                    bytes = new List<byte>(output.ToArray());
                 }
             }
 
@@ -125,22 +121,18 @@ namespace SkiaSharp.QrCode
             if (compressMode.Equals(Compression.Deflate))
             {
                 using (var output = new MemoryStream())
+                using (var dstream = new DeflateStream(output, CompressionMode.Compress))
                 {
-                    using (var dstream = new DeflateStream(output, CompressionMode.Compress))
-                    {
-                        dstream.Write(rawData, 0, rawData.Length);
-                    }
+                    dstream.Write(rawData, 0, rawData.Length);
                     rawData = output.ToArray();
                 }
             }
             else if (compressMode.Equals(Compression.GZip))
             {
                 using (var output = new MemoryStream())
+                using (GZipStream gzipStream = new GZipStream(output, CompressionMode.Compress, true))
                 {
-                    using (GZipStream gzipStream = new GZipStream(output, CompressionMode.Compress, true))
-                    {
-                        gzipStream.Write(rawData, 0, rawData.Length);
-                    }
+                    gzipStream.Write(rawData, 0, rawData.Length);
                     rawData = output.ToArray();
                 }
             }
@@ -158,7 +150,6 @@ namespace SkiaSharp.QrCode
         {
             this.ModuleMatrix = null;
             this.Version = 0;
-
         }
 
         public enum Compression

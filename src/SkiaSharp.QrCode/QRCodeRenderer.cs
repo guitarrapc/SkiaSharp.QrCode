@@ -1,4 +1,3 @@
-using SkiaSharp;
 using SkiaSharp.QrCode.Models;
 using System;
 using System.Linq;
@@ -20,7 +19,8 @@ namespace SkiaSharp.QrCode
             if (data != null)
             {
                 using (var lightPaint = new SKPaint() { Color = SKColors.White, Style = SKPaintStyle.StrokeAndFill })
-                using (var darkPaint = new SKPaint() { Color = (qrColor.HasValue ? qrColor.Value : SKColors.Black), Style = SKPaintStyle.StrokeAndFill }) {
+                using (var darkPaint = new SKPaint() { Color = (qrColor.HasValue ? qrColor.Value : SKColors.Black), Style = SKPaintStyle.StrokeAndFill })
+                {
 
                     var rows = data.ModuleMatrix.Count;
                     var columns = data.ModuleMatrix.Select(x => x.Length).Max();
@@ -58,6 +58,6 @@ namespace SkiaSharp.QrCode
         /// <see cref="T:SkiaSharp.QRCodeGeneration.QRCodeRenderer"/> so the garbage collector can reclaim the memory
         /// that the <see cref="T:SkiaSharp.QRCodeGeneration.QRCodeRenderer"/> was occupying.</remarks>
         public void Dispose()
-        {}
+        { }
     }
 }

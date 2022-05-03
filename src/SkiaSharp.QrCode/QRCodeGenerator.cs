@@ -962,7 +962,9 @@ namespace SkiaSharp.QrCode
             var codeText = string.Empty;
 
             if (this.IsValidISO(plainText) && !forceUtf8)
+            {
                 codeBytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(plainText);
+            }
             else
             {
                 switch (eciMode)
@@ -1120,8 +1122,7 @@ namespace SkiaSharp.QrCode
                 {
                     Version = (i + 7) / 7,
                     PatternPositions = points
-                }
-                );
+                });
             }
         }
 
