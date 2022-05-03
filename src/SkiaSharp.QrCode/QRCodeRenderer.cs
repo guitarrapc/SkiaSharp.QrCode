@@ -14,11 +14,11 @@ namespace SkiaSharp.QrCode
         /// <param name="data">The data.</param>
         /// <param name="qrColor">The color.</param>
         /// <param name="iconData">The icon settings</param>
-        public void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? qrColor, IconData iconData = null)
+        public void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? qrColor, SKColor? backgroundColor, IconData iconData = null)
         {
             if (data != null)
             {
-                using (var lightPaint = new SKPaint() { Color = SKColors.White, Style = SKPaintStyle.StrokeAndFill })
+                using (var lightPaint = new SKPaint() { Color = (backgroundColor.HasValue ? backgroundColor.Value : SKColors.White), Style = SKPaintStyle.StrokeAndFill })
                 using (var darkPaint = new SKPaint() { Color = (qrColor.HasValue ? qrColor.Value : SKColors.Black), Style = SKPaintStyle.StrokeAndFill })
                 {
 
