@@ -3,13 +3,46 @@
 @using SkiaSharp.QrCode
 @using SkiaSharp.QrCode.Image
 @using SkiaSharp.Views.Blazor
+@using Microsoft.Fast.Components.FluentUI
+@using System.ComponentModel.DataAnnotations
 
 <PageTitle>QR</PageTitle>
 
+
 <h1>QR Code</h1>
 
-<p>Input Text <input type="text" @bind="Text" /></p>
-<button class="btn btn-primary" @onclick="ToggleQrStatus">@State QR Code</button>
+<FluentCard>
+    <EditForm Model="@Model">
+        <p>
+            <label>
+                QuietZoneSize: @Model.QuietZoneSize
+            </label>
+        </p>
+        <FluentSlider @bind-Value=@Model.QuietZoneSize></FluentSlider>
+
+        <p>
+            <label>
+                EccLevel:
+                <InputSelect @bind-Value="@Model.EccLevel">
+                    @foreach (var level in Enum.GetValues(typeof(ECCLevel)))
+                    {
+                        <option value="@level">@level.ToString()</option>
+                    }
+                </InputSelect>
+            </label>
+        </p>
+
+        <p>
+            <label>
+                Content:
+                <InputText @bind-Value="@Model.Content" />
+            </label>
+        </p>
+
+        <button type="submit" class="btn btn-primary" @onclick="ToggleQrStatus">@(ShowQr ? "Hide QR" : "Generate QR")</button>
+    </EditForm>
+</FluentCard>
+
 
 <!-- SkiaSharp.Views.Blazor work on WebAssembly workload. You need `dotnet workload install wasm-tools` before run Blazor WASM. -->
 @if (ShowQr)
@@ -19,31 +52,38 @@
 }
 
 @code {
-    public string State { get; set; } = "Render";
-    public string Text { get; set; } = "https://github.com/guitarrapc/SkiaSharp.QrCode";
-    public bool ShowQr { get; set; }
+    private bool ShowQr { get; set; }
+    private QrGenerateModel Model { get; set; } = new QrGenerateModel();
 
     void ToggleQrStatus()
     {
         ShowQr = !ShowQr;
-        State = ShowQr ? "Hide" : "Generate";
     }
 
     void OnPaintSurfaceQr(SKPaintSurfaceEventArgs e)
     {
-        var content = Text;
+        var content = Model.Content;
 
         var canvas = e.Surface.Canvas;
         canvas.Clear(SKColors.Red);
         using var generator = new QRCodeGenerator();
 
         // Generate QrCode
-        var qr = generator.CreateQrCode(content, ECCLevel.L);
+        var qr = generator.CreateQrCode(content, Model.EccLevel, quietZoneSize: Model.QuietZoneSize);
 
         // Render to canvas
         var info = new SKImageInfo(512, 512); // Make sure match with SKCanvasView width & height.
         using var surface = SKSurface.Create(info);
         canvas.Render(qr, info.Width, info.Height);
+    }
+
+    public class QrGenerateModel
+    {
+        [Required]
+        public string Content { get; set; } = "https://github.com/guitarrapc/SkiaSharp.QrCode";
+        [Range(0, 10)]
+        public int QuietZoneSize { get; set; } = 4;
+        public ECCLevel EccLevel { get; set; } = ECCLevel.L;
     }
 }
 

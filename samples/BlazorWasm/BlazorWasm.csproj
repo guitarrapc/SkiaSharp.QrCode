@@ -9,6 +9,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="6.0.4" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="6.0.4" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Fast.Components.FluentUI" Version="1.4.0" />
     <PackageReference Include="SkiaSharp.QrCode" Version="0.5.0" />
     <PackageReference Include="SkiaSharp.Views.Blazor" Version="2.88.0-preview.256" />
   </ItemGroup>
