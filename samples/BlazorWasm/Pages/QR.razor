@@ -1,0 +1,35 @@
+@page "/qr"
+@using SkiaSharp
+@using SkiaSharp.QrCode
+@using SkiaSharp.QrCode.Image
+@using SkiaSharp.Views.Blazor
+
+<PageTitle>QR</PageTitle>
+
+<h1>QR Code</h1>
+
+<p>Input Text <input type="text" @bind="Text" /></p>
+<!-- SkiaSharp.Views.Blazor work on WebAssembly workload. You need `dotnet workload install wasm-tools` before run Blazor WASM. -->
+<SKCanvasView width="512" height="512" OnPaintSurface="OnPaintSurfaceQr" />
+
+@code {
+    public string? Text { get; set; } = "https://github.com/guitarrapc/SkiaSharp.QrCode";
+
+    void OnPaintSurfaceQr(SKPaintSurfaceEventArgs e)
+    {
+        var content = Text;
+
+        var canvas = e.Surface.Canvas;
+        canvas.Clear(SKColors.Red);
+        using var generator = new QRCodeGenerator();
+
+        // Generate QrCode
+        var qr = generator.CreateQrCode(content, ECCLevel.L);
+
+        // Render to canvas
+        var info = new SKImageInfo(512, 512); // Make sure match with SKCanvasView width & height.
+        using var surface = SKSurface.Create(info);
+        canvas.Render(qr, info.Width, info.Height);
+    }
+}
+
