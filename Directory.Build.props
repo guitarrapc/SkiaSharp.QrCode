@@ -13,9 +13,5 @@
     <PackageTags>skia, skiasharp, qrcode</PackageTags>
     <NeutralLanguage>en</NeutralLanguage>
     <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
-
-    <!-- Strong Naming -->
-    <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>../../opensource.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 </Project>
