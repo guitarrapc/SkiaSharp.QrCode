@@ -50,7 +50,7 @@ namespace SkiaSharp.QrCode
                 version = this.GetVersion(dataInputLength, encoding, eccLevel);
             }
 
-            string modeIndicator = String.Empty;
+            string modeIndicator = string.Empty;
             if (eciMode != EciMode.Default)
             {
                 modeIndicator = DecToBin((int)EncodingMode.ECI, 4);
@@ -798,7 +798,7 @@ namespace SkiaSharp.QrCode
         {
             return new List<char>(bitString.ToCharArray()).Select((x, i) => new { Index = i, Value = x })
                 .GroupBy(x => x.Index / 8)
-                .Select(x => String.Join("", x.Select(v => v.Value.ToString()).ToArray()))
+                .Select(x => string.Join("", x.Select(v => v.Value.ToString()).ToArray()))
                 .ToList();
         }
 
@@ -873,7 +873,7 @@ namespace SkiaSharp.QrCode
             var bytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(input);
             //var result = Encoding.GetEncoding("ISO-8859-1").GetString(bytes);
             var result = Encoding.GetEncoding("ISO-8859-1").GetString(bytes, 0, bytes.Length);
-            return String.Equals(input, result);
+            return string.Equals(input, result);
         }
 
         private string PlainTextToBinary(string plainText, EncodingMode encMode, EciMode eciMode, bool utf8BOM, bool forceUtf8)
@@ -931,17 +931,6 @@ namespace SkiaSharp.QrCode
             if (plainText.Length > 0)
             {
                 codeText += DecToBin(this.alphanumEncDict[plainText[0]], 6);
-            }
-            return codeText;
-        }
-
-        private string PlainTextToBinaryECI(string plainText)
-        {
-            var codeText = string.Empty;
-            byte[] _bytes = Encoding.GetEncoding("ascii").GetBytes(plainText);
-            foreach (byte _byte in _bytes)
-            {
-                codeText += DecToBin(_byte, 8);
             }
             return codeText;
         }
