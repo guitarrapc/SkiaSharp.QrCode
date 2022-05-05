@@ -1,0 +1,16 @@
+<Project>
+  <PropertyGroup>
+    <!-- NuGet -->
+    <PackageVersion>$(Version)</PackageVersion>
+    <Authors>guitarrapc</Authors>
+    <Company />
+    <Copyright>guitarrapc</Copyright>
+    <Description>QrCode for .NET Standard with Skia.Sharp. No GDI, no System.Drawing.</Description>
+    <PackageProjectUrl>https://github.com/guitarrapc/Skia.QrCode</PackageProjectUrl>
+    <RepositoryUrl>$(PackageProjectUrl)</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>skia, skiasharp, qrcode</PackageTags>
+    <NeutralLanguage>en</NeutralLanguage>
+    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+  </PropertyGroup>
+</Project>

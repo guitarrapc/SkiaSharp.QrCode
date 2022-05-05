@@ -2,23 +2,11 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;netstandard2.1</TargetFrameworks>
-  </PropertyGroup>
 
-  <PropertyGroup>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>0.4.0</Version>
-    <AssemblyVersion>$(Version)</AssemblyVersion>
-    <Authors>guitarrapc</Authors>
-    <Company />
-    <Title>QrCode for .NET Standard</Title>
-    <Summary>QrCode for .NET Standard with Skia.Sharp.</Summary>
-    <Description>QrCode for .NET Standard with Skia.Sharp. No GDI, no System.Drawing.</Description>
-    <Copyright>guitarrapc</Copyright>
-    <PackageProjectUrl>https://github.com/guitarrapc/Skia.QrCode</PackageProjectUrl>
-    <RepositoryUrl>$(PackageProjectUrl)</RepositoryUrl>
-    <PackageTags>skia, skiasharp, qrcode</PackageTags>
-    <NeutralLanguage>en</NeutralLanguage>
-    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <!-- NuGet -->
+    <PackageId>SkiaSharp.QrCode</PackageId>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>../../opensource.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
   <ItemGroup>
