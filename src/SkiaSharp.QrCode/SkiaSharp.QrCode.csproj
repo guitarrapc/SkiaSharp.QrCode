@@ -13,11 +13,4 @@
     <PackageReference Include="SkiaSharp" Version="2.80.2" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="..\..\LICENSE.md">
-      <Pack>True</Pack>
-      <PackagePath></PackagePath>
-    </None>
-  </ItemGroup>
-
 </Project>
