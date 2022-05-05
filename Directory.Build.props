@@ -5,7 +5,6 @@
     <Authors>guitarrapc</Authors>
     <Company />
     <Copyright>guitarrapc</Copyright>
-    <PackageId>SkiaSharp.QrCode</PackageId>
     <Description>QrCode for .NET Standard with Skia.Sharp. No GDI, no System.Drawing.</Description>
     <PackageProjectUrl>https://github.com/guitarrapc/Skia.QrCode</PackageProjectUrl>
     <RepositoryUrl>$(PackageProjectUrl)</RepositoryUrl>
