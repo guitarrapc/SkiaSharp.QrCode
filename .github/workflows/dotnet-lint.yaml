@@ -79,7 +79,7 @@ jobs:
       - name: Create PullRequest
         if: steps.git-check.outputs.modified == 'true'
         id: cpr
-        uses: peter-evans/create-pull-request@v3
+        uses: peter-evans/create-pull-request@v4
         with:
           base: "main"
           branch: "auto-pr/dotnet-format"
@@ -117,6 +117,7 @@ jobs:
 
           labels: |
             automated pr
+          token: ${{ secrets.SYNCED_GITHUB_TOKEN_REPO }} # for PR build trigger
 
       - name: Check outputs
         if: steps.git-check.outputs.modified == 'true'
