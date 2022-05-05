@@ -22,6 +22,12 @@
 
         <p>
             <label>
+                Size: <FluentNumberField @bind-Value=@Model.Size></FluentNumberField>
+            </label>
+        </p>
+
+        <p>
+            <label>
                 QuietZoneSize: @Model.QuietZoneSize
             </label>
         </p>
@@ -84,12 +90,16 @@
 @if (ShowQr)
 {
     // Re-render will regenerate QR Code with new contents.
-    <SKCanvasView width="512" height="512" OnPaintSurface="OnPaintSurfaceQr" />
+    <SKCanvasView width="@Model.Size" height="@Model.Size" OnPaintSurface="OnPaintSurfaceQr" />
+}
+else
+{
+    <p>Please generate QR.</p>
 }
 
 @code {
     private bool ShowQr { get; set; }
-    private QrGenerateModel Model { get; set; } = new QrGenerateModel();
+    private QrCodeModel Model { get; set; } = new QrCodeModel();
 
     void ToggleQrStatus()
     {
@@ -108,15 +118,18 @@
         var qr = generator.CreateQrCode(content, Model.EccLevel, quietZoneSize: Model.QuietZoneSize);
 
         // Render to canvas
-        var info = new SKImageInfo(512, 512); // Make sure match with SKCanvasView width & height.
+        var info = new SKImageInfo(Model.Size, Model.Size); // Make sure match with SKCanvasView width & height.
         using var surface = SKSurface.Create(info);
         canvas.Render(qr, info.Width, info.Height, Model.ClearColor, Model.CodeColor, Model.BackgroundColor);
     }
 
-    public class QrGenerateModel
+    public class QrCodeModel
     {
         [Required]
         public string Content { get; set; } = "https://github.com/guitarrapc/SkiaSharp.QrCode";
+        [Required]
+        [Range(100, 1024)]
+        public int Size { get; set; } = 512;
         [Range(0, 10)]
         public int QuietZoneSize { get; set; } = 4;
         public ECCLevel EccLevel { get; set; } = ECCLevel.L;
