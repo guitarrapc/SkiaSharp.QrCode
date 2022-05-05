@@ -11,6 +11,6 @@
     <RepositoryType>git</RepositoryType>
     <PackageTags>skia, skiasharp, qrcode</PackageTags>
     <NeutralLanguage>en</NeutralLanguage>
-    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 </Project>
