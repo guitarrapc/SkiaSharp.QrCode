@@ -23,7 +23,7 @@ namespace SimpleGenerate
             {
                 qrCode.GenerateImage(output);
             }
-            
+
             Console.WriteLine($"Successfully output QRCode in {path}");
         }
     }

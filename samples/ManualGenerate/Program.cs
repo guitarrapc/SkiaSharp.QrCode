@@ -1,8 +1,6 @@
 using SkiaSharp;
-using System;
 using System.IO;
 using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Models;
 
 namespace SkiaQrCodeSampleConsole
 {
@@ -16,7 +14,7 @@ namespace SkiaQrCodeSampleConsole
             using (var generator = new QRCodeGenerator())
             {
                 // Generate QrCode
-                var qr = generator.CreateQrCode(content, ECCLevel.L, quietZoneSize:1);
+                var qr = generator.CreateQrCode(content, ECCLevel.L, quietZoneSize: 1);
 
                 // Render to canvas
                 var info = new SKImageInfo(512, 512);
