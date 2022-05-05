@@ -1,11 +1,10 @@
 using Microsoft.AspNetCore.Components.Forms;
 using SkiaSharp;
-using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 
 namespace BlazorWasm.Pages
 {
-    public class CustomInputSelect<TValue> : InputSelect<TValue>
+    public class SKColorInputSelect<TValue> : InputSelect<TValue>
     {
         protected override bool TryParseValueFromString(string? value, [MaybeNullWhen(false)] out TValue result, [NotNullWhen(false)] out string? validationErrorMessage)
         {
