@@ -26,7 +26,7 @@ jobs:
       - name: Build
         run: dotnet build -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.Linux.slnf
       - name: Test
-        run: dotnet test -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.sln --logger GitHubActions --logger console;verbosity=normal
+        run: dotnet test -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.sln --logger GitHubActions --logger "console;verbosity=normal"
       # ManualGenerate
       - name: Run ManualGenerate (net6.0)
         run: dotnet run --no-build --project ./ManualGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net6.0
