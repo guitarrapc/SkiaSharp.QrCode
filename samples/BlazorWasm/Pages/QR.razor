@@ -6,6 +6,8 @@
 @using Microsoft.Fast.Components.FluentUI
 @using System.ComponentModel.DataAnnotations
 
+@implements IDisposable;
+
 <PageTitle>QR</PageTitle>
 
 <h1>QR Code</h1>
@@ -115,6 +117,11 @@
         var info = new SKImageInfo(Model.Size, Model.Size); // Make sure match with SKCanvasView width & height.
         using var surface = SKSurface.Create(info);
         canvas.Render(qr, info.Width, info.Height, Model.ClearColor, Model.CodeColor, Model.BackgroundColor);
+    }
+
+    public void Dispose()
+    {
+        CanvasView?.Dispose();
     }
 
     public class QrCodeModel
