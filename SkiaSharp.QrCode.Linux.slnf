@@ -1,0 +1,12 @@
+{
+  "solution": {
+    "path": "SkiaSharp.QrCode.sln",
+    "projects": [
+      "samples\\BlazorWasm\\BlazorWasm.csproj",
+      "samples\\ManualGenerate\\ManualGenerate.csproj",
+      "samples\\SimpleGenerate\\SimpleGenerate.csproj",
+      "src\\SkiaSharp.QrCode\\SkiaSharp.QrCode.csproj",
+      "tests\\SkiaSharp.QrCode.Tests\\SkiaSharp.QrCode.Tests.csproj"
+    ]
+  }
+}
