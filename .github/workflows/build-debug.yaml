@@ -1,4 +1,4 @@
-name: dotnet-build
+name: build debug
 
 on:
   push:
