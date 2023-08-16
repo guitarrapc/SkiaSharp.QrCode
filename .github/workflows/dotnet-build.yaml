@@ -9,8 +9,7 @@ on:
       - "main"
 
 env:
-  DOCKER_BUILDKIT: 1
-  DOTNET_BUILD_CONFIG: Debug
+  BUILD_CONFIG: Debug
 
 jobs:
   build:
@@ -18,19 +17,26 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-dotnet@v3
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
+          restore-wasm-workload: true
           dotnet-version: |
             6.0.x
             7.0.x
       - name: Build
-        run: dotnet build  -c ${{ env.DOTNET_BUILD_CONFIG }}
+        run: dotnet build -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.Linux.slnf
       - name: Test
-        run: dotnet test -c ${{ env.DOTNET_BUILD_CONFIG }} -p:CollectCoverage=true -p:CoverletOutputFormat=opencover --logger GitHubActions --logger console;verbosity=normal
-      - uses: codecov/codecov-action@v1
-        with:
-          file: ./tests/SkiaSharp.QrCode.Tests/coverage.opencover.xml
-          flags: unittests
-          fail_ci_if_error: true
-          verbose: true
-        continue-on-error: true
+        run: dotnet test -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.sln --logger GitHubActions --logger console;verbosity=normal
+      # net6.0
+      - name: Run ManualGenerate (net6.0)
+        run: dotnet run --no-build --project ./samples/ManualGenerate/ManualGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net6.0
+      - name: Run SimpleGenerate (net6.0)
+        run: dotnet run --no-build --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net6.0
+      # net7.0
+      - name: Run ManualGenerate (net6.0)
+        run: dotnet run --no-build --project ./samples/ManualGenerate/ManualGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net7.0
+      - name: Run SimpleGenerate (net6.0)
+        run: dotnet run --no-build --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net7.0
+      # docker
+      - name: Linux Docker Compose Run
+        run: docker-compose -f ./samples/LinuxRunSamples/compose.yaml up
