@@ -91,7 +91,9 @@
 </EditForm>
 
 <!-- SkiaSharp.Views.Blazor work on WebAssembly workload. You need `dotnet workload install wasm-tools` before run Blazor WASM. -->
-<SKCanvasView width="@Model.Size" height="@Model.Size" @ref="CanvasView" OnPaintSurface="OnPaintSurfaceQr" />
+<!-- When using @ref, `width=@Model.Size height=@Model.Size` ignored. Set static value instead. -->
+@*<SKCanvasView width="@Model.Size" height="@Model.Size" @ref="CanvasView" OnPaintSurface="OnPaintSurfaceQr" />*@
+<SKCanvasView width="2048" height="2048" @ref="CanvasView" OnPaintSurface="OnPaintSurfaceQr" />
 
 @code {
     private EditContext EditContext { get; set; } = default!; // Autoupdate
