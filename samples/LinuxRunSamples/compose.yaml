@@ -1,32 +1,4 @@
 services:
-  netcoreapp3.1:
-    image: mcr.microsoft.com/dotnet/core/sdk:3.1
-    command: bash -eux entrypoint.sh -f netcoreapp3.1
-    working_dir: /src
-    volumes:
-      - ./3.1/:/src
-
-  netcoreapp3.1_nodep:
-    image: mcr.microsoft.com/dotnet/core/sdk:3.1
-    command: bash -eux entrypoint.sh -f netcoreapp3.1
-    working_dir: /src
-    volumes:
-      - ./3.1_nodep/:/src
-
-  net5.0:
-    image: mcr.microsoft.com/dotnet/sdk:5.0
-    command: bash -eux entrypoint.sh -f net5.0
-    working_dir: /src
-    volumes:
-      - ./5.0:/src
-
-  net5.0__nodep:
-    image: mcr.microsoft.com/dotnet/sdk:5.0
-    command: bash -eux entrypoint.sh -f net5.0
-    working_dir: /src
-    volumes:
-      - ./5.0_nodep:/src
-
   net6.0:
     image: mcr.microsoft.com/dotnet/sdk:6.0
     command: bash -eux entrypoint.sh -f net6.0
@@ -40,3 +12,17 @@ services:
     working_dir: /src
     volumes:
       - ./6.0_nodep:/src
+
+  net7.0:
+    image: mcr.microsoft.com/dotnet/sdk:7.0
+    command: bash -eux entrypoint.sh -f net7.0
+    working_dir: /src
+    volumes:
+      - ./7.0:/src
+
+  net7.0__nodep:
+    image: mcr.microsoft.com/dotnet/sdk:7.0
+    command: bash -eux entrypoint.sh -f net7.0
+    working_dir: /src
+    volumes:
+      - ./7.0_nodep:/src
