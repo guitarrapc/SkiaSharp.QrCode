@@ -1,0 +1,44 @@
+name: dotnet-build
+
+on:
+  push:
+    branches:
+      - "main"
+  pull_request:
+    branches:
+      - "main"
+
+env:
+  BUILD_CONFIG: Debug
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v3
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
+        with:
+          restore-wasm-workload: true
+          dotnet-version: |
+            6.0.x
+            7.0.x
+      - name: Build
+        run: dotnet build -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.Linux.slnf
+      - name: Test
+        run: dotnet test -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.sln --logger GitHubActions --logger console;verbosity=normal
+      # ManualGenerate
+      - name: Run ManualGenerate (net6.0)
+        run: dotnet run --no-build --project ./ManualGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net6.0
+        working-directory: ./samples/ManualGenerate
+      - name: Run ManualGenerate (net7.0)
+        run: dotnet run --no-build --project ./ManualGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net7.0
+        working-directory: ./samples/ManualGenerate
+      # SimpleGenerate
+      - name: Run SimpleGenerate (net6.0)
+        run: dotnet run --no-build --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net6.0
+      - name: Run SimpleGenerate (net7.0)
+        run: dotnet run --no-build --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net7.0
+      # docker
+      - name: Linux Docker Compose Run
+        run: docker-compose -f ./samples/LinuxRunSamples/compose.yaml up

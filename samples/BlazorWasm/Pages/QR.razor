@@ -6,104 +6,115 @@
 @using Microsoft.Fast.Components.FluentUI
 @using System.ComponentModel.DataAnnotations
 
-<PageTitle>QR</PageTitle>
+@implements IDisposable;
 
+<PageTitle>QR</PageTitle>
 
 <h1>QR Code</h1>
 
-<FluentCard>
-    <EditForm Model="@Model">
-        <p>
-            <label>
-                Content:
-            </label>
-            <InputText style="width: 90%;" @bind-Value="@Model.Content" />
-        </p>
+<EditForm EditContext="@EditContext" OnSubmit="@OnHandleSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
 
-        <p>
-            <label>
-                Size: <FluentNumberField @bind-Value=@Model.Size></FluentNumberField>
-            </label>
-        </p>
+    <div style="margin-bottom: 1rem">
+        <FluentCard>
 
-        <p>
-            <label>
-                QuietZoneSize: @Model.QuietZoneSize
-            </label>
-        </p>
-        <FluentSlider @bind-Value=@Model.QuietZoneSize></FluentSlider>
+            <div class="d-flex flex-row" style="margin:0.5rem">
+                <label style="width: 80px;">Content</label>
+                <InputText style="width: 100%;" @bind-Value="@Model.Content" />
+            </div>
 
-        <p>
-            <label>
-                EccLevel:
-                <InputSelect @bind-Value="@Model.EccLevel">
+            <div class="d-flex flex-row" style="margin:0.5rem">
+                <label style="width: 80px;">Size</label>
+                <FluentNumberField @bind-Value=@Model.Size></FluentNumberField>
+            </div>
+
+        </FluentCard>
+    </div>
+
+    <div style="margin-bottom: 1rem">
+        <FluentCard>
+
+            <div class="d-flex flex-row" style="margin:0.5rem">
+                <label style="width: 120px;">QuietZoneSize</label>
+                <label style="width: 20px;">@Model.QuietZoneSize</label>
+                <input style="width: 200px;" class="mx-1" type="range" min="0" max="10" step="1" @bind-value="@Model.QuietZoneSize" />
+            </div>
+
+            <div style="margin:0.5rem">
+                <label style="width: 140px;">EccLevel</label>
+                <InputSelect style="width: 200px;" @bind-Value="@Model.EccLevel">
                     @foreach (var level in Enum.GetValues(typeof(ECCLevel)))
                     {
-                        <option value="@level">@level.ToString()</option>
+                        <option value="@level">@level</option>
                     }
                 </InputSelect>
-            </label>
-        </p>
+            </div>
 
-        <p>
-            <label>
-                ClearColor:
-                <SKColorInputSelect @bind-Value="@Model.ClearColor">
+            <div style="margin:0.5rem">
+                <label style="width: 140px;">ClearColor</label>
+                <SKColorInputSelect style="width: 200px;" @bind-Value="@Model.ClearColor">
                     @foreach (var color in typeof(SKColors).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static).Select(x => (x.Name, Value: x.GetValue(Model.ClearColor))).ToArray())
                     {
                         <option value="@color.Value">@color.Name</option>
                     }
                 </SKColorInputSelect>
-            </label>
-        </p>
+            </div>
 
-        <p>
-            <label>
-                CodeColor:
-                <SKColorInputSelect @bind-Value="@Model.CodeColor">
+            <div style="margin:0.5rem">
+                <label style="width: 140px;">CodeColor</label>
+                <SKColorInputSelect style="width: 200px;" @bind-Value="@Model.CodeColor">
                     @foreach (var color in typeof(SKColors).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static).Select(x => (x.Name, Value: x.GetValue(Model.CodeColor))).ToArray())
                     {
                         <option value="@color.Value">@color.Name</option>
                     }
                 </SKColorInputSelect>
-            </label>
-        </p>
+            </div>
 
-        <p>
-            <label>
-                BackgroundColor:
-                <SKColorInputSelect @bind-Value="@Model.BackgroundColor">
+            <div style="margin:0.5rem">
+                <label style="width: 140px;">BackgroundColor</label>
+                <SKColorInputSelect style="width: 200px;" @bind-Value="@Model.BackgroundColor">
                     @foreach (var color in typeof(SKColors).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static).Select(x => (x.Name, Value: x.GetValue(Model.BackgroundColor))).ToArray())
                     {
                         <option value="@color.Value">@color.Name</option>
                     }
                 </SKColorInputSelect>
-            </label>
-        </p>
+            </div>
 
-        <button type="submit" class="btn btn-primary" @onclick="ToggleQrStatus">@(ShowQr ? "Hide QR" : "Generate QR")</button>
-    </EditForm>
-</FluentCard>
+        </FluentCard>
+    </div>
 
+    <div style="margin-bottom: 1rem">
+        <button type="submit" class="btn btn-primary">Refresh</button>
+    </div>
+
+</EditForm>
 
 <!-- SkiaSharp.Views.Blazor work on WebAssembly workload. You need `dotnet workload install wasm-tools` before run Blazor WASM. -->
-@if (ShowQr)
-{
-    // Re-render will regenerate QR Code with new contents.
-    <SKCanvasView width="@Model.Size" height="@Model.Size" OnPaintSurface="OnPaintSurfaceQr" />
-}
-else
-{
-    <p>Please generate QR.</p>
-}
+<!-- When using @ref, `width=@Model.Size height=@Model.Size` ignored. Set static value instead. -->
+@*<SKCanvasView width="@Model.Size" height="@Model.Size" @ref="CanvasView" OnPaintSurface="OnPaintSurfaceQr" />*@
+<SKCanvasView width="2048" height="2048" @ref="CanvasView" OnPaintSurface="OnPaintSurfaceQr" />
 
 @code {
-    private bool ShowQr { get; set; }
+    private EditContext EditContext { get; set; } = default!; // Autoupdate
     private QrCodeModel Model { get; set; } = new QrCodeModel();
+    private SKCanvasView? CanvasView { get; set; }
 
-    void ToggleQrStatus()
+    protected override void OnInitialized()
     {
-        ShowQr = !ShowQr;
+        EditContext = new EditContext(Model);
+        EditContext.OnFieldChanged += OnEditContextFiledChanged;
+        base.OnInitialized();
+    }
+
+    void OnEditContextFiledChanged(object? sender, FieldChangedEventArgs e)
+    {
+        OnHandleSubmit();
+    }
+
+    void OnHandleSubmit()
+    {
+        CanvasView?.Invalidate(); // re-render SKCanvasView
     }
 
     void OnPaintSurfaceQr(SKPaintSurfaceEventArgs e)
@@ -123,16 +134,21 @@ else
         canvas.Render(qr, info.Width, info.Height, Model.ClearColor, Model.CodeColor, Model.BackgroundColor);
     }
 
+    public void Dispose()
+    {
+        CanvasView?.Dispose();
+    }
+
     public class QrCodeModel
     {
         [Required]
         public string Content { get; set; } = "https://github.com/guitarrapc/SkiaSharp.QrCode";
         [Required]
-        [Range(100, 1024)]
+        [Range(100, 4096)]
         public int Size { get; set; } = 512;
         [Range(0, 10)]
         public int QuietZoneSize { get; set; } = 4;
-        public ECCLevel EccLevel { get; set; } = ECCLevel.L;
+        public ECCLevel EccLevel { get; set; } = ECCLevel.M;
         public SKColor ClearColor { get; set; } = SKColors.Transparent;
         public SKColor CodeColor { get; set; } = SKColors.Black;
         public SKColor BackgroundColor { get; set; } = SKColors.White;

@@ -6,15 +6,8 @@ on:
     - cron: 0 1 * * 1 # At AM10:00 JST on Monday
 
 env:
-  DOTNET_CLI_TELEMETRY_OPTOUT: 1
-  DOTNET_NOLOGO: true
-  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-  NUGET_XMLDOC_MODE: skip
   SLN_ROOT: .
-  IGNORE_CSPROJ: NanoServer
-  # colour output
-  DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION: 1
-  TERM: xterm
+  IGNORE_CSPROJ: FooBar
 
 jobs:
   lint_csharp:
@@ -22,7 +15,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-dotnet@v2
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           dotnet-version: 6.0.x
 
