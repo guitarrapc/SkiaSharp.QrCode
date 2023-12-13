@@ -5,3 +5,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly" # Check for updates to GitHub Actions every week
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "daily"
