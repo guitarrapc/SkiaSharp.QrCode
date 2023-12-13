@@ -30,6 +30,7 @@ jobs:
         run: dotnet test -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.sln --logger GitHubActions --logger "console;verbosity=normal"
 
   run:
+    needs: [build]
     strategy:
       matrix:
         dotnet-version: ["6.0", "7.0", "8.0"]
