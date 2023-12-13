@@ -175,8 +175,14 @@ namespace SkiaSharp.QrCode.Tests.Shared
                     case SKColorType.Rgba16161616:
                         Assert.Equal(80000, c.BytesSize);
                         break;
+                    case SKColorType.Bgra1010102:
+                        Assert.Equal(40000, c.BytesSize);
+                        break;
+                    case SKColorType.Bgr101010x:
+                        Assert.Equal(40000, c.BytesSize);
+                        break;
                     default:
-                        throw new NotImplementedException();
+                        throw new NotImplementedException($"{nameof(colorType)} {colorType}");
                 }
             }
         }
@@ -253,8 +259,14 @@ namespace SkiaSharp.QrCode.Tests.Shared
                         case SKColorType.Rgba16161616:
                             Assert.Equal(80000, d.BytesSize);
                             break;
+                        case SKColorType.Bgra1010102:
+                            Assert.Equal(40000, d.BytesSize);
+                            break;
+                        case SKColorType.Bgr101010x:
+                            Assert.Equal(40000, d.BytesSize);
+                            break;
                         default:
-                            throw new NotImplementedException();
+                            throw new NotImplementedException($"{nameof(colorType)} {colorType}");
                     }
                 }
             }
