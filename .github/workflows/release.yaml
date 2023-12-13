@@ -27,7 +27,7 @@ jobs:
       - run: dotnet build -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.Linux.slnf -p:Version=${{ env.GIT_TAG }}
       # pack
       - run: dotnet pack ./src/SkiaSharp.QrCode/ -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.Linux.slnf -p:Version=${{ env.GIT_TAG }} -o ./pack
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: nuget
           path: ./pack/
