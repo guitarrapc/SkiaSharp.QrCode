@@ -48,6 +48,6 @@ jobs:
           release_name: ${{ github.ref }}
           draft: true
           prerelease: false
-      - uses: actions/download-artifact@v2
+      - uses: actions/download-artifact@v3
       # upload nuget
       - run: dotnet nuget push "./nuget/*.nupkg" --skip-duplicate -s https://www.nuget.org/api/v2/package -k ${{ secrets.SYNCED_NUGET_KEY }}
