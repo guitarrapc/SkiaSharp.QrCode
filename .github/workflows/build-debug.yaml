@@ -41,14 +41,17 @@ jobs:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           restore-wasm-workload: true
-          dotnet-version: "${{ matrix.dotnet-version }}.x"
+          dotnet-version: |
+            6.0.x
+            7.0.x
+            8.0.x
       # ManualGenerate
       - name: Run ManualGenerate (${{ matrix.dotnet-version}})
-        run: dotnet run --no-build --project ./ManualGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net${{ matrix.dotnet-version }}
+        run: dotnet run --project ./ManualGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net${{ matrix.dotnet-version }}
         working-directory: ./samples/ManualGenerate
       # SimpleGenerate
       - name: Run SimpleGenerate (net6.0)
-        run: dotnet run --no-build --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net${{ matrix.dotnet-version }}
+        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net${{ matrix.dotnet-version }}
       # LinuxRunSamples
       - name: Linux Docker Compose Run
         run: docker-compose -f ./samples/LinuxRunSamples/compose.override.${{ matrix.dotnet-version }}.yaml up
