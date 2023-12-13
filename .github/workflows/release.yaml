@@ -20,6 +20,7 @@ jobs:
           dotnet-version: |
             6.0.x
             7.0.x
+            8.0.x
       # tag
       - run: echo "GIT_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
       # build
@@ -35,11 +36,7 @@ jobs:
     needs: [build-dotnet]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: |
-            6.0.x
-            7.0.x
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
       - run: echo "GIT_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
       # Create Release
       - uses: actions/create-release@v1

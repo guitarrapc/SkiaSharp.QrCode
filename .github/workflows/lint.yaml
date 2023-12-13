@@ -16,8 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
-        with:
-          dotnet-version: 6.0.x
 
       # dotnet list
       - name: Obtain csproj to lint
@@ -33,7 +31,7 @@ jobs:
       - name: Add dotnet-format problem matcher
         uses: xt0rted/dotnet-format-problem-matcher@v1
 
-      # dotnet format is build-in from dotnet 6.0 sdk
+      # dotnet format is build-in since dotnet 6.0 sdk
       - name: Dotnet Format
         run: |
           for csproj in $(dotnet sln list | tail -n +3 | grep -v "${{ env.IGNORE_CSPROJ }}"); do
