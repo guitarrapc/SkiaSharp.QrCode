@@ -6,9 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SkiaSharp.QrCode" Version="0.4.1" />
+    <PackageReference Include="SkiaSharp.QrCode" Version="0.7.0" />
     <!-- require libfontconfig1 https://github.com/mono/SkiaSharp/issues/964#issuecomment-549385484 -->
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.80.2" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.88.6" />
   </ItemGroup>
 
   <ItemGroup>
