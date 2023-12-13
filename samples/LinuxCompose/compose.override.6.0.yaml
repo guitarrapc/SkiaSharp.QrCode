@@ -1,12 +1,12 @@
 services:
-  net6.0:
+  net:
     image: mcr.microsoft.com/dotnet/sdk:6.0
     command: bash -eux entrypoint.sh -f net6.0
     working_dir: /src
     volumes:
       - ./6.0:/src
 
-  net6.0__nodep:
+  nodep:
     image: mcr.microsoft.com/dotnet/sdk:6.0
     command: bash -eux entrypoint.sh -f net6.0
     working_dir: /src

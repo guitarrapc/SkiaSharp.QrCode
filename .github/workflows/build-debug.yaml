@@ -50,8 +50,8 @@ jobs:
         run: dotnet run --project ./ManualGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net${{ matrix.dotnet-version }}
         working-directory: ./samples/ManualGenerate
       # SimpleGenerate
-      - name: Run SimpleGenerate (net6.0)
+      - name: Run SimpleGenerate (${{ matrix.dotnet-version}})
         run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net${{ matrix.dotnet-version }}
       # LinuxRunSamples
-      - name: Linux Docker Compose Run
-        run: docker-compose -f ./samples/LinuxRunSamples/compose.override.${{ matrix.dotnet-version }}.yaml up
+      - name: Run Linux Docker Compose (${{ matrix.dotnet-version}})
+        run: docker-compose -f ./samples/LinuxCompose/compose.override.${{ matrix.dotnet-version }}.yaml up
