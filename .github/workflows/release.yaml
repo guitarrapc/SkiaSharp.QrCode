@@ -5,9 +5,6 @@ on:
     tags:
       - "[0-9]+.[0-9]+.[0-9]+*" # only tag
 
-env:
-  BUILD_CONFIG: Release
-
 jobs:
   build-dotnet:
     runs-on: ubuntu-latest
@@ -20,12 +17,14 @@ jobs:
           dotnet-version: |
             9.0.x
             8.0.x
-      # tag
-      - run: echo "GIT_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
       # build
-      - run: dotnet build -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.Linux.slnf -p:Version=${{ env.GIT_TAG }}
+      - run: dotnet build -c Release SkiaSharp.QrCode.Linux.slnf -p:Version="${GIT_TAG}"
+        env:
+          GIT_TAG: ${{ github.ref_name }}
       # pack
-      - run: dotnet pack ./src/SkiaSharp.QrCode/ -c ${{ env.BUILD_CONFIG }} -p:Version=${{ env.GIT_TAG }} -o ./.artifacts/
+      - run: dotnet pack ./src/SkiaSharp.QrCode/ -c Release -p:Version="${GIT_TAG}" -o ./.artifacts/
+        env:
+          GIT_TAG: ${{ github.ref_name }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: nuget
@@ -36,20 +35,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
-      - run: echo "GIT_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
       # Create Release
-      - uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1.1.4
-        id: create_release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
-          draft: true
-          prerelease: false
       - uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4.2.1
         with:
           name: nuget
           path: ./nuget
+      - name: Create Relase
+        uses: guitarrapc/actions/.github/actions/create-release@main
+        with:
+          tag: ${{ github.ref_name }}
+          title: ${{ github.ref_name }}
+          gh-token: ${{ secrets.GITHUB_TOKEN }}
       # upload nuget
-      - run: dotnet nuget push "./nuget/*.nupkg" --skip-duplicate -s https://www.nuget.org/api/v2/package -k ${{ secrets.SYNCED_NUGET_KEY }}
+      - run: dotnet nuget push "./nuget/*.nupkg" --skip-duplicate -s https://api.nuget.org/v3/index.json -k "${NUGET_KEY}"
+        env:
+          NUGET_KEY: ${{ secrets.SYNCED_NUGET_KEY }}
