@@ -107,7 +107,7 @@
         EditContext.OnFieldChanged += OnEditContextFiledChanged;
         Colors = typeof(SKColors)
           .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
-          .Select(x => (Name: x.Name, Value: (SKColor)x.GetValue(Model.ClearColor)!))
+          .Select(x => (Name: x.Name, Value: (SKColor)x.GetValue(null)!))
           .ToArray();
         base.OnInitialized();
     }
