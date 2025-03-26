@@ -1,0 +1,35 @@
+name: actionlint
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/**"
+  schedule:
+    - cron: "0 0 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: aquaproj/aqua-installer@e2d0136abcf70b7a2f6f505720640750557c4b33 # v3.1.1
+        with:
+          aqua_version: v2.43.1
+      # github workflows/action's Static Checker
+      - name: Run actionlint
+        run: actionlint -color -oneline
+      # checkout's persist-credentials: false checker
+      - name: Run ghalint
+        run: ghalint run
+      # # A static analysis tool for GitHub Actions
+      # - name: Run zizmor
+      #   run: docker run -t -v .:/github ghcr.io/woodruffw/zizmor:1.5.2 /github --min-severity medium
