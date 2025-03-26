@@ -21,7 +21,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		Directory.Build.props = Directory.Build.props
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NanoServerGenerate60", "samples\NanoServerGenerate60\NanoServerGenerate60.csproj", "{DE7C59CA-B61E-4D96-9EE5-E4526DB7AC68}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "NanoServerGenerate80", "samples\NanoServerGenerate80\NanoServerGenerate80.csproj", "{DE7C59CA-B61E-4D96-9EE5-E4526DB7AC68}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SkiaSharp.QrCode.Tests", "tests\SkiaSharp.QrCode.Tests\SkiaSharp.QrCode.Tests.csproj", "{87908323-D0A3-41F7-AD98-C27F43FD1BDE}"
 EndProject
