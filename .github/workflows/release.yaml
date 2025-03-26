@@ -18,6 +18,7 @@ jobs:
         with:
           restore-wasm-workload: true
           dotnet-version: |
+            9.0.x
             8.0.x
       # tag
       - run: echo "GIT_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV

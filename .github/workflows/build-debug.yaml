@@ -21,6 +21,7 @@ jobs:
         with:
           restore-wasm-workload: true
           dotnet-version: |
+            9.0.x
             8.0.x
       - name: Build
         run: dotnet build -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.Linux.slnf
@@ -40,6 +41,7 @@ jobs:
         with:
           restore-wasm-workload: true
           dotnet-version: |
+            9.0.x
             8.0.x
       # ManualGenerate
       - name: Run ManualGenerate (${{ matrix.dotnet-version}})
