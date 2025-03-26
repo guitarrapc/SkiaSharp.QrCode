@@ -54,7 +54,7 @@
             <div style="margin:0.5rem">
                 <label style="width: 140px;">ClearColor</label>
                 <SKColorInputSelect style="width: 200px;" @bind-Value="@Model.ClearColor">
-                    @foreach (var color in typeof(SKColors).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static).Select(x => (x.Name, Value: x.GetValue(Model.ClearColor))).ToArray())
+                    @foreach (var color in Colors)
                     {
                         <option value="@color.Value">@color.Name</option>
                     }
@@ -64,7 +64,7 @@
             <div style="margin:0.5rem">
                 <label style="width: 140px;">CodeColor</label>
                 <SKColorInputSelect style="width: 200px;" @bind-Value="@Model.CodeColor">
-                    @foreach (var color in typeof(SKColors).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static).Select(x => (x.Name, Value: x.GetValue(Model.CodeColor))).ToArray())
+                    @foreach (var color in Colors)
                     {
                         <option value="@color.Value">@color.Name</option>
                     }
@@ -74,7 +74,7 @@
             <div style="margin:0.5rem">
                 <label style="width: 140px;">BackgroundColor</label>
                 <SKColorInputSelect style="width: 200px;" @bind-Value="@Model.BackgroundColor">
-                    @foreach (var color in typeof(SKColors).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static).Select(x => (x.Name, Value: x.GetValue(Model.BackgroundColor))).ToArray())
+                    @foreach (var color in Colors)
                     {
                         <option value="@color.Value">@color.Name</option>
                     }
@@ -99,11 +99,16 @@
     private EditContext EditContext { get; set; } = default!; // Autoupdate
     private QrCodeModel Model { get; set; } = new QrCodeModel();
     private SKCanvasView? CanvasView { get; set; }
+    private (string Name, SKColor Value)[] Colors { get; set; } = default!;
 
     protected override void OnInitialized()
     {
         EditContext = new EditContext(Model);
         EditContext.OnFieldChanged += OnEditContextFiledChanged;
+        Colors = typeof(SKColors)
+          .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+          .Select(x => (Name: x.Name, Value: (SKColor)x.GetValue(Model.ClearColor)!))
+          .ToArray();
         base.OnInitialized();
     }
 
