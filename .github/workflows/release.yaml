@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-dotnet:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     timeout-minutes: 15
@@ -36,7 +36,7 @@ jobs:
 
   create-release:
     needs: [build-dotnet]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     timeout-minutes: 5
