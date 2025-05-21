@@ -11,3 +11,5 @@ jobs:
       contents: write
       pull-requests: write
     uses: guitarrapc/actions/.github/workflows/reusable-dotnet-lint.yaml@main
+    with:
+      sln-file: "SkiaSharp.QrCode.sln"
