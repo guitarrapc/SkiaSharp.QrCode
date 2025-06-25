@@ -11,7 +11,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />
-    <PackageReference Include="SkiaSharp.NativeAssets.NanoServer" Version="2.88.8" />
+    <PackageReference Include="SkiaSharp.NativeAssets.NanoServer" Version="3.119.0" />
   </ItemGroup>
 
   <ItemGroup>
