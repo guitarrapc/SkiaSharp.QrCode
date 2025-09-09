@@ -5,6 +5,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly" # Check for updates to GitHub Actions every week
+    cooldown:
+      default-days: 14
+      semver-major-days: 30
+      semver-minor-days: 14
     ignore:
       # I just want update action when major/minor version is updated. patch updates are too noisy.
       - dependency-name: "*"
@@ -14,6 +18,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 14
+      semver-major-days: 30
+      semver-minor-days: 14
     ignore:
       # I just want update action when major/minor version is updated. patch updates are too noisy.
       - dependency-name: "*"
