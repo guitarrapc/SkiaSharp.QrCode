@@ -38,10 +38,10 @@ jobs:
 
   create-release:
     needs: [build-dotnet]
-    runs-on: ubuntu-24.04
     permissions:
       contents: write
       id-token: write # for NuGet Trusted Publish
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
