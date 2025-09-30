@@ -47,7 +47,7 @@ jobs:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
       # nuget
       - name: NuGet login (OIDC → temp API key)
-        uses: NuGet/login@v1
+        uses: NuGet/login@d22cc5f58ff5b88bf9bd452535b4335137e24544 # v1.1.0
         id: login
         with:
           user: ${{ secrets.SYNCED_NUGET_USER }}
