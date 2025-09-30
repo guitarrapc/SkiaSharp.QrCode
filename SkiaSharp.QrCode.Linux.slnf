@@ -1,6 +1,6 @@
 {
   "solution": {
-    "path": "SkiaSharp.QrCode.sln",
+    "path": "SkiaSharp.QrCode.slnx",
     "projects": [
       "samples\\BlazorWasm\\BlazorWasm.csproj",
       "samples\\ManualGenerate\\ManualGenerate.csproj",
