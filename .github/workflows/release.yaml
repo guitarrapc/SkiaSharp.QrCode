@@ -7,9 +7,9 @@ on:
 
 jobs:
   build-dotnet:
-    runs-on: ubuntu-24.04
     permissions:
       contents: read
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -22,11 +22,11 @@ jobs:
             9.0.x
             8.0.x
       # build
-      - run: dotnet build -c Release SkiaSharp.QrCode.Linux.slnf -p:Version="${GIT_TAG}"
+      - run: dotnet build -c Release -p:Version="${GIT_TAG}"
         env:
           GIT_TAG: ${{ github.ref_name }}
       # pack
-      - run: dotnet pack ./src/SkiaSharp.QrCode/ -c Release -p:Version="${GIT_TAG}" -o ./.artifacts/
+      - run: dotnet pack -c Release -p:Version="${GIT_TAG}" -o ./publish
         env:
           GIT_TAG: ${{ github.ref_name }}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

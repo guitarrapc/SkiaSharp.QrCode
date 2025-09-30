@@ -8,9 +8,6 @@ on:
     branches:
       - "main"
 
-env:
-  BUILD_CONFIG: Debug
-
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -24,13 +21,10 @@ jobs:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           restore-wasm-workload: true
-          dotnet-version: |
-            9.0.x
-            8.0.x
       - name: Build
-        run: dotnet build -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.Linux.slnf
+        run: dotnet build -c Release
       - name: Test
-        run: dotnet test -c ${{ env.BUILD_CONFIG }} SkiaSharp.QrCode.sln --logger GitHubActions --logger "console;verbosity=normal"
+        run: dotnet test -c Release --logger GitHubActions --logger "console;verbosity=normal"
 
   run:
     needs: [build]
@@ -48,16 +42,13 @@ jobs:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           restore-wasm-workload: true
-          dotnet-version: |
-            9.0.x
-            8.0.x
       # ManualGenerate
       - name: Run ManualGenerate (${{ matrix.dotnet-version}})
-        run: dotnet run --project ./ManualGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net${{ matrix.dotnet-version }}
+        run: dotnet run --project ./ManualGenerate.csproj -c Release -f net${{ matrix.dotnet-version }}
         working-directory: ./samples/ManualGenerate
       # SimpleGenerate
       - name: Run SimpleGenerate (${{ matrix.dotnet-version}})
-        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c ${{ env.BUILD_CONFIG }} -f net${{ matrix.dotnet-version }}
+        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Release -f net${{ matrix.dotnet-version }}
       # LinuxRunSamples
       - name: Run Linux Docker Compose (${{ matrix.dotnet-version}})
         run: docker compose -f ./samples/LinuxCompose/compose.override.${{ matrix.dotnet-version }}.yaml up

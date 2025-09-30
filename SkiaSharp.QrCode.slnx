@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/BlazorWasm/BlazorWasm.csproj" />
+    <Project Path="samples/ManualGenerate/ManualGenerate.csproj" />
+    <Project Path="samples/NanoServerGenerate80/NanoServerGenerate80.csproj" />
+    <Project Path="samples/SimpleGenerate/SimpleGenerate.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SkiaSharp.QrCode.Tests/SkiaSharp.QrCode.Tests.csproj" />
+  </Folder>
+</Solution>
