@@ -1,5 +1,5 @@
-[![lint](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/lint.yaml/badge.svg)](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/lint.yaml)
-[![build debug](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/build-debug.yaml/badge.svg)](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/build-debug.yaml)
+[![Build](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/build.yaml/badge.svg)](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/build.yaml)
+[![release](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/release.yaml/badge.svg)](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/release.yaml)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![NuGet](https://img.shields.io/nuget/v/SkiaSharp.QrCode.svg?label=SkiaSharp%2EQrCode%20nuget)](https://www.nuget.org/packages/SkiaSharp.QrCode)
