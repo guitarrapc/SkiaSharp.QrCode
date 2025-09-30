@@ -6,6 +6,7 @@
     <!-- NuGet -->
     <IsPackable>true</IsPackable>
     <PackageId>SkiaSharp.QrCode</PackageId>
+    <Description>QrCode for .NET Standard with Skia.Sharp. No GDI, no System.Drawing.</Description>
   </PropertyGroup>
 
   <ItemGroup>
