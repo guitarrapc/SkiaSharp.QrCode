@@ -1,5 +1,6 @@
 <Project>
   <PropertyGroup>
+    <LangVersion>13.0</LangVersion>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)opensource.snk</AssemblyOriginatorKeyFile>
 

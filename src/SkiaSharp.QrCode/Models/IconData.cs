@@ -1,8 +1,7 @@
-namespace SkiaSharp.QrCode.Models
+namespace SkiaSharp.QrCode.Models;
+
+public class IconData
 {
-    public class IconData
-    {
-        public SKBitmap Icon { get; set; }
-        public int IconSizePercent { get; set; } = 10;
-    }
+    public SKBitmap Icon { get; set; }
+    public int IconSizePercent { get; set; } = 10;
 }
