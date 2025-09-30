@@ -32,22 +32,33 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: nuget
-          path: ./.artifacts/
+          path: ./publish/
+          retention-days: 1
+          if-no-files-found: error
 
   create-release:
     needs: [build-dotnet]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      id-token: write # for NuGet Trusted Publish
     timeout-minutes: 5
     steps:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
-      # Create Release
+      # nuget
+      - name: NuGet login (OIDC → temp API key)
+        uses: NuGet/login@d22cc5f58ff5b88bf9bd452535b4335137e24544 # v1.1.0
+        id: login
+        with:
+          user: ${{ secrets.SYNCED_NUGET_USER }}
       - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
           name: nuget
           path: ./nuget
-      - name: Create Relase
+      - name: List Nuget
+        run: ls -al ./nuget
+      # release
+      - name: Create Release
         uses: guitarrapc/actions/.github/actions/create-release@main
         with:
           tag: ${{ github.ref_name }}
@@ -56,4 +67,4 @@ jobs:
       # upload nuget
       - run: dotnet nuget push "./nuget/*.nupkg" --skip-duplicate -s https://api.nuget.org/v3/index.json -k "${NUGET_KEY}"
         env:
-          NUGET_KEY: ${{ secrets.SYNCED_NUGET_KEY }}
+          NUGET_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
