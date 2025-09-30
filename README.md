@@ -110,8 +110,8 @@ sudo apt update && apt install -y libfontconfig1
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SkiaSharp.QrCode" Version="0.5.0" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.80.2" />
+    <PackageReference Include="SkiaSharp.QrCode" Version="0.8.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.1" />
   </ItemGroup>
 </Project>
 ```
@@ -127,25 +127,26 @@ sudo apt update && apt install -y libfontconfig1
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SkiaSharp.QrCode" Version="0.5.0" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.80.2" />
+    <PackageReference Include="SkiaSharp.QrCode" Version="0.8.0" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
   </ItemGroup>
 </Project>
 ```
 
 ### Docker Build & Run
 
-Test Build lib.
+Test Build nuget packages.
 
 ```shell
 docker build -t skiasharp.qrcode .
+docker run -it -v ${PWD}/pack:/pack skiasharp.qrcode
+ls ./pack
 ```
 
 Test Run on linux.
 
 ```shell
-cd samples/LinuxRunSamples
-docker-compose up
+docker compose -f ./samples/LinuxCompose/compose.override.8.0.yaml up
 ```
 
 ## License
