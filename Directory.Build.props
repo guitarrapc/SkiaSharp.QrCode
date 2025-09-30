@@ -15,7 +15,7 @@
     <PackageVersion>$(Version)</PackageVersion>
     <Authors>guitarrapc</Authors>
     <Company />
-    <Copyright>© guitarapc</Copyright>
+    <Copyright>© guitarrapc</Copyright>
     <PackageTags>skia, skiasharp, qrcode</PackageTags>
     <PackageVersion>$(Version)</PackageVersion>
     <PackageProjectUrl>https://github.com/guitarrapc/Skia.QrCode</PackageProjectUrl>
