@@ -5,8 +5,6 @@ services:
     working_dir: /src
     volumes:
       - ./8.0:/src
-      - ./entrypoint.sh:/src/entrypoint.sh:ro
-      - ./Program.cs:/src/Program.cs:ro
 
   nodep:
     image: mcr.microsoft.com/dotnet/sdk:8.0
@@ -14,5 +12,3 @@ services:
     working_dir: /src
     volumes:
       - ./8.0_nodep:/src
-      - ./entrypoint_nodep.sh:/src/entrypoint.sh:ro
-      - ./Program.cs:/src/Program.cs:ro
