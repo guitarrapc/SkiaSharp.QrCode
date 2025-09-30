@@ -6,15 +6,15 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Core -->
-    <PackageVersion Include="SkiaSharp" Version="2.88.8" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.8" />
+    <PackageVersion Include="SkiaSharp" Version="3.119.1" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
     <!-- Sandbox -->
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.14" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="9.0.3" />
     <PackageVersion Include="Microsoft.Fast.Components.FluentUI" Version="3.8.0" />
     <PackageVersion Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.21.0" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.NanoServer" Version="2.88.8" />
-    <PackageVersion Include="SkiaSharp.Views.Blazor" Version="2.88.8" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.NanoServer" Version="3.119.1" />
+    <PackageVersion Include="SkiaSharp.Views.Blazor" Version="3.119.1" />
     <!-- Tests -->
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="DogStatsD-CSharp-Client" Version="8.0.0" />
