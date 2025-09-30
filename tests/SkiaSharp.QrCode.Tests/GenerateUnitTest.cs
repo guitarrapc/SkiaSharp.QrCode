@@ -124,6 +124,9 @@ public class GenerateUnitTest
                 case SKColorType.Alpha8:
                     Assert.Equal(10000, c.BytesSize);
                     break;
+                case SKColorType.R8Unorm:
+                    Assert.Equal(10000, c.BytesSize);
+                    break;
                 case SKColorType.Rgb565:
                     Assert.Equal(20000, c.BytesSize);
                     break;
@@ -137,6 +140,9 @@ public class GenerateUnitTest
                     Assert.Equal(40000, c.BytesSize);
                     break;
                 case SKColorType.Bgra8888:
+                    Assert.Equal(40000, c.BytesSize);
+                    break;
+                case SKColorType.Srgba8888:
                     Assert.Equal(40000, c.BytesSize);
                     break;
                 case SKColorType.Rgba1010102:
@@ -175,10 +181,16 @@ public class GenerateUnitTest
                 case SKColorType.Rgba16161616:
                     Assert.Equal(80000, c.BytesSize);
                     break;
+                case SKColorType.Rgba10x6:
+                    Assert.Equal(80000, c.BytesSize);
+                    break;
                 case SKColorType.Bgra1010102:
                     Assert.Equal(40000, c.BytesSize);
                     break;
                 case SKColorType.Bgr101010x:
+                    Assert.Equal(40000, c.BytesSize);
+                    break;
+                case SKColorType.Bgr101010xXR:
                     Assert.Equal(40000, c.BytesSize);
                     break;
                 default:
@@ -208,6 +220,12 @@ public class GenerateUnitTest
                     case SKColorType.Alpha8:
                         Assert.Equal(10000, d.BytesSize);
                         break;
+                    // R8 Unorm (normalized 8-bit red channel only), Total: 8 bits = 1byte
+                    // Red: 8 bits, Total: 8 bits = 1byte
+                    // 100 * 100 * 1 = 10000
+                    case SKColorType.R8Unorm:
+                        Assert.Equal(10000, d.BytesSize);
+                        break;
                     case SKColorType.Rgb565:
                         Assert.Equal(20000, d.BytesSize);
                         break;
@@ -223,9 +241,21 @@ public class GenerateUnitTest
                     case SKColorType.Bgra8888:
                         Assert.Equal(40000, d.BytesSize);
                         break;
+                    // sRGB RGBA Formats with each channel is 8 bits, Total: 32 bits = 4bytes
+                    // Red: 8 bits, Green: 8 bits, Blue: 8 bits, Alpha: 8 bits, Total: 32 bits = 4bytes
+                    // 100 * 100 * 4 = 40000
+                    case SKColorType.Srgba8888:
+                        Assert.Equal(40000, d.BytesSize);
+                        break;
+                    // RGBA Formats with each channel is 10 bits, Alpha: 2 bits, Total: 32 bits = 4bytes
+                    // Red: 10 bits, Green: 10 bits, Blue: 10 bits, Alpha: 2 bits, Total: 32 bits = 4bytes
+                    // 100 * 100 * 4 = 40000
                     case SKColorType.Rgba1010102:
                         Assert.Equal(40000, d.BytesSize);
                         break;
+                    // RGB Formats with each channel is 10 bits, Unused: 2 bits, Total: 32 bits = 4bytes
+                    // Red: 10 bits, Green: 10 bits, Blue: 10 bits, Unused: 2 bits, Total: 32 bits = 4bytes
+                    // 100 * 100 * 4 = 40000
                     case SKColorType.Rgb101010x:
                         Assert.Equal(40000, d.BytesSize);
                         break;
@@ -256,13 +286,34 @@ public class GenerateUnitTest
                     case SKColorType.Rg1616:
                         Assert.Equal(40000, d.BytesSize);
                         break;
+                    // RGBA Formats with each channel is 16 bits, Total: 64 bits = 8bytes
+                    // Red: 16 bits, Green: 16 bits, Blue: 16 bits, Alpha: 16 bits, Total: 64 bits = 8bytes
+                    // 100 * 100 * 8 = 80000
                     case SKColorType.Rgba16161616:
                         Assert.Equal(80000, d.BytesSize);
                         break;
+                    // RGBA Formats with each channel is 10 bits (padded to 16 bits), Total: 64 bits = 8bytes
+                    // Red: 10 bits (16 bits), Green: 10 bits (16 bits), Blue: 10 bits (16 bits), Alpha: 10 bits (16 bits), Total: 64 bits = 8bytes
+                    // 100 * 100 * 8 = 80000
+                    case SKColorType.Rgba10x6:
+                        Assert.Equal(80000, d.BytesSize);
+                        break;
+                    // BGRA Formats with each channel is 10 bits, Alpha: 2 bits, Total: 32 bits = 4bytes
+                    // Blue: 10 bits, Green: 10 bits, Red: 10 bits, Alpha: 2 bits, Total: 32 bits = 4bytes
+                    // 100 * 100 * 4 = 40000
                     case SKColorType.Bgra1010102:
                         Assert.Equal(40000, d.BytesSize);
                         break;
+                    // BGR Formats with each channel is 10 bits, Unused: 2 bits, Total: 32 bits = 4bytes
+                    // Blue: 10 bits, Green: 10 bits, Red: 10 bits, Unused: 2 bits, Total: 32 bits = 4bytes
+                    // 100 * 100 * 4 = 40000
                     case SKColorType.Bgr101010x:
+                        Assert.Equal(40000, d.BytesSize);
+                        break;
+                    // BGR Formats with each channel is 10 bits (eXtended Range) Color Type
+                    // Blue: 10 bits, Green: 10 bits, Red: 10 bits, Unused: 2 bits, Total: 32 bits = 4bytes
+                    // 100 * 100 * 4 = 40000
+                    case SKColorType.Bgr101010xXR:
                         Assert.Equal(40000, d.BytesSize);
                         break;
                     default:
