@@ -1,6 +1,10 @@
 <Project>
   <PropertyGroup>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)opensource.snk</AssemblyOriginatorKeyFile>
+
     <!-- NuGet -->
+    <IsPackable>false</IsPackable>
     <PackageVersion>$(Version)</PackageVersion>
     <Authors>guitarrapc</Authors>
     <Company />
@@ -13,4 +17,9 @@
     <NeutralLanguage>en</NeutralLanguage>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
+    <EmbeddedResource Include="$(MSBuildThisFileDirectory)LICENSE" />
+  </ItemGroup>
 </Project>
