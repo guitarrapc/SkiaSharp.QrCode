@@ -12,14 +12,11 @@
     <!-- NuGet -->
     <IsPackable>false</IsPackable>
     <Version>1.0.0</Version>
-    <PackageVersion>$(Version)</PackageVersion>
     <Authors>guitarrapc</Authors>
-    <Company />
     <Copyright>© guitarrapc</Copyright>
     <PackageTags>skia, skiasharp, qrcode</PackageTags>
     <PackageVersion>$(Version)</PackageVersion>
     <PackageProjectUrl>https://github.com/guitarrapc/Skia.QrCode</PackageProjectUrl>
-    <RepositoryUrl>$(PackageProjectUrl)</RepositoryUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>$(PackageProjectUrl)</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
