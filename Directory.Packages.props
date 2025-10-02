@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Core -->
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.4" />
     <PackageVersion Include="SkiaSharp" Version="3.119.1" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
     <!-- Sandbox -->

@@ -4,6 +4,7 @@
     <File Path="Directory.Packages.props" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="samples/Benchmark/Benchmark.csproj" />
     <Project Path="samples/BlazorWasm/BlazorWasm.csproj" />
     <Project Path="samples/ManualGenerate/ManualGenerate.csproj" />
     <Project Path="samples/NanoServerGenerate80/NanoServerGenerate80.csproj" />
