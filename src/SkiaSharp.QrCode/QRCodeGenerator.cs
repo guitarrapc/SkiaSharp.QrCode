@@ -2334,11 +2334,10 @@ public class QRCodeGenerator : IDisposable
         }
     }
 
-    // TODO: Can be struct
     /// <summary>
     /// Simple 2D point structure for alignment pattern coordinates.
     /// </summary>
-    private class Point
+    private readonly record struct Point
     {
         public int X { get; }
         public int Y { get; }
@@ -2349,12 +2348,11 @@ public class QRCodeGenerator : IDisposable
         }
     }
 
-    // TODO: Can be struct
     /// <summary>
     /// Rectangle structure for tracking blocked module regions.
     /// Used during QR code matrix generation to avoid overwriting patterns.
     /// </summary>
-    private class Rectangle
+    private readonly record struct Rectangle
     {
         public int X { get; }
         public int Y { get; }
