@@ -30,7 +30,7 @@ public class QRCodeGenerator : IDisposable
     // - Index calculation: (version-1) × 16 + eccLevel × 4 + encodingMode
     // - Example: Version 1, ECC-M, Alphanumeric = 0×16 + 1×4 + 1 = capacityBaseValues[5] = 20 characters
     // Based on ISO/IEC 18004 Table 7-11
-    private int[] capacityBaseValues = {
+    private static readonly int[] _capacityBaseValues = [
         // ECC Level L: Numeric, Alphanumeric, Byte, Kanji
         // ECC Level M
         // ECC Level Q
@@ -234,8 +234,10 @@ public class QRCodeGenerator : IDisposable
         7089, 4296, 2953, 1817,
         5596, 3391, 2331, 1435,
         3993, 2420, 1663, 1024,
-        3057, 1852, 1273, 784
-    };
+        3057, 1852, 1273, 784,
+    ];
+    private static ReadOnlySpan<int> CapacityBaseValues => _capacityBaseValues;
+
     // TODO: Can be optimized by static, ROS
     // Error correction codewords configuration for each version and ECC level
     // Array structure: [version-1][eccLevel][6 parameters]
@@ -249,7 +251,7 @@ public class QRCodeGenerator : IDisposable
     //   [4] blocksInGroup2
     //   [5] codewordsInGroup2
     // Based on ISO/IEC 18004 Table 9
-    private int[] capacityECCBaseValues = {
+    private static readonly int[] _capacityECCBaseValues = [
         // ECC Level L: Numeric, Alphanumeric, Byte, Kanji
         // ECC Level M
         // ECC Level Q
@@ -454,7 +456,9 @@ public class QRCodeGenerator : IDisposable
         2334, 28, 18, 47, 31, 48,
         1666, 30, 34, 24, 34, 25,
         1276, 30, 20, 15, 61, 16
-    };
+    ];
+    private static ReadOnlySpan<int> CapacityECCBaseValues => _capacityECCBaseValues;
+
     // TODO: Can be optimized by static, ROS
     // Alignment pattern positions for each QR code version
     // Array structure: 7 positions per version × 40 versions = 280 elements
@@ -462,7 +466,7 @@ public class QRCodeGenerator : IDisposable
     // - Version 2+: Positions where alignment patterns should be placed
     // - 0 indicates no pattern at that position
     // Based on ISO/IEC 18004 Annex E
-    private int[] alignmentPatternBaseValues = {
+    private static readonly int[] _alignmentPatternBaseValues = [
         0, 0, 0, 0, 0, 0, 0,
         6, 18, 0, 0, 0, 0, 0,
         6, 22, 0, 0, 0, 0, 0,
@@ -502,20 +506,23 @@ public class QRCodeGenerator : IDisposable
         6, 28, 54, 80, 106, 132, 158,
         6, 32, 58, 84, 110, 136, 162,
         6, 26, 54, 82, 110, 138, 166,
-        6, 30, 58, 86, 114, 142, 170 };
+        6, 30, 58, 86, 114, 142, 170
+    ];
+    private static ReadOnlySpan<int> AlignmentPatternBaseValues => _alignmentPatternBaseValues;
     // TODO: Can be optimized by static, ROS
     // Number of remainder bits for each QR code version (1-40)
     // These bits are added as padding after all data and ECC codewords
     // Values range from 0 to 7 bits depending on version
     // Based on ISO/IEC 18004 Table 1
-    private int[] remainderBits = {
+    private static readonly int[] _remainderBits = [
         0, 7, 7, 7, 7, 7,
         0, 0, 0, 0, 0, 0, 0,
         3, 3, 3, 3, 3, 3, 3,
         4, 4, 4, 4, 4, 4, 4,
         3, 3, 3, 3, 3, 3, 3,
         0, 0, 0, 0, 0, 0
-    };
+    ];
+    private static ReadOnlySpan<int> RemainderBits => _remainderBits;
 
     private List<AlignmentPattern> alignmentPatternTable;
     private List<ECCInfo> capacityECCTable;
@@ -685,7 +692,7 @@ public class QRCodeGenerator : IDisposable
                     interleavedWordsSb.Append(codeBlock.ECCWords[i]);
         }
         // Add remainder bits
-        interleavedWordsSb.Append(new string('0', this.remainderBits[version - 1]));
+        interleavedWordsSb.Append(new string('0', RemainderBits[version - 1]));
         var interleavedData = interleavedWordsSb.ToString();
 
         // Step 9-12: Place all patterns and data on QR code matrix
@@ -1964,13 +1971,13 @@ public class QRCodeGenerator : IDisposable
             var points = new List<Point>();
             for (var x = 0; x < 7; x++)
             {
-                if (this.alignmentPatternBaseValues[i + x] != 0)
+                if (AlignmentPatternBaseValues[i + x] != 0)
                 {
                     for (var y = 0; y < 7; y++)
                     {
-                        if (this.alignmentPatternBaseValues[i + y] != 0)
+                        if (AlignmentPatternBaseValues[i + y] != 0)
                         {
-                            var p = new Point(this.alignmentPatternBaseValues[i + x] - 2, this.alignmentPatternBaseValues[i + y] - 2);
+                            var p = new Point(AlignmentPatternBaseValues[i + x] - 2, AlignmentPatternBaseValues[i + y] - 2);
                             if (!points.Contains(p))
                                 points.Add(p);
                         }
@@ -2001,44 +2008,44 @@ public class QRCodeGenerator : IDisposable
                 new ECCInfo(
                     (i+24) / 24,
                     ECCLevel.L,
-                    this.capacityECCBaseValues[i],
-                    this.capacityECCBaseValues[i+1],
-                    this.capacityECCBaseValues[i+2],
-                    this.capacityECCBaseValues[i+3],
-                    this.capacityECCBaseValues[i+4],
-                    this.capacityECCBaseValues[i+5]),
+                    CapacityECCBaseValues[i],
+                    CapacityECCBaseValues[i+1],
+                    CapacityECCBaseValues[i+2],
+                    CapacityECCBaseValues[i+3],
+                    CapacityECCBaseValues[i+4],
+                    CapacityECCBaseValues[i+5]),
                 new ECCInfo
                 (
                     version: (i + 24) / 24,
                     errorCorrectionLevel: ECCLevel.M,
-                    totalDataCodewords: this.capacityECCBaseValues[i+6],
-                    eccPerBlock: this.capacityECCBaseValues[i+7],
-                    blocksInGroup1: this.capacityECCBaseValues[i+8],
-                    codewordsInGroup1: this.capacityECCBaseValues[i+9],
-                    blocksInGroup2: this.capacityECCBaseValues[i+10],
-                    codewordsInGroup2: this.capacityECCBaseValues[i+11]
+                    totalDataCodewords: CapacityECCBaseValues[i+6],
+                    eccPerBlock: CapacityECCBaseValues[i+7],
+                    blocksInGroup1: CapacityECCBaseValues[i+8],
+                    codewordsInGroup1: CapacityECCBaseValues[i+9],
+                    blocksInGroup2: CapacityECCBaseValues[i+10],
+                    codewordsInGroup2: CapacityECCBaseValues[i+11]
                 ),
                 new ECCInfo
                 (
                     version: (i + 24) / 24,
                     errorCorrectionLevel: ECCLevel.Q,
-                    totalDataCodewords: this.capacityECCBaseValues[i+12],
-                    eccPerBlock: this.capacityECCBaseValues[i+13],
-                    blocksInGroup1: this.capacityECCBaseValues[i+14],
-                    codewordsInGroup1: this.capacityECCBaseValues[i+15],
-                    blocksInGroup2: this.capacityECCBaseValues[i+16],
-                    codewordsInGroup2: this.capacityECCBaseValues[i+17]
+                    totalDataCodewords: CapacityECCBaseValues[i+12],
+                    eccPerBlock: CapacityECCBaseValues[i+13],
+                    blocksInGroup1: CapacityECCBaseValues[i+14],
+                    codewordsInGroup1: CapacityECCBaseValues[i+15],
+                    blocksInGroup2: CapacityECCBaseValues[i+16],
+                    codewordsInGroup2: CapacityECCBaseValues[i+17]
                 ),
                 new ECCInfo
                 (
                     version: (i + 24) / 24,
                     errorCorrectionLevel: ECCLevel.H,
-                    totalDataCodewords: this.capacityECCBaseValues[i+18],
-                    eccPerBlock: this.capacityECCBaseValues[i+19],
-                    blocksInGroup1: this.capacityECCBaseValues[i+20],
-                    codewordsInGroup1: this.capacityECCBaseValues[i+21],
-                    blocksInGroup2: this.capacityECCBaseValues[i+22],
-                    codewordsInGroup2: this.capacityECCBaseValues[i+23]
+                    totalDataCodewords: CapacityECCBaseValues[i+18],
+                    eccPerBlock: CapacityECCBaseValues[i+19],
+                    blocksInGroup1: CapacityECCBaseValues[i+20],
+                    codewordsInGroup1: CapacityECCBaseValues[i+21],
+                    blocksInGroup2: CapacityECCBaseValues[i+22],
+                    codewordsInGroup2: CapacityECCBaseValues[i+23]
                 )
             });
         }
@@ -2061,37 +2068,37 @@ public class QRCodeGenerator : IDisposable
                     new VersionInfoDetails(
                          ECCLevel.L,
                          new Dictionary<EncodingMode,int>(){
-                             { EncodingMode.Numeric, this.capacityBaseValues[i] },
-                             { EncodingMode.Alphanumeric, this.capacityBaseValues[i+1] },
-                             { EncodingMode.Byte, this.capacityBaseValues[i+2] },
-                             { EncodingMode.Kanji, this.capacityBaseValues[i+3] },
+                             { EncodingMode.Numeric, CapacityBaseValues[i] },
+                             { EncodingMode.Alphanumeric, CapacityBaseValues[i+1] },
+                             { EncodingMode.Byte, CapacityBaseValues[i+2] },
+                             { EncodingMode.Kanji, CapacityBaseValues[i+3] },
                         }
                     ),
                     new VersionInfoDetails(
                          ECCLevel.M,
                          new Dictionary<EncodingMode,int>(){
-                             { EncodingMode.Numeric, this.capacityBaseValues[i+4] },
-                             { EncodingMode.Alphanumeric, this.capacityBaseValues[i+5] },
-                             { EncodingMode.Byte, this.capacityBaseValues[i+6] },
-                             { EncodingMode.Kanji, this.capacityBaseValues[i+7] },
+                             { EncodingMode.Numeric, CapacityBaseValues[i+4] },
+                             { EncodingMode.Alphanumeric, CapacityBaseValues[i+5] },
+                             { EncodingMode.Byte, CapacityBaseValues[i+6] },
+                             { EncodingMode.Kanji, CapacityBaseValues[i+7] },
                          }
                     ),
                     new VersionInfoDetails(
                          ECCLevel.Q,
                          new Dictionary<EncodingMode,int>(){
-                             { EncodingMode.Numeric, this.capacityBaseValues[i+8] },
-                             { EncodingMode.Alphanumeric, this.capacityBaseValues[i+9] },
-                             { EncodingMode.Byte, this.capacityBaseValues[i+10] },
-                             { EncodingMode.Kanji, this.capacityBaseValues[i+11] },
+                             { EncodingMode.Numeric, CapacityBaseValues[i+8] },
+                             { EncodingMode.Alphanumeric, CapacityBaseValues[i+9] },
+                             { EncodingMode.Byte, CapacityBaseValues[i+10] },
+                             { EncodingMode.Kanji, CapacityBaseValues[i+11] },
                          }
                     ),
                     new VersionInfoDetails(
                          ECCLevel.H,
                          new Dictionary<EncodingMode,int>(){
-                             { EncodingMode.Numeric, this.capacityBaseValues[i+12] },
-                             { EncodingMode.Alphanumeric, this.capacityBaseValues[i+13] },
-                             { EncodingMode.Byte, this.capacityBaseValues[i+14] },
-                             { EncodingMode.Kanji, this.capacityBaseValues[i+15] },
+                             { EncodingMode.Numeric, CapacityBaseValues[i+12] },
+                             { EncodingMode.Alphanumeric, CapacityBaseValues[i+13] },
+                             { EncodingMode.Byte, CapacityBaseValues[i+14] },
+                             { EncodingMode.Kanji, CapacityBaseValues[i+15] },
                          }
                     )
                 }
@@ -2370,14 +2377,10 @@ public class QRCodeGenerator : IDisposable
 
     public void Dispose()
     {
-        this.alignmentPatternBaseValues = null;
         this.alignmentPatternTable = null;
         this.alphanumEncDict = null;
-        this.capacityBaseValues = null;
-        this.capacityECCBaseValues = null;
         this.capacityECCTable = null;
         this.capacityTable = null;
         this.galoisField = null;
-        this.remainderBits = null;
     }
 }
