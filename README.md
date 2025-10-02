@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![NuGet](https://img.shields.io/nuget/v/SkiaSharp.QrCode.svg?label=SkiaSharp%2EQrCode%20nuget)](https://www.nuget.org/packages/SkiaSharp.QrCode)
 
-## Skia.QrCode
+## SkiaSharp.QrCode
 
 Qr Code generator with [Skia.Sharp](https://github.com/mono/SkiaSharp).
 
