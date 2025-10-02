@@ -1098,7 +1098,7 @@ public class QRCodeGenerator : IDisposable
         // Used to validate and encode alphanumeric data (2 characters = 11 bits)
         // Total 45 characters as defined in QR code specification
         public static readonly char[] AlphanumEncTable = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', ' ', '$', '%', '*', '+', '-', '.', '/', ':' };
-        // TODO: Can be optimized by static, ROS
+
         // Maximum data capacity for each QR code version (1-40) and error correction level (L,M,Q,H)
         // Array structure: [version-1][eccLevel][encodingMode]
         // - 1600 elements total (40 versions × 4 ECC levels × 4 encoding modes)
@@ -1315,7 +1315,6 @@ public class QRCodeGenerator : IDisposable
         ];
         public static ReadOnlySpan<int> CapacityBaseValues => _capacityBaseValues;
 
-        // TODO: Can be optimized by static, ROS
         // Error correction codewords configuration for each version and ECC level
         // Array structure: [version-1][eccLevel][6 parameters]
         // - 960 elements total (40 versions × 4 ECC levels × 6 parameters)
@@ -1536,7 +1535,6 @@ public class QRCodeGenerator : IDisposable
         ];
         public static ReadOnlySpan<int> CapacityECCBaseValues => _capacityECCBaseValues;
 
-        // TODO: Can be optimized by static, ROS
         // Alignment pattern positions for each QR code version
         // Array structure: 7 positions per version × 40 versions = 280 elements
         // - Version 1: No alignment patterns (all zeros)
@@ -1586,7 +1584,7 @@ public class QRCodeGenerator : IDisposable
             6, 30, 58, 86, 114, 142, 170
         ];
         public static ReadOnlySpan<int> AlignmentPatternBaseValues => _alignmentPatternBaseValues;
-        // TODO: Can be optimized by static, ROS
+
         // Number of remainder bits for each QR code version (1-40)
         // These bits are added as padding after all data and ECC codewords
         // Values range from 0 to 7 bits depending on version
