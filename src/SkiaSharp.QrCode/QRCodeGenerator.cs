@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace SkiaSharp.QrCode;
@@ -162,7 +163,7 @@ public class QRCodeGenerator : IDisposable
             }
         }
         // Add remainder bits
-        interleavedWordsSb.Append(new string('0', QrCodeConstants.RemainderBits[version - 1]));
+        interleavedWordsSb.Append(new string('0', QrCodeConstants.GetRemainderBits(version)));
         var interleavedData = interleavedWordsSb.ToString();
 
         // Step 9-12: Place all patterns and data on QR code matrix
@@ -525,7 +526,7 @@ public class QRCodeGenerator : IDisposable
 
         foreach (char c in plainText)
         {
-            if (QrCodeConstants.NumTable.Contains(c))
+            if (QrCodeConstants.IsNumeric(c))
                 continue;
 
             result = EncodingMode.Alphanumeric;
@@ -1090,9 +1091,14 @@ public class QRCodeGenerator : IDisposable
 
     private static class QrCodeConstants
     {
-        // TODO: Can be optimized by range check `c >= '0' && c <= '9'`
-        // Used to validate and encode numeric-only data (most efficient: 3 digits = 10 bits)
-        public static readonly char[] NumTable = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' };
+        /// <summary>
+        /// Checks if a character is numeric (0-9).
+        /// </summary>
+        /// <param name="c">Character to check.</param>
+        /// <returns>True if the character is a digit (0-9).</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsNumeric(char c) => c >= '0' && c <= '9';
+
         // TODO: Can be optimized by ASCII Table lookup
         // Alphanumeric mode character set (0-9, A-Z, space, $%*+-./:)
         // Used to validate and encode alphanumeric data (2 characters = 11 bits)
@@ -1107,7 +1113,7 @@ public class QRCodeGenerator : IDisposable
         // - Index calculation: (version-1) × 16 + eccLevel × 4 + encodingMode
         // - Example: Version 1, ECC-M, Alphanumeric = 0×16 + 1×4 + 1 = capacityBaseValues[5] = 20 characters
         // Based on ISO/IEC 18004 Table 7-11
-        private static readonly int[] _capacityBaseValues = [
+        private static readonly int[] capacityBaseValues = [
             // ECC Level L: Numeric, Alphanumeric, Byte, Kanji
             // ECC Level M
             // ECC Level Q
@@ -1313,7 +1319,7 @@ public class QRCodeGenerator : IDisposable
             3993, 2420, 1663, 1024,
             3057, 1852, 1273, 784,
         ];
-        public static ReadOnlySpan<int> CapacityBaseValues => _capacityBaseValues;
+        public static ReadOnlySpan<int> CapacityBaseValues => capacityBaseValues;
 
         // Error correction codewords configuration for each version and ECC level
         // Array structure: [version-1][eccLevel][6 parameters]
@@ -1327,7 +1333,7 @@ public class QRCodeGenerator : IDisposable
         //   [4] blocksInGroup2
         //   [5] codewordsInGroup2
         // Based on ISO/IEC 18004 Table 9
-        private static readonly int[] _capacityECCBaseValues = [
+        private static readonly int[] capacityECCBaseValues = [
             // ECC Level L: Numeric, Alphanumeric, Byte, Kanji
             // ECC Level M
             // ECC Level Q
@@ -1533,7 +1539,7 @@ public class QRCodeGenerator : IDisposable
             1666, 30, 34, 24, 34, 25,
             1276, 30, 20, 15, 61, 16
         ];
-        public static ReadOnlySpan<int> CapacityECCBaseValues => _capacityECCBaseValues;
+        public static ReadOnlySpan<int> CapacityECCBaseValues => capacityECCBaseValues;
 
         // Alignment pattern positions for each QR code version
         // Array structure: 7 positions per version × 40 versions = 280 elements
@@ -1541,7 +1547,7 @@ public class QRCodeGenerator : IDisposable
         // - Version 2+: Positions where alignment patterns should be placed
         // - 0 indicates no pattern at that position
         // Based on ISO/IEC 18004 Annex E
-        private static readonly int[] _alignmentPatternBaseValues = [
+        private static readonly int[] alignmentPatternBaseValues = [
             0, 0, 0, 0, 0, 0, 0,
             6, 18, 0, 0, 0, 0, 0,
             6, 22, 0, 0, 0, 0, 0,
@@ -1583,13 +1589,13 @@ public class QRCodeGenerator : IDisposable
             6, 26, 54, 82, 110, 138, 166,
             6, 30, 58, 86, 114, 142, 170
         ];
-        public static ReadOnlySpan<int> AlignmentPatternBaseValues => _alignmentPatternBaseValues;
+        public static ReadOnlySpan<int> AlignmentPatternBaseValues => alignmentPatternBaseValues;
 
         // Number of remainder bits for each QR code version (1-40)
         // These bits are added as padding after all data and ECC codewords
         // Values range from 0 to 7 bits depending on version
         // Based on ISO/IEC 18004 Table 1
-        private static readonly int[] _remainderBits = [
+        private static readonly int[] remainderBits = [
             0, 7, 7, 7, 7, 7,
             0, 0, 0, 0, 0, 0, 0,
             3, 3, 3, 3, 3, 3, 3,
@@ -1597,7 +1603,15 @@ public class QRCodeGenerator : IDisposable
             3, 3, 3, 3, 3, 3, 3,
             0, 0, 0, 0, 0, 0
         ];
-        public static ReadOnlySpan<int> RemainderBits => _remainderBits;
+
+        /// <summary>
+        /// Gets the number of remainder bits for a specific QR code version.
+        /// </summary>
+        /// <param name="version">The QR code version (1-40) for which to retrieve the remainder bits.</param>
+        public static int GetRemainderBits(int version)
+        {
+            return remainderBits.AsSpan()[version - 1];
+        }
     }
 
     /// <summary>
