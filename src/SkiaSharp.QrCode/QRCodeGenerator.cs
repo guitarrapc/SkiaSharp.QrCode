@@ -77,34 +77,41 @@ public class QRCodeGenerator : IDisposable
         }
 
         // Step 5: Build mode indicator and character count indicator
-        string modeIndicator = string.Empty;
-        if (eciMode != EciMode.Default)
-        {
-            modeIndicator = DecToBin((int)EncodingMode.ECI, 4);
-            modeIndicator += DecToBin((int)eciMode, 8);
-        }
-        modeIndicator += DecToBin((int)encoding, 4);
+        string modeIndicator = eciMode != EciMode.Default
+            ? DecToBin((int)EncodingMode.ECI, 4) + DecToBin((int)eciMode, 8) + DecToBin((int)encoding, 4)
+            : DecToBin((int)encoding, 4);
         var countIndicator = DecToBin(dataInputLength, this.GetCountIndicatorLength(version, encoding));
-        var bitString = modeIndicator + countIndicator;
 
-        bitString += codedText;
+        var capacity = CalculateMaxBitStringLength(version, eccLevel, encoding);
+        var bitStringBuilder = new StringBuilder(capacity);
+        bitStringBuilder.Append(modeIndicator);
+        bitStringBuilder.Append(countIndicator);
+        bitStringBuilder.Append(codedText);
 
         // Step 6: Fill up data code word to capacity
-        var eccInfo = CapacityECCTable.Single(x => x.Version == version && x.ErrorCorrectionLevel.Equals(eccLevel));
+        var eccInfo = CapacityECCTable.Single(x => x.Version == version && x.ErrorCorrectionLevel == eccLevel);
         var dataLength = eccInfo.TotalDataCodewords * 8;
-        var lengthDiff = dataLength - bitString.Length;
+        var lengthDiff = dataLength - bitStringBuilder.Length;
+
         // Add terminator (up to 4 zeros)
         if (lengthDiff > 0)
-            bitString += new string('0', Math.Min(lengthDiff, 4));
+            bitStringBuilder.Append('0', Math.Min(lengthDiff, 4));
+
         // Pad to byte boundary
-        if ((bitString.Length % 8) != 0)
-            bitString += new string('0', 8 - (bitString.Length % 8));
+        if ((bitStringBuilder.Length % 8) != 0)
+            bitStringBuilder.Append('0', 8 - (bitStringBuilder.Length % 8));
+
         // Fill with alternating pad bytes (11101100, 00010001)
-        while (bitString.Length < dataLength)
-            bitString += "1110110000010001";
+        while (bitStringBuilder.Length < dataLength)
+        {
+            bitStringBuilder.Append("1110110000010001");
+        }
+
         // Trim if over capacity
-        if (bitString.Length > dataLength)
-            bitString = bitString.Substring(0, dataLength);
+        if (bitStringBuilder.Length > dataLength)
+            bitStringBuilder.Length = dataLength;
+
+        var bitString = bitStringBuilder.ToString();
 
         // Step 7: Calculate error correction words using Reed-Solomon
         var codeWordWithECC = new List<CodewordBlock>();
