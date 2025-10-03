@@ -43,6 +43,7 @@ jobs:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           restore-wasm-workload: true
+          dotnet-version: "9.0.x"
       # ManualGenerate
       - name: Run ManualGenerate (${{ matrix.dotnet-version}})
         run: dotnet run --project ./ManualGenerate.csproj -c Release -f net${{ matrix.dotnet-version }}
