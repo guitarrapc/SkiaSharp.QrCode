@@ -21,6 +21,7 @@ jobs:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           restore-wasm-workload: true
+          dotnet-version: "9.0.x"
       - name: Build
         run: dotnet build -c Release
       - name: Test
@@ -30,7 +31,7 @@ jobs:
     needs: [build]
     strategy:
       matrix:
-        dotnet-version: ["8.0"]
+        dotnet-version: ["9.0"]
     permissions:
       contents: read
     runs-on: ubuntu-24.04
