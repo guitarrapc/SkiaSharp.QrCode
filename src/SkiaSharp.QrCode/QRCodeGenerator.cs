@@ -1605,8 +1605,9 @@ public class QRCodeGenerator : IDisposable
         ];
 
         /// <summary>
-        /// Gets remainder bits for a specific version.
+        /// Gets the number of remainder bits for a specific QR code version.
         /// </summary>
+        /// <param name="version">The QR code version (1-40) for which to retrieve the remainder bits.</param>
         public static int GetRemainderBits(int version)
         {
             return remainderBits.AsSpan()[version - 1];
