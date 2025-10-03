@@ -1089,7 +1089,7 @@ public class QRCodeGenerator : IDisposable
         Kanji = 8,
     }
 
-    private static class QrCodeConstants
+    internal static class QrCodeConstants
     {
         /// <summary>
         /// Checks if a character is numeric (0-9).
