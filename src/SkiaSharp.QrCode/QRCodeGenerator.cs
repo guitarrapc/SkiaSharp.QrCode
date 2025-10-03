@@ -18,12 +18,10 @@ public class QRCodeGenerator : IDisposable
     private List<ECCInfo> capacityECCTable;
     private List<VersionInfo> capacityTable;
     private List<Antilog> galoisField;
-    private Dictionary<char, int> alphanumEncDict;
 
     public QRCodeGenerator()
     {
         this.CreateAntilogTable();
-        this.CreateAlphanumEncDict();
         this.CreateCapacityTable();
         this.CreateCapacityECCTable();
         this.CreateAlignmentPatternTable();
@@ -531,7 +529,7 @@ public class QRCodeGenerator : IDisposable
 
             result = EncodingMode.Alphanumeric;
 
-            if (!QrCodeConstants.AlphanumEncTable.Contains(c))
+            if (!QrCodeConstants.IsAlphanumeric(c))
                 return EncodingMode.Byte;
         }
 
@@ -718,14 +716,13 @@ public class QRCodeGenerator : IDisposable
         while (plainText.Length >= 2)
         {
             var token = plainText.Substring(0, 2);
-            var dec = this.alphanumEncDict[token[0]] * 45 + this.alphanumEncDict[token[1]];
+            var dec = QrCodeConstants.GetAlphanumericValue(token[0]) * 45 + QrCodeConstants.GetAlphanumericValue(token[1]);
             codeText += DecToBin(dec, 11);
             plainText = plainText.Substring(2);
-
         }
         if (plainText.Length > 0)
         {
-            codeText += DecToBin(this.alphanumEncDict[plainText[0]], 6);
+            codeText += DecToBin(QrCodeConstants.GetAlphanumericValue(plainText[0]), 6);
         }
         return codeText;
     }
@@ -828,21 +825,6 @@ public class QRCodeGenerator : IDisposable
     }
 
     // Lookup Table Initialization
-
-    /// <summary>
-    /// Initializes alphanumeric encoding dictionary.
-    /// Maps each of 45 alphanumeric characters to its index (0-44).
-    /// </summary>
-    private void CreateAlphanumEncDict()
-    {
-        this.alphanumEncDict = new Dictionary<char, int>();
-        //alphanumEncTable.ToList().Select((x, i) => new { Chr = x, Index = i }).ToList().ForEach(x => this.alphanumEncDict.Add(x.Chr, x.Index));
-        var resList = QrCodeConstants.AlphanumEncTable.ToList().Select((x, i) => new { Chr = x, Index = i }).ToList();
-        foreach (var res in resList)
-        {
-            this.alphanumEncDict.Add(res.Chr, res.Index);
-        }
-    }
 
     /// <summary>
     /// Initializes alignment pattern lookup table from base values.
@@ -1099,11 +1081,96 @@ public class QRCodeGenerator : IDisposable
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool IsNumeric(char c) => c >= '0' && c <= '9';
 
-        // TODO: Can be optimized by ASCII Table lookup
-        // Alphanumeric mode character set (0-9, A-Z, space, $%*+-./:)
-        // Used to validate and encode alphanumeric data (2 characters = 11 bits)
-        // Total 45 characters as defined in QR code specification
-        public static readonly char[] AlphanumEncTable = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', ' ', '$', '%', '*', '+', '-', '.', '/', ':' };
+        /// <summary>
+        /// ASCII lookup table for alphanumeric character validation and encoding.
+        /// Index: ASCII code (0-127)
+        /// Value: Encoding value (0-44) or -1 if not alphanumeric
+        /// Based on ISO/IEC 18004 Section 7.4.3.
+        /// </summary>
+        private static ReadOnlySpan<sbyte> alphanumericLookup => [
+            // 0-31: Control characters (invalid)
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1,
+        
+            // 32-47: Space and special characters ' ', '$', '%', '*', '+', '-', '.', '/'
+                    36, -1, -1, -1, 37, 38, -1, -1,
+            -1, -1, 39, 40, -1, 41, 42, 43,
+        
+            // 48-57: Digits 0-9
+                                             0, 1,
+            2, 3, 4, 5, 6, 7, 8, 9,
+        
+            // 58-64: Colon and others ':'
+                                            44, -1,
+            -1, -1, -1, -1, -1,
+        
+            // 65-90: Letters A-Z
+                                10, 11, 12, 13, 14,
+            15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            25, 26, 27, 28, 29, 30, 31, 32, 33, 34,
+            35,
+        
+            // 91-127: Invalid
+                -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+            -1, -1, -1, -1, -1, -1, -1, -1,
+        ];
+
+        /// <summary>
+        /// Checks if a character is valid in alphanumeric mode.
+        /// Valid characters: 0-9, A-Z, space, $%*+-./:
+        /// </summary>
+        /// <param name="c">Character to check.</param>
+        /// <returns>True if valid alphanumeric character.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsAlphanumeric(char c)
+        {
+            return c < alphanumericLookup.Length && alphanumericLookup[c] >= 0;
+        }
+
+        /// <summary>
+        /// Gets the encoding value for an alphanumeric character.
+        /// </summary>
+        /// <param name="c">Alphanumeric character.</param>
+        /// <returns>Encoding value (0-44).</returns>
+        /// <exception cref="ArgumentException">If character is not alphanumeric.</exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int GetAlphanumericValue(char c)
+        {
+            if (c >= alphanumericLookup.Length)
+                throw new ArgumentException($"Character '{c}' is not alphanumeric.", nameof(c));
+
+            var value = alphanumericLookup[c];
+            if (value < 0)
+                throw new ArgumentException($"Character '{c}' is not alphanumeric.", nameof(c));
+
+            return value;
+        }
+
+        /// <summary>
+        /// Tries to get the encoding value for an alphanumeric character.
+        /// </summary>
+        /// <param name="c">Character to encode.</param>
+        /// <param name="value">Encoding value (0-44) if successful.</param>
+        /// <returns>True if character is alphanumeric.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool TryGetAlphanumericValue(char c, out int value)
+        {
+            if (c < alphanumericLookup.Length)
+            {
+                var lookup = alphanumericLookup[c];
+                if (lookup >= 0)
+                {
+                    value = lookup;
+                    return true;
+                }
+            }
+            value = -1;
+            return false;
+        }
 
         // Maximum data capacity for each QR code version (1-40) and error correction level (L,M,Q,H)
         // Array structure: [version-1][eccLevel][encodingMode]
@@ -2401,7 +2468,6 @@ public class QRCodeGenerator : IDisposable
     public void Dispose()
     {
         this.alignmentPatternTable = null;
-        this.alphanumEncDict = null;
         this.capacityECCTable = null;
         this.capacityTable = null;
         this.galoisField = null;
