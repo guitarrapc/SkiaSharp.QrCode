@@ -800,47 +800,47 @@ internal static class QRCodeConstants
         {
             table.AddRange([
                 new ECCInfo(
-                        version: (i+24) / 24,
-                        errorCorrectionLevel: ECCLevel.L,
-                        totalDataCodewords: CapacityECCBaseValues[i],
-                        eccPerBlock: CapacityECCBaseValues[i+1],
-                        blocksInGroup1: CapacityECCBaseValues[i+2],
-                        codewordsInGroup1: CapacityECCBaseValues[i+3],
-                        blocksInGroup2: CapacityECCBaseValues[i+4],
-                        codewordsInGroup2: CapacityECCBaseValues[i+5]),
-                    new ECCInfo
-                    (
-                        version: (i + 24) / 24,
-                        errorCorrectionLevel: ECCLevel.M,
-                        totalDataCodewords: CapacityECCBaseValues[i+6],
-                        eccPerBlock: CapacityECCBaseValues[i+7],
-                        blocksInGroup1: CapacityECCBaseValues[i+8],
-                        codewordsInGroup1: CapacityECCBaseValues[i+9],
-                        blocksInGroup2: CapacityECCBaseValues[i+10],
-                        codewordsInGroup2: CapacityECCBaseValues[i+11]
-                    ),
-                    new ECCInfo
-                    (
-                        version: (i + 24) / 24,
-                        errorCorrectionLevel: ECCLevel.Q,
-                        totalDataCodewords: CapacityECCBaseValues[i+12],
-                        eccPerBlock: CapacityECCBaseValues[i+13],
-                        blocksInGroup1: CapacityECCBaseValues[i+14],
-                        codewordsInGroup1: CapacityECCBaseValues[i+15],
-                        blocksInGroup2: CapacityECCBaseValues[i+16],
-                        codewordsInGroup2: CapacityECCBaseValues[i+17]
-                    ),
-                    new ECCInfo
-                    (
-                        version: (i + 24) / 24,
-                        errorCorrectionLevel: ECCLevel.H,
-                        totalDataCodewords: CapacityECCBaseValues[i+18],
-                        eccPerBlock: CapacityECCBaseValues[i+19],
-                        blocksInGroup1: CapacityECCBaseValues[i+20],
-                        codewordsInGroup1: CapacityECCBaseValues[i+21],
-                        blocksInGroup2: CapacityECCBaseValues[i+22],
-                        codewordsInGroup2: CapacityECCBaseValues[i+23]
-                    )
+                    version: (i+24) / 24,
+                    errorCorrectionLevel: ECCLevel.L,
+                    totalDataCodewords: CapacityECCBaseValues[i],
+                    eccPerBlock: CapacityECCBaseValues[i+1],
+                    blocksInGroup1: CapacityECCBaseValues[i+2],
+                    codewordsInGroup1: CapacityECCBaseValues[i+3],
+                    blocksInGroup2: CapacityECCBaseValues[i+4],
+                    codewordsInGroup2: CapacityECCBaseValues[i+5]),
+                new ECCInfo
+                (
+                    version: (i + 24) / 24,
+                    errorCorrectionLevel: ECCLevel.M,
+                    totalDataCodewords: CapacityECCBaseValues[i+6],
+                    eccPerBlock: CapacityECCBaseValues[i+7],
+                    blocksInGroup1: CapacityECCBaseValues[i+8],
+                    codewordsInGroup1: CapacityECCBaseValues[i+9],
+                    blocksInGroup2: CapacityECCBaseValues[i+10],
+                    codewordsInGroup2: CapacityECCBaseValues[i+11]
+                ),
+                new ECCInfo
+                (
+                    version: (i + 24) / 24,
+                    errorCorrectionLevel: ECCLevel.Q,
+                    totalDataCodewords: CapacityECCBaseValues[i+12],
+                    eccPerBlock: CapacityECCBaseValues[i+13],
+                    blocksInGroup1: CapacityECCBaseValues[i+14],
+                    codewordsInGroup1: CapacityECCBaseValues[i+15],
+                    blocksInGroup2: CapacityECCBaseValues[i+16],
+                    codewordsInGroup2: CapacityECCBaseValues[i+17]
+                ),
+                new ECCInfo
+                (
+                    version: (i + 24) / 24,
+                    errorCorrectionLevel: ECCLevel.H,
+                    totalDataCodewords: CapacityECCBaseValues[i+18],
+                    eccPerBlock: CapacityECCBaseValues[i+19],
+                    blocksInGroup1: CapacityECCBaseValues[i+20],
+                    codewordsInGroup1: CapacityECCBaseValues[i+21],
+                    blocksInGroup2: CapacityECCBaseValues[i+22],
+                    codewordsInGroup2: CapacityECCBaseValues[i+23]
+                )
             ]);
         }
         return table;
