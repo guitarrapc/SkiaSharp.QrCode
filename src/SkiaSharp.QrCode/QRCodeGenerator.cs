@@ -1515,6 +1515,6 @@ public class QRCodeGenerator : IDisposable
 
     public void Dispose()
     {
-        // will be remove in future, or remain.
+        // will be removed in future, or remain.
     }
 }

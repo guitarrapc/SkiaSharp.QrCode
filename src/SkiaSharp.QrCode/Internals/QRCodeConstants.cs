@@ -749,7 +749,7 @@ internal static class QRCodeConstants
 
         static int CalculateAlignmentPatternCount(int version)
         {
-            // Version 1: 0 pattens
+            // Version 1: 0 pattern
             // Version 2-6: 1 pattern (corner excluded
             // Version 7+: max 7x7 = 49 patterns (most cases less)
             if (version == 1) return 0;
