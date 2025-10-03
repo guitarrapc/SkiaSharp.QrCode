@@ -1,6 +1,5 @@
-using System.Linq;
+using SkiaSharp.QrCode.Internals;
 using Xunit;
-using static SkiaSharp.QrCode.QRCodeGenerator;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -21,7 +20,7 @@ public class QrCodeConstantsUnitTest
     [InlineData('#', false)]
     public void IsNumericTest(char c, bool expected)
     {
-        var result = QrCodeConstants.IsNumeric(c);
+        var result = QRCodeConstants.IsNumeric(c);
         Assert.Equal(expected, result);
     }
 
@@ -45,7 +44,7 @@ public class QrCodeConstantsUnitTest
     [InlineData('#', false)]
     public void IsAlphanumericTest(char c, bool expected)
     {
-        var result = QrCodeConstants.IsAlphanumeric(c);
+        var result = QRCodeConstants.IsAlphanumeric(c);
         Assert.Equal(expected, result);
     }
 
@@ -69,7 +68,7 @@ public class QrCodeConstantsUnitTest
     [InlineData('#', -1)]
     public void GetAlphanumericValueTest(char c, int expected)
     {
-        var success = QrCodeConstants.TryGetAlphanumericValue(c, out var result);
+        var success = QRCodeConstants.TryGetAlphanumericValue(c, out var result);
         if (expected == -1)
         {
             Assert.False(success);
