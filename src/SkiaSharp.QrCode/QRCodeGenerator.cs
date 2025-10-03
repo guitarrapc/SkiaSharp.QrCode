@@ -14,6 +14,24 @@ namespace SkiaSharp.QrCode;
 /// </summary>
 public class QRCodeGenerator : IDisposable
 {
+    // -----------------------------------------------------
+    // QR Code Structure
+    // -----------------------------------------------------
+    //
+    // 1. Header
+    // ┌─────────────────┬───────────────┬────────────────┐
+    // │ ECI (0 or 12b)  │ Mode (4b)     │ Count (8-16b)  │
+    // └─────────────────┴───────────────┴────────────────┘
+    // 2. Data
+    // ┌──────────────────────────────────────────────────┐
+    // │ Encoded data (variable length)                   │
+    // └──────────────────────────────────────────────────┘
+    // 3. Padding
+    // ┌──────┬────────┬──────────────────────────────────┐
+    // │ Term │ Align  │ Pad bytes (0xEC, 0x11...)        │
+    // │ (4b) │ (0-7b) │ (until dataCapacityBits reached) │
+    // └──────┴────────┴──────────────────────────────────┘
+
     /// <summary>
     /// Creates a QR code from the provided plain text.
     /// </summary>
@@ -178,6 +196,26 @@ public class QRCodeGenerator : IDisposable
         ModulePlacer.AddQuietZone(ref qr, quietZoneSize);
 
         return qr;
+    }
+
+    /// <summary>
+    /// Calculates the maximum bit string length for the given encoding mode, data, and version.
+    /// Used to pre-allocate StringBuilder capacity to avoid resizing.
+    /// </summary>
+    /// <param name="version">QR code version (1-40).</param>
+    /// <param name="eccLevel">Error correction level.</param>
+    /// <param name="encoding">Encoding mode (Numeric, Alphanumeric, Byte, Kanji).</param>
+    /// <returns>Maximum bit string length in characters.</returns>
+    internal static int CalculateMaxBitStringLength(int version, ECCLevel eccLevel, EncodingMode encoding)
+    {
+        if (version < 1 || version > 40)
+            throw new ArgumentOutOfRangeException(nameof(version), $"Version must be 1-40, but was {version}");
+
+        // QR codes are always padded to full capacity with 0xEC/0x11 bytes
+        // So the final bit string length = data capacity in bits
+        // ECCInfo contains the actual byte capacity (TotalDataCodewords)
+        var eccInfo = CapacityECCTable.Single(x => x.Version == version && x.ErrorCorrectionLevel == eccLevel);
+        return eccInfo.TotalDataCodewords * 8; // Convert bytes to bits
     }
 
     // Format and Version String Generation
