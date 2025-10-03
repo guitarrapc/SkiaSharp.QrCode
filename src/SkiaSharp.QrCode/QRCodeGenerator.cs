@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace SkiaSharp.QrCode;
@@ -525,7 +526,7 @@ public class QRCodeGenerator : IDisposable
 
         foreach (char c in plainText)
         {
-            if (QrCodeConstants.NumTable.Contains(c))
+            if (QrCodeConstants.IsNumeric(c))
                 continue;
 
             result = EncodingMode.Alphanumeric;
@@ -1090,9 +1091,14 @@ public class QRCodeGenerator : IDisposable
 
     private static class QrCodeConstants
     {
-        // TODO: Can be optimized by range check `c >= '0' && c <= '9'`
-        // Used to validate and encode numeric-only data (most efficient: 3 digits = 10 bits)
-        public static readonly char[] NumTable = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' };
+        /// <summary>
+        /// Checks if a character is numeric (0-9).
+        /// </summary>
+        /// <param name="c">Character to check.</param>
+        /// <returns>True if the character is a digit (0-9).</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsNumeric(char c) => c >= '0' && c <= '9';
+
         // TODO: Can be optimized by ASCII Table lookup
         // Alphanumeric mode character set (0-9, A-Z, space, $%*+-./:)
         // Used to validate and encode alphanumeric data (2 characters = 11 bits)
@@ -1597,14 +1603,13 @@ public class QRCodeGenerator : IDisposable
             3, 3, 3, 3, 3, 3, 3,
             0, 0, 0, 0, 0, 0
         ];
-        private static ReadOnlySpan<int> RemainderBits => remainderBits;
 
         /// <summary>
         /// Gets remainder bits for a specific version.
         /// </summary>
         public static int GetRemainderBits(int version)
         {
-            return RemainderBits[version - 1];
+            return remainderBits.AsSpan()[version - 1];
         }
     }
 
