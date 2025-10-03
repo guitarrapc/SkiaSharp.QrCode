@@ -28,7 +28,6 @@ jobs:
         run: dotnet test -c Release --logger GitHubActions --logger "console;verbosity=normal"
 
   run:
-    needs: [build]
     strategy:
       matrix:
         dotnet-version: ["9.0"]
@@ -53,4 +52,4 @@ jobs:
         run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Release -f net${{ matrix.dotnet-version }}
       # LinuxRunSamples
       - name: Run Linux Docker Compose (${{ matrix.dotnet-version}})
-        run: docker compose -f ./samples/LinuxCompose/compose.override.${{ matrix.dotnet-version }}.yaml up
+        run: docker compose -f ./samples/LinuxCompose/compose.yaml up
