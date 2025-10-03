@@ -153,7 +153,9 @@ public class QRCodeGenerator : IDisposable
             foreach (var codeBlock in codeWordWithECC)
             {
                 if (codeBlock.CodeWords.Count > i)
+                {
                     interleavedWordsSb.Append(codeBlock.CodeWords[i]);
+                }
             }
         }
         // Interleave ECC codewords
@@ -162,7 +164,9 @@ public class QRCodeGenerator : IDisposable
             foreach (var codeBlock in codeWordWithECC)
             {
                 if (codeBlock.ECCWords.Count > i)
+                {
                     interleavedWordsSb.Append(codeBlock.ECCWords[i]);
+                }
             }
         }
         // Add remainder bits
@@ -241,7 +245,9 @@ public class QRCodeGenerator : IDisposable
             var sb = new StringBuilder();
             generator = generator.PadRight(fStrEcc.Length, '0');
             for (var i = 0; i < fStrEcc.Length; i++)
+            {
                 sb.Append((Convert.ToInt32(fStrEcc[i]) ^ Convert.ToInt32(generator[i])).ToString());
+            }
             fStrEcc = sb.ToString().TrimStart('0');
         }
         fStrEcc = fStrEcc.PadLeft(10, '0');
@@ -271,7 +277,9 @@ public class QRCodeGenerator : IDisposable
             var sb = new StringBuilder();
             generator = generator.PadRight(vStrEcc.Length, '0');
             for (var i = 0; i < vStrEcc.Length; i++)
+            {
                 sb.Append((Convert.ToInt32(vStrEcc[i]) ^ Convert.ToInt32(generator[i])).ToString());
+            }
             vStrEcc = sb.ToString().TrimStart('0');
         }
         vStrEcc = vStrEcc.PadLeft(12, '0');
@@ -295,12 +303,18 @@ public class QRCodeGenerator : IDisposable
         var generatorPolynom = this.CalculateGeneratorPolynom(eccWords);
 
         for (var i = 0; i < messagePolynom.PolyItems.Count; i++)
-            messagePolynom.PolyItems[i] = new PolynomItem(messagePolynom.PolyItems[i].Coefficient,
-                messagePolynom.PolyItems[i].Exponent + eccWords);
+        {
+            var coefficient = messagePolynom.PolyItems[i].Coefficient;
+            var exponent = messagePolynom.PolyItems[i].Exponent + eccWords;
+            messagePolynom.PolyItems[i] = new PolynomItem(coefficient, exponent);
+        }
 
         for (var i = 0; i < generatorPolynom.PolyItems.Count; i++)
-            generatorPolynom.PolyItems[i] = new PolynomItem(generatorPolynom.PolyItems[i].Coefficient,
-                generatorPolynom.PolyItems[i].Exponent + (messagePolynom.PolyItems.Count - 1));
+        {
+            var coefficient = generatorPolynom.PolyItems[i].Coefficient;
+            var exponent = generatorPolynom.PolyItems[i].Exponent + (messagePolynom.PolyItems.Count - 1);
+            generatorPolynom.PolyItems[i] = new PolynomItem(coefficient, exponent);
+        }
 
         var leadTermSource = messagePolynom;
         for (var i = 0; (leadTermSource.PolyItems.Count > 0 && leadTermSource.PolyItems[leadTermSource.PolyItems.Count - 1].Exponent > 0); i++)
@@ -348,18 +362,11 @@ public class QRCodeGenerator : IDisposable
     private Polynom CalculateGeneratorPolynom(int numEccWords)
     {
         var generatorPolynom = new Polynom();
-        generatorPolynom.PolyItems.AddRange(new[]{
-            new PolynomItem(0,1),
-            new PolynomItem(0,0)
-        });
+        generatorPolynom.PolyItems.AddRange([new PolynomItem(0, 1), new PolynomItem(0, 0)]);
         for (var i = 1; i <= numEccWords - 1; i++)
         {
             var multiplierPolynom = new Polynom();
-            multiplierPolynom.PolyItems.AddRange(new[]{
-               new PolynomItem(0,1),
-            new PolynomItem(i,0)
-            });
-
+            multiplierPolynom.PolyItems.AddRange([new PolynomItem(0, 1), new PolynomItem(i, 0)]);
             generatorPolynom = this.MultiplyAlphaPolynoms(generatorPolynom, multiplierPolynom);
         }
 
@@ -377,11 +384,13 @@ public class QRCodeGenerator : IDisposable
     {
         var newPoly = new Polynom();
         for (var i = 0; i < poly.PolyItems.Count; i++)
-            newPoly.PolyItems.Add(
-                new PolynomItem(
-                    (poly.PolyItems[i].Coefficient != 0
-                        ? this.GetAlphaExpFromIntVal(poly.PolyItems[i].Coefficient)
-                        : 0), poly.PolyItems[i].Exponent));
+        {
+            var coefficient = poly.PolyItems[i].Coefficient != 0
+                ? this.GetAlphaExpFromIntVal(poly.PolyItems[i].Coefficient)
+                : 0;
+            var data = new PolynomItem(coefficient, poly.PolyItems[i].Exponent);
+            newPoly.PolyItems.Add(data);
+        }
         return newPoly;
     }
 
@@ -394,7 +403,10 @@ public class QRCodeGenerator : IDisposable
     {
         var newPoly = new Polynom();
         for (var i = 0; i < poly.PolyItems.Count; i++)
-            newPoly.PolyItems.Add(new PolynomItem(this.GetIntValFromAlphaExp(poly.PolyItems[i].Coefficient), poly.PolyItems[i].Exponent));
+        {
+            var coefficient = this.GetIntValFromAlphaExp(poly.PolyItems[i].Coefficient);
+            newPoly.PolyItems.Add(new PolynomItem(coefficient, poly.PolyItems[i].Exponent));
+        }
         return newPoly;
     }
 
@@ -406,7 +418,10 @@ public class QRCodeGenerator : IDisposable
     /// <returns>Integer value (0-255).</returns>
     private int GetIntValFromAlphaExp(int exp)
     {
-        return GaloisField.Where(alog => alog.ExponentAlpha == exp).Select(alog => alog.IntegerValue).First();
+        return GaloisField
+            .Where(x => x.ExponentAlpha == exp)
+            .Select(x => x.IntegerValue)
+            .First();
     }
 
     /// <summary>
@@ -417,7 +432,10 @@ public class QRCodeGenerator : IDisposable
     /// <returns>Alpha exponent (0-255).</returns>
     private int GetAlphaExpFromIntVal(int intVal)
     {
-        return GaloisField.Where(alog => alog.IntegerValue == intVal).Select(alog => alog.ExponentAlpha).First();
+        return GaloisField
+            .Where(x => x.IntegerValue == intVal)
+            .Select(x => x.ExponentAlpha)
+            .First();
     }
 
     /// <summary>
@@ -444,13 +462,8 @@ public class QRCodeGenerator : IDisposable
 
         for (var i = 0; i < longPoly.PolyItems.Count; i++)
         {
-            var polItemRes = new PolynomItem
-            (
-
-                    longPoly.PolyItems[i].Coefficient ^
-                    (shortPoly.PolyItems.Count > i ? shortPoly.PolyItems[i].Coefficient : 0),
-                messagePolynom.PolyItems[0].Exponent - i
-            );
+            var coefficient = longPoly.PolyItems[i].Coefficient ^ (shortPoly.PolyItems.Count > i ? shortPoly.PolyItems[i].Coefficient : 0);
+            var polItemRes = new PolynomItem(coefficient, messagePolynom.PolyItems[0].Exponent - i);
             resultPolynom.PolyItems.Add(polItemRes);
         }
         resultPolynom.PolyItems.RemoveAt(0);
@@ -470,11 +483,8 @@ public class QRCodeGenerator : IDisposable
         {
             foreach (var polItemMulti in polynomBase.PolyItems)
             {
-                var polItemRes = new PolynomItem
-                (
-                    ShrinkAlphaExp(polItemBase.Coefficient + polItemMulti.Coefficient),
-                    (polItemBase.Exponent + polItemMulti.Exponent)
-                );
+                var coefficient = ShrinkAlphaExp(polItemBase.Coefficient + polItemMulti.Coefficient);
+                var polItemRes = new PolynomItem(coefficient, (polItemBase.Exponent + polItemMulti.Exponent));
                 resultPolynom.PolyItems.Add(polItemRes);
             }
         }
@@ -483,8 +493,9 @@ public class QRCodeGenerator : IDisposable
         var toGlue = exponentsToGlue as IList<int> ?? exponentsToGlue.ToList();
         foreach (var exponent in toGlue)
         {
-            var coefficient = resultPolynom.PolyItems.Where(x => x.Exponent == exponent).Aggregate(0, (current, polynomOld)
-                => current ^ this.GetIntValFromAlphaExp(polynomOld.Coefficient));
+            var coefficient = resultPolynom.PolyItems
+                .Where(x => x.Exponent == exponent)
+                .Aggregate(0, (current, polynomOld) => current ^ this.GetIntValFromAlphaExp(polynomOld.Coefficient));
             var polynomFixed = new PolynomItem(this.GetAlphaExpFromIntVal(coefficient), exponent);
             gluedPolynoms.Add(polynomFixed);
         }
@@ -518,18 +529,15 @@ public class QRCodeGenerator : IDisposable
     /// <returns>Version number (1-40).</returns>
     private int GetVersion(int length, EncodingMode encMode, ECCLevel eccLevel)
     {
-        var version = CapacityTable.Where(
-            x => x.Details.Count(
-                y => (y.ErrorCorrectionLevel == eccLevel
-                      && y.CapacityDict[encMode] >= Convert.ToInt32(length)
-                      )
-                ) > 0
-          ).Select(x => new
-          {
-              version = x.Version,
-              capacity = x.Details.Single(y => y.ErrorCorrectionLevel == eccLevel)
-                                        .CapacityDict[encMode]
-          }).Min(x => x.version);
+        var version = CapacityTable
+            .Where(x => x.Details
+                .Count(y => (y.ErrorCorrectionLevel == eccLevel && y.CapacityDict[encMode] >= Convert.ToInt32(length))) > 0)
+            .Select(x => new
+            {
+                version = x.Version,
+                capacity = x.Details.Single(y => y.ErrorCorrectionLevel == eccLevel).CapacityDict[encMode]
+            })
+            .Min(x => x.version);
         return version;
     }
 
@@ -545,17 +553,19 @@ public class QRCodeGenerator : IDisposable
         EncodingMode result = EncodingMode.Numeric;
 
         if (forceUtf8)
+        {
             return EncodingMode.Byte;
+        }
 
         foreach (char c in plainText)
         {
-            if (IsNumeric(c))
-                continue;
+            if (IsNumeric(c)) continue;
 
             result = EncodingMode.Alphanumeric;
-
             if (!IsAlphanumeric(c))
+            {
                 return EncodingMode.Byte;
+            }
         }
 
         return result;
@@ -712,7 +722,6 @@ public class QRCodeGenerator : IDisposable
             var dec = Convert.ToInt32(plainText.Substring(0, 3));
             codeText += DecToBin(dec, 10);
             plainText = plainText.Substring(3);
-
         }
         if (plainText.Length == 2)
         {
@@ -801,7 +810,8 @@ public class QRCodeGenerator : IDisposable
     /// </summary>
     private List<string> BinaryStringToBitBlockList(string bitString)
     {
-        return new List<char>(bitString.ToCharArray()).Select((x, i) => new { Index = i, Value = x })
+        return new List<char>(bitString.ToCharArray())
+            .Select((x, i) => new { Index = i, Value = x })
             .GroupBy(x => x.Index / 8)
             .Select(x => string.Join("", x.Select(v => v.Value.ToString()).ToArray()))
             .ToList();
@@ -813,7 +823,9 @@ public class QRCodeGenerator : IDisposable
     /// </summary>
     private List<int> BinaryStringListToDecList(List<string> binaryStringList)
     {
-        return binaryStringList.Select(binaryString => this.BinToDec(binaryString)).ToList();
+        return binaryStringList
+            .Select(binaryString => this.BinToDec(binaryString))
+            .ToList();
     }
 
     /// <summary>
@@ -839,11 +851,8 @@ public class QRCodeGenerator : IDisposable
         var resultPolynom = new Polynom();
         foreach (var polItemBase in genPolynom.PolyItems)
         {
-            var polItemRes = new PolynomItem(
-
-                (polItemBase.Coefficient + leadTerm.Coefficient) % 255,
-                polItemBase.Exponent - lowerExponentBy
-            );
+            var coefficient = (polItemBase.Coefficient + leadTerm.Coefficient) % 255;
+            var polItemRes = new PolynomItem(coefficient, polItemBase.Exponent - lowerExponentBy);
             resultPolynom.PolyItems.Add(polItemRes);
         }
         return resultPolynom;
@@ -895,11 +904,17 @@ public class QRCodeGenerator : IDisposable
 
             var quietLine = new bool[qrCode.ModuleMatrix.Count + quietZoneSize * 2];
             for (var i = 0; i < quietLine.Length; i++)
+            {
                 quietLine[i] = false;
+            }
             for (var i = 0; i < quietZoneSize; i++)
+            {
                 qrCode.ModuleMatrix.Insert(0, new BitArray(quietLine));
+            }
             for (var i = 0; i < quietZoneSize; i++)
+            {
                 qrCode.ModuleMatrix.Add(new BitArray(quietLine));
+            }
             for (var i = quietZoneSize; i < qrCode.ModuleMatrix.Count - quietZoneSize; i++)
             {
                 bool[] quietPart = new bool[quietZoneSize];
@@ -920,7 +935,9 @@ public class QRCodeGenerator : IDisposable
             if (inp.Length > 0)
             {
                 for (int i = inp.Length - 1; i >= 0; i--)
+                {
                     newStr += inp[i];
+                }
             }
             return newStr;
         }
@@ -932,9 +949,7 @@ public class QRCodeGenerator : IDisposable
         public static void PlaceVersion(ref QRCodeData qrCode, string versionStr)
         {
             var size = qrCode.ModuleMatrix.Count;
-
             var vStr = ReverseString(versionStr);
-
             for (var x = 0; x < 6; x++)
             {
                 for (var y = 0; y < 3; y++)
@@ -954,7 +969,24 @@ public class QRCodeGenerator : IDisposable
         {
             var size = qrCode.ModuleMatrix.Count;
             var fStr = ReverseString(formatStr);
-            var modules = new[,] { { 8, 0, size - 1, 8 }, { 8, 1, size - 2, 8 }, { 8, 2, size - 3, 8 }, { 8, 3, size - 4, 8 }, { 8, 4, size - 5, 8 }, { 8, 5, size - 6, 8 }, { 8, 7, size - 7, 8 }, { 8, 8, size - 8, 8 }, { 7, 8, 8, size - 7 }, { 5, 8, 8, size - 6 }, { 4, 8, 8, size - 5 }, { 3, 8, 8, size - 4 }, { 2, 8, 8, size - 3 }, { 1, 8, 8, size - 2 }, { 0, 8, 8, size - 1 } };
+            var modules = new[,]
+            {
+                { 8, 0, size - 1, 8 },
+                { 8, 1, size - 2, 8 },
+                { 8, 2, size - 3, 8 },
+                { 8, 3, size - 4, 8 },
+                { 8, 4, size - 5, 8 },
+                { 8, 5, size - 6, 8 },
+                { 8, 7, size - 7, 8 },
+                { 8, 8, size - 8, 8 },
+                { 7, 8, 8, size - 7 },
+                { 5, 8, 8, size - 6 },
+                { 4, 8, 8, size - 5 },
+                { 3, 8, 8, size - 4 },
+                { 2, 8, 8, size - 3 },
+                { 1, 8, 8, size - 2 },
+                { 0, 8, 8, size - 1 }
+            };
             for (var i = 0; i < 15; i++)
             {
                 var p1 = new Point(modules[i, 0], modules[i, 1]);
@@ -973,7 +1005,6 @@ public class QRCodeGenerator : IDisposable
         {
             var patternName = string.Empty;
             var patternScore = 0;
-
             var size = qrCode.ModuleMatrix.Count;
 
             var methods = typeof(MaskPattern).GetTypeInfo().DeclaredMethods;
@@ -989,7 +1020,6 @@ public class QRCodeGenerator : IDisposable
                         {
                             qrTemp.ModuleMatrix[y][x] = qrCode.ModuleMatrix[y][x];
                         }
-
                     }
 
                     var formatStr = GetFormatString(eccLevel, Convert.ToInt32((pattern.Name.Substring(7, 1))) - 1);
@@ -1006,7 +1036,7 @@ public class QRCodeGenerator : IDisposable
                         {
                             if (!IsBlocked(new Rectangle(x, y, 1, 1), blockedModules))
                             {
-                                qrTemp.ModuleMatrix[y][x] ^= (bool)pattern.Invoke(null, new object[] { x, y });
+                                qrTemp.ModuleMatrix[y][x] ^= (bool)pattern.Invoke(null, [x, y]);
                             }
                         }
                     }
@@ -1017,19 +1047,17 @@ public class QRCodeGenerator : IDisposable
                         patternName = pattern.Name;
                         patternScore = score;
                     }
-
                 }
             }
 
             var patterMethod = typeof(MaskPattern).GetTypeInfo().GetDeclaredMethod(patternName);
-
             for (var x = 0; x < size; x++)
             {
                 for (var y = 0; y < size; y++)
                 {
                     if (!IsBlocked(new Rectangle(x, y, 1, 1), blockedModules))
                     {
-                        qrCode.ModuleMatrix[y][x] ^= (bool)patterMethod.Invoke(null, new object[] { x, y });
+                        qrCode.ModuleMatrix[y][x] ^= (bool)patterMethod.Invoke(null, [x, y]);
                     }
                 }
             }
@@ -1083,14 +1111,14 @@ public class QRCodeGenerator : IDisposable
         /// </summary>
         public static void ReserveSeperatorAreas(int size, ref List<Rectangle> blockedModules)
         {
-            blockedModules.AddRange(new[]{
+            blockedModules.AddRange([
                 new Rectangle(7, 0, 1, 8),
                 new Rectangle(0, 7, 7, 1),
                 new Rectangle(0, size-8, 8, 1),
                 new Rectangle(7, size-7, 1, 7),
                 new Rectangle(size-8, 0, 1, 8),
                 new Rectangle(size-7, 7, 7, 1)
-            });
+            ]);
         }
 
         /// <summary>
@@ -1099,21 +1127,21 @@ public class QRCodeGenerator : IDisposable
         /// </summary>
         public static void ReserveVersionAreas(int size, int version, ref List<Rectangle> blockedModules)
         {
-            blockedModules.AddRange(new[]{
+            blockedModules.AddRange([
                 new Rectangle(8, 0, 1, 6),
                 new Rectangle(8, 7, 1, 1),
                 new Rectangle(0, 8, 6, 1),
                 new Rectangle(7, 8, 2, 1),
                 new Rectangle(size-8, 8, 8, 1),
                 new Rectangle(8, size-7, 1, 7)
-            });
+            ]);
 
             if (version >= 7)
             {
-                blockedModules.AddRange(new[]{
-                new Rectangle(size-11, 0, 3, 6),
-                new Rectangle(0, size-11, 6, 3)
-            });
+                blockedModules.AddRange([
+                    new Rectangle(size-11, 0, 3, 6),
+                    new Rectangle(0, size-11, 6, 3)
+                ]);
             }
         }
 
@@ -1135,7 +1163,7 @@ public class QRCodeGenerator : IDisposable
         public static void PlaceFinderPatterns(ref QRCodeData qrCode, ref List<Rectangle> blockedModules)
         {
             var size = qrCode.ModuleMatrix.Count;
-            int[] locations = { 0, 0, size - 7, 0, 0, size - 7 };
+            int[] locations = [0, 0, size - 7, 0, 0, size - 7];
 
             for (var i = 0; i < 6; i = i + 2)
             {
@@ -1173,7 +1201,9 @@ public class QRCodeGenerator : IDisposable
                     }
                 }
                 if (blocked)
+                {
                     continue;
+                }
 
                 for (var x = 0; x < 5; x++)
                 {
@@ -1206,10 +1236,10 @@ public class QRCodeGenerator : IDisposable
                     qrCode.ModuleMatrix[i][6] = true;
                 }
             }
-            blockedModules.AddRange(new[]{
+            blockedModules.AddRange([
                 new Rectangle(6, 8, 1, size-16),
                 new Rectangle(8, 6, size-16, 1)
-            });
+            ]);
         }
 
         /// <summary>
@@ -1217,7 +1247,10 @@ public class QRCodeGenerator : IDisposable
         /// </summary>
         private static bool Intersects(Rectangle r1, Rectangle r2)
         {
-            return r2.X < r1.X + r1.Width && r1.X < r2.X + r2.Width && r2.Y < r1.Y + r1.Height && r1.Y < r2.Y + r2.Height;
+            return r2.X < r1.X + r1.Width
+                && r1.X < r2.X + r2.Width
+                && r2.Y < r1.Y + r1.Height
+                && r1.Y < r2.Y + r2.Height;
         }
 
         /// <summary>
@@ -1229,7 +1262,9 @@ public class QRCodeGenerator : IDisposable
             foreach (var blockedMod in blockedModules)
             {
                 if (Intersects(blockedMod, r1))
+                {
                     isBlocked = true;
+                }
             }
             return isBlocked;
         }
@@ -1245,66 +1280,42 @@ public class QRCodeGenerator : IDisposable
             /// <summary>
             /// Creates a checkerboard pattern.
             /// </summary>
-            public static bool Pattern1(int x, int y)
-            {
-                return (x + y) % 2 == 0;
-            }
+            public static bool Pattern1(int x, int y) => (x + y) % 2 == 0;
 
             /// <summary>
             /// Creates horizontal stripes.
             /// </summary>
-            public static bool Pattern2(int x, int y)
-            {
-                return y % 2 == 0;
-            }
+            public static bool Pattern2(int x, int y) => y % 2 == 0;
 
             /// <summary>
             /// Creates vertical stripes (wider than pattern 1).
             /// </summary>
-            public static bool Pattern3(int x, int y)
-            {
-                return x % 3 == 0;
-            }
+            public static bool Pattern3(int x, int y) => x % 3 == 0;
 
             /// <summary>
             /// Creates diagonal stripes (wider than pattern 0).
             /// </summary>
-            public static bool Pattern4(int x, int y)
-            {
-                return (x + y) % 3 == 0;
-            }
+            public static bool Pattern4(int x, int y) => (x + y) % 3 == 0;
 
             /// <summary>
             /// Creates a combination of horizontal and vertical patterns.
             /// </summary>
-            public static bool Pattern5(int x, int y)
-            {
-                return ((int)(Math.Floor(y / 2d) + Math.Floor(x / 3d)) % 2) == 0;
-            }
+            public static bool Pattern5(int x, int y) => ((int)(Math.Floor(y / 2d) + Math.Floor(x / 3d)) % 2) == 0;
 
             /// <summary>
             /// Creates a complex grid pattern.
             /// </summary>
-            public static bool Pattern6(int x, int y)
-            {
-                return ((x * y) % 2) + ((x * y) % 3) == 0;
-            }
+            public static bool Pattern6(int x, int y) => ((x * y) % 2) + ((x * y) % 3) == 0;
 
             /// <summary>
             /// Creates an alternating complex pattern.
             /// </summary>
-            public static bool Pattern7(int x, int y)
-            {
-                return (((x * y) % 2) + ((x * y) % 3)) % 2 == 0;
-            }
+            public static bool Pattern7(int x, int y) => (((x * y) % 2) + ((x * y) % 3)) % 2 == 0;
 
             /// <summary>
             /// Creates a combination of checkerboard and grid patterns.
             /// </summary>
-            public static bool Pattern8(int x, int y)
-            {
-                return (((x + y) % 2) + ((x * y) % 3)) % 2 == 0;
-            }
+            public static bool Pattern8(int x, int y) => (((x + y) % 2) + ((x * y) % 3)) % 2 == 0;
 
             /// <summary>
             /// Calculates penalty score for a masked QR code.
@@ -1346,24 +1357,39 @@ public class QRCodeGenerator : IDisposable
                     for (var x = 0; x < size; x++)
                     {
                         if (qrCode.ModuleMatrix[y][x] == lastValRow)
+                        {
                             modInRow++;
+                        }
                         else
+                        {
                             modInRow = 1;
+                        }
                         if (modInRow == 5)
+                        {
                             score1 += 3;
+                        }
                         else if (modInRow > 5)
+                        {
                             score1++;
+                        }
                         lastValRow = qrCode.ModuleMatrix[y][x];
 
-
                         if (qrCode.ModuleMatrix[x][y] == lastValColumn)
+                        {
                             modInColumn++;
+                        }
                         else
+                        {
                             modInColumn = 1;
+                        }
                         if (modInColumn == 5)
+                        {
                             score1 += 3;
+                        }
                         else if (modInColumn > 5)
+                        {
                             score1++;
+                        }
                         lastValColumn = qrCode.ModuleMatrix[x][y];
                     }
                 }
@@ -1377,7 +1403,9 @@ public class QRCodeGenerator : IDisposable
                         if (qrCode.ModuleMatrix[y][x] == qrCode.ModuleMatrix[y][x + 1] &&
                             qrCode.ModuleMatrix[y][x] == qrCode.ModuleMatrix[y + 1][x] &&
                             qrCode.ModuleMatrix[y][x] == qrCode.ModuleMatrix[y + 1][x + 1])
+                        {
                             score2 += 3;
+                        }
                     }
                 }
 
@@ -1527,7 +1555,7 @@ public class QRCodeGenerator : IDisposable
                 sb.Append("a^" + polyItem.Coefficient + "*x^" + polyItem.Exponent + " + ");
             }
 
-            return sb.ToString().TrimEnd(new[] { ' ', '+' });
+            return sb.ToString().TrimEnd([' ', '+']);
         }
     }
 
