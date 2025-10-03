@@ -146,7 +146,7 @@ ls ./pack
 Test Run on linux.
 
 ```shell
-docker compose -f ./samples/LinuxCompose/compose.yaml up
+docker compose -f ./samples/LinuxCompose/compose.override.8.0.yaml up
 ```
 
 ## License

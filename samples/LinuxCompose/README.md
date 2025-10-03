@@ -3,5 +3,5 @@
 Run compose.
 
 ```shell
-docker compose -f samples/Linuxcompose/compose.yaml up
+docker compose -f samples/Linuxcompose/compose.override.8.0.yaml up
 ```

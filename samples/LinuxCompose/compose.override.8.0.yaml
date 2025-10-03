@@ -1,14 +1,14 @@
 services:
   net:
-    image: mcr.microsoft.com/dotnet/sdk:9.0
+    image: mcr.microsoft.com/dotnet/sdk:8.0
     command: bash -eux entrypoint.sh -f net9.0
     working_dir: /src
     volumes:
-      - ./normal:/src
+      - ./8.0:/src
 
   nodep:
-    image: mcr.microsoft.com/dotnet/sdk:9.0
+    image: mcr.microsoft.com/dotnet/sdk:8.0
     command: bash -eux entrypoint.sh -f net9.0
     working_dir: /src
     volumes:
-      - ./nodep:/src
+      - ./8.0_nodep:/src
