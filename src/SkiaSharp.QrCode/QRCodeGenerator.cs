@@ -1,3 +1,4 @@
+using SkiaSharp.QrCode.Internals;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -445,7 +446,7 @@ public class QRCodeGenerator : IDisposable
         for (var i = 0; i < poly.PolyItems.Count; i++)
         {
             var coefficient = poly.PolyItems[i].Coefficient != 0
-                ? this.GetAlphaExpFromIntVal(poly.PolyItems[i].Coefficient)
+                ? GetAlphaExpFromIntVal(poly.PolyItems[i].Coefficient)
                 : 0;
             var data = new PolynomItem(coefficient, poly.PolyItems[i].Exponent);
             newPoly.PolyItems.Add(data);
@@ -463,38 +464,10 @@ public class QRCodeGenerator : IDisposable
         var newPoly = new Polynom();
         for (var i = 0; i < poly.PolyItems.Count; i++)
         {
-            var coefficient = this.GetIntValFromAlphaExp(poly.PolyItems[i].Coefficient);
+            var coefficient = GetIntValFromAlphaExp(poly.PolyItems[i].Coefficient);
             newPoly.PolyItems.Add(new PolynomItem(coefficient, poly.PolyItems[i].Exponent));
         }
         return newPoly;
-    }
-
-    /// <summary>
-    /// Gets integer value from alpha exponent using Galois field lookup.
-    /// Example: α^25 → galoisField[25].IntegerValue
-    /// </summary>
-    /// <param name="exp">Alpha exponent (0-255).</param>
-    /// <returns>Integer value (0-255).</returns>
-    private int GetIntValFromAlphaExp(int exp)
-    {
-        return GaloisField
-            .Where(x => x.ExponentAlpha == exp)
-            .Select(x => x.IntegerValue)
-            .First();
-    }
-
-    /// <summary>
-    /// Gets alpha exponent from integer value using Galois field lookup.
-    /// Example: 57 → galoisField.Find(x => x.IntegerValue == 57).ExponentAlpha
-    /// </summary>
-    /// <param name="intVal">Integer value (0-255).</param>
-    /// <returns>Alpha exponent (0-255).</returns>
-    private int GetAlphaExpFromIntVal(int intVal)
-    {
-        return GaloisField
-            .Where(x => x.IntegerValue == intVal)
-            .Select(x => x.ExponentAlpha)
-            .First();
     }
 
     /// <summary>
@@ -554,8 +527,8 @@ public class QRCodeGenerator : IDisposable
         {
             var coefficient = resultPolynom.PolyItems
                 .Where(x => x.Exponent == exponent)
-                .Aggregate(0, (current, polynomOld) => current ^ this.GetIntValFromAlphaExp(polynomOld.Coefficient));
-            var polynomFixed = new PolynomItem(this.GetAlphaExpFromIntVal(coefficient), exponent);
+                .Aggregate(0, (current, polynomOld) => current ^ GetIntValFromAlphaExp(polynomOld.Coefficient));
+            var polynomFixed = new PolynomItem(GetAlphaExpFromIntVal(coefficient), exponent);
             gluedPolynoms.Add(polynomFixed);
         }
         resultPolynom.PolyItems.RemoveAll(x => toGlue.Contains(x.Exponent));

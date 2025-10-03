@@ -9,12 +9,12 @@ internal static class QRCodeConstants
     private static readonly Lazy<IReadOnlyList<AlignmentPattern>> alignmentPatternTable = new(() => CreateAlignmentPatternTable());
     private static readonly Lazy<IReadOnlyList<ECCInfo>> capacityECCTable = new(() => CreateCapacityECCTable());
     private static readonly Lazy<IReadOnlyList<VersionInfo>> capacityTable = new(() => CreateCapacityTable());
-    private static readonly Lazy<IReadOnlyList<Antilog>> galoisField = new(() => CreateAntilogTable());
+    private static readonly Lazy<GaloisFieldData> galoisField = new(() => CreateCreateGaloisFieldData());
 
     public static IReadOnlyList<AlignmentPattern> AlignmentPatternTable => alignmentPatternTable.Value;
     public static IReadOnlyList<ECCInfo> CapacityECCTable => capacityECCTable.Value;
     public static IReadOnlyList<VersionInfo> CapacityTable => capacityTable.Value;
-    public static IReadOnlyList<Antilog> GaloisField => galoisField.Value;
+    public static GaloisFieldData GaloisField => galoisField.Value;
 
     /// <summary>
     /// Checks if a character is numeric (0-9).
@@ -705,6 +705,34 @@ internal static class QRCodeConstants
         return remainderBits.AsSpan()[version - 1];
     }
 
+    /// <summary>
+    /// Gets integer value from alpha exponent using Galois field lookup.
+    /// Example: α^25 → galoisField[25].IntegerValue
+    /// </summary>
+    /// <param name="alphaExponent">Alpha exponent (0-255).</param>
+    /// <returns>Integer value in GF(256).</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetIntValFromAlphaExp(int alphaExponent)
+    {
+        // Gets integer value from alpha exponent (O(1) array lookup).
+        // Replaces LINQ-based linear search in GetIntValFromAlphaExp.
+        return GaloisField.ExpToInt[alphaExponent];
+    }
+
+    /// <summary>
+    /// Gets alpha exponent from integer value using Galois field lookup.
+    /// Example: 57 → galoisField.Find(x => x.IntegerValue == 57).ExponentAlpha
+    /// </summary>
+    /// <param name="intValue">Integer value (0-255).</param>
+    /// <returns>Alpha exponent in GF(256).</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetAlphaExpFromIntVal(int intValue)
+    {
+        // Gets alpha exponent from integer value (O(1) array lookup).
+        // Replaces LINQ-based linear search in GetAlphaExpFromIntVal.
+        return GaloisField.IntToExp[intValue];
+    }
+
     // Lookup Table Initialization
 
     /// <summary>
@@ -772,47 +800,47 @@ internal static class QRCodeConstants
         {
             table.AddRange([
                 new ECCInfo(
-                        version: (i+24) / 24,
-                        errorCorrectionLevel: ECCLevel.L,
-                        totalDataCodewords: CapacityECCBaseValues[i],
-                        eccPerBlock: CapacityECCBaseValues[i+1],
-                        blocksInGroup1: CapacityECCBaseValues[i+2],
-                        codewordsInGroup1: CapacityECCBaseValues[i+3],
-                        blocksInGroup2: CapacityECCBaseValues[i+4],
-                        codewordsInGroup2: CapacityECCBaseValues[i+5]),
-                    new ECCInfo
-                    (
-                        version: (i + 24) / 24,
-                        errorCorrectionLevel: ECCLevel.M,
-                        totalDataCodewords: CapacityECCBaseValues[i+6],
-                        eccPerBlock: CapacityECCBaseValues[i+7],
-                        blocksInGroup1: CapacityECCBaseValues[i+8],
-                        codewordsInGroup1: CapacityECCBaseValues[i+9],
-                        blocksInGroup2: CapacityECCBaseValues[i+10],
-                        codewordsInGroup2: CapacityECCBaseValues[i+11]
-                    ),
-                    new ECCInfo
-                    (
-                        version: (i + 24) / 24,
-                        errorCorrectionLevel: ECCLevel.Q,
-                        totalDataCodewords: CapacityECCBaseValues[i+12],
-                        eccPerBlock: CapacityECCBaseValues[i+13],
-                        blocksInGroup1: CapacityECCBaseValues[i+14],
-                        codewordsInGroup1: CapacityECCBaseValues[i+15],
-                        blocksInGroup2: CapacityECCBaseValues[i+16],
-                        codewordsInGroup2: CapacityECCBaseValues[i+17]
-                    ),
-                    new ECCInfo
-                    (
-                        version: (i + 24) / 24,
-                        errorCorrectionLevel: ECCLevel.H,
-                        totalDataCodewords: CapacityECCBaseValues[i+18],
-                        eccPerBlock: CapacityECCBaseValues[i+19],
-                        blocksInGroup1: CapacityECCBaseValues[i+20],
-                        codewordsInGroup1: CapacityECCBaseValues[i+21],
-                        blocksInGroup2: CapacityECCBaseValues[i+22],
-                        codewordsInGroup2: CapacityECCBaseValues[i+23]
-                    )
+                    version: (i+24) / 24,
+                    errorCorrectionLevel: ECCLevel.L,
+                    totalDataCodewords: CapacityECCBaseValues[i],
+                    eccPerBlock: CapacityECCBaseValues[i+1],
+                    blocksInGroup1: CapacityECCBaseValues[i+2],
+                    codewordsInGroup1: CapacityECCBaseValues[i+3],
+                    blocksInGroup2: CapacityECCBaseValues[i+4],
+                    codewordsInGroup2: CapacityECCBaseValues[i+5]),
+                new ECCInfo
+                (
+                    version: (i + 24) / 24,
+                    errorCorrectionLevel: ECCLevel.M,
+                    totalDataCodewords: CapacityECCBaseValues[i+6],
+                    eccPerBlock: CapacityECCBaseValues[i+7],
+                    blocksInGroup1: CapacityECCBaseValues[i+8],
+                    codewordsInGroup1: CapacityECCBaseValues[i+9],
+                    blocksInGroup2: CapacityECCBaseValues[i+10],
+                    codewordsInGroup2: CapacityECCBaseValues[i+11]
+                ),
+                new ECCInfo
+                (
+                    version: (i + 24) / 24,
+                    errorCorrectionLevel: ECCLevel.Q,
+                    totalDataCodewords: CapacityECCBaseValues[i+12],
+                    eccPerBlock: CapacityECCBaseValues[i+13],
+                    blocksInGroup1: CapacityECCBaseValues[i+14],
+                    codewordsInGroup1: CapacityECCBaseValues[i+15],
+                    blocksInGroup2: CapacityECCBaseValues[i+16],
+                    codewordsInGroup2: CapacityECCBaseValues[i+17]
+                ),
+                new ECCInfo
+                (
+                    version: (i + 24) / 24,
+                    errorCorrectionLevel: ECCLevel.H,
+                    totalDataCodewords: CapacityECCBaseValues[i+18],
+                    eccPerBlock: CapacityECCBaseValues[i+19],
+                    blocksInGroup1: CapacityECCBaseValues[i+20],
+                    codewordsInGroup1: CapacityECCBaseValues[i+21],
+                    blocksInGroup2: CapacityECCBaseValues[i+22],
+                    codewordsInGroup2: CapacityECCBaseValues[i+23]
+                )
             ]);
         }
         return table;
@@ -878,9 +906,12 @@ internal static class QRCodeConstants
     /// Creates the Galois field (GF(256)) antilog table for Reed-Solomon error correction.
     /// Generates α^0 to α^255 values using polynomial x^8 + x^4 + x^3 + x^2 + 1 (0x11D).
     /// </summary>
-    private static IReadOnlyList<Antilog> CreateAntilogTable()
+    private static GaloisFieldData CreateCreateGaloisFieldData()
     {
-        var table = new List<Antilog>(256); // 256 entries for GF(256)
+        var table = new Antilog[256]; // 256 entries for GF(256)
+        var expToInt = new byte[256];
+        var intToExp = new byte[256];
+
         for (var i = 0; i < 256; i++)
         {
             int gfItem;
@@ -899,9 +930,59 @@ internal static class QRCodeConstants
                 gfItem = gfItem ^ 285; // Polynomial: x^8 + x^4 + x^3 + x^2 + 1 = 0x11D
             }
 
-            table.Add(new Antilog(i, gfItem));
+            var antilog = new Antilog(i, gfItem);
+            table[i] = antilog;
+
+            // lookup tables
+            expToInt[i] = (byte)gfItem;
+            intToExp[gfItem] = (byte)i;
         }
-        return table;
+
+        return new GaloisFieldData(table, expToInt, intToExp);
+    }
+
+    // enum
+
+    /// <summary>
+    /// Encoding mode enumeration (ISO/IEC 18004 Section 7.4.1).
+    /// Determines how data is encoded in the QR code, affecting capacity and efficiency.
+    /// 
+    /// Mode priority in automatic detection:
+    /// 1. Numeric (most efficient)
+    /// 2. Alphanumeric
+    /// 3. Byte (least efficient)
+    /// 
+    /// Note: ECI is not a data encoding mode, but a character set declaration.
+    /// </summary>
+    public enum EncodingMode
+    {
+        /// <summary>
+        /// 0-9 only (10 bits per 3 digits)
+        /// </summary>
+        Numeric = 1,
+        /// <summary>
+        /// 0-9, A-Z, space, $%*+-./:  (11 bits per 2 chars).
+        /// </summary>
+        Alphanumeric = 2,
+        /// <summary>
+        /// Any 8-bit data (8 bits per byte)
+        /// Default: ISO-8859-1, can be UTF-8 with ECI.
+        /// </summary>
+        Byte = 4,
+        /// <summary>
+        /// Extended Channel Interpretation (metadata only).
+        /// Mode indicator: 0111 + 8-bit assignment number
+        /// Specifies character encoding for Byte mode:
+        ///   - ECI 3: ISO-8859-1
+        ///   - ECI 4: ISO-8859-2
+        ///   - ECI 26: UTF-8
+        /// Always followed by another mode (typically Byte).
+        /// </summary>
+        ECI = 7,
+        /// <summary>
+        /// Shift JIS Kanji (13 bits per character)
+        /// </summary>
+        Kanji = 8,
     }
 
     // struct definitions
@@ -1000,45 +1081,21 @@ internal static class QRCodeConstants
     }
 
     /// <summary>
-    /// Encoding mode enumeration (ISO/IEC 18004 Section 7.4.1).
-    /// Determines how data is encoded in the QR code, affecting capacity and efficiency.
-    /// 
-    /// Mode priority in automatic detection:
-    /// 1. Numeric (most efficient)
-    /// 2. Alphanumeric
-    /// 3. Byte (least efficient)
-    /// 
-    /// Note: ECI is not a data encoding mode, but a character set declaration.
+    /// Glois field data and lookup tables
     /// </summary>
-    public enum EncodingMode
+    public readonly struct GaloisFieldData
     {
-        /// <summary>
-        /// 0-9 only (10 bits per 3 digits)
-        /// </summary>
-        Numeric = 1,
-        /// <summary>
-        /// 0-9, A-Z, space, $%*+-./:  (11 bits per 2 chars).
-        /// </summary>
-        Alphanumeric = 2,
-        /// <summary>
-        /// Any 8-bit data (8 bits per byte)
-        /// Default: ISO-8859-1, can be UTF-8 with ECI.
-        /// </summary>
-        Byte = 4,
-        /// <summary>
-        /// Extended Channel Interpretation (metadata only).
-        /// Mode indicator: 0111 + 8-bit assignment number
-        /// Specifies character encoding for Byte mode:
-        ///   - ECI 3: ISO-8859-1
-        ///   - ECI 4: ISO-8859-2
-        ///   - ECI 26: UTF-8
-        /// Always followed by another mode (typically Byte).
-        /// </summary>
-        ECI = 7,
-        /// <summary>
-        /// Shift JIS Kanji (13 bits per character)
-        /// </summary>
-        Kanji = 8,
+        private readonly Antilog[] antilogTable;
+        public ReadOnlySpan<Antilog> AntilogTable => antilogTable;
+        public byte[] ExpToInt { get; }  // α^n → integer
+        public byte[] IntToExp { get; }  // integer → α^n
+
+        public GaloisFieldData(Antilog[] antilogTable, byte[] expToInt, byte[] intToExp)
+        {
+            this.antilogTable = antilogTable;
+            ExpToInt = expToInt;
+            IntToExp = intToExp;
+        }
     }
 
     /// <summary>
