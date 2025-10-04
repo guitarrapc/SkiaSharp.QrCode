@@ -1,5 +1,4 @@
 [MemoryDiagnoser]
-[ThreadingDiagnoser]
 public class QrGeneratorSimple
 {
     private QRCodeGenerator _generator;
