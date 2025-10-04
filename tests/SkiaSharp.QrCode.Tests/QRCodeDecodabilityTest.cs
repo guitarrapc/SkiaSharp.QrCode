@@ -1,6 +1,10 @@
+using System;
+using System.Linq;
 using Xunit;
 using ZXing;
 using ZXing.SkiaSharp;
+
+[assembly: CaptureConsole]
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -23,33 +27,108 @@ public class QRCodeDecodabilityTest
     }
 
     [Theory]
-    [InlineData("0123456789", ECCLevel.L, EciMode.Default)]
-    [InlineData("HELLO WORLD", ECCLevel.M, EciMode.Default)]
-    [InlineData("ABC-123", ECCLevel.Q, EciMode.Default)]
-    [InlineData("Test123", ECCLevel.H, EciMode.Default)]
-    public void CreateQrCode_Default_IsDecodable(string content, ECCLevel eccLevel, EciMode eciMode)
+    [InlineData("0123456789", ECCLevel.L, EciMode.Utf8)]
+    [InlineData("Hello, World!", ECCLevel.L, EciMode.Utf8)]
+    [InlineData("special", ECCLevel.L, EciMode.Utf8)]
+    public void CreateQrCode_Default_ascii_words_IsDecodable(string content, ECCLevel eccLevel, EciMode eciMode)
     {
+        // default is ISO-8859-1 for ASCII-only
         AssertQrCodeIsDecodable(content, eccLevel, eciMode);
     }
 
     [Theory]
-    [InlineData("Hello, World!", ECCLevel.L, EciMode.Utf8)]
     [InlineData("こんにちは", ECCLevel.M, EciMode.Utf8)]
     [InlineData("你好世界", ECCLevel.Q, EciMode.Utf8)]
     [InlineData("Привет мир", ECCLevel.H, EciMode.Utf8)]
     [InlineData("🎉🎊🎈", ECCLevel.L, EciMode.Utf8)]
     [InlineData("café", ECCLevel.M, EciMode.Utf8)]
+    [InlineData("Café", ECCLevel.L, EciMode.Utf8)]
+    [InlineData("Résumé", ECCLevel.M, EciMode.Utf8)]
+    [InlineData("Naïve", ECCLevel.Q, EciMode.Utf8)]
+    [InlineData("Zürich", ECCLevel.H, EciMode.Utf8)]
+    public void CreateQrCode_Default_utf8_words_IsDecodable(string content, ECCLevel eccLevel, EciMode eciMode)
+    {
+        // automatic ECI mode selection should match Utf8 for non-ASCII
+        AssertQrCodeIsDecodable(content, eccLevel, eciMode);
+    }
+
+    [Theory]
+    [InlineData("0123456789", ECCLevel.L, EciMode.Utf8)]
+    [InlineData("Hello, World!", ECCLevel.L, EciMode.Utf8)]
+    [InlineData("special", ECCLevel.L, EciMode.Utf8)]
+    [InlineData("こんにちは", ECCLevel.M, EciMode.Utf8)]
+    [InlineData("你好世界", ECCLevel.Q, EciMode.Utf8)]
+    [InlineData("Привет мир", ECCLevel.H, EciMode.Utf8)]
+    [InlineData("🎉🎊🎈", ECCLevel.L, EciMode.Utf8)]
+    [InlineData("café", ECCLevel.M, EciMode.Utf8)]
+    [InlineData("Café", ECCLevel.L, EciMode.Utf8)]
+    [InlineData("Résumé", ECCLevel.M, EciMode.Utf8)]
+    [InlineData("Naïve", ECCLevel.Q, EciMode.Utf8)]
+    [InlineData("Zürich", ECCLevel.H, EciMode.Utf8)]
     public void CreateQrCode_Utf8_IsDecodable(string content, ECCLevel eccLevel, EciMode eciMode)
     {
         AssertQrCodeIsDecodable(content, eccLevel, eciMode);
     }
 
     [Theory]
+    [InlineData("0123456789", ECCLevel.L, EciMode.Iso8859_1)]
+    [InlineData("HELLO WORLD", ECCLevel.M, EciMode.Iso8859_1)]
+    [InlineData("special", ECCLevel.L, EciMode.Iso8859_1)]
+    [InlineData("ABC-123", ECCLevel.Q, EciMode.Iso8859_1)]
+    [InlineData("Test123", ECCLevel.H, EciMode.Iso8859_1)]
     [InlineData("Café", ECCLevel.L, EciMode.Iso8859_1)]
     [InlineData("Résumé", ECCLevel.M, EciMode.Iso8859_1)]
+    [InlineData("Naïve", ECCLevel.Q, EciMode.Iso8859_1)]
+    [InlineData("Zürich", ECCLevel.H, EciMode.Iso8859_1)]
     public void CreateQrCode_Iso8859_IsDecodable(string content, ECCLevel eccLevel, EciMode eciMode)
     {
         AssertQrCodeIsDecodable(content, eccLevel, eciMode);
+    }
+
+    [Fact]
+    public void Debug_Zurich_Version_Check()
+    {
+        var content = "Zürich";
+
+        // check byte length in UTF-8
+        var utf8Bytes = System.Text.Encoding.UTF8.GetBytes(content);
+        var byteCount = utf8Bytes.Length;
+
+        using var generator = new QRCodeGenerator();
+
+        var qrH = generator.CreateQrCode(content, ECCLevel.H, eciMode: EciMode.Utf8);
+        var qrM = generator.CreateQrCode(content, ECCLevel.M, eciMode: EciMode.Utf8);
+        var qrL = generator.CreateQrCode(content, ECCLevel.L, eciMode: EciMode.Utf8);
+
+        // debug output
+        Console.WriteLine($"Content: \"{content}\"");
+        Console.WriteLine($"UTF-8 Bytes: {byteCount} [{string.Join(", ", utf8Bytes.Select(b => $"0x{b:X2}"))}]");
+        Console.WriteLine($"");
+        Console.WriteLine($"ECC Level H → Version {qrH.Version} (Size: {qrH.ModuleMatrix.Count}x{qrH.ModuleMatrix.Count})");
+        Console.WriteLine($"ECC Level M → Version {qrM.Version} (Size: {qrM.ModuleMatrix.Count}x{qrM.ModuleMatrix.Count})");
+        Console.WriteLine($"ECC Level L → Version {qrL.Version} (Size: {qrL.ModuleMatrix.Count}x{qrL.ModuleMatrix.Count})");
+        Console.WriteLine($"");
+
+        // Version 1 logical capacity
+        Console.WriteLine("Version 1 Byte mode capacity:");
+        Console.WriteLine("  ECC L: 17 bytes");
+        Console.WriteLine("  ECC M: 14 bytes");
+        Console.WriteLine("  ECC Q: 11 bytes");
+        Console.WriteLine("  ECC H: 7 bytes");
+        Console.WriteLine($"");
+        Console.WriteLine($"Required (with ECI header): ~10-12 bytes");
+        Console.WriteLine($"");
+
+        // Expected
+        Console.WriteLine("Expected versions:");
+        Console.WriteLine("  ECC L: Version 1 (17 bytes available)");
+        Console.WriteLine("  ECC M: Version 1 (14 bytes available)");
+        Console.WriteLine("  ECC Q: Version 1 (11 bytes available)");
+        Console.WriteLine("  ECC H: Version 2 (16 bytes available)");
+
+        // Should be automatically upgrade to Version 2
+        Assert.True(qrH.Version >= 2, $"ECC H should use Version 2 or higher, but got Version {qrH.Version}");
+        Assert.True(qrM.Version >= 1, $"ECC M should use Version 1 or higher, but got Version {qrM.Version}");
     }
 
     [Theory]

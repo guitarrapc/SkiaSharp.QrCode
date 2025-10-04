@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using Xunit;
-using static SkiaSharp.QrCode.Internals.QRCodeConstants;
+using SkiaSharp.QrCode.Internals;
 using static SkiaSharp.QrCode.QRCodeGenerator;
 
 namespace SkiaSharp.QrCode.Tests;
@@ -248,15 +248,15 @@ public class QRCodeGeneratorUnitTest
     }
 
     [Theory]
-    [InlineData(ECCLevel.L, 17, 1)]   // V1-L: 17 bytes → V1 (21+8=29)
-    [InlineData(ECCLevel.M, 14, 1)]   // V1-M: 14 bytes → V1 (21+8=29)
-    [InlineData(ECCLevel.H, 7, 1)]    // V1-H: 7 bytes → V1 (21+8=29)
-    [InlineData(ECCLevel.L, 18, 2)]   // V1-L max + 1 → should upgrade to V2
-    [InlineData(ECCLevel.M, 15, 2)]   // V1-M max + 1 → should upgrade to V2
-    [InlineData(ECCLevel.H, 8, 2)]   // V1-H max + 1 → should upgrade to V2
-    [InlineData(ECCLevel.L, 32, 2)]   // V2-L max
-    [InlineData(ECCLevel.M, 26, 2)]   // V2-M max
-    [InlineData(ECCLevel.H, 14, 2)]   // V2-H max
+    [InlineData(ECCLevel.L, 16, 1)]   // V1-L: 16 bytes → V1 (21+8=29)
+    [InlineData(ECCLevel.M, 13, 1)]   // V1-M: 13 bytes → V1 (21+8=29)
+    [InlineData(ECCLevel.H, 6, 1)]    // V1-H: 6 bytes → V1 (21+8=29)
+    [InlineData(ECCLevel.L, 17, 2)]   // V1-L max + 1 → should upgrade to V2
+    [InlineData(ECCLevel.M, 14, 2)]   // V1-M max + 1 → should upgrade to V2
+    [InlineData(ECCLevel.H, 7, 2)]   // V1-H max + 1 → should upgrade to V2
+    [InlineData(ECCLevel.L, 31, 2)]   // V2-L max
+    [InlineData(ECCLevel.M, 25, 2)]   // V2-M max
+    [InlineData(ECCLevel.H, 13, 2)]   // V2-H max
     public void CreateQrCode_Utf8_Version1MaxCapacity(ECCLevel eccLevel, int maxBytes, int expectedVersion)
     {
         var expectedSize = CalculateSize(expectedVersion);
@@ -290,11 +290,27 @@ public class QRCodeGeneratorUnitTest
     {
         var generator = new QRCodeGenerator();
 
+        var qrDefault = generator.CreateQrCode("HELLO", ECCLevel.M, eciMode: EciMode.Default);
         var qrIso = generator.CreateQrCode("HELLO", ECCLevel.M, eciMode: EciMode.Iso8859_1);
         var qrUtf8 = generator.CreateQrCode("HELLO", ECCLevel.M, eciMode: EciMode.Utf8);
 
         // Different ECI headers → different QR codes
+        Assert.NotEqual(SerializeMatrix(qrDefault.ModuleMatrix), SerializeMatrix(qrIso.ModuleMatrix));
         Assert.NotEqual(SerializeMatrix(qrIso.ModuleMatrix), SerializeMatrix(qrUtf8.ModuleMatrix));
+        Assert.NotEqual(SerializeMatrix(qrDefault.ModuleMatrix), SerializeMatrix(qrUtf8.ModuleMatrix));
+    }
+
+    [Theory]
+    [InlineData("Zürich", ECCLevel.H, EciMode.Utf8, 2)]  // 修正後: Version 2
+    [InlineData("Zürich", ECCLevel.M, EciMode.Utf8, 1)]  // Version 1 で OK
+    [InlineData("Zürich", ECCLevel.L, EciMode.Utf8, 1)]  // Version 1 で OK
+    [InlineData("café", ECCLevel.H, EciMode.Utf8, 1)]    // Version 1 で OK
+    public void CreateQrCode_VersionSelection_IsCorrect(string content, ECCLevel eccLevel, EciMode eciMode, int expectedVersion)
+    {
+        using var generator = new QRCodeGenerator();
+        var qr = generator.CreateQrCode(content, eccLevel, eciMode: eciMode);
+
+        Assert.Equal(expectedVersion, qr.Version);
     }
 
     // Maximum Capacity Tests

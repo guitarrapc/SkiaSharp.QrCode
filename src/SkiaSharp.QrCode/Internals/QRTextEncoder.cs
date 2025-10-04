@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
@@ -21,9 +20,9 @@ internal class QRTextEncoder
     /// <summary>
     /// Writes mode indicator (4 bits) and optional ECI header (12 bits).
     /// </summary>
-    /// <param name="mode">Encoding mode.</param>
+    /// <param name="encoding">Encoding mode.</param>
     /// <param name="eci">ECI mode for character encoding.</param>
-    public void WriteMode(EncodingMode mode, EciMode eci)
+    public void WriteMode(EncodingMode encoding, EciMode eci)
     {
         // ECI mode requires special header before mode indicator
         if (eci != EciMode.Default)
@@ -35,7 +34,7 @@ internal class QRTextEncoder
         }
 
         // Standard mode indicator (4 bits)
-        _builder.Append(DecToBin((int)mode, 4));
+        _builder.Append(DecToBin((int)encoding, 4));
     }
 
     /// <summary>
@@ -43,10 +42,10 @@ internal class QRTextEncoder
     /// </summary>
     /// <param name="count">Number of input characters</param>
     /// <param name="version">QR code version (1-40)</param>
-    /// <param name="mode">Encoding mode (affects bit length of count indicator)</param>
-    public void WriteCharacterCount(int count, int version, EncodingMode mode)
+    /// <param name="encoding">Encoding mode (affects bit length of count indicator)</param>
+    public void WriteCharacterCount(int count, int version, EncodingMode encoding)
     {
-        var bitsLength = GetCountIndicatorLength(version, mode);
+        var bitsLength = encoding.GetCountIndicatorLength(version);
         _builder.Append(DecToBin(count, bitsLength));
     }
 
@@ -54,18 +53,18 @@ internal class QRTextEncoder
     /// Writes encoded data based on mode
     /// </summary>
     /// <param name="plainText">Input text to encode</param>
-    /// <param name="mode">Encoding mode</param>
+    /// <param name="encoding">Encoding mode</param>
     /// <param name="eci">ECI mode for character encoding</param>
     /// <param name="utf8Bom">Whether to include UTF-8 BOM</param>
-    public void WriteData(string plainText, EncodingMode mode, EciMode eci, bool utf8Bom)
+    public void WriteData(string plainText, EncodingMode encoding, EciMode eci, bool utf8Bom)
     {
-        var encoded = mode switch
+        var encoded = encoding switch
         {
             EncodingMode.Numeric => EncodeNumeric(plainText),
             EncodingMode.Alphanumeric => EncodeAlphanumeric(plainText),
             EncodingMode.Byte => EncodeByte(plainText, eci, utf8Bom),
             EncodingMode.Kanji => throw new NotImplementedException("Kanji encoding not yet implemented, use Byte mode with UTF-8 encoding for Japanese text."),
-            _ => throw new ArgumentOutOfRangeException(nameof(mode), "Invalid encoding mode"),
+            _ => throw new ArgumentOutOfRangeException(nameof(encoding), "Invalid encoding mode"),
         };
         _builder.Append(encoded);
     }
@@ -241,55 +240,6 @@ internal class QRTextEncoder
     {
         var binStr = Convert.ToString(num, 2);
         return binStr.PadLeft(bits, '0');
-    }
-
-    /// <summary>
-    /// Gets the bit length of character count indicator based on version and mode
-    /// </summary>
-    /// <param name="version">QR code version (1-40).</param>
-    /// <param name="mode">Encoding mode.</param>
-    /// <returns>
-    /// Bit length (8-16 bits):
-    /// - Version 1-9: Numeric=10, Alphanumeric=9, Byte=8
-    /// - Version 10-26: Numeric=12, Alphanumeric=11, Byte=16
-    /// - Version 27-40: Numeric=14, Alphanumeric=13, Byte=16
-    /// </returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int GetCountIndicatorLength(int version, EncodingMode mode)
-    {
-        if (version < 10)
-        {
-            return mode switch
-            {
-                EncodingMode.Numeric => 10,
-                EncodingMode.Alphanumeric => 9,
-                EncodingMode.Byte => 8,
-                EncodingMode.Kanji => 8,
-                _ => throw new ArgumentOutOfRangeException(nameof(mode), "Invalid encoding mode"),
-            };
-        }
-        else if (version < 27)
-        {
-            return mode switch
-            {
-                EncodingMode.Numeric => 12,
-                EncodingMode.Alphanumeric => 11,
-                EncodingMode.Byte => 16,
-                EncodingMode.Kanji => 10,
-                _ => throw new ArgumentOutOfRangeException(nameof(mode), "Invalid encoding mode"),
-            };
-        }
-        else
-        {
-            return mode switch
-            {
-                EncodingMode.Numeric => 14,
-                EncodingMode.Alphanumeric => 13,
-                EncodingMode.Byte => 16,
-                EncodingMode.Kanji => 12,
-                _ => throw new ArgumentOutOfRangeException(nameof(mode), "Invalid encoding mode"),
-            };
-        }
     }
 
     /// <summary>
