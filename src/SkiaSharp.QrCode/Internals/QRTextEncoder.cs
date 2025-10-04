@@ -3,7 +3,6 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
-using static SkiaSharp.QrCode.QRCodeGenerator;
 
 namespace SkiaSharp.QrCode.Internals;
 
