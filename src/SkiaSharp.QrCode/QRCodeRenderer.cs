@@ -1,6 +1,4 @@
 using SkiaSharp.QrCode.Models;
-using System;
-using System.Linq;
 
 namespace SkiaSharp.QrCode;
 
