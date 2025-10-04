@@ -283,14 +283,15 @@ internal class ReedSolomonTextEncoder
             }
         }
 
-        // Combine terms with same exponent using XOR
+        // Find duplicate exponents
         var exponentsToGlue = resultPolynom.PolyItems
             .GroupBy(x => x.Exponent)
             .Where(x => x.Count() > 1)
-            .Select(x => x.First().Exponent)
+            .Select(x => x.Key)
             .ToList();
-        var gluedPolynoms = new List<PolynomItem>();
 
+        // Combine duplicates using XOR
+        var gluedPolynoms = new List<PolynomItem>();
         foreach (var exponent in exponentsToGlue)
         {
             var coefficient = resultPolynom.PolyItems
@@ -299,6 +300,8 @@ internal class ReedSolomonTextEncoder
             var polynomFixed = new PolynomItem(GetAlphaExpFromIntVal(coefficient), exponent);
             gluedPolynoms.Add(polynomFixed);
         }
+
+        // Remove duplicates and add combined terms
         resultPolynom.PolyItems.RemoveAll(x => exponentsToGlue.Contains(x.Exponent));
         resultPolynom.PolyItems.AddRange(gluedPolynoms);
         resultPolynom.PolyItems = resultPolynom.PolyItems.OrderByDescending(x => x.Exponent).ToList();
