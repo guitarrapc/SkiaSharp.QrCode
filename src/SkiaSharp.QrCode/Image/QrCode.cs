@@ -1,5 +1,3 @@
-using System.IO;
-
 namespace SkiaSharp.QrCode.Image;
 
 public class QrCode

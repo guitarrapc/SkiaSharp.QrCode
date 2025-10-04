@@ -1,7 +1,6 @@
 using SkiaSharp;
 using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Models;
-using System.IO;
 
 var content = "testtesttest";
 var path = "bin/output/hoge.png";

@@ -2,7 +2,7 @@
   <PropertyGroup>
     <LangVersion>13.0</LangVersion>
     <!-- <Nullable>enable</Nullable> -->
-    <!-- <ImplicitUsings>enable</ImplicitUsings> -->
+    <ImplicitUsings>enable</ImplicitUsings>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
