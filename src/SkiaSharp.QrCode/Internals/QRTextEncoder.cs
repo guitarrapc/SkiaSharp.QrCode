@@ -42,7 +42,7 @@ internal class QRTextEncoder
     /// Writes character count indicator (8-16 bits depending on version and mode)
     /// </summary>
     /// <param name="count">Number of input characters</param>
-    /// <param name="version">QR code verseion (1-40)</param>
+    /// <param name="version">QR code version (1-40)</param>
     /// <param name="mode">Encoding mode (affects bit length of count indicator)</param>
     public void WriteCharacterCount(int count, int version, EncodingMode mode)
     {
@@ -91,7 +91,7 @@ internal class QRTextEncoder
             _builder.Append('0', Math.Min(remaining, 4));
         }
 
-        // 2. Byte boundary alifnment (0-7 bits)
+        // 2. Byte boundary alignment (0-7 bits)
         if ((_builder.Length % 8) != 0)
         {
             _builder.Append('0', 8 - (_builder.Length % 8));
@@ -119,7 +119,7 @@ internal class QRTextEncoder
     // private methods
 
     /// <summary>
-    /// Encodes numetric text (0-9) to binary string
+    /// Encodes numeric text (0-9) to binary string
     /// </summary>
     /// <param name="text"></param>
     /// <remarks>
@@ -162,7 +162,7 @@ internal class QRTextEncoder
     }
 
     /// <summary>
-    /// Enbcodes alphanumeric text (0-9, A-Z, space, $, %, *, +, -, ., /, :) to binary string
+    /// Encodes alphanumeric text (0-9, A-Z, space, $, %, *, +, -, ., /, :) to binary string
     /// </summary>
     /// <param name="text"></param>
     /// <remarks>
