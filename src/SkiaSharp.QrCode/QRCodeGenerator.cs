@@ -1,10 +1,10 @@
-using SkiaSharp.QrCode.Internals;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using SkiaSharp.QrCode.Internals;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
 namespace SkiaSharp.QrCode;
@@ -270,7 +270,7 @@ public class QRCodeGenerator : IDisposable
         // var dataCodewordsBits = 80 * 8 = 640 bits
         // var eccCodewordsBits = 18 * (2 + 2) * 8 = 576 bits
         // var remainderBits = GetRemainderBits(5) = 0 bits  // Version 5 has no module remainder bits
-        // 
+        //
         // Total = 640 + 576 + 0 = 1,216 bits (152 bytes)
         // -----------------------------------------------------
 
@@ -1353,19 +1353,19 @@ public class QRCodeGenerator : IDisposable
             /// Calculates penalty score for a masked QR code.
             /// Lower score = better readability and scanning reliability.
             /// Applies 4 penalty rules from ISO/IEC 18004 Section 8.8.2:
-            /// 
-            /// Rule 1 (Consecutive modules): 
+            ///
+            /// Rule 1 (Consecutive modules):
             ///   - 5 consecutive modules: +3 points
             ///   - Each additional consecutive module: +1 point
             ///   - Applied to both rows and columns
-            /// 
+            ///
             /// Rule 2 (Block patterns):
             ///   - Each 2×2 block of same color: +3 points
-            /// 
+            ///
             /// Rule 3 (Finder-like patterns):
             ///   - Pattern "1:1:3:1:1 ratio with 4 light modules on either side": +40 points
             ///   - Helps avoid false positives during QR code detection
-            /// 
+            ///
             /// Rule 4 (Balance):
             ///   - Deviation from 50% dark modules
             ///   - Score = (|percentage - 50| / 5) × 10
@@ -1546,49 +1546,6 @@ public class QRCodeGenerator : IDisposable
         public List<int> CodeWordsInt { get; }
         public List<string> ECCWords { get; }
         public List<int> ECCWordsInt { get; }
-    }
-
-    /// <summary>
-    /// Polynomial term with coefficient and exponent.
-    /// Used in Reed-Solomon error correction algorithm.
-    /// Can represent both alpha notation (α^n·x^m) and decimal notation.
-    /// </summary>
-    private struct PolynomItem
-    {
-        public PolynomItem(int coefficient, int exponent)
-        {
-            this.Coefficient = coefficient;
-            this.Exponent = exponent;
-        }
-
-        public int Coefficient { get; }
-        public int Exponent { get; }
-    }
-
-    /// <summary>
-    /// Polynomial representation for Reed-Solomon calculations.
-    /// Collection of PolynomItem terms.
-    /// </summary>
-    private class Polynom
-    {
-        public Polynom()
-        {
-            this.PolyItems = new List<PolynomItem>();
-        }
-
-        public List<PolynomItem> PolyItems { get; set; }
-
-        public override string ToString()
-        {
-            var sb = new StringBuilder();
-            //this.PolyItems.ForEach(x => sb.Append("a^" + x.Coefficient + "*x^" + x.Exponent + " + "));
-            foreach (var polyItem in this.PolyItems)
-            {
-                sb.Append("a^" + polyItem.Coefficient + "*x^" + polyItem.Exponent + " + ");
-            }
-
-            return sb.ToString().TrimEnd([' ', '+']);
-        }
     }
 
     /// <summary>
