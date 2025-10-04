@@ -215,7 +215,6 @@ internal class QRTextEncoder
             codeBytes = eci switch
             {
                 EciMode.Iso8859_1 => Encoding.GetEncoding("ISO-8859-1").GetBytes(ConvertToIso8859(text, "ISO-8859-1")),
-                EciMode.Iso8859_2 => Encoding.GetEncoding("ISO-8859-2").GetBytes(ConvertToIso8859(text, "ISO-8859-2")),
                 EciMode.Default or EciMode.Utf8 or _ => utf8BOM
                 ? Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(text)).ToArray()
                 : Encoding.UTF8.GetBytes(text),
