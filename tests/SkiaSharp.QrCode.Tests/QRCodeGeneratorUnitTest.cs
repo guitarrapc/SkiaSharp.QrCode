@@ -290,11 +290,14 @@ public class QRCodeGeneratorUnitTest
     {
         var generator = new QRCodeGenerator();
 
+        var qrDefault = generator.CreateQrCode("HELLO", ECCLevel.M, eciMode: EciMode.Default);
         var qrIso = generator.CreateQrCode("HELLO", ECCLevel.M, eciMode: EciMode.Iso8859_1);
         var qrUtf8 = generator.CreateQrCode("HELLO", ECCLevel.M, eciMode: EciMode.Utf8);
 
         // Different ECI headers → different QR codes
+        Assert.NotEqual(SerializeMatrix(qrDefault.ModuleMatrix), SerializeMatrix(qrIso.ModuleMatrix));
         Assert.NotEqual(SerializeMatrix(qrIso.ModuleMatrix), SerializeMatrix(qrUtf8.ModuleMatrix));
+        Assert.NotEqual(SerializeMatrix(qrDefault.ModuleMatrix), SerializeMatrix(qrUtf8.ModuleMatrix));
     }
 
     [Theory]
@@ -302,11 +305,7 @@ public class QRCodeGeneratorUnitTest
     [InlineData("Zürich", ECCLevel.M, EciMode.Utf8, 1)]  // Version 1 で OK
     [InlineData("Zürich", ECCLevel.L, EciMode.Utf8, 1)]  // Version 1 で OK
     [InlineData("café", ECCLevel.H, EciMode.Utf8, 1)]    // Version 1 で OK
-    public void CreateQrCode_VersionSelection_IsCorrect(
-    string content,
-    ECCLevel eccLevel,
-    EciMode eciMode,
-    int expectedVersion)
+    public void CreateQrCode_VersionSelection_IsCorrect(string content, ECCLevel eccLevel, EciMode eciMode, int expectedVersion)
     {
         using var generator = new QRCodeGenerator();
         var qr = generator.CreateQrCode(content, eccLevel, eciMode: eciMode);

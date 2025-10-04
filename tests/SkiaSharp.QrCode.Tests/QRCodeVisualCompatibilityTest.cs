@@ -36,40 +36,47 @@ public class QRCodeVisualCompatibilityTest
     // tests
 
     [Theory]
-    [InlineData("0123456789", ECCLevel.L, EciMode.Default)]
-    [InlineData("HELLO WORLD", ECCLevel.M, EciMode.Default)]
-    [InlineData("ABC-123", ECCLevel.Q, EciMode.Default)]
-    [InlineData("Test123", ECCLevel.H, EciMode.Default)]
-    public void CreateQrCode_Default_PixelsMatchSample(string content, ECCLevel eccLevel, EciMode eciMode)
+    [InlineData("0123456789", ECCLevel.L)]
+    [InlineData("HELLO WORLD", ECCLevel.M)]
+    [InlineData("ABC-123", ECCLevel.Q)]
+    [InlineData("Test123", ECCLevel.H)]
+    [InlineData("Hello, World!", ECCLevel.L)]
+    [InlineData("こんにちは", ECCLevel.M)]
+    [InlineData("你好世界", ECCLevel.Q)]
+    [InlineData("Привет мир", ECCLevel.H)]
+    [InlineData("🎉🎊🎈", ECCLevel.L)]
+    [InlineData("café", ECCLevel.M)]
+    [InlineData("Ñoño", ECCLevel.Q)]
+    public void CreateQrCode_Default_PixelsMatchSample(string content, ECCLevel eccLevel)
     {
-        AssertPixelsMatchSample(content, eccLevel, eciMode);
+        AssertPixelsMatchSample(content, eccLevel, EciMode.Default);
     }
 
     [Theory]
-    [InlineData("0123456789", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("HELLO WORLD", ECCLevel.M, EciMode.Utf8)]
-    [InlineData("ABC-123", ECCLevel.Q, EciMode.Utf8)]
-    [InlineData("Test123", ECCLevel.H, EciMode.Utf8)]
-    [InlineData("Hello, World!", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("こんにちは", ECCLevel.M, EciMode.Utf8)]
-    [InlineData("你好世界", ECCLevel.Q, EciMode.Utf8)]
-    [InlineData("Привет мир", ECCLevel.H, EciMode.Utf8)]
-    [InlineData("🎉🎊🎈", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("café", ECCLevel.M, EciMode.Utf8)]
-    [InlineData("Ñoño", ECCLevel.Q, EciMode.Utf8)]
-    public void CreateQrCode_Utf8_PixelsMatchSample(string content, ECCLevel eccLevel, EciMode eciMode)
+    [InlineData("0123456789", ECCLevel.L)]
+    [InlineData("HELLO WORLD", ECCLevel.M)]
+    [InlineData("ABC-123", ECCLevel.Q)]
+    [InlineData("Test123", ECCLevel.H)]
+    [InlineData("Hello, World!", ECCLevel.L)]
+    [InlineData("こんにちは", ECCLevel.M)]
+    [InlineData("你好世界", ECCLevel.Q)]
+    [InlineData("Привет мир", ECCLevel.H)]
+    [InlineData("🎉🎊🎈", ECCLevel.L)]
+    [InlineData("café", ECCLevel.M)]
+    [InlineData("Ñoño", ECCLevel.Q)]
+    public void CreateQrCode_Utf8_PixelsMatchSample(string content, ECCLevel eccLevel)
     {
-        AssertPixelsMatchSample(content, eccLevel, eciMode);
+        AssertPixelsMatchSample(content, eccLevel, EciMode.Utf8);
     }
 
     [Theory]
-    [InlineData("Café", ECCLevel.L, EciMode.Iso8859_1)]
-    [InlineData("Résumé", ECCLevel.M, EciMode.Iso8859_1)]
-    [InlineData("Naïve", ECCLevel.Q, EciMode.Iso8859_1)]
-    [InlineData("Zürich", ECCLevel.H, EciMode.Iso8859_1)]
-    public void CreateQrCode_Iso8859_1_PixelsMatchSample(string content, ECCLevel eccLevel, EciMode eciMode)
+    [InlineData("Café", ECCLevel.L)]
+    [InlineData("Résumé", ECCLevel.M)]
+    [InlineData("Naïve", ECCLevel.Q)]
+    [InlineData("Zürich", ECCLevel.H)]
+    public void CreateQrCode_Iso8859_1_PixelsMatchSample(string content, ECCLevel eccLevel)
     {
-        AssertPixelsMatchSample(content, eccLevel, eciMode);
+        AssertPixelsMatchSample(content, eccLevel, EciMode.Iso8859_1);
     }
 
     // edge cases
@@ -137,9 +144,33 @@ public class QRCodeVisualCompatibilityTest
     public static IEnumerable<object[]> GetVersionBoundaryTestCases()
     {
         // Default mode (no ECI header)
+        // Numeric mode
+        // V1-L: 152 bits - 4 (mode) - 10 (count) = 138 bits → 41 digits
         yield return new object[] { new string('1', 41), ECCLevel.L, EciMode.Default, 1 };  // V1-L max
         yield return new object[] { new string('1', 42), ECCLevel.L, EciMode.Default, 2 };  // V2-L min
 
+        // V1-M: 128 bits - 4 - 10 = 114 bits → 34 digits  
+        yield return new object[] { new string('1', 34), ECCLevel.M, EciMode.Default, 1 };  // V1-M max
+        yield return new object[] { new string('1', 35), ECCLevel.M, EciMode.Default, 2 };  // V2-M min
+
+        // V1-H: 72 bits - 4 - 10 = 58 bits → 17 digits
+        yield return new object[] { new string('1', 17), ECCLevel.H, EciMode.Default, 1 };  // V1-H max
+        yield return new object[] { new string('1', 18), ECCLevel.H, EciMode.Default, 2 };  // V2-H min
+
+        //Alphanumeric mode
+        // V1-L: 152 bits - 4 - 9 = 139 bits → 25 chars
+        yield return new object[] { new string('A', 25), ECCLevel.L, EciMode.Default, 1 };  // V1-L max
+        yield return new object[] { new string('A', 26), ECCLevel.L, EciMode.Default, 2 };  // V2-L min
+
+        // V1-M: 128 bits - 4 - 9 = 115 bits → 20 chars
+        yield return new object[] { new string('A', 20), ECCLevel.M, EciMode.Default, 1 };  // V1-M max
+        yield return new object[] { new string('A', 21), ECCLevel.M, EciMode.Default, 2 };  // V2-M min
+
+        //  V1-H: 72 bits - 4 - 9 = 59 bits → 10 chars
+        yield return new object[] { new string('A', 10), ECCLevel.H, EciMode.Default, 1 };  // V1-H max
+        yield return new object[] { new string('A', 11), ECCLevel.H, EciMode.Default, 2 };  // V2-H min
+
+        // Encoding with ECI header (12 bits)
         foreach (var eci in new[] { EciMode.Iso8859_1, EciMode.Utf8 })
         {
             // Numeric mode
