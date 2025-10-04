@@ -157,6 +157,24 @@ internal static class QRCodeConstants
     }
 
     /// <summary>
+    /// Validates if text can be encoded in ISO-8859-1.
+    /// ISO-8859-1 supports U+0000 to U+00FF only.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsValidISO88591(string input)
+    {
+        if (input.Length == 0) return true;
+
+        // TODO: Can be simd
+
+        foreach (char c in input)
+        {
+            if (c > 0xFF) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
     /// Gets the encoding value for an alphanumeric character.
     /// </summary>
     /// <param name="c">Alphanumeric character.</param>

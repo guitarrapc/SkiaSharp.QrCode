@@ -320,9 +320,11 @@ public class QRCodeGenerator : IDisposable
     /// </summary>
     /// <param name="plainText">Text to analyze.</param>
     /// <returns>
-    /// - <see cref="EciMode.Default"/> for ASCII-only text (no ECI header)
-    /// - <see cref="EciMode.Iso8859_1"/> for Latin-1 compatible text
-    /// - <see cref="EciMode.Utf8"/> for other Unicode text
+    /// <list type="bullet">
+    /// <item><see cref="EciMode.Default"/> for ASCII-only text (no ECI header)</item>
+    /// <item><see cref="EciMode.Iso8859_1"/> for Latin-1 compatible text</item>
+    /// <item><see cref="EciMode.Utf8"/> for other Unicode text</item>
+    /// </list>
     /// </returns>
     private static EciMode DetermineEciMode(string plainText)
     {
@@ -333,7 +335,7 @@ public class QRCodeGenerator : IDisposable
         }
 
         // ISO-8859-1 compatible → ECI 3
-        if (IsValidISO(plainText))
+        if (IsValidISO88591(plainText))
         {
             return EciMode.Iso8859_1;
         }
@@ -475,7 +477,7 @@ public class QRCodeGenerator : IDisposable
             // ISO-8859-x encoding based on ECI mode
             return eciMode switch
             {
-                EciMode.Default => IsValidISO(plainText)
+                EciMode.Default => IsValidISO88591(plainText)
                     ? Encoding.GetEncoding("ISO-8859-1").GetByteCount(plainText)
                     : Encoding.UTF8.GetByteCount(plainText),
                 EciMode.Iso8859_1 => Encoding.GetEncoding("ISO-8859-1").GetByteCount(plainText),
@@ -483,18 +485,6 @@ public class QRCodeGenerator : IDisposable
                 _ => throw new ArgumentOutOfRangeException(nameof(eciMode), "Unsupported ECI mode for Byte encoding"),
             };
         }
-    }
-
-    /// <summary>
-    /// Validates if text can be encoded in ISO-8859-1 without data loss.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsValidISO(string input)
-    {
-        var bytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(input);
-        //var result = Encoding.GetEncoding("ISO-8859-1").GetString(bytes);
-        var result = Encoding.GetEncoding("ISO-8859-1").GetString(bytes, 0, bytes.Length);
-        return string.Equals(input, result);
     }
 
     /// <summary>
