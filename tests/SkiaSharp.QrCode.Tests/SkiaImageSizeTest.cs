@@ -1,7 +1,7 @@
 using System;
 using Xunit;
 
-namespace SkiaSharp.QrCode.Tests.Shared;
+namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
 /// Visual compatibility test using pixel compatison instead of binary comparison.
