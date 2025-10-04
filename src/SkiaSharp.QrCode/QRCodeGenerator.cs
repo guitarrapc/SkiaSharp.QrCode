@@ -66,93 +66,54 @@ public class QRCodeGenerator : IDisposable
         EncodingMode encoding = GetEncodingFromPlaintext(plainText, forceUtf8);
         var dataInputLength = GetDataLength(encoding, plainText, eciMode, forceUtf8);
 
-        // Convert plain text to binary string
-        var codedText = this.PlainTextToBinary(plainText, encoding, eciMode, utf8BOM, forceUtf8);
-
         // Select QR code version (auto or manual)
         int version = requestedVersion;
         if (version == -1)
         {
-            version = this.GetVersion(dataInputLength, encoding, eccLevel);
+            version = GetVersion(dataInputLength, encoding, eccLevel);
         }
 
-        // Build mode indicator and character count indicator
-        string modeIndicator = eciMode != EciMode.Default
-            ? DecToBin((int)EncodingMode.ECI, 4) + DecToBin((int)eciMode, 8) + DecToBin((int)encoding, 4)
-            : DecToBin((int)encoding, 4);
-        var countIndicator = DecToBin(dataInputLength, this.GetCountIndicatorLength(version, encoding));
-
-        var bitsStringCapacity = CalculateMaxBitStringLength(version, eccLevel, encoding);
-        var bitStringBuilder = new StringBuilder(bitsStringCapacity);
-        bitStringBuilder.Append(modeIndicator);
-        bitStringBuilder.Append(countIndicator);
-        bitStringBuilder.Append(codedText);
-
-        // Fill up data code word to capacity
         var eccInfo = CapacityECCTable.Single(x => x.Version == version && x.ErrorCorrectionLevel == eccLevel);
-        var dataLength = eccInfo.TotalDataCodewords * 8;
-        var lengthDiff = dataLength - bitStringBuilder.Length;
 
-        // Add terminator (up to 4 zeros)
-        if (lengthDiff > 0)
-            bitStringBuilder.Append('0', Math.Min(lengthDiff, 4));
+        // Encode data
+        var capacity = CalculateMaxBitStringLength(version, eccLevel, encoding);
+        var qrEncoder = new QRTextEncoder(capacity);
+        qrEncoder.WriteMode(encoding, eciMode);
+        qrEncoder.WriteCharacterCount(dataInputLength, version, encoding);
+        qrEncoder.WriteData(plainText, encoding, eciMode, utf8BOM, forceUtf8);
+        qrEncoder.WritePadding(eccInfo.TotalDataCodewords * 8);
+        var bitString = qrEncoder.ToBinaryString();
 
-        // Pad to byte boundary
-        if ((bitStringBuilder.Length % 8) != 0)
-            bitStringBuilder.Append('0', 8 - (bitStringBuilder.Length % 8));
-
-        // Fill with alternating pad bytes (11101100, 00010001)
-        while (bitStringBuilder.Length < dataLength)
-        {
-            bitStringBuilder.Append("1110110000010001");
-        }
-
-        // Trim if over capacity
-        if (bitStringBuilder.Length > dataLength)
-            bitStringBuilder.Length = dataLength;
-
-        var bitString = bitStringBuilder.ToString();
-
-        // Calculate error correction words using Reed-Solomon
+        // Calculate ECC
+        var eccEncoder = new EccTextEncoder();
         var codeWordWithECC = new List<CodewordBlock>();
         // Process group 1 blocks
         for (var i = 0; i < eccInfo.BlocksInGroup1; i++)
         {
             var bitStr = bitString.Substring(i * eccInfo.CodewordsInGroup1 * 8, eccInfo.CodewordsInGroup1 * 8);
-            var bitBlockList = this.BinaryStringToBitBlockList(bitStr);
-            var bitBlockListDec = this.BinaryStringListToDecList(bitBlockList);
-            var eccWordList = this.CalculateECCWords(bitStr, eccInfo);
-            var eccWordListDec = this.BinaryStringListToDecList(eccWordList);
-            codeWordWithECC.Add(
-                new CodewordBlock(1,
-                i + 1,
-                bitStr,
-                bitBlockList,
-                eccWordList,
-                bitBlockListDec,
-                eccWordListDec)
-            );
+            var bitBlockList = BinaryStringToBitBlockList(bitStr);
+            var bitBlockListDec = BinaryStringListToDecList(bitBlockList);
+
+            var eccWordList = eccEncoder.CalculateECC(bitStr, eccInfo.ECCPerBlock);
+            var eccWordListDec = BinaryStringListToDecList(eccWordList);
+            var codewordBlock = new CodewordBlock(1, i + 1, bitStr, bitBlockList, eccWordList, bitBlockListDec, eccWordListDec);
+            codeWordWithECC.Add(codewordBlock);
         }
         bitString = bitString.Substring(eccInfo.BlocksInGroup1 * eccInfo.CodewordsInGroup1 * 8);
         // Process group 2 blocks
         for (var i = 0; i < eccInfo.BlocksInGroup2; i++)
         {
-            var bitStr = bitString.Substring(i * eccInfo.CodewordsInGroup2 * 8, eccInfo.CodewordsInGroup2 * 8);
-            var bitBlockList = this.BinaryStringToBitBlockList(bitStr);
-            var bitBlockListDec = this.BinaryStringListToDecList(bitBlockList);
-            var eccWordList = this.CalculateECCWords(bitStr, eccInfo);
-            var eccWordListDec = this.BinaryStringListToDecList(eccWordList);
-            codeWordWithECC.Add(new CodewordBlock(2,
-                i + 1,
-                bitStr,
-                bitBlockList,
-                eccWordList,
-                bitBlockListDec,
-                eccWordListDec)
-            );
+            var blockData = bitString.Substring(i * eccInfo.CodewordsInGroup2 * 8, eccInfo.CodewordsInGroup2 * 8);
+            var bitBlockList = BinaryStringToBitBlockList(blockData);
+            var bitBlockListDec = BinaryStringListToDecList(bitBlockList);
+
+            var eccWordList = eccEncoder.CalculateECC(blockData, eccInfo.ECCPerBlock);
+            var eccWordListDec = BinaryStringListToDecList(eccWordList);
+            var codewordBlock = new CodewordBlock(2, i + 1, blockData, bitBlockList, eccWordList, bitBlockListDec, eccWordListDec);
+            codeWordWithECC.Add(codewordBlock);
         }
 
-        // Interleave code words
+        // Interleave code words % module placement
         var interleaveCapacity = CalculateInterleavedDataCapacity(version, eccInfo);
         var interleavedWordsSb = new StringBuilder(interleaveCapacity);
         var maxCodewordCount = Math.Max(eccInfo.CodewordsInGroup1, eccInfo.CodewordsInGroup2);
@@ -189,26 +150,27 @@ public class QRCodeGenerator : IDisposable
         // Place all patterns and data on QR code matrix
         var qr = new QRCodeData(version);
         var blockedModules = new List<Rectangle>();
-        // Place fixed patterns
+
         ModulePlacer.PlaceFinderPatterns(ref qr, ref blockedModules);
         ModulePlacer.ReserveSeperatorAreas(qr.ModuleMatrix.Count, ref blockedModules);
         ModulePlacer.PlaceAlignmentPatterns(ref qr, AlignmentPatternTable.Where(x => x.Version == version).Select(x => x.PatternPositions).First(), ref blockedModules);
         ModulePlacer.PlaceTimingPatterns(ref qr, ref blockedModules);
         ModulePlacer.PlaceDarkModule(ref qr, version, ref blockedModules);
         ModulePlacer.ReserveVersionAreas(qr.ModuleMatrix.Count, version, ref blockedModules);
-        // Place data
         ModulePlacer.PlaceDataWords(ref qr, interleavedData, ref blockedModules);
+
         // Apply mask and get optimal mask number
         var maskVersion = ModulePlacer.MaskCode(ref qr, version, ref blockedModules, eccLevel);
-        // Place format information
         var formatStr = GetFormatString(eccLevel, maskVersion);
         ModulePlacer.PlaceFormat(ref qr, formatStr);
+
         // Place version information (version 7+)
         if (version >= 7)
         {
             var versionString = GetVersionString(version);
             ModulePlacer.PlaceVersion(ref qr, versionString);
         }
+
         // Add quiet zone
         ModulePlacer.AddQuietZone(ref qr, quietZoneSize);
 
@@ -358,8 +320,8 @@ public class QRCodeGenerator : IDisposable
     private List<string> CalculateECCWords(string bitString, ECCInfo eccInfo)
     {
         var eccWords = eccInfo.ECCPerBlock;
-        var messagePolynom = this.CalculateMessagePolynom(bitString);
-        var generatorPolynom = this.CalculateGeneratorPolynom(eccWords);
+        var messagePolynom = CalculateMessagePolynom(bitString);
+        var generatorPolynom = CalculateGeneratorPolynom(eccWords);
 
         for (var i = 0; i < messagePolynom.PolyItems.Count; i++)
         {
@@ -385,9 +347,9 @@ public class QRCodeGenerator : IDisposable
             }
             else
             {
-                var resPoly = this.MultiplyGeneratorPolynomByLeadterm(generatorPolynom, this.ConvertToAlphaNotation(leadTermSource).PolyItems[0], i);
-                resPoly = this.ConvertToDecNotation(resPoly);
-                resPoly = this.XORPolynoms(leadTermSource, resPoly);
+                var resPoly = MultiplyGeneratorPolynomByLeadterm(generatorPolynom, ConvertToAlphaNotation(leadTermSource).PolyItems[0], i);
+                resPoly = ConvertToDecNotation(resPoly);
+                resPoly = XORPolynoms(leadTermSource, resPoly);
                 leadTermSource = resPoly;
             }
         }
@@ -406,7 +368,7 @@ public class QRCodeGenerator : IDisposable
         var messagePol = new Polynom();
         for (var i = bitString.Length / 8 - 1; i >= 0; i--)
         {
-            messagePol.PolyItems.Add(new PolynomItem(this.BinToDec(bitString.Substring(0, 8)), i));
+            messagePol.PolyItems.Add(new PolynomItem(BinToDec(bitString.Substring(0, 8)), i));
             bitString = bitString.Remove(0, 8);
         }
         return messagePol;
@@ -426,7 +388,7 @@ public class QRCodeGenerator : IDisposable
         {
             var multiplierPolynom = new Polynom();
             multiplierPolynom.PolyItems.AddRange([new PolynomItem(0, 1), new PolynomItem(i, 0)]);
-            generatorPolynom = this.MultiplyAlphaPolynoms(generatorPolynom, multiplierPolynom);
+            generatorPolynom = MultiplyAlphaPolynoms(generatorPolynom, multiplierPolynom);
         }
 
         return generatorPolynom;
@@ -880,7 +842,7 @@ public class QRCodeGenerator : IDisposable
     private List<int> BinaryStringListToDecList(List<string> binaryStringList)
     {
         return binaryStringList
-            .Select(binaryString => this.BinToDec(binaryString))
+            .Select(binaryString => BinToDec(binaryString))
             .ToList();
     }
 
@@ -1529,13 +1491,13 @@ public class QRCodeGenerator : IDisposable
         public CodewordBlock(int groupNumber, int blockNumber, string bitString, List<string> codeWords,
             List<string> eccWords, List<int> codeWordsInt, List<int> eccWordsInt)
         {
-            this.GroupNumber = groupNumber;
-            this.BlockNumber = blockNumber;
-            this.BitString = bitString;
-            this.CodeWords = codeWords;
-            this.ECCWords = eccWords;
-            this.CodeWordsInt = codeWordsInt;
-            this.ECCWordsInt = eccWordsInt;
+            GroupNumber = groupNumber;
+            BlockNumber = blockNumber;
+            BitString = bitString;
+            CodeWords = codeWords;
+            ECCWords = eccWords;
+            CodeWordsInt = codeWordsInt;
+            ECCWordsInt = eccWordsInt;
         }
 
         public int GroupNumber { get; }
@@ -1560,10 +1522,10 @@ public class QRCodeGenerator : IDisposable
 
         public Rectangle(int x, int y, int w, int h)
         {
-            this.X = x;
-            this.Y = y;
-            this.Width = w;
-            this.Height = h;
+            X = x;
+            Y = y;
+            Width = w;
+            Height = h;
         }
     }
 
