@@ -12,7 +12,7 @@ public class QRCodeRenderer : IDisposable
     /// <param name="data">The data.</param>
     /// <param name="qrColor">The color.</param>
     /// <param name="iconData">The icon settings</param>
-    public void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? qrColor, SKColor? backgroundColor, IconData iconData = null)
+    public void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? qrColor, SKColor? backgroundColor, IconData? iconData = null)
     {
         if (data != null)
         {
