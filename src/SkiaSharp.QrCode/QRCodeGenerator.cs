@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using SkiaSharp.QrCode.Internals;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
@@ -61,23 +62,21 @@ public class QRCodeGenerator : IDisposable
     /// </remarks>
     public QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, bool forceUtf8 = false, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
     {
-        // Step 1: Auto-detect optimal encoding mode (Numeric > Alphanumeric > Byte)
+        // Auto-detect optimal encoding mode (Numeric > Alphanumeric > Byte)
         EncodingMode encoding = GetEncodingFromPlaintext(plainText, forceUtf8);
+        var dataInputLength = GetDataLength(encoding, plainText, eciMode, forceUtf8);
 
-        // Step 2: Convert plain text to binary string
+        // Convert plain text to binary string
         var codedText = this.PlainTextToBinary(plainText, encoding, eciMode, utf8BOM, forceUtf8);
 
-        // Step 3: Calculate actual data length for version selection
-        var dataInputLength = this.GetDataLength(encoding, plainText, codedText, forceUtf8);
-
-        // Step 4: Select QR code version (auto or manual)
+        // Select QR code version (auto or manual)
         int version = requestedVersion;
         if (version == -1)
         {
             version = this.GetVersion(dataInputLength, encoding, eccLevel);
         }
 
-        // Step 5: Build mode indicator and character count indicator
+        // Build mode indicator and character count indicator
         string modeIndicator = eciMode != EciMode.Default
             ? DecToBin((int)EncodingMode.ECI, 4) + DecToBin((int)eciMode, 8) + DecToBin((int)encoding, 4)
             : DecToBin((int)encoding, 4);
@@ -89,7 +88,7 @@ public class QRCodeGenerator : IDisposable
         bitStringBuilder.Append(countIndicator);
         bitStringBuilder.Append(codedText);
 
-        // Step 6: Fill up data code word to capacity
+        // Fill up data code word to capacity
         var eccInfo = CapacityECCTable.Single(x => x.Version == version && x.ErrorCorrectionLevel == eccLevel);
         var dataLength = eccInfo.TotalDataCodewords * 8;
         var lengthDiff = dataLength - bitStringBuilder.Length;
@@ -114,7 +113,7 @@ public class QRCodeGenerator : IDisposable
 
         var bitString = bitStringBuilder.ToString();
 
-        // Step 7: Calculate error correction words using Reed-Solomon
+        // Calculate error correction words using Reed-Solomon
         var codeWordWithECC = new List<CodewordBlock>();
         // Process group 1 blocks
         for (var i = 0; i < eccInfo.BlocksInGroup1; i++)
@@ -153,7 +152,7 @@ public class QRCodeGenerator : IDisposable
             );
         }
 
-        // Step 8: Interleave code words
+        // Interleave code words
         var interleaveCapacity = CalculateInterleavedDataCapacity(version, eccInfo);
         var interleavedWordsSb = new StringBuilder(interleaveCapacity);
         var maxCodewordCount = Math.Max(eccInfo.CodewordsInGroup1, eccInfo.CodewordsInGroup2);
@@ -187,7 +186,7 @@ public class QRCodeGenerator : IDisposable
         }
         var interleavedData = interleavedWordsSb.ToString();
 
-        // Step 9-12: Place all patterns and data on QR code matrix
+        // Place all patterns and data on QR code matrix
         var qr = new QRCodeData(version);
         var blockedModules = new List<Rectangle>();
         // Place fixed patterns
@@ -651,16 +650,40 @@ public class QRCodeGenerator : IDisposable
 
     /// <summary>
     /// Calculates actual data length for capacity checking.
-    /// For UTF-8, returns byte count; otherwise returns character count.
+    /// Returns character count for Numeric/Alphanumeric, byte count for Byte mode.
     /// </summary>
     /// <param name="encoding">Encoding mode.</param>
     /// <param name="plainText">Original text.</param>
-    /// <param name="codedText">Encoded binary text.</param>
+    /// <param name="eciMode">ECI mode for character encoding.</param>
     /// <param name="forceUtf8">Whether UTF-8 is forced.</param>
     /// <returns>Data length for version selection.</returns>
-    private int GetDataLength(EncodingMode encoding, string plainText, string codedText, bool forceUtf8)
+    private int GetDataLength(EncodingMode encoding, string plainText, EciMode eciMode, bool forceUtf8)
     {
-        return forceUtf8 || this.IsUtf8(encoding, plainText) ? (codedText.Length / 8) : plainText.Length;
+        return encoding switch
+        {
+            EncodingMode.Numeric => plainText.Length,
+            EncodingMode.Alphanumeric => plainText.Length,
+            EncodingMode.Byte => CalculateByteCount(plainText, eciMode, forceUtf8),
+            EncodingMode.Kanji => plainText.Length,  // Not implemented
+            _ => plainText.Length
+        };
+
+        static int CalculateByteCount(string plainText, EciMode eciMode, bool forceUtf8)
+        {
+            // UTF-8 encoding required?
+            if (forceUtf8 || !IsValidISO(plainText))
+            {
+                return Encoding.UTF8.GetByteCount(plainText);
+            }
+
+            // ISO-8859-x encoding based on ECI mode
+            return eciMode switch
+            {
+                EciMode.Iso8859_1 => Encoding.GetEncoding("ISO-8859-1").GetByteCount(plainText),
+                EciMode.Iso8859_2 => Encoding.GetEncoding("ISO-8859-2").GetByteCount(plainText),
+                _ => plainText.Length  // Default: 1 byte per char (ISO-8859-1)
+            };
+        }
     }
 
     /// <summary>
@@ -668,13 +691,14 @@ public class QRCodeGenerator : IDisposable
     /// </summary>
     private bool IsUtf8(EncodingMode encoding, string plainText)
     {
-        return (encoding == EncodingMode.Byte && !this.IsValidISO(plainText));
+        return (encoding == EncodingMode.Byte && !IsValidISO(plainText));
     }
 
     /// <summary>
     /// Validates if text can be encoded in ISO-8859-1 without data loss.
     /// </summary>
-    private bool IsValidISO(string input)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsValidISO(string input)
     {
         var bytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(input);
         //var result = Encoding.GetEncoding("ISO-8859-1").GetString(bytes);
@@ -808,7 +832,7 @@ public class QRCodeGenerator : IDisposable
         byte[] codeBytes;
         var codeText = string.Empty;
 
-        if (this.IsValidISO(plainText) && !forceUtf8)
+        if (IsValidISO(plainText) && !forceUtf8)
         {
             codeBytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(plainText);
         }
