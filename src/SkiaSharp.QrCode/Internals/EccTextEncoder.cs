@@ -7,11 +7,10 @@ using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 namespace SkiaSharp.QrCode.Internals;
 
 /// <summary>
-/// Reed-Solomon error correction encoder (text-based).
-/// Temporary text-based implementation for migration to byte-based architecture.
+/// Ecc encoder with Reed-Solomon error correction (text-based).
 /// </summary>
 /// <remarks>
-/// This encoder implements Reed-Solomon error correction using polynomial operations
+/// This ecc encoder implements Reed-Solomon error correction using polynomial operations
 /// on binary string representations.
 /// 
 /// Reed-Solomon error correction process:
@@ -21,7 +20,7 @@ namespace SkiaSharp.QrCode.Internals;
 /// 4. Perform polynomial division in GF(256) using XOR operations
 /// 5. Remainder becomes the error correction codewords
 /// </remarks>
-internal class ReedSolomonTextEncoder
+internal class EccTextEncoder
 {
     /// <summary>
     /// Calculates error correction codewords using Reed-Solomon algorithm.
