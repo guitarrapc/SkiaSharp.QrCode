@@ -10,11 +10,11 @@ namespace SkiaSharp.QrCode.Internals;
 /// <summary>
 /// QR code text encoder to binary string.
 /// </summary>
-internal class QRTextEncorder
+internal class QRTextEncoder
 {
     private readonly StringBuilder _builder;
 
-    public QRTextEncorder(int estimatedCapacity)
+    public QRTextEncoder(int estimatedCapacity)
     {
         _builder = new StringBuilder(estimatedCapacity);
     }
@@ -66,7 +66,7 @@ internal class QRTextEncorder
             EncodingMode.Numeric => EncodeNumeric(plainText),
             EncodingMode.Alphanumeric => EncodeAlphanumeric(plainText),
             EncodingMode.Byte => EncodeByte(plainText, eci, utf8Bom, forceUtf8),
-            EncodingMode.Kanji => throw new NotImplementedException("Kanji encoding not yet implemented"),
+            EncodingMode.Kanji => throw new NotImplementedException("Kanji encoding not yet implemented, use Byte mode with UTF-8 encoding for Japanese text."),
             _ => throw new ArgumentOutOfRangeException(nameof(mode), "Invalid encoding mode"),
         };
         _builder.Append(encoded);
@@ -87,7 +87,7 @@ internal class QRTextEncorder
         var remaining = targetBitCount - _builder.Length;
 
         // 1. Terminator (up to 4 bits)
-        if (remaining > 4)
+        if (remaining > 0)
         {
             _builder.Append('0', Math.Min(remaining, 4));
         }
@@ -134,7 +134,7 @@ internal class QRTextEncorder
         var index = 0;
 
         // Process 3 digits at a time
-        while (text.Length >= 3)
+        while (index + 2 < length)
         {
             var dec = (text[index] - '0') * 100
                 + (text[index + 1] - '0') * 10
