@@ -387,7 +387,6 @@ public class QRCodeGenerator : IDisposable
             return eciMode switch
             {
                 EciMode.Iso8859_1 => Encoding.GetEncoding("ISO-8859-1").GetByteCount(plainText),
-                EciMode.Iso8859_2 => Encoding.GetEncoding("ISO-8859-2").GetByteCount(plainText),
                 _ => plainText.Length  // Default: 1 byte per char (ISO-8859-1)
             };
         }

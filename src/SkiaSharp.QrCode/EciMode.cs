@@ -48,13 +48,6 @@ public enum EciMode
     /// If your data is ASCII/Latin-1, this will be the most efficient.
     /// </summary>
     Iso8859_1 = 3,
-    // TODO: Drop Iso8859_2 support. As .NET Standard 2.0/2.1 does not support it by default.
-    /// <summary>
-    /// ISO-8859-2 (Latin-2) - Central European
-    /// If your data is Central European, this will be the most efficient.
-    /// Only limited QR reader support this encoding, you may better use UTF-8 instead.
-    /// </summary>
-    Iso8859_2 = 4,
     /// <summary>
     /// UTF-8 Unicode.
     /// If your input is UTF-8, emoji or other multibyte characters, you should use this.
