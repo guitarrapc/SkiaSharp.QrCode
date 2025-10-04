@@ -1,10 +1,11 @@
-using SkiaSharp.QrCode.Internals;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
+using SkiaSharp.QrCode.Internals;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
 namespace SkiaSharp.QrCode;
@@ -61,99 +62,58 @@ public class QRCodeGenerator : IDisposable
     /// </remarks>
     public QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, bool forceUtf8 = false, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
     {
-        // Step 1: Auto-detect optimal encoding mode (Numeric > Alphanumeric > Byte)
+        // Auto-detect optimal encoding mode (Numeric > Alphanumeric > Byte)
         EncodingMode encoding = GetEncodingFromPlaintext(plainText, forceUtf8);
+        var dataInputLength = GetDataLength(encoding, plainText, eciMode, forceUtf8);
 
-        // Step 2: Convert plain text to binary string
-        var codedText = this.PlainTextToBinary(plainText, encoding, eciMode, utf8BOM, forceUtf8);
-
-        // Step 3: Calculate actual data length for version selection
-        var dataInputLength = this.GetDataLength(encoding, plainText, codedText, forceUtf8);
-
-        // Step 4: Select QR code version (auto or manual)
+        // Select QR code version (auto or manual)
         int version = requestedVersion;
         if (version == -1)
         {
-            version = this.GetVersion(dataInputLength, encoding, eccLevel);
+            version = GetVersion(dataInputLength, encoding, eccLevel);
         }
 
-        // Step 5: Build mode indicator and character count indicator
-        string modeIndicator = eciMode != EciMode.Default
-            ? DecToBin((int)EncodingMode.ECI, 4) + DecToBin((int)eciMode, 8) + DecToBin((int)encoding, 4)
-            : DecToBin((int)encoding, 4);
-        var countIndicator = DecToBin(dataInputLength, this.GetCountIndicatorLength(version, encoding));
-
-        var bitsStringCapacity = CalculateMaxBitStringLength(version, eccLevel, encoding);
-        var bitStringBuilder = new StringBuilder(bitsStringCapacity);
-        bitStringBuilder.Append(modeIndicator);
-        bitStringBuilder.Append(countIndicator);
-        bitStringBuilder.Append(codedText);
-
-        // Step 6: Fill up data code word to capacity
         var eccInfo = CapacityECCTable.Single(x => x.Version == version && x.ErrorCorrectionLevel == eccLevel);
-        var dataLength = eccInfo.TotalDataCodewords * 8;
-        var lengthDiff = dataLength - bitStringBuilder.Length;
 
-        // Add terminator (up to 4 zeros)
-        if (lengthDiff > 0)
-            bitStringBuilder.Append('0', Math.Min(lengthDiff, 4));
+        // Encode data
+        var capacity = CalculateMaxBitStringLength(version, eccLevel, encoding);
+        var qrEncoder = new QRTextEncoder(capacity);
+        qrEncoder.WriteMode(encoding, eciMode);
+        qrEncoder.WriteCharacterCount(dataInputLength, version, encoding);
+        qrEncoder.WriteData(plainText, encoding, eciMode, utf8BOM, forceUtf8);
+        qrEncoder.WritePadding(eccInfo.TotalDataCodewords * 8);
+        var bitString = qrEncoder.ToBinaryString();
 
-        // Pad to byte boundary
-        if ((bitStringBuilder.Length % 8) != 0)
-            bitStringBuilder.Append('0', 8 - (bitStringBuilder.Length % 8));
-
-        // Fill with alternating pad bytes (11101100, 00010001)
-        while (bitStringBuilder.Length < dataLength)
-        {
-            bitStringBuilder.Append("1110110000010001");
-        }
-
-        // Trim if over capacity
-        if (bitStringBuilder.Length > dataLength)
-            bitStringBuilder.Length = dataLength;
-
-        var bitString = bitStringBuilder.ToString();
-
-        // Step 7: Calculate error correction words using Reed-Solomon
+        // Calculate ECC
+        var eccEncoder = new EccTextEncoder();
         var codeWordWithECC = new List<CodewordBlock>();
         // Process group 1 blocks
         for (var i = 0; i < eccInfo.BlocksInGroup1; i++)
         {
             var bitStr = bitString.Substring(i * eccInfo.CodewordsInGroup1 * 8, eccInfo.CodewordsInGroup1 * 8);
-            var bitBlockList = this.BinaryStringToBitBlockList(bitStr);
-            var bitBlockListDec = this.BinaryStringListToDecList(bitBlockList);
-            var eccWordList = this.CalculateECCWords(bitStr, eccInfo);
-            var eccWordListDec = this.BinaryStringListToDecList(eccWordList);
-            codeWordWithECC.Add(
-                new CodewordBlock(1,
-                i + 1,
-                bitStr,
-                bitBlockList,
-                eccWordList,
-                bitBlockListDec,
-                eccWordListDec)
-            );
+            var bitBlockList = BinaryStringToBitBlockList(bitStr);
+            var bitBlockListDec = BinaryStringListToDecList(bitBlockList);
+
+            var eccWordList = eccEncoder.CalculateECC(bitStr, eccInfo.ECCPerBlock);
+            var eccWordListDec = BinaryStringListToDecList(eccWordList);
+            var codewordBlock = new CodewordBlock(1, i + 1, bitStr, bitBlockList, eccWordList, bitBlockListDec, eccWordListDec);
+            codeWordWithECC.Add(codewordBlock);
         }
         bitString = bitString.Substring(eccInfo.BlocksInGroup1 * eccInfo.CodewordsInGroup1 * 8);
         // Process group 2 blocks
         for (var i = 0; i < eccInfo.BlocksInGroup2; i++)
         {
-            var bitStr = bitString.Substring(i * eccInfo.CodewordsInGroup2 * 8, eccInfo.CodewordsInGroup2 * 8);
-            var bitBlockList = this.BinaryStringToBitBlockList(bitStr);
-            var bitBlockListDec = this.BinaryStringListToDecList(bitBlockList);
-            var eccWordList = this.CalculateECCWords(bitStr, eccInfo);
-            var eccWordListDec = this.BinaryStringListToDecList(eccWordList);
-            codeWordWithECC.Add(new CodewordBlock(2,
-                i + 1,
-                bitStr,
-                bitBlockList,
-                eccWordList,
-                bitBlockListDec,
-                eccWordListDec)
-            );
+            var blockData = bitString.Substring(i * eccInfo.CodewordsInGroup2 * 8, eccInfo.CodewordsInGroup2 * 8);
+            var bitBlockList = BinaryStringToBitBlockList(blockData);
+            var bitBlockListDec = BinaryStringListToDecList(bitBlockList);
+
+            var eccWordList = eccEncoder.CalculateECC(blockData, eccInfo.ECCPerBlock);
+            var eccWordListDec = BinaryStringListToDecList(eccWordList);
+            var codewordBlock = new CodewordBlock(2, i + 1, blockData, bitBlockList, eccWordList, bitBlockListDec, eccWordListDec);
+            codeWordWithECC.Add(codewordBlock);
         }
 
-        // Step 8: Interleave code words
+        // Interleave code words % module placement
         var interleaveCapacity = CalculateInterleavedDataCapacity(version, eccInfo);
         var interleavedWordsSb = new StringBuilder(interleaveCapacity);
         var maxCodewordCount = Math.Max(eccInfo.CodewordsInGroup1, eccInfo.CodewordsInGroup2);
@@ -187,29 +147,30 @@ public class QRCodeGenerator : IDisposable
         }
         var interleavedData = interleavedWordsSb.ToString();
 
-        // Step 9-12: Place all patterns and data on QR code matrix
+        // Place all patterns and data on QR code matrix
         var qr = new QRCodeData(version);
         var blockedModules = new List<Rectangle>();
-        // Place fixed patterns
+
         ModulePlacer.PlaceFinderPatterns(ref qr, ref blockedModules);
         ModulePlacer.ReserveSeperatorAreas(qr.ModuleMatrix.Count, ref blockedModules);
         ModulePlacer.PlaceAlignmentPatterns(ref qr, AlignmentPatternTable.Where(x => x.Version == version).Select(x => x.PatternPositions).First(), ref blockedModules);
         ModulePlacer.PlaceTimingPatterns(ref qr, ref blockedModules);
         ModulePlacer.PlaceDarkModule(ref qr, version, ref blockedModules);
         ModulePlacer.ReserveVersionAreas(qr.ModuleMatrix.Count, version, ref blockedModules);
-        // Place data
         ModulePlacer.PlaceDataWords(ref qr, interleavedData, ref blockedModules);
+
         // Apply mask and get optimal mask number
         var maskVersion = ModulePlacer.MaskCode(ref qr, version, ref blockedModules, eccLevel);
-        // Place format information
         var formatStr = GetFormatString(eccLevel, maskVersion);
         ModulePlacer.PlaceFormat(ref qr, formatStr);
+
         // Place version information (version 7+)
         if (version >= 7)
         {
             var versionString = GetVersionString(version);
             ModulePlacer.PlaceVersion(ref qr, versionString);
         }
+
         // Add quiet zone
         ModulePlacer.AddQuietZone(ref qr, quietZoneSize);
 
@@ -270,7 +231,7 @@ public class QRCodeGenerator : IDisposable
         // var dataCodewordsBits = 80 * 8 = 640 bits
         // var eccCodewordsBits = 18 * (2 + 2) * 8 = 576 bits
         // var remainderBits = GetRemainderBits(5) = 0 bits  // Version 5 has no module remainder bits
-        // 
+        //
         // Total = 640 + 576 + 0 = 1,216 bits (152 bytes)
         // -----------------------------------------------------
 
@@ -348,207 +309,6 @@ public class QRCodeGenerator : IDisposable
         return vStr;
     }
 
-    // Error Correction (Reed-Solomon)
-
-    /// <summary>
-    /// Calculates error correction codewords using Reed-Solomon algorithm.
-    /// </summary>
-    /// <param name="bitString">Data bit string to protect.</param>
-    /// <param name="eccInfo">Error correction configuration.</param>
-    /// <returns>List of ECC codewords as binary strings (8 bits each).</returns>
-    private List<string> CalculateECCWords(string bitString, ECCInfo eccInfo)
-    {
-        var eccWords = eccInfo.ECCPerBlock;
-        var messagePolynom = this.CalculateMessagePolynom(bitString);
-        var generatorPolynom = this.CalculateGeneratorPolynom(eccWords);
-
-        for (var i = 0; i < messagePolynom.PolyItems.Count; i++)
-        {
-            var coefficient = messagePolynom.PolyItems[i].Coefficient;
-            var exponent = messagePolynom.PolyItems[i].Exponent + eccWords;
-            messagePolynom.PolyItems[i] = new PolynomItem(coefficient, exponent);
-        }
-
-        for (var i = 0; i < generatorPolynom.PolyItems.Count; i++)
-        {
-            var coefficient = generatorPolynom.PolyItems[i].Coefficient;
-            var exponent = generatorPolynom.PolyItems[i].Exponent + (messagePolynom.PolyItems.Count - 1);
-            generatorPolynom.PolyItems[i] = new PolynomItem(coefficient, exponent);
-        }
-
-        var leadTermSource = messagePolynom;
-        for (var i = 0; (leadTermSource.PolyItems.Count > 0 && leadTermSource.PolyItems[leadTermSource.PolyItems.Count - 1].Exponent > 0); i++)
-        {
-            if (leadTermSource.PolyItems[0].Coefficient == 0)
-            {
-                leadTermSource.PolyItems.RemoveAt(0);
-                leadTermSource.PolyItems.Add(new PolynomItem(0, leadTermSource.PolyItems[leadTermSource.PolyItems.Count - 1].Exponent - 1));
-            }
-            else
-            {
-                var resPoly = this.MultiplyGeneratorPolynomByLeadterm(generatorPolynom, this.ConvertToAlphaNotation(leadTermSource).PolyItems[0], i);
-                resPoly = this.ConvertToDecNotation(resPoly);
-                resPoly = this.XORPolynoms(leadTermSource, resPoly);
-                leadTermSource = resPoly;
-            }
-        }
-        return leadTermSource.PolyItems.Select(x => DecToBin(x.Coefficient, 8)).ToList();
-    }
-
-    /// <summary>
-    /// Creates message polynomial from bit string.
-    /// Each 8-bit block becomes a coefficient with decreasing exponent.
-    /// Example: "11010011 10101100" → α^1·x^1 + α^0·x^0
-    /// </summary>
-    /// <param name="bitString">Binary data string.</param>
-    /// <returns>Polynomial representation of message.</returns>
-    private Polynom CalculateMessagePolynom(string bitString)
-    {
-        var messagePol = new Polynom();
-        for (var i = bitString.Length / 8 - 1; i >= 0; i--)
-        {
-            messagePol.PolyItems.Add(new PolynomItem(this.BinToDec(bitString.Substring(0, 8)), i));
-            bitString = bitString.Remove(0, 8);
-        }
-        return messagePol;
-    }
-
-    /// <summary>
-    /// Generates Reed-Solomon generator polynomial.
-    /// Formula: (x - α^0)(x - α^1)...(x - α^(n-1)) where n = numEccWords
-    /// </summary>
-    /// <param name="numEccWords">Number of error correction words needed.</param>
-    /// <returns>Generator polynomial in alpha notation.</returns>
-    private Polynom CalculateGeneratorPolynom(int numEccWords)
-    {
-        var generatorPolynom = new Polynom();
-        generatorPolynom.PolyItems.AddRange([new PolynomItem(0, 1), new PolynomItem(0, 0)]);
-        for (var i = 1; i <= numEccWords - 1; i++)
-        {
-            var multiplierPolynom = new Polynom();
-            multiplierPolynom.PolyItems.AddRange([new PolynomItem(0, 1), new PolynomItem(i, 0)]);
-            generatorPolynom = this.MultiplyAlphaPolynoms(generatorPolynom, multiplierPolynom);
-        }
-
-        return generatorPolynom;
-    }
-
-    // Galois Field Operations
-
-    /// <summary>
-    /// Converts polynomial from decimal notation to alpha notation (α^n).
-    /// </summary>
-    /// <param name="poly">Polynomial in decimal notation.</param>
-    /// <returns>Polynomial in alpha notation.</returns>
-    private Polynom ConvertToAlphaNotation(Polynom poly)
-    {
-        var newPoly = new Polynom();
-        for (var i = 0; i < poly.PolyItems.Count; i++)
-        {
-            var coefficient = poly.PolyItems[i].Coefficient != 0
-                ? GetAlphaExpFromIntVal(poly.PolyItems[i].Coefficient)
-                : 0;
-            var data = new PolynomItem(coefficient, poly.PolyItems[i].Exponent);
-            newPoly.PolyItems.Add(data);
-        }
-        return newPoly;
-    }
-
-    /// <summary>
-    /// Converts polynomial from alpha notation (α^n) to decimal notation.
-    /// </summary>
-    /// <param name="poly">Polynomial in alpha notation.</param>
-    /// <returns>Polynomial in decimal notation.</returns>
-    private Polynom ConvertToDecNotation(Polynom poly)
-    {
-        var newPoly = new Polynom();
-        for (var i = 0; i < poly.PolyItems.Count; i++)
-        {
-            var coefficient = GetIntValFromAlphaExp(poly.PolyItems[i].Coefficient);
-            newPoly.PolyItems.Add(new PolynomItem(coefficient, poly.PolyItems[i].Exponent));
-        }
-        return newPoly;
-    }
-
-    /// <summary>
-    /// Performs XOR operation on two polynomials coefficient-wise.
-    /// Used in Reed-Solomon division process.
-    /// </summary>
-    /// <param name="messagePolynom">Message polynomial.</param>
-    /// <param name="resPolynom">Result polynomial from previous step.</param>
-    /// <returns>XORed polynomial.</returns>
-    private Polynom XORPolynoms(Polynom messagePolynom, Polynom resPolynom)
-    {
-        var resultPolynom = new Polynom();
-        Polynom longPoly, shortPoly;
-        if (messagePolynom.PolyItems.Count >= resPolynom.PolyItems.Count)
-        {
-            longPoly = messagePolynom;
-            shortPoly = resPolynom;
-        }
-        else
-        {
-            longPoly = resPolynom;
-            shortPoly = messagePolynom;
-        }
-
-        for (var i = 0; i < longPoly.PolyItems.Count; i++)
-        {
-            var coefficient = longPoly.PolyItems[i].Coefficient ^ (shortPoly.PolyItems.Count > i ? shortPoly.PolyItems[i].Coefficient : 0);
-            var polItemRes = new PolynomItem(coefficient, messagePolynom.PolyItems[0].Exponent - i);
-            resultPolynom.PolyItems.Add(polItemRes);
-        }
-        resultPolynom.PolyItems.RemoveAt(0);
-        return resultPolynom;
-    }
-
-    /// <summary>
-    /// Multiplies two polynomials in alpha notation using Galois field arithmetic.
-    /// </summary>
-    /// <param name="polynomBase">Base polynomial.</param>
-    /// <param name="polynomMultiplier">Multiplier polynomial.</param>
-    /// <returns>Product polynomial.</returns>
-    private Polynom MultiplyAlphaPolynoms(Polynom polynomBase, Polynom polynomMultiplier)
-    {
-        var resultPolynom = new Polynom();
-        foreach (var polItemBase in polynomMultiplier.PolyItems)
-        {
-            foreach (var polItemMulti in polynomBase.PolyItems)
-            {
-                var coefficient = ShrinkAlphaExp(polItemBase.Coefficient + polItemMulti.Coefficient);
-                var polItemRes = new PolynomItem(coefficient, (polItemBase.Exponent + polItemMulti.Exponent));
-                resultPolynom.PolyItems.Add(polItemRes);
-            }
-        }
-        var exponentsToGlue = resultPolynom.PolyItems.GroupBy(x => x.Exponent).Where(x => x.Count() > 1).Select(x => x.First().Exponent);
-        var gluedPolynoms = new List<PolynomItem>();
-        var toGlue = exponentsToGlue as IList<int> ?? exponentsToGlue.ToList();
-        foreach (var exponent in toGlue)
-        {
-            var coefficient = resultPolynom.PolyItems
-                .Where(x => x.Exponent == exponent)
-                .Aggregate(0, (current, polynomOld) => current ^ GetIntValFromAlphaExp(polynomOld.Coefficient));
-            var polynomFixed = new PolynomItem(GetAlphaExpFromIntVal(coefficient), exponent);
-            gluedPolynoms.Add(polynomFixed);
-        }
-        resultPolynom.PolyItems.RemoveAll(x => toGlue.Contains(x.Exponent));
-        resultPolynom.PolyItems.AddRange(gluedPolynoms);
-        resultPolynom.PolyItems = resultPolynom.PolyItems.OrderByDescending(x => x.Exponent).ToList();
-        return resultPolynom;
-    }
-
-    /// <summary>
-    /// Normalizes alpha exponent to 0-255 range.
-    /// Formula: (exp mod 256) + floor(exp / 256)
-    /// </summary>
-    /// <param name="alphaExp">Alpha exponent to normalize.</param>
-    /// <returns>Normalized exponent (0-255).</returns>
-    private static int ShrinkAlphaExp(int alphaExp)
-    {
-        // ReSharper disable once PossibleLossOfFraction
-        return (int)((alphaExp % 256) + Math.Floor((double)(alphaExp / 256)));
-    }
-
     // Utilities
 
     /// <summary>
@@ -604,77 +364,48 @@ public class QRCodeGenerator : IDisposable
     }
 
     /// <summary>
-    /// Gets the length of character count indicator based on version and encoding mode.
-    /// </summary>
-    /// <param name="version">QR code version (1-40).</param>
-    /// <param name="encMode">Encoding mode.</param>
-    /// <returns>
-    /// Bit length of count indicator:
-    /// - Version 1-9: Numeric=10, Alphanumeric=9, Byte=8
-    /// - Version 10-26: Numeric=12, Alphanumeric=11, Byte=16
-    /// - Version 27-40: Numeric=14, Alphanumeric=13, Byte=16
-    /// </returns>
-    private int GetCountIndicatorLength(int version, EncodingMode encMode)
-    {
-        if (version < 10)
-        {
-            if (encMode.Equals(EncodingMode.Numeric))
-                return 10;
-            else if (encMode.Equals(EncodingMode.Alphanumeric))
-                return 9;
-            else
-                return 8;
-        }
-        else if (version < 27)
-        {
-            if (encMode.Equals(EncodingMode.Numeric))
-                return 12;
-            else if (encMode.Equals(EncodingMode.Alphanumeric))
-                return 11;
-            else if (encMode.Equals(EncodingMode.Byte))
-                return 16;
-            else
-                return 10;
-        }
-        else
-        {
-            if (encMode.Equals(EncodingMode.Numeric))
-                return 14;
-            else if (encMode.Equals(EncodingMode.Alphanumeric))
-                return 13;
-            else if (encMode.Equals(EncodingMode.Byte))
-                return 16;
-            else
-                return 12;
-        }
-    }
-
-    /// <summary>
     /// Calculates actual data length for capacity checking.
-    /// For UTF-8, returns byte count; otherwise returns character count.
+    /// Returns character count for Numeric/Alphanumeric, byte count for Byte mode.
     /// </summary>
     /// <param name="encoding">Encoding mode.</param>
     /// <param name="plainText">Original text.</param>
-    /// <param name="codedText">Encoded binary text.</param>
+    /// <param name="eciMode">ECI mode for character encoding.</param>
     /// <param name="forceUtf8">Whether UTF-8 is forced.</param>
     /// <returns>Data length for version selection.</returns>
-    private int GetDataLength(EncodingMode encoding, string plainText, string codedText, bool forceUtf8)
+    private int GetDataLength(EncodingMode encoding, string plainText, EciMode eciMode, bool forceUtf8)
     {
-        return forceUtf8 || this.IsUtf8(encoding, plainText) ? (codedText.Length / 8) : plainText.Length;
-    }
+        return encoding switch
+        {
+            EncodingMode.Numeric => plainText.Length,
+            EncodingMode.Alphanumeric => plainText.Length,
+            EncodingMode.Byte => CalculateByteCount(plainText, eciMode, forceUtf8),
+            EncodingMode.Kanji => plainText.Length,  // Not implemented
+            _ => plainText.Length
+        };
 
-    /// <summary>
-    /// Checks if text requires UTF-8 encoding (not valid ISO-8859-1).
-    /// </summary>
-    private bool IsUtf8(EncodingMode encoding, string plainText)
-    {
-        return (encoding == EncodingMode.Byte && !this.IsValidISO(plainText));
+        static int CalculateByteCount(string plainText, EciMode eciMode, bool forceUtf8)
+        {
+            // UTF-8 encoding required?
+            if (forceUtf8 || !IsValidISO(plainText))
+            {
+                return Encoding.UTF8.GetByteCount(plainText);
+            }
+
+            // ISO-8859-x encoding based on ECI mode
+            return eciMode switch
+            {
+                EciMode.Iso8859_1 => Encoding.GetEncoding("ISO-8859-1").GetByteCount(plainText),
+                EciMode.Iso8859_2 => Encoding.GetEncoding("ISO-8859-2").GetByteCount(plainText),
+                _ => plainText.Length  // Default: 1 byte per char (ISO-8859-1)
+            };
+        }
     }
 
     /// <summary>
     /// Validates if text can be encoded in ISO-8859-1 without data loss.
     /// </summary>
-    private bool IsValidISO(string input)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsValidISO(string input)
     {
         var bytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(input);
         //var result = Encoding.GetEncoding("ISO-8859-1").GetString(bytes);
@@ -698,142 +429,8 @@ public class QRCodeGenerator : IDisposable
     /// <returns>Binary string.</returns>
     private static string DecToBin(int decNum, int padLeftUpTo)
     {
-        var binStr = DecToBin(decNum);
+        var binStr = Convert.ToString(decNum, 2);
         return binStr.PadLeft(padLeftUpTo, '0');
-    }
-
-    /// <summary>
-    /// Converts decimal number to binary string with optional padding.
-    /// </summary>
-    /// <param name="decNum">Decimal number.</param>
-    /// <returns>Binary string.</returns>
-    private static string DecToBin(int decNum)
-    {
-        return Convert.ToString(decNum, 2);
-    }
-
-    /// <summary>
-    /// Converts plain text to binary string based on encoding mode.
-    /// </summary>
-    /// <param name="plainText">Text to encode.</param>
-    /// <param name="encMode">Encoding mode (Numeric/Alphanumeric/Byte/Kanji).</param>
-    /// <param name="eciMode">ECI mode for character set.</param>
-    /// <param name="utf8BOM">Include UTF-8 Byte Order Mark.</param>
-    /// <param name="forceUtf8">Force UTF-8 encoding.</param>
-    /// <returns>Binary string representation of the input text.</returns>
-    private string PlainTextToBinary(string plainText, EncodingMode encMode, EciMode eciMode, bool utf8BOM, bool forceUtf8)
-    {
-        switch (encMode)
-        {
-            case EncodingMode.Alphanumeric:
-                return PlainTextToBinaryAlphanumeric(plainText);
-            case EncodingMode.Numeric:
-                return PlainTextToBinaryNumeric(plainText);
-            case EncodingMode.Byte:
-                return PlainTextToBinaryByte(plainText, eciMode, utf8BOM, forceUtf8);
-            case EncodingMode.Kanji:
-                return string.Empty;
-            case EncodingMode.ECI:
-            default:
-                return string.Empty;
-        }
-    }
-
-    /// <summary>
-    /// Converts numeric text (0-9) to binary string.
-    /// Encoding: 3 digits = 10 bits, 2 digits = 7 bits, 1 digit = 4 bits.
-    /// Example: "123" → DecToBin(123, 10) = "0001111011"
-    /// </summary>
-    /// <param name="plainText">Numeric string (0-9 only).</param>
-    /// <returns>Binary encoded string.</returns>
-    private string PlainTextToBinaryNumeric(string plainText)
-    {
-        var codeText = string.Empty;
-        while (plainText.Length >= 3)
-        {
-            var dec = Convert.ToInt32(plainText.Substring(0, 3));
-            codeText += DecToBin(dec, 10);
-            plainText = plainText.Substring(3);
-        }
-        if (plainText.Length == 2)
-        {
-            var dec = Convert.ToInt32(plainText.Substring(0, plainText.Length));
-            codeText += DecToBin(dec, 7);
-        }
-        else if (plainText.Length == 1)
-        {
-            var dec = Convert.ToInt32(plainText.Substring(0, plainText.Length));
-            codeText += DecToBin(dec, 4);
-        }
-        return codeText;
-    }
-
-    /// <summary>
-    /// Converts alphanumeric text to binary string.
-    /// Encoding: 2 characters = 11 bits, 1 character = 6 bits.
-    /// Formula: (char1_value × 45 + char2_value) in 11 bits.
-    /// Example: "AB" → (10 × 45 + 11) = 461 = "00111001101"
-    /// </summary>
-    /// <param name="plainText">Alphanumeric string.</param>
-    /// <returns>Binary encoded string.</returns>
-    private string PlainTextToBinaryAlphanumeric(string plainText)
-    {
-        var codeText = string.Empty;
-        while (plainText.Length >= 2)
-        {
-            var token = plainText.Substring(0, 2);
-            var dec = GetAlphanumericValue(token[0]) * 45 + GetAlphanumericValue(token[1]);
-            codeText += DecToBin(dec, 11);
-            plainText = plainText.Substring(2);
-        }
-        if (plainText.Length > 0)
-        {
-            codeText += DecToBin(GetAlphanumericValue(plainText[0]), 6);
-        }
-        return codeText;
-    }
-
-    /// <summary>
-    /// Converts byte mode text to binary string.
-    /// Encoding: Each byte = 8 bits.
-    /// Supports ISO-8859-1, ISO-8859-2, and UTF-8 encodings.
-    /// </summary>
-    /// <param name="plainText">Text to encode.</param>
-    /// <param name="eciMode">Character encoding mode.</param>
-    /// <param name="utf8BOM">Whether to include UTF-8 BOM.</param>
-    /// <param name="forceUtf8">Force UTF-8 even if ISO-8859-1 is valid.</param>
-    /// <returns>Binary encoded string.</returns>
-    private string PlainTextToBinaryByte(string plainText, EciMode eciMode, bool utf8BOM, bool forceUtf8)
-    {
-        byte[] codeBytes;
-        var codeText = string.Empty;
-
-        if (this.IsValidISO(plainText) && !forceUtf8)
-        {
-            codeBytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(plainText);
-        }
-        else
-        {
-            switch (eciMode)
-            {
-                case EciMode.Iso8859_1:
-                    codeBytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(ConvertToIso8859(plainText, "ISO-8859-1"));
-                    break;
-                case EciMode.Iso8859_2:
-                    codeBytes = Encoding.GetEncoding("ISO-8859-2").GetBytes(ConvertToIso8859(plainText, "ISO-8859-2"));
-                    break;
-                case EciMode.Default:
-                case EciMode.Utf8:
-                default:
-                    codeBytes = utf8BOM ? Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(plainText)).ToArray() : Encoding.UTF8.GetBytes(plainText);
-                    break;
-            }
-        }
-
-        foreach (var b in codeBytes)
-            codeText += DecToBin(b, 8);
-
-        return codeText;
     }
 
     /// <summary>
@@ -856,63 +453,8 @@ public class QRCodeGenerator : IDisposable
     private List<int> BinaryStringListToDecList(List<string> binaryStringList)
     {
         return binaryStringList
-            .Select(binaryString => this.BinToDec(binaryString))
+            .Select(binaryString => BinToDec(binaryString))
             .ToList();
-    }
-
-    /// <summary>
-    /// Converts text to ISO-8859-1 or ISO-8859-2 encoding.
-    /// Used when ECI mode specifies non-UTF-8 encoding.
-    /// </summary>
-    private string ConvertToIso8859(string value, string Iso = "ISO-8859-2")
-    {
-        Encoding iso = Encoding.GetEncoding(Iso);
-        Encoding utf8 = Encoding.UTF8;
-        byte[] utfBytes = utf8.GetBytes(value);
-        byte[] isoBytes = Encoding.Convert(utf8, iso, utfBytes);
-
-        return iso.GetString(isoBytes, 0, isoBytes.Length);
-    }
-
-    /// <summary>
-    /// Multiplies generator polynomial by lead term during Reed-Solomon division.
-    /// Part of the Reed-Solomon error correction calculation process.
-    /// </summary>
-    private Polynom MultiplyGeneratorPolynomByLeadterm(Polynom genPolynom, PolynomItem leadTerm, int lowerExponentBy)
-    {
-        var resultPolynom = new Polynom();
-        foreach (var polItemBase in genPolynom.PolyItems)
-        {
-            var coefficient = (polItemBase.Coefficient + leadTerm.Coefficient) % 255;
-            var polItemRes = new PolynomItem(coefficient, polItemBase.Exponent - lowerExponentBy);
-            resultPolynom.PolyItems.Add(polItemRes);
-        }
-        return resultPolynom;
-    }
-
-    // Data Structures
-
-    /// <summary>
-    /// ECI (Extended Channel Interpretation) mode for character encoding.
-    /// </summary>
-    public enum EciMode
-    {
-        /// <summary>
-        /// Auto-detect (ISO-8859-1 or UTF-8)
-        /// </summary>
-        Default = 0,
-        /// <summary>
-        /// Western European
-        /// </summary>
-        Iso8859_1 = 3,
-        /// <summary>
-        /// Central European
-        /// </summary>
-        Iso8859_2 = 4,
-        /// <summary>
-        /// Unicode UTF-8
-        /// </summary>
-        Utf8 = 26
     }
 
     /// <summary>
@@ -1353,19 +895,19 @@ public class QRCodeGenerator : IDisposable
             /// Calculates penalty score for a masked QR code.
             /// Lower score = better readability and scanning reliability.
             /// Applies 4 penalty rules from ISO/IEC 18004 Section 8.8.2:
-            /// 
-            /// Rule 1 (Consecutive modules): 
+            ///
+            /// Rule 1 (Consecutive modules):
             ///   - 5 consecutive modules: +3 points
             ///   - Each additional consecutive module: +1 point
             ///   - Applied to both rows and columns
-            /// 
+            ///
             /// Rule 2 (Block patterns):
             ///   - Each 2×2 block of same color: +3 points
-            /// 
+            ///
             /// Rule 3 (Finder-like patterns):
             ///   - Pattern "1:1:3:1:1 ratio with 4 light modules on either side": +40 points
             ///   - Helps avoid false positives during QR code detection
-            /// 
+            ///
             /// Rule 4 (Balance):
             ///   - Deviation from 50% dark modules
             ///   - Score = (|percentage - 50| / 5) × 10
@@ -1530,13 +1072,13 @@ public class QRCodeGenerator : IDisposable
         public CodewordBlock(int groupNumber, int blockNumber, string bitString, List<string> codeWords,
             List<string> eccWords, List<int> codeWordsInt, List<int> eccWordsInt)
         {
-            this.GroupNumber = groupNumber;
-            this.BlockNumber = blockNumber;
-            this.BitString = bitString;
-            this.CodeWords = codeWords;
-            this.ECCWords = eccWords;
-            this.CodeWordsInt = codeWordsInt;
-            this.ECCWordsInt = eccWordsInt;
+            GroupNumber = groupNumber;
+            BlockNumber = blockNumber;
+            BitString = bitString;
+            CodeWords = codeWords;
+            ECCWords = eccWords;
+            CodeWordsInt = codeWordsInt;
+            ECCWordsInt = eccWordsInt;
         }
 
         public int GroupNumber { get; }
@@ -1546,49 +1088,6 @@ public class QRCodeGenerator : IDisposable
         public List<int> CodeWordsInt { get; }
         public List<string> ECCWords { get; }
         public List<int> ECCWordsInt { get; }
-    }
-
-    /// <summary>
-    /// Polynomial term with coefficient and exponent.
-    /// Used in Reed-Solomon error correction algorithm.
-    /// Can represent both alpha notation (α^n·x^m) and decimal notation.
-    /// </summary>
-    private struct PolynomItem
-    {
-        public PolynomItem(int coefficient, int exponent)
-        {
-            this.Coefficient = coefficient;
-            this.Exponent = exponent;
-        }
-
-        public int Coefficient { get; }
-        public int Exponent { get; }
-    }
-
-    /// <summary>
-    /// Polynomial representation for Reed-Solomon calculations.
-    /// Collection of PolynomItem terms.
-    /// </summary>
-    private class Polynom
-    {
-        public Polynom()
-        {
-            this.PolyItems = new List<PolynomItem>();
-        }
-
-        public List<PolynomItem> PolyItems { get; set; }
-
-        public override string ToString()
-        {
-            var sb = new StringBuilder();
-            //this.PolyItems.ForEach(x => sb.Append("a^" + x.Coefficient + "*x^" + x.Exponent + " + "));
-            foreach (var polyItem in this.PolyItems)
-            {
-                sb.Append("a^" + polyItem.Coefficient + "*x^" + polyItem.Exponent + " + ");
-            }
-
-            return sb.ToString().TrimEnd([' ', '+']);
-        }
     }
 
     /// <summary>
@@ -1604,10 +1103,10 @@ public class QRCodeGenerator : IDisposable
 
         public Rectangle(int x, int y, int w, int h)
         {
-            this.X = x;
-            this.Y = y;
-            this.Width = w;
-            this.Height = h;
+            X = x;
+            Y = y;
+            Width = w;
+            Height = h;
         }
     }
 
