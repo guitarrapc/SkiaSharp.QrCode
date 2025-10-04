@@ -39,19 +39,94 @@ public enum EciMode
     // Data difference -> Optimal mask pattern may be different -> Final QR code pattern is different.
 
     /// <summary>
-    /// No ECI header (decoder-dependent interpretation).
-    /// Not recommended for non-numeric/alphanumeric input.
+    /// Auto-detect encoding and add appropriate ECI header (recommended for most use cases).
     /// </summary>
+    /// <remarks>
+    /// <para>Automatic Encoding Detection</para>
+    /// <list type="bullet">
+    /// <item>ASCII-only (0x00-0x7F): No ECI header (maximum compatibility, smallest size)</item>
+    /// <item>ISO-8859-1 compatible: Auto-upgrade to <see cref="Iso8859_1"/> (ECI 3 header added)</item>
+    /// <item>Unicode (emojis, CJK, etc.): Auto-upgrade to <see cref="Utf8"/> (ECI 26 header added)</item>
+    /// </list>
+    /// 
+    /// <para>Examples:</para>
+    /// <code>
+    /// "HELLO"     → No ECI header (ASCII-only, 29 bits for "HE")
+    /// "Café"      → ECI 3 (ISO-8859-1, 41 bits for "Ca")
+    /// "🎉"        → ECI 26 (UTF-8, 41 bits + UTF-8 bytes)
+    /// "こんにちは"  → ECI 26 (UTF-8, auto-detected)
+    /// </code>
+    /// </remarks>
     Default = 0,
     /// <summary>
-    /// ISO-8859-1 (Latin-1) - Western European.
-    /// If your data is ASCII/Latin-1, this will be the most efficient.
+    /// ISO-8859-1 (Latin-1) encoding - Western European characters.
+    /// Adds ECI header: 0111 00000011 (12 bits overhead).
     /// </summary>
+    /// <remarks>
+    /// <para>Character Support:</para>
+    /// <list type="bullet">
+    /// <item>ASCII (0x00-0x7F): A-Z, 0-9, basic symbols</item>
+    /// <item>Extended Latin (0x80-0xFF): À, Ç, Ñ, é, ü, etc.</item>
+    /// </list>
+    /// 
+    /// <para>Use when:</para>
+    /// <list type="bullet">
+    /// <item>Content is Western European languages (English, French, Spanish, German, etc.)</item>
+    /// <item>You need explicit ISO-8859-1 encoding declaration</item>
+    /// <item>Compatibility with ISO-8859-1 readers is required</item>
+    /// </list>
+    /// 
+    /// <para>Cannot encode:</para>
+    /// <list type="bullet">
+    /// <item>Emojis (🎉, 😀, etc.)</item>
+    /// <item>CJK characters (日本語, 中文, 한글)</item>
+    /// <item>Cyrillic beyond basic range</item>
+    /// </list>
+    /// </remarks>
     Iso8859_1 = 3,
     /// <summary>
-    /// UTF-8 Unicode.
-    /// If your input is UTF-8, emoji or other multibyte characters, you should use this.
+    /// UTF-8 Unicode encoding - Universal character support.
+    /// Adds ECI header: 0111 00011010 (12 bits overhead).
     /// </summary>
+    /// <remarks>
+    /// <para>Character Support:</para>
+    /// <list type="bullet">
+    /// <item>All Unicode characters (U+0000 to U+10FFFF)</item>
+    /// <item>Emojis, CJK, Arabic, Hebrew, Cyrillic, etc.</item>
+    /// <item>Multi-byte encoding: 1-4 bytes per character</item>
+    /// </list>
+    /// 
+    /// <para>Size Impact:</para>
+    /// <list type="bullet">
+    /// <item>ECI header: +12 bits overhead</item>
+    /// <item>Data encoding: Variable (1-4 bytes per character)</item>
+    /// <item>Example: "🎉" = 12 (header) + 4 + 9 + 32 (4-byte UTF-8) = 57 bits</item>
+    /// <item>Example: "Café" = 12 (header) + 4 + 9 + 40 (5 bytes: C,a,f,é=C3A9) = 65 bits</item>
+    /// </list>
+    /// 
+    /// <para>UTF-8 Byte Examples:</para>
+    /// <code>
+    /// 'A'  → 0x41           (1 byte,  ASCII)
+    /// 'é'  → 0xC3 0xA9      (2 bytes, Latin Extended)
+    /// '中' → 0xE4 0xB8 0xAD (3 bytes, CJK)
+    /// '🎉' → 0xF0 0x9F 0x8E 0x89 (4 bytes, Emoji)
+    /// </code>
+    /// 
+    /// <para>Use when:</para>
+    /// <list type="bullet">
+    /// <item>Content includes emojis or symbols</item>
+    /// <item>Content includes CJK characters (Japanese, Chinese, Korean)</item>
+    /// <item>Content includes non-Latin scripts (Cyrillic, Arabic, Hebrew, etc.)</item>
+    /// <item>You need universal Unicode support</item>
+    /// </list>
+    /// 
+    /// <para>Trade-offs:</para>
+    /// <list type="bullet">
+    /// <item>Larger data size for non-ASCII characters (multi-byte encoding)</item>
+    /// <item>ECI header adds 12 bits overhead</item>
+    /// <item>For Western European text, <see cref="Iso8859_1"/> is more efficient</item>
+    /// </list>
+    /// </remarks>
     Utf8 = 26
 }
 

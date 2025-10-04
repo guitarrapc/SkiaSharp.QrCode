@@ -61,15 +61,20 @@ public class QRCodeGenerator : IDisposable
     /// </remarks>
     public QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
     {
+        // When EciMode.Default is specified, choose encoding based on text content.
+        var actualEciMode = eciMode == EciMode.Default
+            ? DetermineEciMode(plainText)
+            : eciMode;
+
         // Auto-detect optimal encoding mode (Numeric > Alphanumeric > Byte)
         EncodingMode encoding = GetEncodingFromPlaintext(plainText);
-        var dataInputLength = GetDataLength(encoding, plainText, eciMode);
+        var dataInputLength = GetDataLength(encoding, plainText, actualEciMode);
 
         // Select QR code version (auto or manual)
         int version = requestedVersion;
         if (version == -1)
         {
-            version = GetVersion(dataInputLength, encoding, eccLevel, eciMode);
+            version = GetVersion(dataInputLength, encoding, eccLevel, actualEciMode);
         }
 
         var eccInfo = CapacityECCTable.Single(x => x.Version == version && x.ErrorCorrectionLevel == eccLevel);
@@ -77,9 +82,9 @@ public class QRCodeGenerator : IDisposable
         // Encode data
         var capacity = CalculateMaxBitStringLength(version, eccLevel, encoding);
         var qrEncoder = new QRTextEncoder(capacity);
-        qrEncoder.WriteMode(encoding, eciMode);
+        qrEncoder.WriteMode(encoding, actualEciMode);
         qrEncoder.WriteCharacterCount(dataInputLength, version, encoding);
-        qrEncoder.WriteData(plainText, encoding, eciMode, utf8BOM);
+        qrEncoder.WriteData(plainText, encoding, actualEciMode, utf8BOM);
         qrEncoder.WritePadding(eccInfo.TotalDataCodewords * 8);
         var bitString = qrEncoder.ToBinaryString();
 
@@ -311,6 +316,33 @@ public class QRCodeGenerator : IDisposable
     // Utilities
 
     /// <summary>
+    /// Determines appropriate ECI mode based on text content.
+    /// </summary>
+    /// <param name="plainText">Text to analyze.</param>
+    /// <returns>
+    /// - <see cref="EciMode.Default"/> for ASCII-only text (no ECI header)
+    /// - <see cref="EciMode.Iso8859_1"/> for Latin-1 compatible text
+    /// - <see cref="EciMode.Utf8"/> for other Unicode text
+    /// </returns>
+    private static EciMode DetermineEciMode(string plainText)
+    {
+        // ASCII-only → No ECI header (backward compatibility)
+        if (IsAsciiOnly(plainText))
+        {
+            return EciMode.Default;
+        }
+
+        // ISO-8859-1 compatible → ECI 3
+        if (IsValidISO(plainText))
+        {
+            return EciMode.Iso8859_1;
+        }
+
+        // Unicode (emojis, CJK, etc.) → ECI 26
+        return EciMode.Utf8;
+    }
+
+    /// <summary>
     /// Determines the minimum QR code version required for given data length.
     /// Searches capacity table for smallest version that can hold the data.
     /// </summary>
@@ -463,6 +495,21 @@ public class QRCodeGenerator : IDisposable
         //var result = Encoding.GetEncoding("ISO-8859-1").GetString(bytes);
         var result = Encoding.GetEncoding("ISO-8859-1").GetString(bytes, 0, bytes.Length);
         return string.Equals(input, result);
+    }
+
+    /// <summary>
+    /// Validates if text contains only ASCII characters (0-127).
+    /// </summary>
+    /// <param name="text"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    static bool IsAsciiOnly(string text)
+    {
+        foreach (var c in text)
+        {
+            if (c > 127) return false;
+        }
+        return true;
     }
 
     /// <summary>
