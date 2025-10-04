@@ -297,6 +297,23 @@ public class QRCodeGeneratorUnitTest
         Assert.NotEqual(SerializeMatrix(qrIso.ModuleMatrix), SerializeMatrix(qrUtf8.ModuleMatrix));
     }
 
+    [Theory]
+    [InlineData("Zürich", ECCLevel.H, EciMode.Utf8, 2)]  // 修正後: Version 2
+    [InlineData("Zürich", ECCLevel.M, EciMode.Utf8, 1)]  // Version 1 で OK
+    [InlineData("Zürich", ECCLevel.L, EciMode.Utf8, 1)]  // Version 1 で OK
+    [InlineData("café", ECCLevel.H, EciMode.Utf8, 1)]    // Version 1 で OK
+    public void CreateQrCode_VersionSelection_IsCorrect(
+    string content,
+    ECCLevel eccLevel,
+    EciMode eciMode,
+    int expectedVersion)
+    {
+        using var generator = new QRCodeGenerator();
+        var qr = generator.CreateQrCode(content, eccLevel, eciMode: eciMode);
+
+        Assert.Equal(expectedVersion, qr.Version);
+    }
+
     // Maximum Capacity Tests
 
     [Theory]
