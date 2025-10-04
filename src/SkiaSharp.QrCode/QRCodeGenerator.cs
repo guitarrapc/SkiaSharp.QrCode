@@ -500,8 +500,7 @@ public class QRCodeGenerator : IDisposable
     /// <summary>
     /// Validates if text contains only ASCII characters (0-127).
     /// </summary>
-    /// <param name="text"></param>
-    /// <returns></returns>
+    /// <param name="text">The string to check for ASCII-only characters.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     static bool IsAsciiOnly(string text)
     {

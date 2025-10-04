@@ -90,22 +90,17 @@ public class QRCodeDecodabilityTest
     {
         var content = "Zürich";
 
-        // UTF-8 バイト数を確認
+        // check byte length in UTF-8
         var utf8Bytes = System.Text.Encoding.UTF8.GetBytes(content);
         var byteCount = utf8Bytes.Length;
 
         using var generator = new QRCodeGenerator();
 
-        // ECC Level H でテスト
         var qrH = generator.CreateQrCode(content, ECCLevel.H, eciMode: EciMode.Utf8);
-
-        // ECC Level M でテスト
         var qrM = generator.CreateQrCode(content, ECCLevel.M, eciMode: EciMode.Utf8);
-
-        // ECC Level L でテスト
         var qrL = generator.CreateQrCode(content, ECCLevel.L, eciMode: EciMode.Utf8);
 
-        // デバッグ出力
+        // debug output
         Console.WriteLine($"Content: \"{content}\"");
         Console.WriteLine($"UTF-8 Bytes: {byteCount} [{string.Join(", ", utf8Bytes.Select(b => $"0x{b:X2}"))}]");
         Console.WriteLine($"");
@@ -114,7 +109,7 @@ public class QRCodeDecodabilityTest
         Console.WriteLine($"ECC Level L → Version {qrL.Version} (Size: {qrL.ModuleMatrix.Count}x{qrL.ModuleMatrix.Count})");
         Console.WriteLine($"");
 
-        // Version 1 の理論的容量
+        // Version 1 logical capacity
         Console.WriteLine("Version 1 Byte mode capacity:");
         Console.WriteLine("  ECC L: 17 bytes");
         Console.WriteLine("  ECC M: 14 bytes");
@@ -124,14 +119,14 @@ public class QRCodeDecodabilityTest
         Console.WriteLine($"Required (with ECI header): ~10-12 bytes");
         Console.WriteLine($"");
 
-        // 予想
+        // Expected
         Console.WriteLine("Expected versions:");
         Console.WriteLine("  ECC L: Version 1 (17 bytes available)");
         Console.WriteLine("  ECC M: Version 1 (14 bytes available)");
-        Console.WriteLine("  ECC Q: Version 1 (11 bytes available) - ギリギリ");
-        Console.WriteLine("  ECC H: Version 2 (16 bytes available) - Version 1 では不足");
+        Console.WriteLine("  ECC Q: Version 1 (11 bytes available)");
+        Console.WriteLine("  ECC H: Version 2 (16 bytes available)");
 
-        // Version 2 に自動昇格したか確認
+        // Should be automatically upgrade to Version 2
         Assert.True(qrH.Version >= 2, $"ECC H should use Version 2 or higher, but got Version {qrH.Version}");
         Assert.True(qrM.Version >= 1, $"ECC M should use Version 1 or higher, but got Version {qrM.Version}");
     }
