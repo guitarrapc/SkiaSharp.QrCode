@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
