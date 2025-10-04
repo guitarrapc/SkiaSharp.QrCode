@@ -7,7 +7,7 @@ var path = $"bin/output/{today}.png";
 
 // prepare
 var fullPath = Path.GetFullPath(path);
-var dir = Path.GetDirectoryName(fullPath) ?? throw new DirectoryNotFoundException(fullPath);
+var dir = Path.GetDirectoryName(fullPath) ?? throw new ArgumentException($"Invalid file path: no directory component found ('{fullPath}')");
 Directory.CreateDirectory(dir);
 
 // generate qr code
