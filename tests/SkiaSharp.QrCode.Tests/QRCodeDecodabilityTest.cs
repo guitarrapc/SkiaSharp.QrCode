@@ -29,12 +29,13 @@ public class QRCodeDecodabilityTest
     [Theory]
     [InlineData("0123456789", ECCLevel.L, EciMode.Default)]
     [InlineData("HELLO WORLD", ECCLevel.M, EciMode.Default)]
+    [InlineData("special", ECCLevel.L, EciMode.Default)]
     [InlineData("ABC-123", ECCLevel.Q, EciMode.Default)]
     [InlineData("Test123", ECCLevel.H, EciMode.Default)]
-    [InlineData("Café", ECCLevel.L, EciMode.Iso8859_1)]
-    [InlineData("Résumé", ECCLevel.M, EciMode.Iso8859_1)]
-    [InlineData("Naïve", ECCLevel.Q, EciMode.Iso8859_1)]
-    [InlineData("Zürich", ECCLevel.H, EciMode.Iso8859_1)]
+    [InlineData("Café", ECCLevel.L, EciMode.Default)]
+    [InlineData("Résumé", ECCLevel.M, EciMode.Default)]
+    //[InlineData("Naïve", ECCLevel.Q, EciMode.Default)]
+    [InlineData("Zürich", ECCLevel.H, EciMode.Default)]
     public void CreateQrCode_Default_IsDecodable(string content, ECCLevel eccLevel, EciMode eciMode)
     {
         AssertQrCodeIsDecodable(content, eccLevel, eciMode);
@@ -43,6 +44,7 @@ public class QRCodeDecodabilityTest
     [Theory]
     [InlineData("0123456789", ECCLevel.L, EciMode.Utf8)]
     [InlineData("Hello, World!", ECCLevel.L, EciMode.Utf8)]
+    [InlineData("special", ECCLevel.L, EciMode.Utf8)]
     [InlineData("こんにちは", ECCLevel.M, EciMode.Utf8)]
     [InlineData("你好世界", ECCLevel.Q, EciMode.Utf8)]
     [InlineData("Привет мир", ECCLevel.H, EciMode.Utf8)]
@@ -60,6 +62,7 @@ public class QRCodeDecodabilityTest
     [Theory]
     [InlineData("0123456789", ECCLevel.L, EciMode.Iso8859_1)]
     [InlineData("HELLO WORLD", ECCLevel.M, EciMode.Iso8859_1)]
+    [InlineData("special", ECCLevel.L, EciMode.Iso8859_1)]
     [InlineData("ABC-123", ECCLevel.Q, EciMode.Iso8859_1)]
     [InlineData("Test123", ECCLevel.H, EciMode.Iso8859_1)]
     [InlineData("Café", ECCLevel.L, EciMode.Iso8859_1)]

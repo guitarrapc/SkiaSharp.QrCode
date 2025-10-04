@@ -54,3 +54,49 @@ public enum EciMode
     /// </summary>
     Utf8 = 26
 }
+
+/// <summary>
+/// Extension methods for EciMode enum.
+/// </summary>
+public static class EciModeExtensions
+{
+    /// <summary>
+    /// Gets the ECI header size in bits.
+    /// </summary>
+    /// <param name="eciMode">ECI mode.</param>
+    /// <returns>
+    /// Header size in bits:
+    /// - Default (no ECI): 0 bits
+    /// - With ECI: 4 bits (ECI indicator) + 8 bits (assignment number) = 12 bits
+    /// </returns>
+    /// <remarks>
+    /// ECI Header Structure (ISO/IEC 18004):
+    /// ┌─────────────────┬────────────────────────┐
+    /// │ ECI Indicator   │ ECI Assignment Number  │
+    /// │ 0111 (4 bits)   │ Variable (8-24 bits)   │
+    /// └─────────────────┴────────────────────────┘
+    /// 
+    /// Current implementation supports 0-127 range (8 bits).
+    /// </remarks>
+    internal static int GetHeaderBits(this EciMode eciMode)
+    {
+        if (eciMode == EciMode.Default)
+        {
+            return 0; // No ECI header
+        }
+
+        // ECI mode indicator (4 bits) + ECI assignment number (8 bits for 0-127)
+        return 4 + 8;
+    }
+
+    /// <summary>
+    /// Gets the ECI header size in bytes (rounded up).
+    /// </summary>
+    /// <param name="eciMode">ECI mode.</param>
+    /// <returns>Header size in bytes.</returns>
+    internal static int GetHeaderBytes(this EciMode eciMode)
+    {
+        var bits = eciMode.GetHeaderBits();
+        return (bits + 7) / 8; // Round up to nearest byte
+    }
+}

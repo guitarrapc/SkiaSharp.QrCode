@@ -69,7 +69,7 @@ public class QRCodeGenerator : IDisposable
         int version = requestedVersion;
         if (version == -1)
         {
-            version = GetVersion(dataInputLength, encoding, eccLevel);
+            version = GetVersion(dataInputLength, encoding, eccLevel, eciMode);
         }
 
         var eccInfo = CapacityECCTable.Single(x => x.Version == version && x.ErrorCorrectionLevel == eccLevel);
@@ -315,21 +315,84 @@ public class QRCodeGenerator : IDisposable
     /// Searches capacity table for smallest version that can hold the data.
     /// </summary>
     /// <param name="length">Data length (in characters or bytes).</param>
-    /// <param name="encMode">Encoding mode being used.</param>
+    /// <param name="encoding">Encoding mode being used.</param>
     /// <param name="eccLevel">Error correction level.</param>
     /// <returns>Version number (1-40).</returns>
-    private int GetVersion(int length, EncodingMode encMode, ECCLevel eccLevel)
+    /// <remarks>
+    /// Calculates required bits including:
+    /// - ECI header (0 or 12 bits)
+    /// - Mode indicator (4 bits)
+    /// - Character count indicator (8-16 bits, version-dependent)
+    /// - Data (variable)
+    /// </remarks>
+    private int GetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode)
     {
-        var version = CapacityTable
-            .Where(x => x.Details
-                .Count(y => (y.ErrorCorrectionLevel == eccLevel && y.CapacityDict[encMode] >= Convert.ToInt32(length))) > 0)
-            .Select(x => new
+        // ECI header overhead if eci specified
+        var eciHeaderBits = eciMode.GetHeaderBits();
+
+        // Mode indicator (4 bits)
+        var modeIndicatorBits = 4;
+
+        // Iterate through versions to find the minimum suitable version
+        // Character count indicator size changes at version 10 and 27
+        for (var version = 1; version <= 40; version++)
+        {
+            var countIndicatorBits = encoding.GetCountIndicatorLength(version);
+
+            // Data bits (already in length for Byte mode as byte count)
+            var dataBits = encoding switch
             {
-                version = x.Version,
-                capacity = x.Details.Single(y => y.ErrorCorrectionLevel == eccLevel).CapacityDict[encMode]
-            })
-            .Min(x => x.version);
-        return version;
+                EncodingMode.Numeric => CalculateNumericBits(length),
+                EncodingMode.Alphanumeric => CalculateAlphanumericBits(length),
+                EncodingMode.Byte => length * 8,
+                EncodingMode.Kanji => length * 13, // Kanji: 13 bits per character
+                _ => throw new ArgumentOutOfRangeException(nameof(encoding), $"Unsupported encoding mode: {encoding}")
+            };
+
+            // Total required bits
+            var totalRequiredBits = eciHeaderBits + modeIndicatorBits + countIndicatorBits + dataBits;
+
+            // Get actual capacity for this version and ECC level
+            // Use CapacityTable (which has VersionInfo structure)
+            var eccInfo = CapacityECCTable.Single(x => x.Version == version && x.ErrorCorrectionLevel == eccLevel);
+            var capacityBits = eccInfo.TotalDataCodewords * 8; // convert bytes to bits
+
+            if (capacityBits >= totalRequiredBits)
+            {
+                return version;
+            }
+        }
+
+        throw new InvalidOperationException($"Data too large for QR code (exceeds Version 40 capacity). " +
+            $"Required: {eciHeaderBits + modeIndicatorBits} header bits + {length} data units, " +
+            $"Mode: {encoding}, ECC: {eccLevel}, ECI: {eciMode}");
+
+        // Calculates actual bit count for numeric encoding.
+        // 3 digits → 10 bits, 2 digits → 7 bits, 1 digit → 4 bits.
+        static int CalculateNumericBits(int length)
+        {
+            var bits = (length / 3) * 10; // Groups of 3
+            var remainder = length % 3;
+
+            if (remainder == 2)
+                bits += 7;
+            else if (remainder == 1)
+                bits += 4;
+
+            return bits;
+        }
+
+        // Calculates actual bit count for alphanumeric encoding.
+        // 2 characters → 11 bits, 1 character → 6 bits.
+        static int CalculateAlphanumericBits(int length)
+        {
+            var bits = (length / 2) * 11; // Groups of 2
+
+            if (length % 2 == 1)
+                bits += 6; // Remaining 1 character
+
+            return bits;
+        }
     }
 
     /// <summary>

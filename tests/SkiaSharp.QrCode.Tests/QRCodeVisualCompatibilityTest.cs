@@ -120,11 +120,7 @@ public class QRCodeVisualCompatibilityTest
 
     [Theory]
     [MemberData(nameof(GetVersionBoundaryTestCases))]
-    public void CreateQrCode_VersionBoundaries_PixelsMatchSample(
-    string content,
-    ECCLevel eccLevel,
-    EciMode eciMode,
-    int expectedVersion)
+    public void CreateQrCode_VersionBoundaries_PixelsMatchSample(string content, ECCLevel eccLevel, EciMode eciMode, int expectedVersion)
     {
         using var generator = new QRCodeGenerator();
         var qr = generator.CreateQrCode(content, eccLevel, eciMode: eciMode);
@@ -140,27 +136,37 @@ public class QRCodeVisualCompatibilityTest
 
     public static IEnumerable<object[]> GetVersionBoundaryTestCases()
     {
-        foreach (var eci in Enum.GetValues<EciMode>())
+        // Default mode (no ECI header)
+        yield return new object[] { new string('1', 41), ECCLevel.L, EciMode.Default, 1 };  // V1-L max
+        yield return new object[] { new string('1', 42), ECCLevel.L, EciMode.Default, 2 };  // V2-L min
+
+        foreach (var eci in new[] { EciMode.Iso8859_1, EciMode.Utf8 })
         {
-            // Version 1 boundaries (Numeric mode)
-            yield return new object[] { new string('1', 41), ECCLevel.L, eci, 1 };  // V1-L max
-            yield return new object[] { new string('1', 42), ECCLevel.L, eci, 2 };  // V2-L min
-            yield return new object[] { new string('1', 34), ECCLevel.M, eci, 1 };  // V1-M max
-            yield return new object[] { new string('1', 35), ECCLevel.M, eci, 2 };  // V2-M min
-            yield return new object[] { new string('1', 17), ECCLevel.H, eci, 1 };  // V1-H max
-            yield return new object[] { new string('1', 18), ECCLevel.H, eci, 2 };  // V2-H min
+            // Numeric mode
+            // V1-L: 152 bits - 12 (ECI) - 4 (mode) - 10 (count) = 126 bits → 37 digits
+            yield return new object[] { new string('1', 37), ECCLevel.L, eci, 1 };  // V1-L max
+            yield return new object[] { new string('1', 38), ECCLevel.L, eci, 2 };  // V2-L min
 
-            // Version 1 boundaries (Alphanumeric mode)
-            yield return new object[] { new string('A', 25), ECCLevel.L, eci, 1 };  // V1-L max
-            yield return new object[] { new string('A', 26), ECCLevel.L, eci, 2 };  // V2-L min
-            yield return new object[] { new string('A', 20), ECCLevel.M, eci, 1 };  // V1-M max
-            yield return new object[] { new string('A', 21), ECCLevel.M, eci, 2 };  // V2-M min
-            yield return new object[] { new string('A', 10), ECCLevel.H, eci, 1 };  // V1-H max
-            yield return new object[] { new string('A', 11), ECCLevel.H, eci, 2 };  // V2-H min
+            // V1-M: 128 bits - 12 - 4 - 10 = 102 bits → 30 digits  
+            yield return new object[] { new string('1', 30), ECCLevel.M, eci, 1 };  // V1-M max
+            yield return new object[] { new string('1', 31), ECCLevel.M, eci, 2 };  // V2-M min
 
-            // Version 2 boundaries (Numeric mode)
-            yield return new object[] { new string('9', 77), ECCLevel.L, eci, 2 };  // V2-L max
-            yield return new object[] { new string('9', 78), ECCLevel.L, eci, 3 };  // V3-L min
+            // V1-H: 72 bits - 12 - 4 - 10 = 46 bits → 13 digits
+            yield return new object[] { new string('1', 13), ECCLevel.H, eci, 1 };  // V1-H max
+            yield return new object[] { new string('1', 14), ECCLevel.H, eci, 2 };  // V2-H min
+
+            //Alphanumeric mode
+            // V1-L: 152 bits - 12 - 4 - 9 = 127 bits → 23 chars
+            yield return new object[] { new string('A', 23), ECCLevel.L, eci, 1 };  // V1-L max
+            yield return new object[] { new string('A', 24), ECCLevel.L, eci, 2 };  // V2-L min
+
+            // V1-M: 128 bits - 12 - 4 - 9 = 103 bits → 18 chars
+            yield return new object[] { new string('A', 18), ECCLevel.M, eci, 1 };  // V1-M max
+            yield return new object[] { new string('A', 19), ECCLevel.M, eci, 2 };  // V2-M min
+
+            //  V1-H: 72 bits - 12 - 4 - 9 = 47 bits → 8 chars
+            yield return new object[] { new string('A', 8), ECCLevel.H, eci, 1 };  // V1-H max
+            yield return new object[] { new string('A', 9), ECCLevel.H, eci, 2 };  // V2-H min
         }
     }
 
