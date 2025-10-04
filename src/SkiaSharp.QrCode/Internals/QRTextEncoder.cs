@@ -57,14 +57,13 @@ internal class QRTextEncoder
     /// <param name="mode">Encoding mode</param>
     /// <param name="eci">ECI mode for character encoding</param>
     /// <param name="utf8Bom">Whether to include UTF-8 BOM</param>
-    /// <param name="forceUtf8">Force UTF-8 encoding even if ISO-8859-1 is sufficient.</param>
-    public void WriteData(string plainText, EncodingMode mode, EciMode eci, bool utf8Bom, bool forceUtf8)
+    public void WriteData(string plainText, EncodingMode mode, EciMode eci, bool utf8Bom)
     {
         var encoded = mode switch
         {
             EncodingMode.Numeric => EncodeNumeric(plainText),
             EncodingMode.Alphanumeric => EncodeAlphanumeric(plainText),
-            EncodingMode.Byte => EncodeByte(plainText, eci, utf8Bom, forceUtf8),
+            EncodingMode.Byte => EncodeByte(plainText, eci, utf8Bom),
             EncodingMode.Kanji => throw new NotImplementedException("Kanji encoding not yet implemented, use Byte mode with UTF-8 encoding for Japanese text."),
             _ => throw new ArgumentOutOfRangeException(nameof(mode), "Invalid encoding mode"),
         };
@@ -199,16 +198,15 @@ internal class QRTextEncoder
     /// <param name="text"></param>
     /// <param name="eci"></param>
     /// <param name="utf8BOM"></param>
-    /// <param name="forceUtf8"></param>
     /// <remarks>
     /// Encoding: Each byte → 8 bits (UTF-8 or ISO-8859-x based on ECI mode).
     /// </remarks>
-    private string EncodeByte(string text, EciMode eci, bool utf8BOM, bool forceUtf8)
+    private string EncodeByte(string text, EciMode eci, bool utf8BOM)
     {
         byte[] codeBytes;
 
         // Determine encoding based on ECI mode and validity
-        if (IsValidISO(text) && !forceUtf8)
+        if (IsValidISO(text))
         {
             codeBytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(text);
         }
