@@ -149,7 +149,7 @@ public class QRCodeVisualCompatibilityTest
         yield return new object[] { new string('1', 41), ECCLevel.L, EciMode.Default, 1 };  // V1-L max
         yield return new object[] { new string('1', 42), ECCLevel.L, EciMode.Default, 2 };  // V2-L min
 
-        // V1-M: 128 bits - 4 - 10 = 114 bits → 34 digits  
+        // V1-M: 128 bits - 4 - 10 = 114 bits → 34 digits
         yield return new object[] { new string('1', 34), ECCLevel.M, EciMode.Default, 1 };  // V1-M max
         yield return new object[] { new string('1', 35), ECCLevel.M, EciMode.Default, 2 };  // V2-M min
 
@@ -178,7 +178,7 @@ public class QRCodeVisualCompatibilityTest
             yield return new object[] { new string('1', 37), ECCLevel.L, eci, 1 };  // V1-L max
             yield return new object[] { new string('1', 38), ECCLevel.L, eci, 2 };  // V2-L min
 
-            // V1-M: 128 bits - 12 - 4 - 10 = 102 bits → 30 digits  
+            // V1-M: 128 bits - 12 - 4 - 10 = 102 bits → 30 digits
             yield return new object[] { new string('1', 30), ECCLevel.M, eci, 1 };  // V1-M max
             yield return new object[] { new string('1', 31), ECCLevel.M, eci, 2 };  // V2-M min
 
@@ -325,7 +325,7 @@ public class QRCodeVisualCompatibilityTest
             .Replace("!", "_")
             .Replace("?", "_");
 
-        return string.IsNullOrWhiteSpace(sanitized) ? "special" : sanitized;
+        return string.IsNullOrWhiteSpace(sanitized) ? "this is non-readable chars" : sanitized;
     }
 
     /// <summary>
