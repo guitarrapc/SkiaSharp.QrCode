@@ -39,7 +39,6 @@ public class QRCodeGenerator : IDisposable
     /// </summary>
     /// <param name="plainText">The text to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
-    /// <param name="forceUtf8">Force UTF-8 encoding even if ISO-8859-1 is sufficient.</param>
     /// <param name="utf8BOM">Include UTF-8 BOM (Byte Order Mark) in encoded data.</param>
     /// <param name="eciMode">ECI mode for character encoding.</param>
     /// <param name="requestedVersion">Specific version to use (1-40), or -1 for automatic selection.</param>
@@ -60,11 +59,11 @@ public class QRCodeGenerator : IDisposable
     /// 11. Add format and version information
     /// 12. Add quiet zone (white border)
     /// </remarks>
-    public QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, bool forceUtf8 = false, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
+    public QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
     {
         // Auto-detect optimal encoding mode (Numeric > Alphanumeric > Byte)
-        EncodingMode encoding = GetEncodingFromPlaintext(plainText, forceUtf8);
-        var dataInputLength = GetDataLength(encoding, plainText, eciMode, forceUtf8);
+        EncodingMode encoding = GetEncodingFromPlaintext(plainText);
+        var dataInputLength = GetDataLength(encoding, plainText, eciMode);
 
         // Select QR code version (auto or manual)
         int version = requestedVersion;
@@ -80,7 +79,7 @@ public class QRCodeGenerator : IDisposable
         var qrEncoder = new QRTextEncoder(capacity);
         qrEncoder.WriteMode(encoding, eciMode);
         qrEncoder.WriteCharacterCount(dataInputLength, version, encoding);
-        qrEncoder.WriteData(plainText, encoding, eciMode, utf8BOM, forceUtf8);
+        qrEncoder.WriteData(plainText, encoding, eciMode, utf8BOM);
         qrEncoder.WritePadding(eccInfo.TotalDataCodewords * 8);
         var bitString = qrEncoder.ToBinaryString();
 
@@ -338,16 +337,10 @@ public class QRCodeGenerator : IDisposable
     /// Priority: Numeric (most efficient) > Alphanumeric > Byte (least efficient).
     /// </summary>
     /// <param name="plainText">Text to analyze.</param>
-    /// <param name="forceUtf8">Force byte mode with UTF-8.</param>
     /// <returns>Optimal encoding mode.</returns>
-    private EncodingMode GetEncodingFromPlaintext(string plainText, bool forceUtf8)
+    private EncodingMode GetEncodingFromPlaintext(string plainText)
     {
         EncodingMode result = EncodingMode.Numeric;
-
-        if (forceUtf8)
-        {
-            return EncodingMode.Byte;
-        }
 
         foreach (char c in plainText)
         {
@@ -370,23 +363,22 @@ public class QRCodeGenerator : IDisposable
     /// <param name="encoding">Encoding mode.</param>
     /// <param name="plainText">Original text.</param>
     /// <param name="eciMode">ECI mode for character encoding.</param>
-    /// <param name="forceUtf8">Whether UTF-8 is forced.</param>
     /// <returns>Data length for version selection.</returns>
-    private int GetDataLength(EncodingMode encoding, string plainText, EciMode eciMode, bool forceUtf8)
+    private int GetDataLength(EncodingMode encoding, string plainText, EciMode eciMode)
     {
         return encoding switch
         {
             EncodingMode.Numeric => plainText.Length,
             EncodingMode.Alphanumeric => plainText.Length,
-            EncodingMode.Byte => CalculateByteCount(plainText, eciMode, forceUtf8),
+            EncodingMode.Byte => CalculateByteCount(plainText, eciMode),
             EncodingMode.Kanji => plainText.Length,  // Not implemented
             _ => plainText.Length
         };
 
-        static int CalculateByteCount(string plainText, EciMode eciMode, bool forceUtf8)
+        static int CalculateByteCount(string plainText, EciMode eciMode)
         {
             // UTF-8 encoding required?
-            if (forceUtf8 || !IsValidISO(plainText))
+            if (!IsValidISO(plainText))
             {
                 return Encoding.UTF8.GetByteCount(plainText);
             }
