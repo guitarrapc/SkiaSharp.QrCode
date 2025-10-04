@@ -196,30 +196,27 @@ internal class QRTextEncoder
     /// Encodes byte mode text to binary string
     /// </summary>
     /// <param name="text"></param>
-    /// <param name="eci"></param>
+    /// <param name="eciMode"></param>
     /// <param name="utf8BOM"></param>
     /// <remarks>
     /// Encoding: Each byte → 8 bits (UTF-8 or ISO-8859-x based on ECI mode).
     /// </remarks>
-    private string EncodeByte(string text, EciMode eci, bool utf8BOM)
+    private string EncodeByte(string text, EciMode eciMode, bool utf8BOM)
     {
-        byte[] codeBytes;
-
         // Determine encoding based on ECI mode and validity
-        if (IsValidISO(text))
+        var codeBytes = eciMode switch
         {
-            codeBytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(text);
-        }
-        else
-        {
-            codeBytes = eci switch
-            {
-                EciMode.Iso8859_1 => Encoding.GetEncoding("ISO-8859-1").GetBytes(ConvertToIso8859(text, "ISO-8859-1")),
-                EciMode.Default or EciMode.Utf8 or _ => utf8BOM
-                ? Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(text)).ToArray()
+            EciMode.Default => IsValidISO(text)
+                ? Encoding.GetEncoding("ISO-8859-1").GetBytes(text)
+                : utf8BOM
+                    ? [.. Encoding.UTF8.GetPreamble(), ..Encoding.UTF8.GetBytes(text)]
+                    : Encoding.UTF8.GetBytes(text),
+            EciMode.Iso8859_1 => Encoding.GetEncoding("ISO-8859-1").GetBytes(text),
+            EciMode.Utf8 => utf8BOM
+                ? [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(text)]
                 : Encoding.UTF8.GetBytes(text),
-            };
-        }
+            _ => throw new ArgumentOutOfRangeException(nameof(eciMode), "Unsupported ECI mode for Byte encoding"),
+        };
 
         // Convert each byte to 8-bit binary string
         var codeText = new StringBuilder(codeBytes.Length * 8);
@@ -304,20 +301,5 @@ internal class QRTextEncoder
         var bytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(input);
         var result = Encoding.GetEncoding("ISO-8859-1").GetString(bytes, 0, bytes.Length);
         return string.Equals(input, result);
-    }
-
-    /// <summary>
-    /// Converts text to ISO-8859-1 or ISO-8859-2 encoding.
-    /// Used when ECI mode specifies non-UTF-8 encoding.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static string ConvertToIso8859(string value, string Iso = "ISO-8859-2")
-    {
-        Encoding iso = Encoding.GetEncoding(Iso);
-        Encoding utf8 = Encoding.UTF8;
-        byte[] utfBytes = utf8.GetBytes(value);
-        byte[] isoBytes = Encoding.Convert(utf8, iso, utfBytes);
-
-        return iso.GetString(isoBytes, 0, isoBytes.Length);
     }
 }

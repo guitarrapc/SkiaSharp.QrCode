@@ -377,17 +377,15 @@ public class QRCodeGenerator : IDisposable
 
         static int CalculateByteCount(string plainText, EciMode eciMode)
         {
-            // UTF-8 encoding required?
-            if (!IsValidISO(plainText))
-            {
-                return Encoding.UTF8.GetByteCount(plainText);
-            }
-
             // ISO-8859-x encoding based on ECI mode
             return eciMode switch
             {
+                EciMode.Default => IsValidISO(plainText)
+                    ? Encoding.GetEncoding("ISO-8859-1").GetByteCount(plainText)
+                    : Encoding.UTF8.GetByteCount(plainText),
                 EciMode.Iso8859_1 => Encoding.GetEncoding("ISO-8859-1").GetByteCount(plainText),
-                _ => plainText.Length  // Default: 1 byte per char (ISO-8859-1)
+                EciMode.Utf8 => Encoding.UTF8.GetByteCount(plainText),
+                _ => throw new ArgumentOutOfRangeException(nameof(eciMode), "Unsupported ECI mode for Byte encoding"),
             };
         }
     }
