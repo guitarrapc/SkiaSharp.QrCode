@@ -52,6 +52,16 @@
             </div>
 
             <div style="margin:0.5rem">
+                <label style="width: 140px;">EciMode</label>
+                <InputSelect style="width: 200px;" @bind-Value="@Model.EciMode">
+                    @foreach (var level in Enum.GetValues(typeof(EciMode)))
+                    {
+                        <option value="@level">@level</option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div style="margin:0.5rem">
                 <label style="width: 140px;">ClearColor</label>
                 <SKColorInputSelect style="width: 200px;" @bind-Value="@Model.ClearColor">
                     @foreach (var color in Colors)
@@ -131,7 +141,7 @@
         using var generator = new QRCodeGenerator();
 
         // Generate QrCode
-        var qr = generator.CreateQrCode(content, Model.EccLevel, quietZoneSize: Model.QuietZoneSize);
+        var qr = generator.CreateQrCode(content, Model.EccLevel, eciMode: Model.EciMode, quietZoneSize: Model.QuietZoneSize);
 
         // Render to canvas
         var info = new SKImageInfo(Model.Size, Model.Size); // Make sure match with SKCanvasView width & height.
@@ -154,6 +164,7 @@
         [Range(0, 10)]
         public int QuietZoneSize { get; set; } = 4;
         public ECCLevel EccLevel { get; set; } = ECCLevel.M;
+        public EciMode EciMode { get; set; } = EciMode.Default;
         public SKColor ClearColor { get; set; } = SKColors.Transparent;
         public SKColor CodeColor { get; set; } = SKColors.Black;
         public SKColor BackgroundColor { get; set; } = SKColors.White;
