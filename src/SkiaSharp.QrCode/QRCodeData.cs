@@ -5,6 +5,7 @@ namespace SkiaSharp.QrCode;
 
 public class QRCodeData : IDisposable
 {
+    // TODO: Public List is not a good idea. Change to IReadOnlyList or similar.
     public List<BitArray> ModuleMatrix { get; set; }
 
     public QRCodeData(int version)
@@ -145,7 +146,7 @@ public class QRCodeData : IDisposable
 
     public void Dispose()
     {
-        this.ModuleMatrix = null;
+        this.ModuleMatrix.Clear();
         this.Version = 0;
     }
 

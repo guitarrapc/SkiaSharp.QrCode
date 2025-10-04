@@ -8,7 +8,7 @@ var iconPath = "samples/test.png";
 
 // prepare
 var fullPath = Path.GetFullPath(path);
-var dir = Path.GetDirectoryName(fullPath);
+var dir = Path.GetDirectoryName(fullPath) ?? throw new DirectoryNotFoundException(fullPath);
 Directory.CreateDirectory(dir);
 
 // Generate QrCode
