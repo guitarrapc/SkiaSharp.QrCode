@@ -1,4 +1,3 @@
-using System.Collections;
 using System.IO.Compression;
 
 namespace SkiaSharp.QrCode;
@@ -37,34 +36,9 @@ public class QRCodeData : IDisposable
 
     public QRCodeData(byte[] rawData, Compression compressMode)
     {
-        var bytes = new List<byte>(rawData);
+        var bytes = DecompressData(rawData, compressMode);
 
-        //Decompress
-        if (compressMode.Equals(Compression.Deflate))
-        {
-            using (var input = new MemoryStream(bytes.ToArray()))
-            using (var output = new MemoryStream())
-            {
-                using (var dstream = new DeflateStream(input, CompressionMode.Decompress))
-                {
-                    dstream.CopyTo(output);
-                }
-                bytes = new List<byte>(output.ToArray());
-            }
-        }
-        else if (compressMode.Equals(Compression.GZip))
-        {
-            using (var input = new MemoryStream(bytes.ToArray()))
-            using (var output = new MemoryStream())
-            {
-                using (var dstream = new GZipStream(input, CompressionMode.Decompress))
-                {
-                    dstream.CopyTo(output);
-                }
-                bytes = new List<byte>(output.ToArray());
-            }
-        }
-
+        // validate header
         if (bytes[0] != 0x51 || bytes[1] != 0x52 || bytes[2] != 0x52)
             throw new Exception("Invalid raw data file. Filetype doesn't match \"QRR\".");
 
@@ -74,10 +48,10 @@ public class QRCodeData : IDisposable
         // set version from size
         Version = QRCodeVersionFromModulesPerSide(sideLen);
 
-        // Unpack
+        // unpack
         var totalBits = sideLen * sideLen;
         var modules = new Queue<bool>(totalBits);
-        for (int byteIndex = 4; byteIndex < bytes.Count; byteIndex++)
+        for (int byteIndex = 4; byteIndex < bytes.Length; byteIndex++)
         {
             var b = bytes[byteIndex];
             for (int i = 7; i >= 0; i--)
@@ -178,7 +152,7 @@ public class QRCodeData : IDisposable
             dataQueue.Enqueue(0);
         }
 
-        // Process queue
+        // pack bits into bytes
         while (dataQueue.Count > 0)
         {
             byte b = 0;
@@ -190,32 +164,71 @@ public class QRCodeData : IDisposable
         }
         var rawData = bytes.ToArray();
 
-        // Compress stream (optional)
-        if (compressMode == Compression.Deflate)
-        {
-            using (var output = new MemoryStream())
-            using (var dstream = new DeflateStream(output, CompressionMode.Compress))
-            {
-                dstream.Write(rawData, 0, rawData.Length);
-                rawData = output.ToArray();
-            }
-        }
-        else if (compressMode == Compression.GZip)
-        {
-            using (var output = new MemoryStream())
-            using (GZipStream gzipStream = new GZipStream(output, CompressionMode.Compress, true))
-            {
-                gzipStream.Write(rawData, 0, rawData.Length);
-                rawData = output.ToArray();
-            }
-        }
-        return rawData;
+        // Compress stream
+        return CompressData(rawData, compressMode);
 
         static int GetPaddingBits(int totalBits)
         {
             var remainder = totalBits % 8;
             return (8 - remainder) % 8;
         }
+    }
+
+    /// <summary>
+    /// Decompresses the given data using the specified compression mode.
+    /// </summary>
+    /// <param name="data"></param>
+    /// <param name="mode"></param>
+    /// <returns></returns>
+    private static byte[] DecompressData(byte[] data, Compression mode)
+    {
+        if (mode == Compression.Uncompressed)
+            return data;
+
+        using var input = new MemoryStream(data);
+        using var output = new MemoryStream();
+
+        Stream decompressor = mode switch
+        {
+            Compression.Deflate => new DeflateStream(input, CompressionMode.Decompress),
+            Compression.GZip => new GZipStream(input, CompressionMode.Decompress),
+            _ => throw new ArgumentException($"Unsupported compression mode: {mode}")
+        };
+
+        using (decompressor)
+        {
+            decompressor.CopyTo(output);
+        }
+
+        return output.ToArray();
+    }
+
+    /// <summary>
+    /// Compresses the given data using the specified compression mode.
+    /// </summary>
+    /// <param name="data"></param>
+    /// <param name="mode"></param>
+    /// <returns></returns>
+    private static byte[] CompressData(byte[] data, Compression mode)
+    {
+        if (mode == Compression.Uncompressed)
+            return data;
+
+        using var output = new MemoryStream();
+
+        Stream compressor = mode switch
+        {
+            Compression.Deflate => new DeflateStream(output, CompressionMode.Compress),
+            Compression.GZip => new GZipStream(output, CompressionMode.Compress),
+            _ => throw new ArgumentException($"Unsupported compression mode: {mode}")
+        };
+
+        using (compressor)
+        {
+            compressor.Write(data, 0, data.Length);
+        }
+
+        return output.ToArray();
     }
 
     /// <summary>
