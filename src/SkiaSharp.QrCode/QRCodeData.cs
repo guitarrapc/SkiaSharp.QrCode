@@ -108,7 +108,7 @@ public class QRCodeData : IDisposable
         var paddingBits = GetPaddingBits(totalBits);
         var totalBitsWithPadding = totalBits + paddingBits;
         var dataBytes = totalBitsWithPadding / 8;
-        var headerSize = 4; // 3 bytes signature + 1 byte size
+        var headerSize = _headerSignature.Length + 1; // signature length + 1 byte for size
         var totalSize = headerSize + dataBytes;
 
         var bytes = new byte[totalSize];
