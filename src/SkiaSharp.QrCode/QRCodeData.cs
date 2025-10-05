@@ -151,7 +151,7 @@ public class QRCodeData : IDisposable
     /// </remarks>
     /// <param name="moduleMatrix">New module matrix.</param>
     /// <param name="quietZoneSize">Quiet zone size in modules (0 if matrix doesn't include quiet zone).</param>
-    public void SetModuleMatrix(bool[,] moduleMatrix, int quietZoneSize)
+    internal void SetModuleMatrix(bool[,] moduleMatrix, int quietZoneSize)
     {
         var totalSize = moduleMatrix.GetLength(0);
         var sizeWithoutQuietZone = totalSize - (quietZoneSize * 2);
