@@ -268,13 +268,13 @@ public class QRCodeData : IDisposable
 
     public void Dispose()
     {
-        // Can be removed in future.
+        // will be removed in future, or remain.
     }
 
     public enum Compression
-{
-    Uncompressed,
-    Deflate,
-    GZip
-}
+    {
+        Uncompressed,
+        Deflate,
+        GZip
+    }
 }
