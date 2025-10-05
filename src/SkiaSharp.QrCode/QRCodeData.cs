@@ -52,12 +52,18 @@ public class QRCodeData : IDisposable
     {
         var bytes = DecompressData(rawData, compressMode);
 
-        // validate header
-        if (bytes[0] != 0x51 || bytes[1] != 0x52 || bytes[2] != 0x52)
-            throw new Exception("Invalid raw data file. Filetype doesn't match \"QRR\".");
+        // Validate minimum size
+        if (bytes.Length < 4)
+            throw new InvalidDataException($"Invalid QR code data: too short ({bytes.Length} bytes).");
 
-        // read size from header
+        // Validate header
+        if (bytes[0] != 0x51 || bytes[1] != 0x52 || bytes[2] != 0x52)
+            throw new InvalidDataException("Invalid QR code data: header mismatch.");
+
+        // Read and validate size
         var sideLen = (int)bytes[3];
+        if (sideLen < 21 || sideLen > 177)
+            throw new InvalidDataException($"Invalid QR code size: {sideLen}.");
 
         // set version from size
         Version = VersionFromSize(sideLen);
