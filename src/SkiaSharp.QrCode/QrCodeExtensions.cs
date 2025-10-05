@@ -2,7 +2,7 @@ using SkiaSharp.QrCode.Models;
 
 namespace SkiaSharp.QrCode;
 
-public static class QrCodeExtensions
+public static class QRCodeExtensions
 {
     public static void Render(this SKCanvas canvas, QRCodeData data, int width, int hight)
     {
