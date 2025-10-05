@@ -49,7 +49,7 @@ public class QRCodeData : IDisposable
                 {
                     dstream.CopyTo(output);
                 }
-                bytes.AddRange(output.ToArray());
+                bytes = new List<byte>(output.ToArray());
             }
         }
         else if (compressMode.Equals(Compression.GZip))
@@ -61,7 +61,7 @@ public class QRCodeData : IDisposable
                 {
                     dstream.CopyTo(output);
                 }
-                bytes.AddRange(output.ToArray());
+                bytes = new List<byte>(output.ToArray());
             }
         }
 
