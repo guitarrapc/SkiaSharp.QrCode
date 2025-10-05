@@ -270,11 +270,4 @@ public class QRCodeData : IDisposable
     {
         // will be removed in future, or remain.
     }
-
-    public enum Compression
-    {
-        Uncompressed,
-        Deflate,
-        GZip
-    }
 }
