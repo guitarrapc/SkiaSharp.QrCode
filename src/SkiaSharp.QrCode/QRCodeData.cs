@@ -259,7 +259,7 @@ public class QRCodeData : IDisposable
     /// <param name="totalBits"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    static int GetPaddingBits(int totalBits)
+    private static int GetPaddingBits(int totalBits)
     {
         var remainder = totalBits % 8;
         return (8 - remainder) % 8;
