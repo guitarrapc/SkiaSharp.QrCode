@@ -1,4 +1,5 @@
 using SkiaSharp.QrCode.Internals;
+using System.Text;
 using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
@@ -235,11 +236,12 @@ public class EccTextEncoderUnitTest
 
     private static string XorBinaryStrings(string a, string b)
     {
-        var result = "";
-        for (int i = 0; i < Math.Min(a.Length, b.Length); i++)
+        var length = Math.Min(a.Length, b.Length);
+        var result = new StringBuilder(length); ;
+        for (int i = 0; i < length; i++)
         {
-            result += (a[i] == b[i]) ? '0' : '1';
+            result.Append((a[i] == b[i]) ? '0' : '1');
         }
-        return result;
+        return result.ToString();
     }
 }
