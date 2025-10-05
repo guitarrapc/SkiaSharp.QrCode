@@ -135,6 +135,12 @@ public enum EciMode
 /// </summary>
 public static class EciModeExtensions
 {
+    // ECI Header Structure (ISO/IEC 18004):
+    // ┌─────────────────┬────────────────────────┐
+    // │ ECI Indicator   │ ECI Assignment Number  │
+    // │ 0111 (4 bits)   │ Variable (8-24 bits)   │
+    // └─────────────────┴────────────────────────┘
+
     /// <summary>
     /// Gets the ECI header size in bits.
     /// </summary>
@@ -145,12 +151,6 @@ public static class EciModeExtensions
     /// - With ECI: 4 bits (ECI indicator) + 8 bits (assignment number) = 12 bits
     /// </returns>
     /// <remarks>
-    /// ECI Header Structure (ISO/IEC 18004):
-    /// ┌─────────────────┬────────────────────────┐
-    /// │ ECI Indicator   │ ECI Assignment Number  │
-    /// │ 0111 (4 bits)   │ Variable (8-24 bits)   │
-    /// └─────────────────┴────────────────────────┘
-    /// 
     /// Current implementation supports 0-127 range (8 bits).
     /// </remarks>
     internal static int GetHeaderBits(this EciMode eciMode)
