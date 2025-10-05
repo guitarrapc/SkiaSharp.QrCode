@@ -9,12 +9,11 @@ public class QRCodeData : IDisposable
     internal List<BitArray> ModuleMatrixInternal => _moduleMatrix;
     private readonly List<BitArray> _moduleMatrix;
 
-    public int Version => _version;
-    private int _version;
+    public int Version { get; private set; }
 
     public QRCodeData(int version)
     {
-        _version = version;
+        Version = version;
         var size = ModulesPerSideFromVersion(version);
         _moduleMatrix = new List<BitArray>();
         for (var i = 0; i < size; i++)
@@ -59,7 +58,7 @@ public class QRCodeData : IDisposable
         //Set QR code version
         var sideLen = (int)bytes[4];
         bytes.RemoveRange(0, 5);
-        _version = (sideLen - 21 - 8) / 4 + 1;
+        Version = (sideLen - 21 - 8) / 4 + 1;
 
         //Unpack
         var modules = new Queue<bool>();
@@ -151,7 +150,7 @@ public class QRCodeData : IDisposable
     public void Dispose()
     {
         _moduleMatrix.Clear();
-        _version = 0;
+        Version = 0;
     }
 
     public enum Compression
