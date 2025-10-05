@@ -68,16 +68,18 @@ public class QRCodeData : IDisposable
         if (bytes[0] != 0x51 || bytes[1] != 0x52 || bytes[2] != 0x52)
             throw new Exception("Invalid raw data file. Filetype doesn't match \"QRR\".");
 
-        // Set QR code version
-        var sideLen = (int)bytes[4];
-        bytes.RemoveRange(0, 5);
+        // read size from header
+        var sideLen = (int)bytes[3];
+
+        // set version from size
         Version = QRCodeVersionFromModulesPerSide(sideLen);
 
         // Unpack
-        var modules = new Queue<bool>();
-        foreach (var b in bytes)
+        var totalBits = sideLen * sideLen;
+        var modules = new Queue<bool>(totalBits);
+        for (int byteIndex = 4; byteIndex < bytes.Count; byteIndex++)
         {
-            var bArr = new BitArray(new byte[] { b });
+            var b = bytes[byteIndex];
             for (int i = 7; i >= 0; i--)
             {
                 modules.Enqueue((b & (1 << i)) != 0);
@@ -90,6 +92,11 @@ public class QRCodeData : IDisposable
         {
             for (int x = 0; x < sideLen; x++)
             {
+                if (modules.Count == 0)
+                {
+                    throw new InvalidOperationException($"Insufficient data: expected {totalBits} bits, "
+                        + $"but only {y * sideLen + x} bits available.");
+                }
                 _moduleMatrix[y, x] = modules.Dequeue();
             }
         }
