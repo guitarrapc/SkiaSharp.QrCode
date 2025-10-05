@@ -5,7 +5,7 @@ namespace SkiaSharp.QrCode;
 
 public class QRCodeData : IDisposable
 {
-    private static readonly byte[] _headerSignature = [0x51, 0x52, 0x52 ]; // "QRR"
+    private static readonly byte[] _headerSignature = [0x51, 0x52, 0x52]; // "QRR"
     /// <summary>
     /// Get the QR code version (1-40)
     /// </summary>
@@ -170,8 +170,13 @@ public class QRCodeData : IDisposable
         }
 
         // Padding to byte boundary
-        var boundary = 8 - (size * size) % 8;
-        for (int i = 0; i < boundary; i++)
+        // Formula: (8 - remainder) % 8
+        // - If remainder = 0 (already aligned): (8 - 0) % 8 = 0 (no padding)
+        // - If remainder = 1-7: (8 - 1-7) % 8 = 7-1 (add padding to align)
+        var totalBits = size * size;
+        var remainder = totalBits % 8;
+        var paddingBits = (8 - remainder) % 8;
+        for (int i = 0; i < paddingBits; i++)
         {
             dataQueue.Enqueue(0);
         }
