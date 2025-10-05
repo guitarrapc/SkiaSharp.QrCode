@@ -87,7 +87,7 @@ public class QRCodeGenerator : IDisposable
 
         // Calculate ECC
         var eccEncoder = new EccTextEncoder();
-        var codeWordWithECC = new List<CodewordBlock>();
+        var codeWordWithECC = new List<CodewordBlock>(eccInfo.BlocksInGroup1);
         // Process group 1 blocks
         for (var i = 0; i < eccInfo.BlocksInGroup1; i++)
         {
