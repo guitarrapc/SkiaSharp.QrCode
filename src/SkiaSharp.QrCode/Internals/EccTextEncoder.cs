@@ -74,7 +74,7 @@ internal class EccTextEncoder
         // Reed-Solomon remainder polynomial R(x) has degree < eccWordCount,
         // so we need exactly eccWordCount coefficients (from x^(n-1) down to x^0).
         // Missing exponents are implicitly 0 (e.g., sparse polynomials).
-        var coeffByExp = BuildCoeffDictionary(leadTermSource.PolyItems);
+        var coeffByExp = BuildCoeffDictionary(leadTermSource.PolyItems, eccWordCount);
         var ecc = new List<string>(eccWordCount);
         for (int exp = eccWordCount - 1; exp >= 0; exp--)
         {
@@ -84,9 +84,9 @@ internal class EccTextEncoder
         return ecc;
 
         // Same as `var coeffByExp = leadTermSource.PolyItems.ToDictionary(p => p.Exponent, p => p.Coefficient);`, but avoid exception on duplicates
-        static Dictionary<int, int> BuildCoeffDictionary(List<PolynomItem> polyItems)
+        static Dictionary<int, int> BuildCoeffDictionary(List<PolynomItem> polyItems, int eccWordCount)
         {
-            var coeffByExp = new Dictionary<int, int>(polyItems.Count);
+            var coeffByExp = new Dictionary<int, int>(Math.Min(polyItems.Count, eccWordCount));
             foreach (var item in polyItems)
             {
                 // If the same exponent already exists, combine using XOR (equivalent to addition in GF(256))
