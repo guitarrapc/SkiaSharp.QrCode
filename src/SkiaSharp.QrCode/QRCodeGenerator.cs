@@ -524,11 +524,13 @@ public class QRCodeGenerator : IDisposable
     /// </summary>
     private List<string> BinaryStringToBitBlockList(string bitString)
     {
-        return new List<char>(bitString.ToCharArray())
-            .Select((x, i) => new { Index = i, Value = x })
-            .GroupBy(x => x.Index / 8)
-            .Select(x => string.Join("", x.Select(v => v.Value.ToString()).ToArray()))
-            .ToList();
+        var byteCount = bitString.Length / 8;
+        var result = new List<string>(byteCount);
+        for (var i = 0; i < byteCount; i++)
+        {
+            result.Add(bitString.Substring(i * 8, 8));
+        }
+        return result;
     }
 
     /// <summary>
