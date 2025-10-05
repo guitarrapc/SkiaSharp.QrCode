@@ -37,7 +37,7 @@ public class QRCodeData : IDisposable
                 {
                     dstream.CopyTo(output);
                 }
-                bytes = new List<byte>(output.ToArray());
+                bytes.AddRange(output.ToArray());
             }
         }
         else if (compressMode.Equals(Compression.GZip))
@@ -49,7 +49,7 @@ public class QRCodeData : IDisposable
                 {
                     dstream.CopyTo(output);
                 }
-                bytes = new List<byte>(output.ToArray());
+                bytes.AddRange(output.ToArray());
             }
         }
 
@@ -59,7 +59,7 @@ public class QRCodeData : IDisposable
         //Set QR code version
         var sideLen = (int)bytes[4];
         bytes.RemoveRange(0, 5);
-        this._version = (sideLen - 21 - 8) / 4 + 1;
+        _version = (sideLen - 21 - 8) / 4 + 1;
 
         //Unpack
         var modules = new Queue<bool>();
@@ -73,13 +73,13 @@ public class QRCodeData : IDisposable
         }
 
         //Build module matrix
-        this._moduleMatrix = new List<BitArray>();
+        _moduleMatrix = new List<BitArray>();
         for (int y = 0; y < sideLen; y++)
         {
-            this._moduleMatrix.Add(new BitArray(sideLen));
+            _moduleMatrix.Add(new BitArray(sideLen));
             for (int x = 0; x < sideLen; x++)
             {
-                this._moduleMatrix[y][x] = modules.Dequeue();
+                _moduleMatrix[y][x] = modules.Dequeue();
             }
         }
 
@@ -89,13 +89,13 @@ public class QRCodeData : IDisposable
     {
         var bytes = new List<byte>();
 
-        //Add header - signature ("QRR")
-        bytes.AddRange(new byte[] { 0x51, 0x52, 0x52, 0x00 });
+        // Add header - signature ("QRR")
+        bytes.AddRange([0x51, 0x52, 0x52, 0x00 ]);
 
-        //Add header - rowsize
+        // Add header - rowsize
         bytes.Add((byte)_moduleMatrix.Count);
 
-        //Build data queue
+        // Build data queue
         var dataQueue = new Queue<int>();
         foreach (var row in _moduleMatrix)
         {
@@ -109,7 +109,7 @@ public class QRCodeData : IDisposable
             dataQueue.Enqueue(0);
         }
 
-        //Process queue
+        // Process queue
         while (dataQueue.Count > 0)
         {
             byte b = 0;
@@ -121,8 +121,8 @@ public class QRCodeData : IDisposable
         }
         var rawData = bytes.ToArray();
 
-        //Compress stream (optional)
-        if (compressMode.Equals(Compression.Deflate))
+        // Compress stream (optional)
+        if (compressMode == Compression.Deflate)
         {
             using (var output = new MemoryStream())
             using (var dstream = new DeflateStream(output, CompressionMode.Compress))
@@ -131,7 +131,7 @@ public class QRCodeData : IDisposable
                 rawData = output.ToArray();
             }
         }
-        else if (compressMode.Equals(Compression.GZip))
+        else if (compressMode == Compression.GZip)
         {
             using (var output = new MemoryStream())
             using (GZipStream gzipStream = new GZipStream(output, CompressionMode.Compress, true))
