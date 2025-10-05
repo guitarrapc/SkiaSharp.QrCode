@@ -19,7 +19,7 @@ public class QRCodeDataUnitTest
         Assert.Equal(expectedSize, qrCode.Size);
 
         // Get raw data
-        var rawData = qrCode.GetRawData(QRCodeData.Compression.Uncompressed);
+        var rawData = qrCode.GetRawData(Compression.Uncompressed);
 
         // Verify byte alignment
         // Expected bytes = ceil((size * size) / 8) + header (4 bytes)
@@ -63,7 +63,7 @@ public class QRCodeDataUnitTest
         Assert.Equal(expectedSize, qrCode.Size);
 
         // Get raw data
-        var rawData = qrCode.GetRawData(QRCodeData.Compression.Uncompressed);
+        var rawData = qrCode.GetRawData(Compression.Uncompressed);
 
         // Verify byte alignment
         var totalBits = expectedSize * expectedSize;
@@ -153,8 +153,8 @@ public class QRCodeDataUnitTest
 
         original.SetModuleMatrix(customMatrix, quietZoneSize: 0);
 
-        var rawData = original.GetRawData(QRCodeData.Compression.Uncompressed);
-        var restored = new QRCodeData(rawData, QRCodeData.Compression.Uncompressed);
+        var rawData = original.GetRawData(Compression.Uncompressed);
+        var restored = new QRCodeData(rawData, Compression.Uncompressed);
 
         Assert.Equal(matrixSize, restored.Size);
 
@@ -215,10 +215,10 @@ public class QRCodeDataUnitTest
     /// □ ■ □ □ ■ □ □ ■ □
     /// </remarks>
     [Theory]
-    [InlineData(QRCodeData.Compression.Uncompressed)]
-    [InlineData(QRCodeData.Compression.Deflate)]
-    [InlineData(QRCodeData.Compression.GZip)]
-    public void Serialization_RoundTrip_AllCompressionModes(QRCodeData.Compression compression)
+    [InlineData(Compression.Uncompressed)]
+    [InlineData(Compression.Deflate)]
+    [InlineData(Compression.GZip)]
+    public void Serialization_RoundTrip_AllCompressionModes(Compression compression)
     {
         // Use (row + col) % 3 to create a pattern that is not too dense.
         // 3 is not 8's multiple, it means it won't dup with byte border.
@@ -278,9 +278,9 @@ public class QRCodeDataUnitTest
         }
 
         // Act
-        var uncompressed = qrCode.GetRawData(QRCodeData.Compression.Uncompressed);
-        var deflate = qrCode.GetRawData(QRCodeData.Compression.Deflate);
-        var gzip = qrCode.GetRawData(QRCodeData.Compression.GZip);
+        var uncompressed = qrCode.GetRawData(Compression.Uncompressed);
+        var deflate = qrCode.GetRawData(Compression.Deflate);
+        var gzip = qrCode.GetRawData(Compression.GZip);
 
         // Assert
         // Compressed data should be smaller than uncompressed (for repetitive patterns)
@@ -311,14 +311,14 @@ public class QRCodeDataUnitTest
         }
 
         // Act & Assert - should not throw
-        var uncompressed = qrCode.GetRawData(QRCodeData.Compression.Uncompressed);
-        var deflate = qrCode.GetRawData(QRCodeData.Compression.Deflate);
-        var gzip = qrCode.GetRawData(QRCodeData.Compression.GZip);
+        var uncompressed = qrCode.GetRawData(Compression.Uncompressed);
+        var deflate = qrCode.GetRawData(Compression.Deflate);
+        var gzip = qrCode.GetRawData(Compression.GZip);
 
         // All should deserialize correctly
-        var restored1 = new QRCodeData(uncompressed, QRCodeData.Compression.Uncompressed);
-        var restored2 = new QRCodeData(deflate, QRCodeData.Compression.Deflate);
-        var restored3 = new QRCodeData(gzip, QRCodeData.Compression.GZip);
+        var restored1 = new QRCodeData(uncompressed, Compression.Uncompressed);
+        var restored2 = new QRCodeData(deflate, Compression.Deflate);
+        var restored3 = new QRCodeData(gzip, Compression.GZip);
 
         Assert.Equal(size, restored1.Size);
         Assert.Equal(size, restored2.Size);
@@ -333,20 +333,20 @@ public class QRCodeDataUnitTest
     {
         // Arrange
         var qrCode = new QRCodeData(1);
-        var compressedData = qrCode.GetRawData(QRCodeData.Compression.Deflate);
+        var compressedData = qrCode.GetRawData(Compression.Deflate);
 
         // Act & Assert - trying to decompress with wrong mode should fail
         Assert.ThrowsAny<Exception>(() =>
-            new QRCodeData(compressedData, QRCodeData.Compression.Uncompressed));
+            new QRCodeData(compressedData, Compression.Uncompressed));
     }
 
     /// <summary>
     /// Tests that corrupted compressed data throws exception
     /// </summary>
     [Theory]
-    [InlineData(QRCodeData.Compression.Deflate)]
-    [InlineData(QRCodeData.Compression.GZip)]
-    public void Deserialization_CorruptedData_ThrowsException(QRCodeData.Compression compression)
+    [InlineData(Compression.Deflate)]
+    [InlineData(Compression.GZip)]
+    public void Deserialization_CorruptedData_ThrowsException(Compression compression)
     {
         // Arrange
         var qrCode = new QRCodeData(1);
@@ -365,13 +365,13 @@ public class QRCodeDataUnitTest
     /// Verifies compression with different QR code sizes
     /// </summary>
     [Theory]
-    [InlineData(1, QRCodeData.Compression.Deflate)]
-    [InlineData(1, QRCodeData.Compression.GZip)]
-    [InlineData(10, QRCodeData.Compression.Deflate)]
-    [InlineData(10, QRCodeData.Compression.GZip)]
-    [InlineData(40, QRCodeData.Compression.Deflate)]
-    [InlineData(40, QRCodeData.Compression.GZip)]
-    public void Compression_VariousSizesAndModes(int version, QRCodeData.Compression compression)
+    [InlineData(1, Compression.Deflate)]
+    [InlineData(1, Compression.GZip)]
+    [InlineData(10, Compression.Deflate)]
+    [InlineData(10, Compression.GZip)]
+    [InlineData(40, Compression.Deflate)]
+    [InlineData(40, Compression.GZip)]
+    public void Compression_VariousSizesAndModes(int version, Compression compression)
     {
         // Arrange
         var original = new QRCodeData(version);
@@ -408,11 +408,11 @@ public class QRCodeDataUnitTest
     /// Tests compression with all black and all white patterns
     /// </summary>
     [Theory]
-    [InlineData(true, QRCodeData.Compression.Deflate)]   // All black
-    [InlineData(false, QRCodeData.Compression.Deflate)]  // All white
-    [InlineData(true, QRCodeData.Compression.GZip)]      // All black
-    [InlineData(false, QRCodeData.Compression.GZip)]     // All white
-    public void Compression_UniformPatterns(bool value, QRCodeData.Compression compression)
+    [InlineData(true, Compression.Deflate)]   // All black
+    [InlineData(false, Compression.Deflate)]  // All white
+    [InlineData(true, Compression.GZip)]      // All black
+    [InlineData(false, Compression.GZip)]     // All white
+    public void Compression_UniformPatterns(bool value, Compression compression)
     {
         // Arrange
         var qrCode = new QRCodeData(5);
@@ -428,7 +428,7 @@ public class QRCodeDataUnitTest
         }
 
         // Act
-        var uncompressed = qrCode.GetRawData(QRCodeData.Compression.Uncompressed);
+        var uncompressed = qrCode.GetRawData(Compression.Uncompressed);
         var compressed = qrCode.GetRawData(compression);
         var restored = new QRCodeData(compressed, compression);
 

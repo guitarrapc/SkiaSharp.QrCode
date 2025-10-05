@@ -1,10 +1,22 @@
 using System.IO.Compression;
+using System.Runtime.CompilerServices;
 
 namespace SkiaSharp.QrCode;
 
+/// <summary>
+/// Represents QR code data as a 2D boolean matrix.
+/// Supports serialization/deserialization with optional compression.
+/// </summary>
+/// <remarks>
+/// QR code structure:
+/// - Version: 1-40 (determines size: 21×21 to 177×177)
+/// - Module matrix: 2D array of boolean values (dark/light)
+/// - Serialization format: "QRR" header + size + bit-packed data
+/// </remarks>
 public class QRCodeData : IDisposable
 {
     private static readonly byte[] _headerSignature = [0x51, 0x52, 0x52]; // "QRR"
+
     /// <summary>
     /// Get the QR code version (1-40)
     /// </summary>
@@ -12,15 +24,17 @@ public class QRCodeData : IDisposable
 
     private bool[,] _moduleMatrix;
     /// <summary>
-    /// Internal direct access to the module matrix for bulk operations.
-    /// </summary>
-    internal bool[,] ModuleMatrixInternal => _moduleMatrix;
-
-    /// <summary>
-    /// Get the size of the QR code module matrix (width and height in modules)
+    /// Gets the size of the QR code matrix (modules per side).
+    /// Includes quiet zone if added via <see cref="SetModuleMatrix"/>.
     /// </summary>
     public int Size => _moduleMatrix.GetLength(0);
 
+    /// <summary>
+    /// Gets or sets the module state at the specified position.
+    /// </summary>
+    /// <param name="row">Row index (0-based).</param>
+    /// <param name="col">Column index (0-based).</param>
+    /// <returns>True if module is dark/black, false if light/white.</returns>
     public bool this[int row, int col]
     {
         get => _moduleMatrix[row, col];
@@ -30,50 +44,101 @@ public class QRCodeData : IDisposable
     public QRCodeData(int version)
     {
         Version = version;
-        var size = ModulesPerSideFromVersion(version);
+        var size = SizeFromVersion(version);
         _moduleMatrix = new bool[size, size];
     }
 
     public QRCodeData(byte[] rawData, Compression compressMode)
     {
+        // Decompress
         var bytes = DecompressData(rawData, compressMode);
 
-        // validate header
-        if (bytes[0] != 0x51 || bytes[1] != 0x52 || bytes[2] != 0x52)
-            throw new Exception("Invalid raw data file. Filetype doesn't match \"QRR\".");
+        // Validate minimum size
+        if (bytes.Length < 4)
+            throw new InvalidDataException($"Invalid QR code data: too short ({bytes.Length} bytes).");
 
-        // read size from header
+        // Validate header
+        if (bytes[0] != 0x51 || bytes[1] != 0x52 || bytes[2] != 0x52)
+            throw new InvalidDataException("Invalid QR code data: header mismatch.");
+
+        // Read and validate size
         var sideLen = (int)bytes[3];
+        if (sideLen < 21 || sideLen > 177)
+            throw new InvalidDataException($"Invalid QR code size: {sideLen}.");
 
         // set version from size
         Version = VersionFromSize(sideLen);
 
         // unpack
         var totalBits = sideLen * sideLen;
-        var modules = new Queue<bool>(totalBits);
-        for (int byteIndex = 4; byteIndex < bytes.Length; byteIndex++)
+        _moduleMatrix = new bool[sideLen, sideLen];
+        var bitIndex = 0;
+        for (var byteIndex = 4; byteIndex < bytes.Length && bitIndex < totalBits; byteIndex++)
         {
             var b = bytes[byteIndex];
-            for (int i = 7; i >= 0; i--)
+            for (int i = 7; i >= 0 && bitIndex < totalBits; i--)
             {
-                modules.Enqueue((b & (1 << i)) != 0);
+                var y = bitIndex / sideLen;
+                var x = bitIndex % sideLen;
+                _moduleMatrix[y, x] = (b & (1 << i)) != 0;
+                bitIndex++;
             }
         }
 
-        // Build module matrix
-        _moduleMatrix = new bool[sideLen, sideLen];
-        for (int y = 0; y < sideLen; y++)
+        if (bitIndex < totalBits)
         {
-            for (int x = 0; x < sideLen; x++)
-            {
-                if (modules.Count == 0)
-                {
-                    throw new InvalidOperationException($"Insufficient data: expected {totalBits} bits, "
-                        + $"but only {y * sideLen + x} bits available.");
-                }
-                _moduleMatrix[y, x] = modules.Dequeue();
-            }
+            throw new InvalidOperationException($"Insufficient data: expected {totalBits} bits, got {bitIndex}.");
         }
+    }
+
+    /// <summary>
+    /// Generates a raw byte array representation of the data, with optional compression.
+    /// </summary>
+    /// <remarks>
+    /// The raw data includes a header followed by the encoded data. The header consists of a
+    /// signature and the row size. The data is padded to ensure alignment to the nearest byte boundary. Compression, if
+    /// specified, is applied to the entire data stream after it is constructed.
+    /// </remarks>
+    /// <param name="compressMode"></param>
+    internal byte[] GetRawData(Compression compressMode)
+    {
+        var bytes = new List<byte>();
+
+        // Add header - signature ("QRR") & raw size
+        bytes.AddRange(_headerSignature);
+        bytes.Add((byte)Size);
+
+        // Pack bits directly into bytes
+        var size = Size;
+        var totalBits = size * size;
+        var paddingBits = GetPaddingBits(totalBits);
+        var totalBitsWithPadding = totalBits + paddingBits;
+        var totalBytes = totalBitsWithPadding / 8;
+
+        var bitIndex = 0;
+        for (var byteIndex = 0; byteIndex < totalBytes; byteIndex++)
+        {
+            byte b = 0;
+            for (var i = 7; i >= 0; i--)
+            {
+                if (bitIndex < totalBits)
+                {
+                    var row = bitIndex / size;
+                    var col = bitIndex % size;
+                    if (_moduleMatrix[row, col])
+                    {
+                        b |= (byte)(1 << i);
+                    }
+                }
+                // else padding bits are 0
+                bitIndex++;
+            }
+            bytes.Add(b);
+        }
+
+        // Compress stream
+        var rawData = bytes.ToArray();
+        return CompressData(rawData, compressMode);
     }
 
     /// <summary>
@@ -86,7 +151,7 @@ public class QRCodeData : IDisposable
     /// </remarks>
     /// <param name="moduleMatrix">New module matrix.</param>
     /// <param name="quietZoneSize">Quiet zone size in modules (0 if matrix doesn't include quiet zone).</param>
-    public void SetModuleMatrix(bool[,] moduleMatrix, int quietZoneSize)
+    internal void SetModuleMatrix(bool[,] moduleMatrix, int quietZoneSize)
     {
         var totalSize = moduleMatrix.GetLength(0);
         var sizeWithoutQuietZone = totalSize - (quietZoneSize * 2);
@@ -105,67 +170,6 @@ public class QRCodeData : IDisposable
 
         _moduleMatrix = moduleMatrix;
         Version = calculatedVersion;
-    }
-
-    /// <summary>
-    /// Generates a raw byte array representation of the data, with optional compression.
-    /// </summary>
-    /// <remarks>
-    /// The raw data includes a header followed by the encoded data. The header consists of a
-    /// signature and the row size. The data is padded to ensure alignment to the nearest byte boundary. Compression, if
-    /// specified, is applied to the entire data stream after it is constructed.
-    /// </remarks>
-    /// <param name="compressMode"></param>
-    public byte[] GetRawData(Compression compressMode)
-    {
-        var bytes = new List<byte>();
-
-        // Add header - signature ("QRR") & raw size
-        bytes.AddRange(_headerSignature);
-        bytes.Add((byte)Size);
-
-        // Build data queue
-        var dataQueue = new Queue<int>();
-        var size = Size;
-        for (var row = 0; row < size; row++)
-        {
-            for (var col = 0; col < size; col++)
-            {
-                dataQueue.Enqueue(_moduleMatrix[row, col] ? 1 : 0);
-            }
-        }
-
-        // Padding to byte boundary
-        // Formula: (8 - remainder) % 8
-        // - If remainder = 0 (already aligned): (8 - 0) % 8 = 0 (no padding)
-        // - If remainder = 1-7: (8 - 1-7) % 8 = 7-1 (add padding to align)
-        var totalBits = size * size;
-        var paddingBits = GetPaddingBits(totalBits);
-        for (int i = 0; i < paddingBits; i++)
-        {
-            dataQueue.Enqueue(0);
-        }
-
-        // pack bits into bytes
-        while (dataQueue.Count > 0)
-        {
-            byte b = 0;
-            for (int i = 7; i >= 0; i--)
-            {
-                b += (byte)(dataQueue.Dequeue() << i);
-            }
-            bytes.Add(b);
-        }
-        var rawData = bytes.ToArray();
-
-        // Compress stream
-        return CompressData(rawData, compressMode);
-
-        static int GetPaddingBits(int totalBits)
-        {
-            var remainder = totalBits % 8;
-            return (8 - remainder) % 8;
-        }
     }
 
     /// <summary>
@@ -230,7 +234,8 @@ public class QRCodeData : IDisposable
     /// </summary>
     /// <param name="version"></param>
     /// <returns></returns>
-    private static int ModulesPerSideFromVersion(int version)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int SizeFromVersion(int version)
     {
         return 21 + (version - 1) * 4;
     }
@@ -242,20 +247,26 @@ public class QRCodeData : IDisposable
     /// </summary>
     /// <param name="sizeWithoutQuietZone"></param>
     /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int VersionFromSize(int sizeWithoutQuietZone)
     {
         return (sizeWithoutQuietZone - 21) / 4 + 1;
     }
 
-    public void Dispose()
+    /// <summary>
+    /// Calculate number of padding bits needed to align totalBits to next byte boundary.
+    /// </summary>
+    /// <param name="totalBits"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int GetPaddingBits(int totalBits)
     {
-        Version = 0;
+        var remainder = totalBits % 8;
+        return (8 - remainder) % 8;
     }
 
-    public enum Compression
+    public void Dispose()
     {
-        Uncompressed,
-        Deflate,
-        GZip
+        // will be removed in future, or remain.
     }
 }
