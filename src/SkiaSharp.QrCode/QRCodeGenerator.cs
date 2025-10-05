@@ -524,11 +524,22 @@ public class QRCodeGenerator : IDisposable
     /// </summary>
     private List<string> BinaryStringToBitBlockList(string bitString)
     {
-        return new List<char>(bitString.ToCharArray())
-            .Select((x, i) => new { Index = i, Value = x })
-            .GroupBy(x => x.Index / 8)
-            .Select(x => string.Join("", x.Select(v => v.Value.ToString()).ToArray()))
-            .ToList();
+        if (bitString.Length % 8 != 0)
+        {
+            var remainder = bitString.Length % 8;
+            throw new ArgumentException($"Binary string length must be a multiple of 8. "
+                + $"Length: {bitString.Length}, Remainder: {remainder} bits. "
+                + $"Data may be corrupted or improperly padded.",
+                nameof(bitString));
+        }
+
+        var byteCount = bitString.Length / 8;
+        var result = new List<string>(byteCount);
+        for (var i = 0; i < byteCount; i++)
+        {
+            result.Add(bitString.Substring(i * 8, 8));
+        }
+        return result;
     }
 
     /// <summary>
@@ -537,9 +548,12 @@ public class QRCodeGenerator : IDisposable
     /// </summary>
     private List<int> BinaryStringListToDecList(List<string> binaryStringList)
     {
-        return binaryStringList
-            .Select(binaryString => BinToDec(binaryString))
-            .ToList();
+        var result = new List<int>(binaryStringList.Count);
+        foreach (var item in binaryStringList)
+        {
+            result.Add(BinToDec(item));
+        }
+        return result;
     }
 
     /// <summary>
