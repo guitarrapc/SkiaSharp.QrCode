@@ -3,7 +3,7 @@ using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
-public class QrCodeConstantsUnitTest
+public class QRCodeConstantsUnitTest
 {
     [Theory]
     [InlineData('0', true)]
