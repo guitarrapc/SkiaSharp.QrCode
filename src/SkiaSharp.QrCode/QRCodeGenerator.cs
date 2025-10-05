@@ -539,9 +539,12 @@ public class QRCodeGenerator : IDisposable
     /// </summary>
     private List<int> BinaryStringListToDecList(List<string> binaryStringList)
     {
-        return binaryStringList
-            .Select(binaryString => BinToDec(binaryString))
-            .ToList();
+        var result = new List<int>(binaryStringList.Count);
+        foreach (var item in binaryStringList)
+        {
+            result.Add(BinToDec(item));
+        }
+        return result;
     }
 
     /// <summary>
