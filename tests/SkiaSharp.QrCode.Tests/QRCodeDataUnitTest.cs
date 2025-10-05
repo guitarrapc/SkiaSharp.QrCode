@@ -154,4 +154,234 @@ public class QRCodeDataUnitTest
         Assert.Equal(5, qrCode.Version);
         Assert.Equal(37, qrCode.Size);
     }
+
+    /// <summary>
+    /// Tests serialization/deserialization with all compression modes
+    /// </summary>
+    [Theory]
+    [InlineData(QRCodeData.Compression.Uncompressed)]
+    [InlineData(QRCodeData.Compression.Deflate)]
+    [InlineData(QRCodeData.Compression.GZip)]
+    public void Serialization_RoundTrip_AllCompressionModes(QRCodeData.Compression compression)
+    {
+        // Arrange
+        var original = new QRCodeData(5);  // Version 5: 37×37
+        var size = original.Size;
+
+        // Set recognizable pattern
+        for (int row = 0; row < size; row++)
+        {
+            for (int col = 0; col < size; col++)
+            {
+                original[row, col] = (row + col) % 3 == 0;
+            }
+        }
+
+        // Act
+        var rawData = original.GetRawData(compression);
+        var restored = new QRCodeData(rawData, compression);
+
+        // Assert
+        Assert.Equal(original.Version, restored.Version);
+        Assert.Equal(original.Size, restored.Size);
+
+        for (int row = 0; row < size; row++)
+        {
+            for (int col = 0; col < size; col++)
+            {
+                Assert.Equal(original[row, col], restored[row, col]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Verifies that compression actually reduces data size
+    /// </summary>
+    [Theory]
+    [InlineData(1)]   // Version 1: small QR code
+    [InlineData(10)]  // Version 10: medium QR code
+    [InlineData(20)]  // Version 20: large QR code
+    public void Compression_ReducesDataSize(int version)
+    {
+        // Arrange
+        var qrCode = new QRCodeData(version);
+        var size = qrCode.Size;
+
+        // Set pattern with repetition (compressible)
+        for (int row = 0; row < size; row++)
+        {
+            for (int col = 0; col < size; col++)
+            {
+                qrCode[row, col] = (row / 4 + col / 4) % 2 == 0;
+            }
+        }
+
+        // Act
+        var uncompressed = qrCode.GetRawData(QRCodeData.Compression.Uncompressed);
+        var deflate = qrCode.GetRawData(QRCodeData.Compression.Deflate);
+        var gzip = qrCode.GetRawData(QRCodeData.Compression.GZip);
+
+        // Assert
+        // Compressed data should be smaller than uncompressed (for repetitive patterns)
+        Assert.True(deflate.Length < uncompressed.Length,
+            $"Deflate ({deflate.Length} bytes) should be smaller than uncompressed ({uncompressed.Length} bytes)");
+        Assert.True(gzip.Length < uncompressed.Length,
+            $"GZip ({gzip.Length} bytes) should be smaller than uncompressed ({uncompressed.Length} bytes)");
+    }
+
+    /// <summary>
+    /// Verifies that compression works with random (non-compressible) data
+    /// </summary>
+    [Fact]
+    public void Compression_WorksWithRandomData()
+    {
+        // Arrange
+        var qrCode = new QRCodeData(5);
+        var size = qrCode.Size;
+        var random = new Random(42);  // Fixed seed for reproducibility
+
+        // Set random pattern (not compressible)
+        for (int row = 0; row < size; row++)
+        {
+            for (int col = 0; col < size; col++)
+            {
+                qrCode[row, col] = random.Next(2) == 1;
+            }
+        }
+
+        // Act & Assert - should not throw
+        var uncompressed = qrCode.GetRawData(QRCodeData.Compression.Uncompressed);
+        var deflate = qrCode.GetRawData(QRCodeData.Compression.Deflate);
+        var gzip = qrCode.GetRawData(QRCodeData.Compression.GZip);
+
+        // All should deserialize correctly
+        var restored1 = new QRCodeData(uncompressed, QRCodeData.Compression.Uncompressed);
+        var restored2 = new QRCodeData(deflate, QRCodeData.Compression.Deflate);
+        var restored3 = new QRCodeData(gzip, QRCodeData.Compression.GZip);
+
+        Assert.Equal(size, restored1.Size);
+        Assert.Equal(size, restored2.Size);
+        Assert.Equal(size, restored3.Size);
+    }
+
+    /// <summary>
+    /// Tests that wrong compression mode throws exception
+    /// </summary>
+    [Fact]
+    public void Deserialization_WrongCompressionMode_ThrowsException()
+    {
+        // Arrange
+        var qrCode = new QRCodeData(1);
+        var compressedData = qrCode.GetRawData(QRCodeData.Compression.Deflate);
+
+        // Act & Assert - trying to decompress with wrong mode should fail
+        Assert.ThrowsAny<Exception>(() =>
+            new QRCodeData(compressedData, QRCodeData.Compression.Uncompressed));
+    }
+
+    /// <summary>
+    /// Tests that corrupted compressed data throws exception
+    /// </summary>
+    [Theory]
+    [InlineData(QRCodeData.Compression.Deflate)]
+    [InlineData(QRCodeData.Compression.GZip)]
+    public void Deserialization_CorruptedData_ThrowsException(QRCodeData.Compression compression)
+    {
+        // Arrange
+        var qrCode = new QRCodeData(1);
+        var compressedData = qrCode.GetRawData(compression);
+
+        // Corrupt the data (change middle bytes)
+        var corrupted = new byte[compressedData.Length];
+        Array.Copy(compressedData, corrupted, compressedData.Length);
+        corrupted[compressedData.Length / 2] ^= 0xFF;  // Flip bits in the middle
+
+        // Act & Assert
+        Assert.ThrowsAny<Exception>(() => new QRCodeData(corrupted, compression));
+    }
+
+    /// <summary>
+    /// Verifies compression with different QR code sizes
+    /// </summary>
+    [Theory]
+    [InlineData(1, QRCodeData.Compression.Deflate)]
+    [InlineData(1, QRCodeData.Compression.GZip)]
+    [InlineData(10, QRCodeData.Compression.Deflate)]
+    [InlineData(10, QRCodeData.Compression.GZip)]
+    [InlineData(40, QRCodeData.Compression.Deflate)]
+    [InlineData(40, QRCodeData.Compression.GZip)]
+    public void Compression_VariousSizesAndModes(int version, QRCodeData.Compression compression)
+    {
+        // Arrange
+        var original = new QRCodeData(version);
+        var size = original.Size;
+
+        // Set checkerboard pattern
+        for (int row = 0; row < size; row++)
+        {
+            for (int col = 0; col < size; col++)
+            {
+                original[row, col] = (row + col) % 2 == 0;
+            }
+        }
+
+        // Act
+        var rawData = original.GetRawData(compression);
+        var restored = new QRCodeData(rawData, compression);
+
+        // Assert
+        Assert.Equal(original.Version, restored.Version);
+        Assert.Equal(original.Size, restored.Size);
+
+        // Verify data integrity
+        for (int row = 0; row < size; row++)
+        {
+            for (int col = 0; col < size; col++)
+            {
+                Assert.Equal(original[row, col], restored[row, col]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tests compression with all black and all white patterns
+    /// </summary>
+    [Theory]
+    [InlineData(true, QRCodeData.Compression.Deflate)]   // All black
+    [InlineData(false, QRCodeData.Compression.Deflate)]  // All white
+    [InlineData(true, QRCodeData.Compression.GZip)]      // All black
+    [InlineData(false, QRCodeData.Compression.GZip)]     // All white
+    public void Compression_UniformPatterns(bool value, QRCodeData.Compression compression)
+    {
+        // Arrange
+        var qrCode = new QRCodeData(5);
+        var size = qrCode.Size;
+
+        // Fill with uniform value (highly compressible)
+        for (int row = 0; row < size; row++)
+        {
+            for (int col = 0; col < size; col++)
+            {
+                qrCode[row, col] = value;
+            }
+        }
+
+        // Act
+        var uncompressed = qrCode.GetRawData(QRCodeData.Compression.Uncompressed);
+        var compressed = qrCode.GetRawData(compression);
+        var restored = new QRCodeData(compressed, compression);
+
+        // Assert
+        // Uniform pattern should compress very well
+        Assert.True(compressed.Length < uncompressed.Length, $"Compressed ({compressed.Length} bytes) should be much smaller than uncompressed ({uncompressed.Length} bytes)");
+
+        // Verify data integrity
+        for (int row = 0; row < size; row++)
+        {
+            for (int col = 0; col < size; col++)
+            {
+                Assert.Equal(value, restored[row, col]);
+            }
+        }
+    }
 }
