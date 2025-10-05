@@ -102,21 +102,26 @@ public class QRCodeData : IDisposable
     /// <param name="compressMode"></param>
     internal byte[] GetRawData(Compression compressMode)
     {
-        var bytes = new List<byte>();
-
-        // Add header - signature ("QRR") & raw size
-        bytes.AddRange(_headerSignature);
-        bytes.Add((byte)Size);
-
-        // Pack bits directly into bytes
+        // size calculations
         var size = Size;
         var totalBits = size * size;
         var paddingBits = GetPaddingBits(totalBits);
         var totalBitsWithPadding = totalBits + paddingBits;
-        var totalBytes = totalBitsWithPadding / 8;
+        var dataBytes = totalBitsWithPadding / 8;
+        var headerSize = _headerSignature.Length + 1; // signature length + 1 byte for size
+        var totalSize = headerSize + dataBytes;
 
+        var bytes = new byte[totalSize];
+
+        // Write header - signature ("QRR") & raw size
+        bytes[0] = _headerSignature[0];
+        bytes[1] = _headerSignature[1];
+        bytes[2] = _headerSignature[2];
+        bytes[3] = (byte)Size;
+
+        // Pack bits into bytes
         var bitIndex = 0;
-        for (var byteIndex = 0; byteIndex < totalBytes; byteIndex++)
+        for (var byteIndex = 0; byteIndex < dataBytes; byteIndex++)
         {
             byte b = 0;
             for (var i = 7; i >= 0; i--)
@@ -133,12 +138,11 @@ public class QRCodeData : IDisposable
                 // else padding bits are 0
                 bitIndex++;
             }
-            bytes.Add(b);
+            bytes[headerSize + byteIndex] = b;
         }
 
         // Compress stream
-        var rawData = bytes.ToArray();
-        return CompressData(rawData, compressMode);
+        return CompressData(bytes, compressMode);
     }
 
     /// <summary>
