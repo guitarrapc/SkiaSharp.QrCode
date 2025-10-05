@@ -46,7 +46,7 @@ public class QRCodeData : IDisposable
         var sideLen = (int)bytes[3];
 
         // set version from size
-        Version = QRCodeVersionFromModulesPerSide(sideLen);
+        Version = VersionFromSize(sideLen);
 
         // unpack
         var totalBits = sideLen * sideLen;
@@ -73,12 +73,6 @@ public class QRCodeData : IDisposable
                 }
                 _moduleMatrix[y, x] = modules.Dequeue();
             }
-        }
-
-        // Version will be calculated from size
-        static int QRCodeVersionFromModulesPerSide(int modulesPerSide)
-        {
-            return (modulesPerSide - 21 - 8) / 4 + 1;
         }
     }
 
