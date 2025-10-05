@@ -5,16 +5,22 @@ namespace SkiaSharp.QrCode;
 
 public class QRCodeData : IDisposable
 {
-    // TODO: Public List is not a good idea. Change to IReadOnlyList or similar.
-    public List<BitArray> ModuleMatrix { get; set; }
+    public IReadOnlyList<BitArray> ModuleMatrix => _moduleMatrix;
+    internal List<BitArray> ModuleMatrixInternal => _moduleMatrix;
+    private readonly List<BitArray> _moduleMatrix;
+
+    public int Version => _version;
+    private int _version;
 
     public QRCodeData(int version)
     {
-        this.Version = version;
+        _version = version;
         var size = ModulesPerSideFromVersion(version);
-        this.ModuleMatrix = new List<BitArray>();
+        _moduleMatrix = new List<BitArray>();
         for (var i = 0; i < size; i++)
-            this.ModuleMatrix.Add(new BitArray(size));
+        {
+            _moduleMatrix.Add(new BitArray(size));
+        }
     }
 
     public QRCodeData(byte[] rawData, Compression compressMode)
@@ -53,7 +59,7 @@ public class QRCodeData : IDisposable
         //Set QR code version
         var sideLen = (int)bytes[4];
         bytes.RemoveRange(0, 5);
-        this.Version = (sideLen - 21 - 8) / 4 + 1;
+        this._version = (sideLen - 21 - 8) / 4 + 1;
 
         //Unpack
         var modules = new Queue<bool>();
@@ -67,13 +73,13 @@ public class QRCodeData : IDisposable
         }
 
         //Build module matrix
-        this.ModuleMatrix = new List<BitArray>();
+        this._moduleMatrix = new List<BitArray>();
         for (int y = 0; y < sideLen; y++)
         {
-            this.ModuleMatrix.Add(new BitArray(sideLen));
+            this._moduleMatrix.Add(new BitArray(sideLen));
             for (int x = 0; x < sideLen; x++)
             {
-                this.ModuleMatrix[y][x] = modules.Dequeue();
+                this._moduleMatrix[y][x] = modules.Dequeue();
             }
         }
 
@@ -87,18 +93,18 @@ public class QRCodeData : IDisposable
         bytes.AddRange(new byte[] { 0x51, 0x52, 0x52, 0x00 });
 
         //Add header - rowsize
-        bytes.Add((byte)ModuleMatrix.Count);
+        bytes.Add((byte)_moduleMatrix.Count);
 
         //Build data queue
         var dataQueue = new Queue<int>();
-        foreach (var row in ModuleMatrix)
+        foreach (var row in _moduleMatrix)
         {
             foreach (var module in row)
             {
                 dataQueue.Enqueue((bool)module ? 1 : 0);
             }
         }
-        for (int i = 0; i < 8 - (ModuleMatrix.Count * ModuleMatrix.Count) % 8; i++)
+        for (int i = 0; i < 8 - (_moduleMatrix.Count * _moduleMatrix.Count) % 8; i++)
         {
             dataQueue.Enqueue(0);
         }
@@ -137,8 +143,6 @@ public class QRCodeData : IDisposable
         return rawData;
     }
 
-    public int Version { get; private set; }
-
     private static int ModulesPerSideFromVersion(int version)
     {
         return 21 + (version - 1) * 4;
@@ -146,8 +150,8 @@ public class QRCodeData : IDisposable
 
     public void Dispose()
     {
-        this.ModuleMatrix.Clear();
-        this.Version = 0;
+        _moduleMatrix.Clear();
+        _version = 0;
     }
 
     public enum Compression

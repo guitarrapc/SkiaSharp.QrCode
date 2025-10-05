@@ -582,11 +582,11 @@ public class QRCodeGenerator : IDisposable
             }
             for (var i = 0; i < quietZoneSize; i++)
             {
-                qrCode.ModuleMatrix.Insert(0, new BitArray(quietLine));
+                qrCode.ModuleMatrixInternal.Insert(0, new BitArray(quietLine));
             }
             for (var i = 0; i < quietZoneSize; i++)
             {
-                qrCode.ModuleMatrix.Add(new BitArray(quietLine));
+                qrCode.ModuleMatrixInternal.Add(new BitArray(quietLine));
             }
             for (var i = quietZoneSize; i < qrCode.ModuleMatrix.Count - quietZoneSize; i++)
             {
@@ -594,7 +594,7 @@ public class QRCodeGenerator : IDisposable
                 var tmpLine = new List<bool>(quietPart);
                 tmpLine.AddRange(qrCode.ModuleMatrix[i].Cast<bool>());
                 tmpLine.AddRange(quietPart);
-                qrCode.ModuleMatrix[i] = new BitArray(tmpLine.ToArray());
+                qrCode.ModuleMatrixInternal[i] = new BitArray(tmpLine.ToArray());
             }
         }
 

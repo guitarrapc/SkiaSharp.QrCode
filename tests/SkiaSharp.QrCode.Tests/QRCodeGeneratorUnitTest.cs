@@ -384,7 +384,7 @@ public class QRCodeGeneratorUnitTest
         return sizeWithoutQuietSone + (quietZoneSize * 2);
     }
 
-    private static string SerializeMatrix(List<BitArray> matrix)
+    private static string SerializeMatrix(IReadOnlyList<BitArray> matrix)
     {
         var sb = new StringBuilder(matrix.Count * matrix.Count);
         foreach (var row in matrix)
