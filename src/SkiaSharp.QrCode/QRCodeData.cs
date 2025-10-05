@@ -70,29 +70,23 @@ public class QRCodeData : IDisposable
 
         // unpack
         var totalBits = sideLen * sideLen;
-        var modules = new Queue<bool>(totalBits);
-        for (int byteIndex = 4; byteIndex < bytes.Length; byteIndex++)
+        _moduleMatrix = new bool[sideLen, sideLen];
+        var bitIndex = 0;
+        for (var byteIndex = 4; byteIndex < bytes.Length && bitIndex < totalBits; byteIndex++)
         {
             var b = bytes[byteIndex];
-            for (int i = 7; i >= 0; i--)
+            for (int i = 7; i >= 0 && bitIndex < totalBits; i--)
             {
-                modules.Enqueue((b & (1 << i)) != 0);
+                var y = bitIndex / sideLen;
+                var x = bitIndex % sideLen;
+                _moduleMatrix[y, x] = (b & (1 << i)) != 0;
+                bitIndex++;
             }
         }
 
-        // Build module matrix
-        _moduleMatrix = new bool[sideLen, sideLen];
-        for (int y = 0; y < sideLen; y++)
+        if (bitIndex < totalBits)
         {
-            for (int x = 0; x < sideLen; x++)
-            {
-                if (modules.Count == 0)
-                {
-                    throw new InvalidOperationException($"Insufficient data: expected {totalBits} bits, "
-                        + $"but only {y * sideLen + x} bits available.");
-                }
-                _moduleMatrix[y, x] = modules.Dequeue();
-            }
+            throw new InvalidOperationException($"Insufficient data: expected {totalBits} bits, got {bitIndex}.");
         }
     }
 
@@ -155,10 +149,7 @@ public class QRCodeData : IDisposable
             }
         }
 
-        // Padding to byte boundary
-        // Formula: (8 - remainder) % 8
-        // - If remainder = 0 (already aligned): (8 - 0) % 8 = 0 (no padding)
-        // - If remainder = 1-7: (8 - 1-7) % 8 = 7-1 (add padding to align)
+        // Padding
         var totalBits = size * size;
         var paddingBits = GetPaddingBits(totalBits);
         for (int i = 0; i < paddingBits; i++)
@@ -180,12 +171,6 @@ public class QRCodeData : IDisposable
 
         // Compress stream
         return CompressData(rawData, compressMode);
-
-        static int GetPaddingBits(int totalBits)
-        {
-            var remainder = totalBits % 8;
-            return (8 - remainder) % 8;
-        }
     }
 
     /// <summary>
@@ -269,15 +254,27 @@ public class QRCodeData : IDisposable
         return (sizeWithoutQuietZone - 21) / 4 + 1;
     }
 
+    /// <summary>
+    /// Calculate number of padding bits needed to align totalBits to next byte boundary.
+    /// </summary>
+    /// <param name="totalBits"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    static int GetPaddingBits(int totalBits)
+    {
+        var remainder = totalBits % 8;
+        return (8 - remainder) % 8;
+    }
+
     public void Dispose()
     {
         // Can be removed in future.
     }
 
     public enum Compression
-    {
-        Uncompressed,
-        Deflate,
-        GZip
-    }
+{
+    Uncompressed,
+    Deflate,
+    GZip
+}
 }
