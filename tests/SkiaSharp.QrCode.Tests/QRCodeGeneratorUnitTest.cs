@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Text;
 using Xunit;
 using SkiaSharp.QrCode.Internals;
@@ -112,8 +111,7 @@ public class QRCodeGeneratorUnitTest
         var generator = new QRCodeGenerator();
         var qr = generator.CreateQrCode(text, eccLevel);
 
-        Assert.NotNull(qr.ModuleMatrix);
-        Assert.True(qr.ModuleMatrix.Count >= 21); // Min size = 21x21
+        Assert.True(qr.Size >= 21); // Min size = 21x21
     }
 
     [Theory]
@@ -134,8 +132,8 @@ public class QRCodeGeneratorUnitTest
         var text = new string('1', maxChars);
 
         var qr = generator.CreateQrCode(text, eccLevel);
-        var version = CalculateVersion(qr.ModuleMatrix.Count);
-        var actualSize = qr.ModuleMatrix.Count;
+        var version = CalculateVersion(qr.Size);
+        var actualSize = qr.Size;
 
         Assert.Equal(expectedVersion, version);
         Assert.Equal(expectedSize, actualSize);
@@ -173,8 +171,7 @@ public class QRCodeGeneratorUnitTest
         var generator = new QRCodeGenerator();
         var qr = generator.CreateQrCode(text, eccLevel);
 
-        Assert.NotNull(qr.ModuleMatrix);
-        Assert.True(qr.ModuleMatrix.Count >= 21);
+        Assert.True(qr.Size >= 21);
     }
 
     [Theory]
@@ -195,8 +192,8 @@ public class QRCodeGeneratorUnitTest
         var text = new string('A', maxChars);
 
         var qr = generator.CreateQrCode(text, eccLevel);
-        var version = CalculateVersion(qr.ModuleMatrix.Count);
-        var actualSize = qr.ModuleMatrix.Count;
+        var version = CalculateVersion(qr.Size);
+        var actualSize = qr.Size;
 
         Assert.Equal(expectedVersion, version);
         Assert.Equal(expectedSize, actualSize);
@@ -241,8 +238,7 @@ public class QRCodeGeneratorUnitTest
         var generator = new QRCodeGenerator();
         var qr = generator.CreateQrCode(text, ECCLevel.M, eciMode: eciMode);
 
-        Assert.NotNull(qr.ModuleMatrix);
-        Assert.True(qr.ModuleMatrix.Count >= 21);
+        Assert.True(qr.Size >= 21);
     }
 
     [Theory]
@@ -263,8 +259,8 @@ public class QRCodeGeneratorUnitTest
         var text = new string('a', maxBytes); // ASCII = 1 byte each
 
         var qr = generator.CreateQrCode(text, eccLevel, eciMode: EciMode.Utf8);
-        var version = CalculateVersion(qr.ModuleMatrix.Count);
-        var actualSize = qr.ModuleMatrix.Count;
+        var version = CalculateVersion(qr.Size);
+        var actualSize = qr.Size;
 
         Assert.Equal(expectedVersion, version);
         Assert.Equal(expectedSize, actualSize);
@@ -280,7 +276,7 @@ public class QRCodeGeneratorUnitTest
         var generator = new QRCodeGenerator();
         var qr = generator.CreateQrCode(text, ECCLevel.M, eciMode: eciMode);
 
-        Assert.NotNull(qr.ModuleMatrix);
+        Assert.True(qr.Size > 0);
     }
 
     [Fact]
@@ -293,9 +289,9 @@ public class QRCodeGeneratorUnitTest
         var qrUtf8 = generator.CreateQrCode("HELLO", ECCLevel.M, eciMode: EciMode.Utf8);
 
         // Different ECI headers → different QR codes
-        Assert.NotEqual(SerializeMatrix(qrDefault.ModuleMatrix), SerializeMatrix(qrIso.ModuleMatrix));
-        Assert.NotEqual(SerializeMatrix(qrIso.ModuleMatrix), SerializeMatrix(qrUtf8.ModuleMatrix));
-        Assert.NotEqual(SerializeMatrix(qrDefault.ModuleMatrix), SerializeMatrix(qrUtf8.ModuleMatrix));
+        Assert.NotEqual(SerializeMatrix(qrDefault), SerializeMatrix(qrIso));
+        Assert.NotEqual(SerializeMatrix(qrIso), SerializeMatrix(qrUtf8));
+        Assert.NotEqual(SerializeMatrix(qrDefault), SerializeMatrix(qrUtf8));
     }
 
     [Theory]
@@ -322,7 +318,7 @@ public class QRCodeGeneratorUnitTest
         var text = new string('1', maxChars);
 
         var qr = generator.CreateQrCode(text, eccLevel);
-        var version = CalculateVersion(qr.ModuleMatrix.Count);
+        var version = CalculateVersion(qr.Size);
 
         Assert.Equal(40, version);
     }
@@ -346,7 +342,7 @@ public class QRCodeGeneratorUnitTest
         var qr1 = generator.CreateQrCode("HELLO WORLD", ECCLevel.M);
         var qr2 = generator.CreateQrCode("HELLO WORLD", ECCLevel.M);
 
-        Assert.Equal(SerializeMatrix(qr1.ModuleMatrix), SerializeMatrix(qr2.ModuleMatrix));
+        Assert.Equal(SerializeMatrix(qr1), SerializeMatrix(qr2));
     }
 
     // Helpers
@@ -384,14 +380,15 @@ public class QRCodeGeneratorUnitTest
         return sizeWithoutQuietSone + (quietZoneSize * 2);
     }
 
-    private static string SerializeMatrix(IReadOnlyList<BitArray> matrix)
+    private static string SerializeMatrix(QRCodeData  qrCode)
     {
-        var sb = new StringBuilder(matrix.Count * matrix.Count);
-        foreach (var row in matrix)
+        var size = qrCode.Size;
+        var sb = new StringBuilder(size * size);
+        for (var row = 0; row < size; row++)
         {
-            for (int i = 0; i < row.Length; i++)
+            for (var col = 0; col < size; col++)
             {
-                sb.Append(row[i] ? '1' : '0');
+                sb.Append(qrCode[row, col] ? '1' : '0');
             }
         }
         return sb.ToString();

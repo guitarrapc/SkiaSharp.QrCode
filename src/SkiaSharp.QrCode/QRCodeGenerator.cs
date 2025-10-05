@@ -1,4 +1,3 @@
-using System.Collections;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -153,11 +152,11 @@ public class QRCodeGenerator : IDisposable
         var blockedModules = new List<Rectangle>();
 
         ModulePlacer.PlaceFinderPatterns(ref qr, ref blockedModules);
-        ModulePlacer.ReserveSeperatorAreas(qr.ModuleMatrix.Count, ref blockedModules);
+        ModulePlacer.ReserveSeperatorAreas(qr.Size, ref blockedModules);
         ModulePlacer.PlaceAlignmentPatterns(ref qr, AlignmentPatternTable.Where(x => x.Version == version).Select(x => x.PatternPositions).First(), ref blockedModules);
         ModulePlacer.PlaceTimingPatterns(ref qr, ref blockedModules);
         ModulePlacer.PlaceDarkModule(ref qr, version, ref blockedModules);
-        ModulePlacer.ReserveVersionAreas(qr.ModuleMatrix.Count, version, ref blockedModules);
+        ModulePlacer.ReserveVersionAreas(qr.Size, version, ref blockedModules);
         ModulePlacer.PlaceDataWords(ref qr, interleavedData, ref blockedModules);
 
         // Apply mask and get optimal mask number
@@ -575,27 +574,23 @@ public class QRCodeGenerator : IDisposable
                 return;
             }
 
-            var quietLine = new bool[qrCode.ModuleMatrix.Count + quietZoneSize * 2];
-            for (var i = 0; i < quietLine.Length; i++)
+            var oldSize = qrCode.Size;
+            var newSize = oldSize + quietZoneSize * 2;
+
+            // Create new matrix with quiet zone
+            var newMatrix = new bool[newSize, newSize];
+
+            // Copy existing data to center of new matrix
+            for (var row = 0; row < oldSize; row++)
             {
-                quietLine[i] = false;
+                for (var col = 0; col < oldSize; col++)
+                {
+                    newMatrix[row + quietZoneSize, col + quietZoneSize] = qrCode[row, col];
+                }
             }
-            for (var i = 0; i < quietZoneSize; i++)
-            {
-                qrCode.ModuleMatrixInternal.Insert(0, new BitArray(quietLine));
-            }
-            for (var i = 0; i < quietZoneSize; i++)
-            {
-                qrCode.ModuleMatrixInternal.Add(new BitArray(quietLine));
-            }
-            for (var i = quietZoneSize; i < qrCode.ModuleMatrix.Count - quietZoneSize; i++)
-            {
-                bool[] quietPart = new bool[quietZoneSize];
-                var tmpLine = new List<bool>(quietPart);
-                tmpLine.AddRange(qrCode.ModuleMatrix[i].Cast<bool>());
-                tmpLine.AddRange(quietPart);
-                qrCode.ModuleMatrixInternal[i] = new BitArray(tmpLine.ToArray());
-            }
+
+            // Replace old matrix with new matrix
+            qrCode.SetModuleMatrix(newMatrix, quietZoneSize);
         }
 
         /// <summary>
@@ -621,14 +616,14 @@ public class QRCodeGenerator : IDisposable
         /// </summary>
         public static void PlaceVersion(ref QRCodeData qrCode, string versionStr)
         {
-            var size = qrCode.ModuleMatrix.Count;
+            var size = qrCode.Size;
             var vStr = ReverseString(versionStr);
             for (var x = 0; x < 6; x++)
             {
                 for (var y = 0; y < 3; y++)
                 {
-                    qrCode.ModuleMatrix[y + size - 11][x] = vStr[x * 3 + y] == '1';
-                    qrCode.ModuleMatrix[x][y + size - 11] = vStr[x * 3 + y] == '1';
+                    qrCode[y + size - 11, x] = vStr[x * 3 + y] == '1';
+                    qrCode[x, y + size - 11] = vStr[x * 3 + y] == '1';
                 }
             }
         }
@@ -640,7 +635,7 @@ public class QRCodeGenerator : IDisposable
         /// </summary>
         public static void PlaceFormat(ref QRCodeData qrCode, string formatStr)
         {
-            var size = qrCode.ModuleMatrix.Count;
+            var size = qrCode.Size;
             var fStr = ReverseString(formatStr);
             var modules = new[,]
             {
@@ -664,8 +659,8 @@ public class QRCodeGenerator : IDisposable
             {
                 var p1 = new Point(modules[i, 0], modules[i, 1]);
                 var p2 = new Point(modules[i, 2], modules[i, 3]);
-                qrCode.ModuleMatrix[p1.Y][p1.X] = fStr[i] == '1';
-                qrCode.ModuleMatrix[p2.Y][p2.X] = fStr[i] == '1';
+                qrCode[p1.Y, p1.X] = fStr[i] == '1';
+                qrCode[p2.Y, p2.X] = fStr[i] == '1';
             }
         }
 
@@ -678,7 +673,7 @@ public class QRCodeGenerator : IDisposable
         {
             var patternName = string.Empty;
             var patternScore = 0;
-            var size = qrCode.ModuleMatrix.Count;
+            var size = qrCode.Size;
 
             var methods = typeof(MaskPattern).GetTypeInfo().DeclaredMethods;
 
@@ -691,7 +686,7 @@ public class QRCodeGenerator : IDisposable
                     {
                         for (var x = 0; x < size; x++)
                         {
-                            qrTemp.ModuleMatrix[y][x] = qrCode.ModuleMatrix[y][x];
+                            qrTemp[y, x] = qrCode[y, x];
                         }
                     }
 
@@ -709,7 +704,7 @@ public class QRCodeGenerator : IDisposable
                         {
                             if (!IsBlocked(new Rectangle(x, y, 1, 1), blockedModules))
                             {
-                                qrTemp.ModuleMatrix[y][x] ^= (bool)pattern.Invoke(null, [x, y]);
+                                qrTemp[y, x] ^= (bool)pattern.Invoke(null, [x, y]);
                             }
                         }
                     }
@@ -730,7 +725,7 @@ public class QRCodeGenerator : IDisposable
                 {
                     if (!IsBlocked(new Rectangle(x, y, 1, 1), blockedModules))
                     {
-                        qrCode.ModuleMatrix[y][x] ^= (bool)patterMethod.Invoke(null, [x, y]);
+                        qrCode[y, x] ^= (bool)patterMethod.Invoke(null, [x, y]);
                     }
                 }
             }
@@ -743,7 +738,7 @@ public class QRCodeGenerator : IDisposable
         /// </summary>
         public static void PlaceDataWords(ref QRCodeData qrCode, string data, ref List<Rectangle> blockedModules)
         {
-            var size = qrCode.ModuleMatrix.Count;
+            var size = qrCode.Size;
             var up = true;
             var datawords = new Queue<bool>();
             for (int i = 0; i < data.Length; i++)
@@ -761,17 +756,17 @@ public class QRCodeGenerator : IDisposable
                     {
                         y = size - yMod;
                         if (datawords.Count > 0 && !IsBlocked(new Rectangle(x, y, 1, 1), blockedModules))
-                            qrCode.ModuleMatrix[y][x] = datawords.Dequeue();
+                            qrCode[y, x] = datawords.Dequeue();
                         if (datawords.Count > 0 && x > 0 && !IsBlocked(new Rectangle(x - 1, y, 1, 1), blockedModules))
-                            qrCode.ModuleMatrix[y][x - 1] = datawords.Dequeue();
+                            qrCode[y, x - 1] = datawords.Dequeue();
                     }
                     else
                     {
                         y = yMod - 1;
                         if (datawords.Count > 0 && !IsBlocked(new Rectangle(x, y, 1, 1), blockedModules))
-                            qrCode.ModuleMatrix[y][x] = datawords.Dequeue();
+                            qrCode[y, x] = datawords.Dequeue();
                         if (datawords.Count > 0 && x > 0 && !IsBlocked(new Rectangle(x - 1, y, 1, 1), blockedModules))
-                            qrCode.ModuleMatrix[y][x - 1] = datawords.Dequeue();
+                            qrCode[y, x - 1] = datawords.Dequeue();
                     }
                 }
                 up = !up;
@@ -825,7 +820,7 @@ public class QRCodeGenerator : IDisposable
         /// </summary>
         public static void PlaceDarkModule(ref QRCodeData qrCode, int version, ref List<Rectangle> blockedModules)
         {
-            qrCode.ModuleMatrix[4 * version + 9][8] = true;
+            qrCode[4 * version + 9, 8] = true;
             blockedModules.Add(new Rectangle(8, 4 * version + 9, 1, 1));
         }
 
@@ -835,7 +830,7 @@ public class QRCodeGenerator : IDisposable
         /// </summary>
         public static void PlaceFinderPatterns(ref QRCodeData qrCode, ref List<Rectangle> blockedModules)
         {
-            var size = qrCode.ModuleMatrix.Count;
+            var size = qrCode.Size;
             int[] locations = [0, 0, size - 7, 0, 0, size - 7];
 
             for (var i = 0; i < 6; i = i + 2)
@@ -846,7 +841,9 @@ public class QRCodeGenerator : IDisposable
                     {
                         if (!(((x == 1 || x == 5) && y > 0 && y < 6) || (x > 0 && x < 6 && (y == 1 || y == 5))))
                         {
-                            qrCode.ModuleMatrix[y + locations[i + 1]][x + locations[i]] = true;
+                            var row = y + locations[i + 1];
+                            var col = x + locations[i];
+                            qrCode[row, col] = true;
                         }
                     }
                 }
@@ -884,7 +881,9 @@ public class QRCodeGenerator : IDisposable
                     {
                         if (y == 0 || y == 4 || x == 0 || x == 4 || (x == 2 && y == 2))
                         {
-                            qrCode.ModuleMatrix[loc.Y + y][loc.X + x] = true;
+                            var row = loc.Y + y;
+                            var col = loc.X + x;
+                            qrCode[row, col] = true;
                         }
                     }
                 }
@@ -900,13 +899,13 @@ public class QRCodeGenerator : IDisposable
         /// </summary>
         public static void PlaceTimingPatterns(ref QRCodeData qrCode, ref List<Rectangle> blockedModules)
         {
-            var size = qrCode.ModuleMatrix.Count;
+            var size = qrCode.Size;
             for (var i = 8; i < size - 8; i++)
             {
                 if (i % 2 == 0)
                 {
-                    qrCode.ModuleMatrix[6][i] = true;
-                    qrCode.ModuleMatrix[i][6] = true;
+                    qrCode[6, i] = true;
+                    qrCode[i, 6] = true;
                 }
             }
             blockedModules.AddRange([
@@ -1018,18 +1017,18 @@ public class QRCodeGenerator : IDisposable
                     score2 = 0,
                     score3 = 0,
                     score4 = 0;
-                var size = qrCode.ModuleMatrix.Count;
+                var size = qrCode.Size;
 
                 // Penalty 1: Consecutive modules
                 for (var y = 0; y < size; y++)
                 {
                     var modInRow = 0;
                     var modInColumn = 0;
-                    var lastValRow = qrCode.ModuleMatrix[y][0];
-                    var lastValColumn = qrCode.ModuleMatrix[0][y];
+                    var lastValRow = qrCode[y, 0];
+                    var lastValColumn = qrCode[0, y];
                     for (var x = 0; x < size; x++)
                     {
-                        if (qrCode.ModuleMatrix[y][x] == lastValRow)
+                        if (qrCode[y, x] == lastValRow)
                         {
                             modInRow++;
                         }
@@ -1045,9 +1044,9 @@ public class QRCodeGenerator : IDisposable
                         {
                             score1++;
                         }
-                        lastValRow = qrCode.ModuleMatrix[y][x];
+                        lastValRow = qrCode[y, x];
 
-                        if (qrCode.ModuleMatrix[x][y] == lastValColumn)
+                        if (qrCode[x, y] == lastValColumn)
                         {
                             modInColumn++;
                         }
@@ -1063,7 +1062,7 @@ public class QRCodeGenerator : IDisposable
                         {
                             score1++;
                         }
-                        lastValColumn = qrCode.ModuleMatrix[x][y];
+                        lastValColumn = qrCode[x, y];
                     }
                 }
 
@@ -1073,9 +1072,9 @@ public class QRCodeGenerator : IDisposable
                 {
                     for (var x = 0; x < size - 1; x++)
                     {
-                        if (qrCode.ModuleMatrix[y][x] == qrCode.ModuleMatrix[y][x + 1] &&
-                            qrCode.ModuleMatrix[y][x] == qrCode.ModuleMatrix[y + 1][x] &&
-                            qrCode.ModuleMatrix[y][x] == qrCode.ModuleMatrix[y + 1][x + 1])
+                        if (qrCode[y, x] == qrCode[y, x + 1] &&
+                            qrCode[y, x] == qrCode[y + 1, x] &&
+                            qrCode[y, x] == qrCode[y + 1, x + 1])
                         {
                             score2 += 3;
                         }
@@ -1087,54 +1086,54 @@ public class QRCodeGenerator : IDisposable
                 {
                     for (var x = 0; x < size - 10; x++)
                     {
-                        if ((qrCode.ModuleMatrix[y][x] &&
-                            !qrCode.ModuleMatrix[y][x + 1] &&
-                            qrCode.ModuleMatrix[y][x + 2] &&
-                            qrCode.ModuleMatrix[y][x + 3] &&
-                            qrCode.ModuleMatrix[y][x + 4] &&
-                            !qrCode.ModuleMatrix[y][x + 5] &&
-                            qrCode.ModuleMatrix[y][x + 6] &&
-                            !qrCode.ModuleMatrix[y][x + 7] &&
-                            !qrCode.ModuleMatrix[y][x + 8] &&
-                            !qrCode.ModuleMatrix[y][x + 9] &&
-                            !qrCode.ModuleMatrix[y][x + 10]) ||
-                            (!qrCode.ModuleMatrix[y][x] &&
-                            !qrCode.ModuleMatrix[y][x + 1] &&
-                            !qrCode.ModuleMatrix[y][x + 2] &&
-                            !qrCode.ModuleMatrix[y][x + 3] &&
-                            qrCode.ModuleMatrix[y][x + 4] &&
-                            !qrCode.ModuleMatrix[y][x + 5] &&
-                            qrCode.ModuleMatrix[y][x + 6] &&
-                            qrCode.ModuleMatrix[y][x + 7] &&
-                            qrCode.ModuleMatrix[y][x + 8] &&
-                            !qrCode.ModuleMatrix[y][x + 9] &&
-                            qrCode.ModuleMatrix[y][x + 10]))
+                        if ((qrCode[y, x] &&
+                            !qrCode[y, x + 1] &&
+                            qrCode[y, x + 2] &&
+                            qrCode[y, x + 3] &&
+                            qrCode[y, x + 4] &&
+                            !qrCode[y, x + 5] &&
+                            qrCode[y, x + 6] &&
+                            !qrCode[y, x + 7] &&
+                            !qrCode[y, x + 8] &&
+                            !qrCode[y, x + 9] &&
+                            !qrCode[y, x + 10]) ||
+                            (!qrCode[y, x] &&
+                            !qrCode[y, x + 1] &&
+                            !qrCode[y, x + 2] &&
+                            !qrCode[y, x + 3] &&
+                            qrCode[y, x + 4] &&
+                            !qrCode[y, x + 5] &&
+                            qrCode[y, x + 6] &&
+                            qrCode[y, x + 7] &&
+                            qrCode[y, x + 8] &&
+                            !qrCode[y, x + 9] &&
+                            qrCode[y, x + 10]))
                         {
                             score3 += 40;
                         }
 
-                        if ((qrCode.ModuleMatrix[x][y] &&
-                            !qrCode.ModuleMatrix[x + 1][y] &&
-                            qrCode.ModuleMatrix[x + 2][y] &&
-                            qrCode.ModuleMatrix[x + 3][y] &&
-                            qrCode.ModuleMatrix[x + 4][y] &&
-                            !qrCode.ModuleMatrix[x + 5][y] &&
-                            qrCode.ModuleMatrix[x + 6][y] &&
-                            !qrCode.ModuleMatrix[x + 7][y] &&
-                            !qrCode.ModuleMatrix[x + 8][y] &&
-                            !qrCode.ModuleMatrix[x + 9][y] &&
-                            !qrCode.ModuleMatrix[x + 10][y]) ||
-                            (!qrCode.ModuleMatrix[x][y] &&
-                            !qrCode.ModuleMatrix[x + 1][y] &&
-                            !qrCode.ModuleMatrix[x + 2][y] &&
-                            !qrCode.ModuleMatrix[x + 3][y] &&
-                            qrCode.ModuleMatrix[x + 4][y] &&
-                            !qrCode.ModuleMatrix[x + 5][y] &&
-                            qrCode.ModuleMatrix[x + 6][y] &&
-                            qrCode.ModuleMatrix[x + 7][y] &&
-                            qrCode.ModuleMatrix[x + 8][y] &&
-                            !qrCode.ModuleMatrix[x + 9][y] &&
-                            qrCode.ModuleMatrix[x + 10][y]))
+                        if ((qrCode[x, y] &&
+                            !qrCode[x + 1, y] &&
+                            qrCode[x + 2, y] &&
+                            qrCode[x + 3, y] &&
+                            qrCode[x + 4, y] &&
+                            !qrCode[x + 5, y] &&
+                            qrCode[x + 6, y] &&
+                            !qrCode[x + 7, y] &&
+                            !qrCode[x + 8, y] &&
+                            !qrCode[x + 9, y] &&
+                            !qrCode[x + 10, y]) ||
+                            (!qrCode[x, y] &&
+                            !qrCode[x + 1, y] &&
+                            !qrCode[x + 2, y] &&
+                            !qrCode[x + 3, y] &&
+                            qrCode[x + 4, y] &&
+                            !qrCode[x + 5, y] &&
+                            qrCode[x + 6, y] &&
+                            qrCode[x + 7, y] &&
+                            qrCode[x + 8, y] &&
+                            !qrCode[x + 9, y] &&
+                            qrCode[x + 10, y]))
                         {
                             score3 += 40;
                         }
@@ -1143,15 +1142,18 @@ public class QRCodeGenerator : IDisposable
 
                 // Penalty 4: Dark/light balance
                 double blackModules = 0;
-                foreach (var row in qrCode.ModuleMatrix)
+                for (var row = 0; row < size; row++)
                 {
-                    foreach (bool bit in row)
+                    for (var col = 0; col < size; col++)
                     {
-                        if (bit) blackModules++;
+                        if (qrCode[row, col])
+                        {
+                            blackModules++;
+                        }
                     }
                 }
 
-                var percent = (blackModules / (qrCode.ModuleMatrix.Count * qrCode.ModuleMatrix.Count)) * 100;
+                var percent = (blackModules / (size * size)) * 100;
                 var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
                 var nextMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 45) / 5;
                 score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;

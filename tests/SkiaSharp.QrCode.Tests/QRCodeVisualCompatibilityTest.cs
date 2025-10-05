@@ -214,7 +214,7 @@ public class QRCodeVisualCompatibilityTest
         if (!File.Exists(samplePath))
         {
             // First run: save as sample
-            SavePixelData(samplePath, actualPixels, qr.ModuleMatrix.Count);
+            SavePixelData(samplePath, actualPixels, qr.Size);
             Assert.True(true, $"Sample file created: {samplePath}");
         }
         else
@@ -226,7 +226,7 @@ public class QRCodeVisualCompatibilityTest
             {
                 // Save actual for comparison
                 var actualPath = samplePath.Replace(".pixels", ".actual.pixels");
-                SavePixelData(actualPath, actualPixels, qr.ModuleMatrix.Count);
+                SavePixelData(actualPath, actualPixels, qr.Size);
 
                 // Calculate difference percentage
                 var diffCount = actualPixels.Zip(expectedPixels, (a, e) => a != e ? 1 : 0).Sum();
@@ -238,13 +238,13 @@ public class QRCodeVisualCompatibilityTest
                            $"ECI Mode: {eciMode}\n" +
                            $"Path: {samplePath}\n" +
                            $"Actual: {actualPath}\n" +
-                           $"Size: {qr.ModuleMatrix.Count}x{qr.ModuleMatrix.Count}\n" +
+                           $"Size: {qr.Size}x{qr.Size}\n" +
                            $"Difference: {diffCount}/{actualPixels.Length} pixels ({diffPercent:F2}%)\n" +
                            $"Run visual diff tool to compare.");
             }
 
             // Also verify size matches
-            Assert.Equal(expectedSize, qr.ModuleMatrix.Count);
+            Assert.Equal(expectedSize, qr.Size);
         }
     }
 
@@ -253,14 +253,14 @@ public class QRCodeVisualCompatibilityTest
     /// </summary>
     private static byte[] RenderToPixelArray(QRCodeData qr)
     {
-        var size = qr.ModuleMatrix.Count;
+        var size = qr.Size;
         var pixels = new byte[size * size];
 
         for (int y = 0; y < size; y++)
         {
             for (int x = 0; x < size; x++)
             {
-                pixels[y * size + x] = qr.ModuleMatrix[y][x] ? (byte)0 : (byte)255;
+                pixels[y * size + x] = qr[y, x] ? (byte)0 : (byte)255;
             }
         }
 

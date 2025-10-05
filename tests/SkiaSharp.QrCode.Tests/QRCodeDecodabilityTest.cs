@@ -102,9 +102,9 @@ public class QRCodeDecodabilityTest
         Console.WriteLine($"Content: \"{content}\"");
         Console.WriteLine($"UTF-8 Bytes: {byteCount} [{string.Join(", ", utf8Bytes.Select(b => $"0x{b:X2}"))}]");
         Console.WriteLine($"");
-        Console.WriteLine($"ECC Level H → Version {qrH.Version} (Size: {qrH.ModuleMatrix.Count}x{qrH.ModuleMatrix.Count})");
-        Console.WriteLine($"ECC Level M → Version {qrM.Version} (Size: {qrM.ModuleMatrix.Count}x{qrM.ModuleMatrix.Count})");
-        Console.WriteLine($"ECC Level L → Version {qrL.Version} (Size: {qrL.ModuleMatrix.Count}x{qrL.ModuleMatrix.Count})");
+        Console.WriteLine($"ECC Level H → Version {qrH.Version} (Size: {qrH.Size}x{qrH.Size})");
+        Console.WriteLine($"ECC Level M → Version {qrM.Version} (Size: {qrM.Size}x{qrM.Size})");
+        Console.WriteLine($"ECC Level L → Version {qrL.Version} (Size: {qrL.Size}x{qrL.Size})");
         Console.WriteLine($"");
 
         // Version 1 logical capacity
@@ -215,7 +215,7 @@ public class QRCodeDecodabilityTest
     /// </summary>
     private static SKBitmap QrCodeToSKBitmap(QRCodeData qr)
     {
-        var size = qr.ModuleMatrix.Count;
+        var size = qr.Size;
         var scale = 10; // Scale up for better decoding
         var bitmap = new SKBitmap(size * scale, size * scale);
 
@@ -231,7 +231,7 @@ public class QRCodeDecodabilityTest
         {
             for (int x = 0; x < size; x++)
             {
-                if (qr.ModuleMatrix[y][x])
+                if (qr[y, x])
                 {
                     canvas.DrawRect(x * scale, y * scale, scale, scale, paint);
                 }

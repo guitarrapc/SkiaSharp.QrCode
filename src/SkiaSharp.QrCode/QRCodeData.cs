@@ -5,21 +5,34 @@ namespace SkiaSharp.QrCode;
 
 public class QRCodeData : IDisposable
 {
-    public IReadOnlyList<BitArray> ModuleMatrix => _moduleMatrix;
-    internal List<BitArray> ModuleMatrixInternal => _moduleMatrix;
-    private readonly List<BitArray> _moduleMatrix;
-
+    private static readonly byte[] _headerSignature = [0x51, 0x52, 0x52 ]; // "QRR"
+    /// <summary>
+    /// Get the QR code version (1-40)
+    /// </summary>
     public int Version { get; private set; }
+
+    private bool[,] _moduleMatrix;
+    /// <summary>
+    /// Internal direct access to the module matrix for bulk operations.
+    /// </summary>
+    internal bool[,] ModuleMatrixInternal => _moduleMatrix;
+
+    /// <summary>
+    /// Get the size of the QR code module matrix (width and height in modules)
+    /// </summary>
+    public int Size => _moduleMatrix.GetLength(0);
+
+    public bool this[int row, int col]
+    {
+        get => _moduleMatrix[row, col];
+        internal set => _moduleMatrix[row, col] = value;
+    }
 
     public QRCodeData(int version)
     {
         Version = version;
         var size = ModulesPerSideFromVersion(version);
-        _moduleMatrix = new List<BitArray>();
-        for (var i = 0; i < size; i++)
-        {
-            _moduleMatrix.Add(new BitArray(size));
-        }
+        _moduleMatrix = new bool[size, size];
     }
 
     public QRCodeData(byte[] rawData, Compression compressMode)
@@ -55,12 +68,12 @@ public class QRCodeData : IDisposable
         if (bytes[0] != 0x51 || bytes[1] != 0x52 || bytes[2] != 0x52)
             throw new Exception("Invalid raw data file. Filetype doesn't match \"QRR\".");
 
-        //Set QR code version
+        // Set QR code version
         var sideLen = (int)bytes[4];
         bytes.RemoveRange(0, 5);
-        Version = (sideLen - 21 - 8) / 4 + 1;
+        Version = QRCodeVersionFromModulesPerSide(sideLen);
 
-        //Unpack
+        // Unpack
         var modules = new Queue<bool>();
         foreach (var b in bytes)
         {
@@ -71,39 +84,87 @@ public class QRCodeData : IDisposable
             }
         }
 
-        //Build module matrix
-        _moduleMatrix = new List<BitArray>();
+        // Build module matrix
+        _moduleMatrix = new bool[sideLen, sideLen];
         for (int y = 0; y < sideLen; y++)
         {
-            _moduleMatrix.Add(new BitArray(sideLen));
             for (int x = 0; x < sideLen; x++)
             {
-                _moduleMatrix[y][x] = modules.Dequeue();
+                _moduleMatrix[y, x] = modules.Dequeue();
             }
         }
 
+        // Version will be calculated from size
+        static int QRCodeVersionFromModulesPerSide(int modulesPerSide)
+        {
+            return (modulesPerSide - 21 - 8) / 4 + 1;
+        }
     }
 
+    /// <summary>
+    /// Updates the module matrix with a new two-dimensional boolean array.
+    /// Automatically calculates and updates the version based on matrix size.
+    /// </summary>
+    /// <remarks>
+    /// The expected size of the module matrix is determined by the version of the object. Ensure
+    /// that the provided matrix has dimensions equal to the expected size before calling this method.
+    /// </remarks>
+    /// <param name="moduleMatrix">New module matrix.</param>
+    /// <param name="quietZoneSize">Quiet zone size in modules (0 if matrix doesn't include quiet zone).</param>
+    public void SetModuleMatrix(bool[,] moduleMatrix, int quietZoneSize)
+    {
+        var totalSize = moduleMatrix.GetLength(0);
+        var sizeWithoutQuietZone = totalSize - (quietZoneSize * 2);
+
+        // Calculate version from size (without quiet zone)
+        var calculatedVersion = VersionFromSize(sizeWithoutQuietZone);
+
+        if (calculatedVersion < 1 || calculatedVersion > 40)
+        {
+            throw new ArgumentException(
+                $"Invalid matrix size. Size without quiet zone: {sizeWithoutQuietZone}, " +
+                $"Calculated version: {calculatedVersion}. " +
+                $"Version must be 1-40.",
+                nameof(moduleMatrix));
+        }
+
+        _moduleMatrix = moduleMatrix;
+        Version = calculatedVersion;
+    }
+
+    /// <summary>
+    /// Generates a raw byte array representation of the data, with optional compression.
+    /// </summary>
+    /// <remarks>
+    /// The raw data includes a header followed by the encoded data. The header consists of a
+    /// signature and the row size. The data is padded to ensure alignment to the nearest byte boundary. Compression, if
+    /// specified, is applied to the entire data stream after it is constructed.
+    /// </remarks>
+    /// <param name="compressMode"></param>
     public byte[] GetRawData(Compression compressMode)
     {
         var bytes = new List<byte>();
 
         // Add header - signature ("QRR")
-        bytes.AddRange([0x51, 0x52, 0x52, 0x00 ]);
+        bytes.AddRange(_headerSignature);
 
         // Add header - rowsize
-        bytes.Add((byte)_moduleMatrix.Count);
+        bytes.Add((byte)Size);
 
         // Build data queue
         var dataQueue = new Queue<int>();
-        foreach (var row in _moduleMatrix)
+        var size = Size;
+        for (var row = 0; row < size; row++)
         {
-            foreach (var module in row)
+            for (var col = 0; col < size; col++)
             {
-                dataQueue.Enqueue((bool)module ? 1 : 0);
+                dataQueue.Enqueue(_moduleMatrix[row, col] ? 1 : 0);
             }
         }
-        for (int i = 0; i < 8 - (_moduleMatrix.Count * _moduleMatrix.Count) % 8; i++)
+
+        // Padding to byte boundary
+        var boundary = 8 - (size * size) % 8;
+        for (int i = 0; i < boundary; i++)
         {
             dataQueue.Enqueue(0);
         }
@@ -142,14 +203,30 @@ public class QRCodeData : IDisposable
         return rawData;
     }
 
+    /// <summary>
+    /// Calculate size (without quiet zone) from version
+    /// </summary>
+    /// <param name="version"></param>
+    /// <returns></returns>
     private static int ModulesPerSideFromVersion(int version)
     {
         return 21 + (version - 1) * 4;
     }
 
+    /// <summary>
+    /// Calculate version from size (without quiet zone)
+    /// Formula: size = 21 + (version - 1) * 4
+    /// Inverse: version = (size - 21) / 4 + 1
+    /// </summary>
+    /// <param name="sizeWithoutQuietZone"></param>
+    /// <returns></returns>
+    private static int VersionFromSize(int sizeWithoutQuietZone)
+    {
+        return (sizeWithoutQuietZone - 21) / 4 + 1;
+    }
+
     public void Dispose()
     {
-        _moduleMatrix.Clear();
         Version = 0;
     }
 

@@ -19,17 +19,18 @@ public class QRCodeRenderer : IDisposable
             using (var lightPaint = new SKPaint() { Color = (backgroundColor.HasValue ? backgroundColor.Value : SKColors.White), Style = SKPaintStyle.StrokeAndFill })
             using (var darkPaint = new SKPaint() { Color = (qrColor.HasValue ? qrColor.Value : SKColors.Black), Style = SKPaintStyle.StrokeAndFill })
             {
+                var size = data.Size;
+                var cellHeight = area.Height / size;
+                var cellWidth = area.Width / size;
 
-                var rows = data.ModuleMatrix.Count;
-                var columns = data.ModuleMatrix.Select(x => x.Length).Max();
-                var cellHeight = area.Height / rows;
-                var cellWidth = area.Width / columns;
-
-                for (int y = 0; y < rows; y++)
+                for (int y = 0; y < size; y++)
                 {
-                    var row = data.ModuleMatrix.ElementAt(y);
-                    for (int x = 0; x < row.Length; x++)
-                        canvas.DrawRect(SKRect.Create(area.Left + x * cellWidth, area.Top + y * cellHeight, cellWidth, cellHeight), (row[x] ? darkPaint : lightPaint));
+                    for (int x = 0; x < size; x++)
+                    {
+                        var rect = SKRect.Create(area.Left + x * cellWidth, area.Top + y * cellHeight, cellWidth, cellHeight);
+                        var paint = data[y, x] ? darkPaint : lightPaint;
+                        canvas.DrawRect(rect, paint);
+                    }
                 }
 
                 if (iconData?.Icon != null)
