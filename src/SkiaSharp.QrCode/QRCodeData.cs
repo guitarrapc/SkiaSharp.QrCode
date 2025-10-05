@@ -1,10 +1,22 @@
 using System.IO.Compression;
+using System.Runtime.CompilerServices;
 
 namespace SkiaSharp.QrCode;
 
+/// <summary>
+/// Represents QR code data as a 2D boolean matrix.
+/// Supports serialization/deserialization with optional compression.
+/// </summary>
+/// <remarks>
+/// QR code structure:
+/// - Version: 1-40 (determines size: 21×21 to 177×177)
+/// - Module matrix: 2D array of boolean values (dark/light)
+/// - Serialization format: "QRR" header + size + bit-packed data
+/// </remarks>
 public class QRCodeData : IDisposable
 {
     private static readonly byte[] _headerSignature = [0x51, 0x52, 0x52]; // "QRR"
+
     /// <summary>
     /// Get the QR code version (1-40)
     /// </summary>
@@ -12,15 +24,17 @@ public class QRCodeData : IDisposable
 
     private bool[,] _moduleMatrix;
     /// <summary>
-    /// Internal direct access to the module matrix for bulk operations.
-    /// </summary>
-    internal bool[,] ModuleMatrixInternal => _moduleMatrix;
-
-    /// <summary>
-    /// Get the size of the QR code module matrix (width and height in modules)
+    /// Gets the size of the QR code matrix (modules per side).
+    /// Includes quiet zone if added via <see cref="SetModuleMatrix"/>.
     /// </summary>
     public int Size => _moduleMatrix.GetLength(0);
 
+    /// <summary>
+    /// Gets or sets the module state at the specified position.
+    /// </summary>
+    /// <param name="row">Row index (0-based).</param>
+    /// <param name="col">Column index (0-based).</param>
+    /// <returns>True if module is dark/black, false if light/white.</returns>
     public bool this[int row, int col]
     {
         get => _moduleMatrix[row, col];
@@ -230,6 +244,7 @@ public class QRCodeData : IDisposable
     /// </summary>
     /// <param name="version"></param>
     /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int ModulesPerSideFromVersion(int version)
     {
         return 21 + (version - 1) * 4;
@@ -242,6 +257,7 @@ public class QRCodeData : IDisposable
     /// </summary>
     /// <param name="sizeWithoutQuietZone"></param>
     /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int VersionFromSize(int sizeWithoutQuietZone)
     {
         return (sizeWithoutQuietZone - 21) / 4 + 1;
@@ -249,7 +265,7 @@ public class QRCodeData : IDisposable
 
     public void Dispose()
     {
-        Version = 0;
+        // Can be removed in future.
     }
 
     public enum Compression
