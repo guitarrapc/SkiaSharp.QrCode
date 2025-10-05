@@ -100,7 +100,7 @@ public class QRCodeData : IDisposable
     /// specified, is applied to the entire data stream after it is constructed.
     /// </remarks>
     /// <param name="compressMode"></param>
-    public byte[] GetRawData(Compression compressMode)
+    internal byte[] GetRawData(Compression compressMode)
     {
         var bytes = new List<byte>();
 
