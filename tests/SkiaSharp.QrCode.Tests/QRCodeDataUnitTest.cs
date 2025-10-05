@@ -104,6 +104,30 @@ public class QRCodeDataUnitTest
     /// <summary>
     /// Round-trip test with VALID QR sizes only
     /// </summary>
+    /// <remarks>
+    /// if matrixSize is 21 (Version 1), then the pattern is:
+    /// ---------------------------------------------
+    /// (row, col) → 1D index → pattern
+    /// ---------------------------------------------
+    /// (0, 0) → 0 * 21 + 0 = 0   → 0 % 7 = 0 → true  ✅
+    /// (0, 1) → 0 * 21 + 1 = 1   → 1 % 7 = 1 → false
+    /// (0, 2) → 0 * 21 + 2 = 2   → 2 % 7 = 2 → false
+    /// ...
+    /// (0, 6) → 0 * 21 + 6 = 6   → 6 % 7 = 6 → false
+    /// (0, 7) → 0 * 21 + 7 = 7   → 7 % 7 = 0 → true  ✅
+    /// (0, 14) → 0 * 21 + 14 = 14 → 14 % 7 = 0 → true ✅
+    /// (1, 6) → 1 * 21 + 6 = 27  → 27 % 7 = 6 → false
+    /// (1, 7) → 1 * 21 + 7 = 28  → 28 % 7 = 0 → true  ✅
+    ///
+    /// ---------------------------------------------
+    /// Visualize
+    /// ---------------------------------------------
+    /// ■ □ □ □ □ □ □ ■ □ □ □ □ □ □ ■ □ □ □ □ □ □
+    /// □ ■ □ □ □ □ □ □ ■ □ □ □ □ □ □ ■ □ □ □ □ □
+    /// □ □ ■ □ □ □ □ □ □ ■ □ □ □ □ □ □ ■ □ □ □ □
+    /// □ □ □ ■ □ □ □ □ □ □ ■ □ □ □ □ □ □ ■ □ □ □
+    /// ...
+    /// </remarks>
     [Theory]
     [InlineData(21)]   // Version 1
     [InlineData(25)]   // Version 2
@@ -111,6 +135,11 @@ public class QRCodeDataUnitTest
     [InlineData(57)]   // Version 10
     public void Serialization_RoundTrip_PreservesData(int matrixSize)
     {
+        // Use (row * matrixSize + col) % 7 to create a pattern that is not too dense.
+        // 7 is not 8's multiple, it means it won't dup with byte border.
+        // see remarks.
+        var pattern = 7;
+
         var original = new QRCodeData(1);
         var customMatrix = new bool[matrixSize, matrixSize];
 
@@ -118,7 +147,7 @@ public class QRCodeDataUnitTest
         {
             for (int col = 0; col < matrixSize; col++)
             {
-                customMatrix[row, col] = (row * matrixSize + col) % 7 == 0;
+                customMatrix[row, col] = (row * matrixSize + col) % pattern == 0;
             }
         }
 
@@ -133,7 +162,7 @@ public class QRCodeDataUnitTest
         {
             for (int col = 0; col < matrixSize; col++)
             {
-                var expected = (row * matrixSize + col) % 7 == 0;
+                var expected = (row * matrixSize + col) % pattern == 0;
                 Assert.Equal(expected, restored[row, col]);
             }
         }
@@ -158,12 +187,44 @@ public class QRCodeDataUnitTest
     /// <summary>
     /// Tests serialization/deserialization with all compression modes
     /// </summary>
+    /// <remarks>
+    /// if matrixSize is 37 (Version 5), then the pattern is:
+    /// ---------------------------------------------
+    /// (row, col) → sum → pattern
+    /// ---------------------------------------------
+    /// (0, 0) → 0 + 0 = 0 → 0 % 3 = 0 → true  ✅
+    /// (0, 1) → 0 + 1 = 1 → 1 % 3 = 1 → false
+    /// (0, 2) → 0 + 2 = 2 → 2 % 3 = 2 → false
+    /// (0, 3) → 0 + 3 = 3 → 3 % 3 = 0 → true  ✅
+    /// (1, 0) → 1 + 0 = 1 → 1 % 3 = 1 → false
+    /// (1, 1) → 1 + 1 = 2 → 2 % 3 = 2 → false
+    /// (1, 2) → 1 + 2 = 3 → 3 % 3 = 0 → true  ✅
+    /// (2, 1) → 2 + 1 = 3 → 3 % 3 = 0 → true  ✅
+    /// 
+    /// ---------------------------------------------
+    /// Visualize
+    /// ---------------------------------------------
+    /// ■ □ □ ■ □ □ ■ □ □
+    /// □ □ ■ □ □ ■ □ □ ■
+    /// □ ■ □ □ ■ □ □ ■ □
+    /// ■ □ □ ■ □ □ ■ □ □
+    /// □ □ ■ □ □ ■ □ □ ■
+    /// □ ■ □ □ ■ □ □ ■ □
+    /// ■ □ □ ■ □ □ ■ □ □
+    /// □ □ ■ □ □ ■ □ □ ■
+    /// □ ■ □ □ ■ □ □ ■ □
+    /// </remarks>
     [Theory]
     [InlineData(QRCodeData.Compression.Uncompressed)]
     [InlineData(QRCodeData.Compression.Deflate)]
     [InlineData(QRCodeData.Compression.GZip)]
     public void Serialization_RoundTrip_AllCompressionModes(QRCodeData.Compression compression)
     {
+        // Use (row + col) % 3 to create a pattern that is not too dense.
+        // 3 is not 8's multiple, it means it won't dup with byte border.
+        // see remarks.
+        var pattern = 3;
+
         // Arrange
         var original = new QRCodeData(5);  // Version 5: 37×37
         var size = original.Size;
@@ -173,7 +234,7 @@ public class QRCodeDataUnitTest
         {
             for (int col = 0; col < size; col++)
             {
-                original[row, col] = (row + col) % 3 == 0;
+                original[row, col] = (row + col) % pattern == 0;
             }
         }
 
