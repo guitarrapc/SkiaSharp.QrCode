@@ -152,10 +152,8 @@ public class QRCodeData : IDisposable
     {
         var bytes = new List<byte>();
 
-        // Add header - signature ("QRR")
+        // Add header - signature ("QRR") & raw size
         bytes.AddRange(_headerSignature);
-
-        // Add header - rowsize
         bytes.Add((byte)Size);
 
         // Build data queue
@@ -174,8 +172,7 @@ public class QRCodeData : IDisposable
         // - If remainder = 0 (already aligned): (8 - 0) % 8 = 0 (no padding)
         // - If remainder = 1-7: (8 - 1-7) % 8 = 7-1 (add padding to align)
         var totalBits = size * size;
-        var remainder = totalBits % 8;
-        var paddingBits = (8 - remainder) % 8;
+        var paddingBits = GetPaddingBits(totalBits);
         for (int i = 0; i < paddingBits; i++)
         {
             dataQueue.Enqueue(0);
@@ -213,6 +210,12 @@ public class QRCodeData : IDisposable
             }
         }
         return rawData;
+
+        static int GetPaddingBits(int totalBits)
+        {
+            var remainder = totalBits % 8;
+            return (8 - remainder) % 8;
+        }
     }
 
     /// <summary>
