@@ -52,14 +52,6 @@ internal class EccTextEncoder
             messagePolynom.PolyItems[i] = new PolynomItem(coefficient, exponent);
         }
 
-        // Multiply generator polynomial by x^(message degree)
-        for (var i = 0; i < generatorPolynom.PolyItems.Count; i++)
-        {
-            var coefficient = generatorPolynom.PolyItems[i].Coefficient;
-            var exponent = generatorPolynom.PolyItems[i].Exponent + (messagePolynom.PolyItems.Count - 1);
-            generatorPolynom.PolyItems[i] = new PolynomItem(coefficient, exponent);
-        }
-
         // Perform polynomial division in GF(256)
         var leadTermSource = messagePolynom;
         for (var i = 0; (leadTermSource.PolyItems.Count > 0 && leadTermSource.PolyItems[^1].Exponent > 0); i++)
@@ -77,9 +69,19 @@ internal class EccTextEncoder
                 leadTermSource = resPoly;
             }
         }
-        return leadTermSource.PolyItems
-            .Select(x => DecToBin(x.Coefficient, 8))
-            .ToList();
+
+        // --- Important: Reconstruct coefficients by degree to ensure fixed length ---
+        // Reed-Solomon remainder polynomial R(x) has degree < eccWordCount,
+        // so we need exactly eccWordCount coefficients (from x^(n-1) down to x^0).
+        // Missing exponents are implicitly 0 (e.g., sparse polynomials).
+        var coeffByExp = leadTermSource.PolyItems.ToDictionary(p => p.Exponent, p => p.Coefficient);
+        var ecc = new List<string>(eccWordCount);
+        for (int exp = eccWordCount - 1; exp >= 0; exp--)
+        {
+            coeffByExp.TryGetValue(exp, out int c); // 0 if missing
+            ecc.Add(DecToBin(c, 8));
+        }
+        return ecc;
     }
 
     /// <summary>
