@@ -138,38 +138,36 @@ public class QRCodeData : IDisposable
         bytes.AddRange(_headerSignature);
         bytes.Add((byte)Size);
 
-        // Build data queue
-        var dataQueue = new Queue<int>();
+        // Pack bits directly into bytes
         var size = Size;
-        for (var row = 0; row < size; row++)
-        {
-            for (var col = 0; col < size; col++)
-            {
-                dataQueue.Enqueue(_moduleMatrix[row, col] ? 1 : 0);
-            }
-        }
-
-        // Padding
         var totalBits = size * size;
         var paddingBits = GetPaddingBits(totalBits);
-        for (int i = 0; i < paddingBits; i++)
-        {
-            dataQueue.Enqueue(0);
-        }
+        var totalBitsWithPadding = totalBits + paddingBits;
+        var totalBytes = totalBitsWithPadding / 8;
 
-        // pack bits into bytes
-        while (dataQueue.Count > 0)
+        var bitIndex = 0;
+        for (var byteIndex = 0; byteIndex < totalBytes; byteIndex++)
         {
             byte b = 0;
-            for (int i = 7; i >= 0; i--)
+            for (var i = 7; i >= 0; i--)
             {
-                b += (byte)(dataQueue.Dequeue() << i);
+                if (bitIndex < totalBits)
+                {
+                    var row = bitIndex / size;
+                    var col = bitIndex % size;
+                    if (_moduleMatrix[row, col])
+                    {
+                        b |= (byte)(1 << i);
+                    }
+                }
+                // else padding bits are 0
+                bitIndex++;
             }
             bytes.Add(b);
         }
-        var rawData = bytes.ToArray();
 
         // Compress stream
+        var rawData = bytes.ToArray();
         return CompressData(rawData, compressMode);
     }
 
