@@ -163,15 +163,4 @@ public static class EciModeExtensions
         // ECI mode indicator (4 bits) + ECI assignment number (8 bits for 0-127)
         return 4 + 8;
     }
-
-    /// <summary>
-    /// Gets the ECI header size in bytes (rounded up).
-    /// </summary>
-    /// <param name="eciMode">ECI mode.</param>
-    /// <returns>Header size in bytes.</returns>
-    internal static int GetHeaderBytes(this EciMode eciMode)
-    {
-        var bits = eciMode.GetHeaderBits();
-        return (bits + 7) / 8; // Round up to nearest byte
-    }
 }
