@@ -44,7 +44,7 @@ public class QRCodeData : IDisposable
     public QRCodeData(int version)
     {
         Version = version;
-        var size = ModulesPerSideFromVersion(version);
+        var size = SizeFromVersion(version);
         _moduleMatrix = new bool[size, size];
     }
 
@@ -251,7 +251,7 @@ public class QRCodeData : IDisposable
     /// <param name="version"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int ModulesPerSideFromVersion(int version)
+    private static int SizeFromVersion(int version)
     {
         return 21 + (version - 1) * 4;
     }
