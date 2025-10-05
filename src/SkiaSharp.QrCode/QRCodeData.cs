@@ -50,6 +50,7 @@ public class QRCodeData : IDisposable
 
     public QRCodeData(byte[] rawData, Compression compressMode)
     {
+        // Decompress
         var bytes = DecompressData(rawData, compressMode);
 
         // Validate minimum size
@@ -88,37 +89,6 @@ public class QRCodeData : IDisposable
         {
             throw new InvalidOperationException($"Insufficient data: expected {totalBits} bits, got {bitIndex}.");
         }
-    }
-
-    /// <summary>
-    /// Updates the module matrix with a new two-dimensional boolean array.
-    /// Automatically calculates and updates the version based on matrix size.
-    /// </summary>
-    /// <remarks>
-    /// The expected size of the module matrix is determined by the version of the object. Ensure
-    /// that the provided matrix has dimensions equal to the expected size before calling this method.
-    /// </remarks>
-    /// <param name="moduleMatrix">New module matrix.</param>
-    /// <param name="quietZoneSize">Quiet zone size in modules (0 if matrix doesn't include quiet zone).</param>
-    public void SetModuleMatrix(bool[,] moduleMatrix, int quietZoneSize)
-    {
-        var totalSize = moduleMatrix.GetLength(0);
-        var sizeWithoutQuietZone = totalSize - (quietZoneSize * 2);
-
-        // Calculate version from size (without quiet zone)
-        var calculatedVersion = VersionFromSize(sizeWithoutQuietZone);
-
-        if (calculatedVersion < 1 || calculatedVersion > 40)
-        {
-            throw new ArgumentException(
-                $"Invalid matrix size. Size without quiet zone: {sizeWithoutQuietZone}, " +
-                $"Calculated version: {calculatedVersion}. " +
-                $"Version must be 1-40.",
-                nameof(moduleMatrix));
-        }
-
-        _moduleMatrix = moduleMatrix;
-        Version = calculatedVersion;
     }
 
     /// <summary>
@@ -169,6 +139,37 @@ public class QRCodeData : IDisposable
         // Compress stream
         var rawData = bytes.ToArray();
         return CompressData(rawData, compressMode);
+    }
+
+    /// <summary>
+    /// Updates the module matrix with a new two-dimensional boolean array.
+    /// Automatically calculates and updates the version based on matrix size.
+    /// </summary>
+    /// <remarks>
+    /// The expected size of the module matrix is determined by the version of the object. Ensure
+    /// that the provided matrix has dimensions equal to the expected size before calling this method.
+    /// </remarks>
+    /// <param name="moduleMatrix">New module matrix.</param>
+    /// <param name="quietZoneSize">Quiet zone size in modules (0 if matrix doesn't include quiet zone).</param>
+    public void SetModuleMatrix(bool[,] moduleMatrix, int quietZoneSize)
+    {
+        var totalSize = moduleMatrix.GetLength(0);
+        var sizeWithoutQuietZone = totalSize - (quietZoneSize * 2);
+
+        // Calculate version from size (without quiet zone)
+        var calculatedVersion = VersionFromSize(sizeWithoutQuietZone);
+
+        if (calculatedVersion < 1 || calculatedVersion > 40)
+        {
+            throw new ArgumentException(
+                $"Invalid matrix size. Size without quiet zone: {sizeWithoutQuietZone}, " +
+                $"Calculated version: {calculatedVersion}. " +
+                $"Version must be 1-40.",
+                nameof(moduleMatrix));
+        }
+
+        _moduleMatrix = moduleMatrix;
+        Version = calculatedVersion;
     }
 
     /// <summary>
