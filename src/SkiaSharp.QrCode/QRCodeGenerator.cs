@@ -524,6 +524,15 @@ public class QRCodeGenerator : IDisposable
     /// </summary>
     private List<string> BinaryStringToBitBlockList(string bitString)
     {
+        if (bitString.Length % 8 != 0)
+        {
+            var remainder = bitString.Length % 8;
+            throw new ArgumentException($"Binary string length must be a multiple of 8. "
+                + $"Length: {bitString.Length}, Remainder: {remainder} bits. "
+                + $"Data may be corrupted or improperly padded.",
+                nameof(bitString));
+        }
+
         var byteCount = bitString.Length / 8;
         var result = new List<string>(byteCount);
         for (var i = 0; i < byteCount; i++)
