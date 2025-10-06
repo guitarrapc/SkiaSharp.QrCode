@@ -288,7 +288,7 @@ public class QRCodeGenerator : IDisposable
     /// - Character count indicator (8-16 bits, version-dependent)
     /// - Data (variable)
     /// </remarks>
-    private int GetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode)
+    private static int GetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode)
     {
         // ECI header overhead if eci specified
         var eciHeaderBits = eciMode.GetHeaderBits();
@@ -364,7 +364,7 @@ public class QRCodeGenerator : IDisposable
     /// </summary>
     /// <param name="plainText">Text to analyze.</param>
     /// <returns>Optimal encoding mode.</returns>
-    private EncodingMode GetEncodingFromPlaintext(string plainText)
+    private static EncodingMode GetEncodingFromPlaintext(string plainText)
     {
         EncodingMode result = EncodingMode.Numeric;
 
@@ -390,7 +390,7 @@ public class QRCodeGenerator : IDisposable
     /// <param name="plainText">Original text.</param>
     /// <param name="eciMode">ECI mode for character encoding.</param>
     /// <returns>Data length for version selection.</returns>
-    private int GetDataLength(EncodingMode encoding, string plainText, EciMode eciMode)
+    private static int GetDataLength(EncodingMode encoding, string plainText, EciMode eciMode)
     {
         return encoding switch
         {
@@ -421,7 +421,7 @@ public class QRCodeGenerator : IDisposable
     /// </summary>
     /// <param name="text">The string to check for ASCII-only characters.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    static bool IsAsciiOnly(string text)
+    private static bool IsAsciiOnly(string text)
     {
         foreach (var c in text)
         {
@@ -434,7 +434,7 @@ public class QRCodeGenerator : IDisposable
     /// Converts binary string (8-bit blocks) to list of binary strings.
     /// Example: "110100111010110000010001" → ["11010011", "10101100", "00010001"]
     /// </summary>
-    private List<string> BinaryStringToBitBlockList(string bitString)
+    private static List<string> BinaryStringToBitBlockList(string bitString)
     {
         if (bitString.Length % 8 != 0)
         {
@@ -458,7 +458,7 @@ public class QRCodeGenerator : IDisposable
     /// Converts list of binary strings to list of decimal integers.
     /// Example: ["11010011", "10101100"] → [211, 172]
     /// </summary>
-    private List<int> BinaryStringListToDecList(List<string> binaryStringList)
+    private static List<int> BinaryStringListToDecList(List<string> binaryStringList)
     {
         var result = new List<int>(binaryStringList.Count);
         foreach (var item in binaryStringList)
