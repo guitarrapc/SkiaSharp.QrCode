@@ -71,7 +71,7 @@ public class QRCodeGenerator : IDisposable
         var codewordBlocks = CalculateErrorCorrection(encodedBits, config.EccInfo);
 
         // Interleave data
-        var interleavedData = InterleavedDataCapacity(codewordBlocks, config.Version, config.EccInfo);
+        var interleavedData = InterleaveCodewords(codewordBlocks, config.Version, config.EccInfo);
 
         // Create QR code matrix
         var qrMatrix = CreateQRMatrix(config.Version, interleavedData, config.EccLevel);
@@ -121,7 +121,7 @@ public class QRCodeGenerator : IDisposable
     /// <param name="config"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static string EncodeData(string plainText, QRConfiguration config)
+    private static string EncodeData(string plainText, in QRConfiguration config)
     {
         var capacity = CalculateMaxBitStringLength(config.Version, config.EccLevel, config.Encoding);
         var encoder = new QRTextEncoder(capacity);
@@ -202,7 +202,7 @@ public class QRCodeGenerator : IDisposable
     /// <param name="eccInfo"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static string InterleavedDataCapacity(List<CodewordBlock> blocks, int version, in ECCInfo eccInfo)
+    private static string InterleaveCodewords(List<CodewordBlock> blocks, int version, in ECCInfo eccInfo)
     {
         var interleaveCapacity = CalculateInterleavedDataCapacity(version, eccInfo);
         var result = new StringBuilder(interleaveCapacity);
@@ -624,7 +624,16 @@ public class QRCodeGenerator : IDisposable
         public List<int> ECCWordsInt { get; }
     }
 
-    private record QRConfiguration(int Version, ECCLevel EccLevel, EncodingMode Encoding, EciMode EciMode, bool Utf8BOM, ECCInfo EccInfo);
+    /// <summary>
+    /// Holds QR configuration parameters determined during setup.
+    /// </summary>
+    /// <param name="Version"></param>
+    /// <param name="EccLevel"></param>
+    /// <param name="Encoding"></param>
+    /// <param name="EciMode"></param>
+    /// <param name="Utf8BOM"></param>
+    /// <param name="EccInfo"></param>
+    private readonly record struct QRConfiguration(int Version, ECCLevel EccLevel, EncodingMode Encoding, EciMode EciMode, bool Utf8BOM, in ECCInfo EccInfo);
 
     public void Dispose()
     {

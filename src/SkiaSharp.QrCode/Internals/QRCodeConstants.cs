@@ -1062,19 +1062,19 @@ internal static class QRCodeConstants
     /// <summary>
     /// Error correction configuration for a specific version and ECC level.
     /// </summary>
-    public struct ECCInfo
+    public readonly struct ECCInfo
     {
         public ECCInfo(int version, ECCLevel errorCorrectionLevel, int totalDataCodewords, int eccPerBlock, int blocksInGroup1,
             int codewordsInGroup1, int blocksInGroup2, int codewordsInGroup2)
         {
-            this.Version = version;
-            this.ErrorCorrectionLevel = errorCorrectionLevel;
-            this.TotalDataCodewords = totalDataCodewords;
-            this.ECCPerBlock = eccPerBlock;
-            this.BlocksInGroup1 = blocksInGroup1;
-            this.CodewordsInGroup1 = codewordsInGroup1;
-            this.BlocksInGroup2 = blocksInGroup2;
-            this.CodewordsInGroup2 = codewordsInGroup2;
+            Version = version;
+            ErrorCorrectionLevel = errorCorrectionLevel;
+            TotalDataCodewords = totalDataCodewords;
+            ECCPerBlock = eccPerBlock;
+            BlocksInGroup1 = blocksInGroup1;
+            CodewordsInGroup1 = codewordsInGroup1;
+            BlocksInGroup2 = blocksInGroup2;
+            CodewordsInGroup2 = codewordsInGroup2;
         }
         public int Version { get; }
         public ECCLevel ErrorCorrectionLevel { get; }
@@ -1094,8 +1094,8 @@ internal static class QRCodeConstants
     {
         public VersionInfo(int version, List<VersionInfoDetails> versionInfoDetails)
         {
-            this.Version = version;
-            this.Details = versionInfoDetails;
+            Version = version;
+            Details = versionInfoDetails;
         }
 
         /// <summary>QR code version (1-40).</summary>
@@ -1113,8 +1113,8 @@ internal static class QRCodeConstants
     {
         public VersionInfoDetails(ECCLevel errorCorrectionLevel, Dictionary<EncodingMode, int> capacityDict)
         {
-            this.ErrorCorrectionLevel = errorCorrectionLevel;
-            this.CapacityDict = capacityDict;
+            ErrorCorrectionLevel = errorCorrectionLevel;
+            CapacityDict = capacityDict;
         }
 
         /// <summary>Error correction level.</summary>
@@ -1136,8 +1136,8 @@ internal static class QRCodeConstants
     {
         public Antilog(int exponentAlpha, int integerValue)
         {
-            this.ExponentAlpha = exponentAlpha;
-            this.IntegerValue = integerValue;
+            ExponentAlpha = exponentAlpha;
+            IntegerValue = integerValue;
         }
         public int ExponentAlpha { get; }
         public int IntegerValue { get; }
