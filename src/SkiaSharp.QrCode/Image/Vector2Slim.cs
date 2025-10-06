@@ -6,62 +6,97 @@ namespace SkiaSharp.QrCode.Image;
 /// int version of Vector2, slim implementation
 /// </summary>
 /// <remarks>
-/// ref: https://github.com/dotnet/corefx/blob/master/src/System.Numerics.Vectors/src/System/Numerics/Vector2_Intrinsics.cs
+/// ref: https://github.com/dotnet/corefx/blob/v3.1.32/src/System.Numerics.Vectors/src/System/Numerics/Vector2_Intrinsics.cs
 /// </remarks>
-public struct Vector2Slim
+public readonly record struct Vector2Slim
 {
     /// <summary>
     /// The X component of the vector.
     /// </summary>
-    public int X;
+    public int X { get; }
     /// <summary>
     /// The Y component of the vector.
     /// </summary>
-    public int Y;
+    public int Y { get; }
 
     public Vector2Slim(int value) : this(value, value) { }
+
     public Vector2Slim(int x, int y) => (X, Y) = (x, y);
 
+    /// <summary>
+    /// Copies the vector elements to the specified array.
+    /// </summary>
+    /// <param name="array">The destination array</param>
+    /// <exception cref="ArgumentNullException">Thrown when array is null</exception>
+    /// <exception cref="ArgumentException">Thrown when array is too short</exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void CopyTo(int[] array) => CopyTo(array, 0);
-    public void CopyTo(int[] array, int index)
+    public void CopyTo(int[] array)
     {
-        if (array == null)
-        {
+        if (array is null)
             throw new ArgumentNullException(nameof(array));
-        }
-        if (index < 0 || index >= array.Length)
-        {
-            throw new ArgumentOutOfRangeException(nameof(index));
-        }
-        if ((array.Length - index) < 2)
-        {
-            throw new ArgumentException($"{index} is greater thean destination.");
-        }
-        array[index] = X;
-        array[index + 1] = Y;
+
+        CopyTo(array.AsSpan(), 0);
     }
 
-    public bool Equals(Vector2Slim other) => this.X == other.X && this.Y == other.Y;
+    /// <summary>
+    /// Copies the vector elements to the specified span.
+    /// </summary>
+    /// <param name="span">The destination span</param>
+    /// <exception cref="ArgumentException">Thrown when span is too short</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void CopyTo(Span<int> span) => CopyTo(span, 0);
 
-    #region statics
+    /// <summary>
+    /// Copies the vector elements to the specified array starting at the specified index.
+    /// </summary>
+    /// <param name="array">The destination array</param>
+    /// <param name="index">The index at which to begin copying</param>
+    /// <exception cref="ArgumentNullException">Thrown when array is null</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when index is out of range</exception>
+    /// <exception cref="ArgumentException">Thrown when destination is too short</exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void CopyTo(int[] array, int index)
+    {
+        if (array is null)
+            throw new ArgumentNullException(nameof(array));
+
+        CopyTo(array.AsSpan(), index);
+    }
+
+    /// <summary>
+    /// Copies the vector elements to the specified span starting at the specified index.
+    /// </summary>
+    /// <param name="span">The destination span</param>
+    /// <param name="index">The index at which to begin copying</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when index is out of range</exception>
+    /// <exception cref="ArgumentException">Thrown when destination is too short</exception>
+    public void CopyTo(Span<int> span, int index)
+    {
+        if (span.Length < 2)
+            throw new ArgumentException("Destination must have at least 2 elements", nameof(span));
+        if (index < 0 || index > span.Length - 2)
+            throw new ArgumentOutOfRangeException(nameof(index), $"Index must be between 0 and {span.Length - 2}");
+
+        span[index] = X;
+        span[index + 1] = Y;
+    }
+
     /// <summary>
     /// Returns the vector (0,0).
     /// </summary>
-    public static Vector2Slim Zero => new Vector2Slim();
+    public static readonly Vector2Slim Zero = new(0, 0);
 
     /// <summary>
     /// Returns the vector (1,1).
     /// </summary>
-    public static Vector2Slim One => new Vector2Slim(1, 1);
+    public static readonly Vector2Slim One = new(1, 1);
 
     /// <summary>
     /// Returns the vector (1,0).
     /// </summary>
-    public static Vector2Slim UnitX => new Vector2Slim(1, 0);
+    public static readonly Vector2Slim UnitX = new(1, 0);
     /// <summary>
     /// Returns the vector (0,1).
     /// </summary>
-    public static Vector2Slim UnitY => new Vector2Slim(0, 1);
-    #endregion
+    public static readonly Vector2Slim UnitY = new(0, 1);
 }
