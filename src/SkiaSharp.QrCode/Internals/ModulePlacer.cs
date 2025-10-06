@@ -205,11 +205,11 @@ internal static class ModulePlacer
     {
         blockedModules.AddRange([
             new Rectangle(7, 0, 1, 8),
-                new Rectangle(0, 7, 7, 1),
-                new Rectangle(0, size-8, 8, 1),
-                new Rectangle(7, size-7, 1, 7),
-                new Rectangle(size-8, 0, 1, 8),
-                new Rectangle(size-7, 7, 7, 1)
+            new Rectangle(0, 7, 7, 1),
+            new Rectangle(0, size-8, 8, 1),
+            new Rectangle(7, size-7, 1, 7),
+            new Rectangle(size-8, 0, 1, 8),
+            new Rectangle(size-7, 7, 7, 1)
         ]);
     }
 
@@ -221,18 +221,18 @@ internal static class ModulePlacer
     {
         blockedModules.AddRange([
             new Rectangle(8, 0, 1, 6),
-                new Rectangle(8, 7, 1, 1),
-                new Rectangle(0, 8, 6, 1),
-                new Rectangle(7, 8, 2, 1),
-                new Rectangle(size-8, 8, 8, 1),
-                new Rectangle(8, size-7, 1, 7)
+            new Rectangle(8, 7, 1, 1),
+            new Rectangle(0, 8, 6, 1),
+            new Rectangle(7, 8, 2, 1),
+            new Rectangle(size-8, 8, 8, 1),
+            new Rectangle(8, size-7, 1, 7)
         ]);
 
         if (version >= 7)
         {
             blockedModules.AddRange([
                 new Rectangle(size-11, 0, 3, 6),
-                    new Rectangle(0, size-11, 6, 3)
+                new Rectangle(0, size-11, 6, 3)
             ]);
         }
     }
@@ -378,6 +378,8 @@ internal static class ModulePlacer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsBlocked(Rectangle r1, List<Rectangle> blockedModules)
     {
+        // Tried HashSet pattern for O(1) lookup, but it was slower than this simple loop O(n) and has memory overhead.
+        // Keep this implementation for now.
         foreach (var blockedMod in blockedModules)
         {
             if (Intersects(blockedMod, r1))
