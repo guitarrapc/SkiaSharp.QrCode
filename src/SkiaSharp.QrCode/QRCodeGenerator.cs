@@ -206,11 +206,8 @@ public class QRCodeGenerator : IDisposable
     {
         var blockBits = bitString.Substring(offset, codewordCount * 8);
         var codeWords = BinaryStringToBitBlockList(blockBits);
-        var codeWordsInt = BinaryStringListToDecList(codeWords);
-
         var eccWords = eccEncoder.CalculateECC(blockBits, eccPerBlock);
-        var eccWordListDec = BinaryStringListToDecList(eccWords);
-        var codewordBlock = new CodewordBlock(groupNumber, blockNumber, blockBits, codeWords, eccWords, codeWordsInt, eccWordListDec);
+        var codewordBlock = new CodewordBlock(groupNumber, blockNumber, blockBits, codeWords, eccWords);
 
         return codewordBlock;
     }
@@ -630,45 +627,10 @@ public class QRCodeGenerator : IDisposable
     }
 
     /// <summary>
-    /// Converts list of binary strings to list of decimal integers.
-    /// Example: ["11010011", "10101100"] → [211, 172]
-    /// </summary>
-    private static List<int> BinaryStringListToDecList(List<string> binaryStringList)
-    {
-        var result = new List<int>(binaryStringList.Count);
-        foreach (var item in binaryStringList)
-        {
-            result.Add(BinToDec(item));
-        }
-        return result;
-    }
-
-    /// <summary>
     /// Represents a codeword block in the interleaving process.
     /// QR codes split data into multiple blocks for error correction.
     /// </summary>
-    private struct CodewordBlock
-    {
-        public CodewordBlock(int groupNumber, int blockNumber, string bitString, List<string> codeWords,
-            List<string> eccWords, List<int> codeWordsInt, List<int> eccWordsInt)
-        {
-            GroupNumber = groupNumber;
-            BlockNumber = blockNumber;
-            BitString = bitString;
-            CodeWords = codeWords;
-            ECCWords = eccWords;
-            CodeWordsInt = codeWordsInt;
-            ECCWordsInt = eccWordsInt;
-        }
-
-        public int GroupNumber { get; }
-        public int BlockNumber { get; }
-        public string BitString { get; }
-        public List<string> CodeWords { get; }
-        public List<int> CodeWordsInt { get; }
-        public List<string> ECCWords { get; }
-        public List<int> ECCWordsInt { get; }
-    }
+    private readonly record struct CodewordBlock(int GroupNumber, int BlockNumber, string BitString, IReadOnlyList<string> CodeWords, IReadOnlyList<string> ECCWords);
 
     /// <summary>
     /// Holds QR configuration parameters determined during setup.
