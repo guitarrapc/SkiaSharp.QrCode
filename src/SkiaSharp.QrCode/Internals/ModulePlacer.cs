@@ -353,6 +353,15 @@ internal static class ModulePlacer
     {
         if (text.Length == 0) return string.Empty;
 
+        // We are .NET Standard 2.0 compatible, so we can't use this method.
+        //return string.Create(text.Length, text, (span, source) =>
+        //{
+        //    for (int i = 0; i < source.Length; i++)
+        //    {
+        //        span[i] = source[source.Length - 1 - i];
+        //    }
+        //});
+
         var chars = text.ToCharArray();
         Array.Reverse(chars);
         return new string(chars);
