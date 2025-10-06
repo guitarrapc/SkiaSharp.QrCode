@@ -321,7 +321,7 @@ internal class EccTextEncoder
         // Remove duplicates and add combined terms
         resultPolynom.PolyItems.RemoveAll(x => exponentsToGlue.Contains(x.Exponent));
         resultPolynom.PolyItems.AddRange(gluedPolynoms);
-        resultPolynom.PolyItems = resultPolynom.PolyItems.OrderByDescending(x => x.Exponent).ToList();
+        resultPolynom.SortByExponentDesc();
 
         return resultPolynom;
     }

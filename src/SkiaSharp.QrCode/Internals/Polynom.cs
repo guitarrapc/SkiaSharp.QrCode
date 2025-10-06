@@ -15,6 +15,11 @@ internal class Polynom
         PolyItems = new List<PolynomItem>();
     }
 
+    public void SortByExponentDesc()
+    {
+        PolyItems.Sort((a, b) => b.Exponent.CompareTo(a.Exponent));
+    }
+
     public override string ToString()
     {
         var sb = new StringBuilder();
