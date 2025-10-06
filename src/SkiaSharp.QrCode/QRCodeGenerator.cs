@@ -109,9 +109,30 @@ public class QRCodeGenerator : IDisposable
             : requestedVersion;
 
         // Create ECCInfo
-        var eccInfo = CapacityECCTable.Single(x => x.Version == version && x.ErrorCorrectionLevel == eccLevel);
+        var eccInfo = GetEccInfo(version, eccLevel);
 
         return new QRConfiguration(version, eccLevel, encoding, actualEciMode, utf8Bom, eccInfo);
+    }
+
+    /// <summary>
+    /// Retrieves ECC information for the specified version and error correction level.
+    /// </summary>
+    /// <param name="version"></param>
+    /// <param name="eccLevel"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ECCInfo GetEccInfo(int version, ECCLevel eccLevel)
+    {
+        var table = CapacityECCTable;
+        for (var i = 0; i < table.Count; i++)
+        {
+            var item = table[i];
+            if (item.Version == version && item.ErrorCorrectionLevel == eccLevel)
+                return item;
+        }
+
+        throw new ArgumentException($"ECC info not found for version {version}, level {eccLevel}");
     }
 
     /// <summary>
