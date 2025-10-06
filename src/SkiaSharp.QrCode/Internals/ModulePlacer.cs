@@ -106,7 +106,7 @@ internal static class ModulePlacer
         var bestPatternIndex = 0;
         var bestScore = int.MaxValue;
 
-        // Test all 8 pattern
+        // Test all 8 patterns
         for (var patternIndex = 0; patternIndex < 8; patternIndex++)
         {
             // Create temporary QR code matrix
@@ -576,8 +576,8 @@ internal static class ModulePlacer
         /// Applies the specified mask pattern to a module
         /// </summary>
         /// <param name="patternIndex">Pattern number (0-7)</param>
-        /// <param name="x">Column position</param>
-        /// <param name="y">Row position</param>
+        /// <param name="x">Math horizontal position = column</param>
+        /// <param name="y">Math vertical position = row</param>
         /// <returns>True if the module is dark, false if it is light</returns>
         /// <exception cref="ArgumentOutOfRangeException"></exception>
         public static bool Apply(int patternIndex, int x, int y)
