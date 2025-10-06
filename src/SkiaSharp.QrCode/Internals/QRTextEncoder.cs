@@ -229,19 +229,6 @@ internal class QRTextEncoder
     // helpers
 
     /// <summary>
-    /// Converts decimal number to binary string with specified bit length
-    /// </summary>
-    /// <param name="num">Decimal number to convert.</param>
-    /// <param name="bits">Number of bits in output (with leading zeros).</param>
-    /// <returns>Binary string (e.g., 5 → "0101" for bits=4).</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static string DecToBin(int num, int bits)
-    {
-        var binStr = Convert.ToString(num, 2);
-        return binStr.PadLeft(bits, '0');
-    }
-
-    /// <summary>
     /// Validates if text can be encoded in ISO-8859-1 without data loss.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

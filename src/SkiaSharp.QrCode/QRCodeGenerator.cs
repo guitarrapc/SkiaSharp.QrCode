@@ -498,26 +498,6 @@ public class QRCodeGenerator : IDisposable
     }
 
     /// <summary>
-    /// Converts binary string to decimal integer.
-    /// </summary>
-    private int BinToDec(string binStr)
-    {
-        return Convert.ToInt32(binStr, 2);
-    }
-
-    /// <summary>
-    /// Converts decimal number to binary string with optional padding.
-    /// </summary>
-    /// <param name="decNum">Decimal number.</param>
-    /// <param name="padLeftUpTo">Minimum bit length (pads with leading zeros).</param>
-    /// <returns>Binary string.</returns>
-    private static string DecToBin(int decNum, int padLeftUpTo)
-    {
-        var binStr = Convert.ToString(decNum, 2);
-        return binStr.PadLeft(padLeftUpTo, '0');
-    }
-
-    /// <summary>
     /// Converts binary string (8-bit blocks) to list of binary strings.
     /// Example: "110100111010110000010001" → ["11010011", "10101100", "00010001"]
     /// </summary>

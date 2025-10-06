@@ -749,6 +749,31 @@ internal static class QRCodeConstants
         return GaloisField.IntToExp[intValue];
     }
 
+    // Binary and Decimal Conversion
+
+    /// <summary>
+    /// Converts binary string to decimal integer.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int BinToDec(string binStr)
+    {
+        return Convert.ToInt32(binStr, 2);
+    }
+
+    /// <summary>
+    /// Converts decimal number to binary string with optional padding.
+    /// </summary>
+    /// <param name="decNum">Decimal number.</param>
+    /// <param name="padLeftUpTo">Minimum bit length (pads with leading zeros).</param>
+    /// <returns>Binary string.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static string DecToBin(int decNum, int padLeftUpTo)
+    {
+        var binStr = Convert.ToString(decNum, 2);
+        return binStr.PadLeft(padLeftUpTo, '0');
+    }
+
+
     // Lookup Table Initialization
 
     /// <summary>

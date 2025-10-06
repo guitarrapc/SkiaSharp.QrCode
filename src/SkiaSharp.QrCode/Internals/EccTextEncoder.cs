@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
 namespace SkiaSharp.QrCode.Internals;
@@ -360,29 +359,5 @@ internal class EccTextEncoder
     private static int ShrinkAlphaExp(int alphaExp)
     {
         return (int)((alphaExp % 256) + Math.Floor((double)(alphaExp / 256)));
-    }
-
-    // helpers
-
-    /// <summary>
-    /// Converts binary string to decimal integer.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int BinToDec(string binStr)
-    {
-        return Convert.ToInt32(binStr, 2);
-    }
-
-    /// <summary>
-    /// Converts decimal number to binary string with optional padding.
-    /// </summary>
-    /// <param name="decNum">Decimal number.</param>
-    /// <param name="padLeftUpTo">Minimum bit length (pads with leading zeros).</param>
-    /// <returns>Binary string.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static string DecToBin(int decNum, int padLeftUpTo)
-    {
-        var binStr = Convert.ToString(decNum, 2);
-        return binStr.PadLeft(padLeftUpTo, '0');
     }
 }
