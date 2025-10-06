@@ -380,16 +380,12 @@ internal static class ModulePlacer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsBlocked(Rectangle r1, List<Rectangle> blockedModules)
     {
-        var isBlocked = false;
         foreach (var blockedMod in blockedModules)
         {
             if (Intersects(blockedMod, r1))
-            {
-                // TODO: optimize by breaking on first match
-                isBlocked = true;
-            }
+                return true;
         }
-        return isBlocked;
+        return false;
     }
 
     // private class/strusts
