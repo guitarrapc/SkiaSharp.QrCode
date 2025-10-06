@@ -161,9 +161,9 @@ public class QRCodeGenerator : IDisposable
     /// <summary>
     /// Calculates error correction codewords for the given bit string and ECC info.
     /// </summary>
-    /// <param name="bitString"></param>
-    /// <param name="eccInfo"></param>
-    /// <returns></returns>
+    /// <param name="bitString">The binary string representing the encoded QR code data.</param>
+    /// <param name="eccInfo">Error correction information for the QR code version and ECC level.</param>
+    /// <returns>A list of codeword blocks containing data and error correction codewords.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static List<CodewordBlock> CalculateErrorCorrection(string bitString, in ECCInfo eccInfo)
     {
@@ -193,14 +193,14 @@ public class QRCodeGenerator : IDisposable
     /// <summary>
     /// Creates a codeword block with data and ECC codewords.
     /// </summary>
-    /// <param name="bitString"></param>
-    /// <param name="offset"></param>
-    /// <param name="codewordCount"></param>
-    /// <param name="eccEncoder"></param>
-    /// <param name="eccPerBlock"></param>
-    /// <param name="groupNumber"></param>
-    /// <param name="blockNumber"></param>
-    /// <returns></returns>
+    /// <param name="bitString">The binary string containing the encoded data.</param>
+    /// <param name="offset">The starting bit offset in the binary string for this block.</param>
+    /// <param name="codewordCount">The number of data codewords in this block.</param>
+    /// <param name="eccEncoder">The ECC encoder used to generate error correction codewords.</param>
+    /// <param name="eccPerBlock">The number of ECC codewords to generate for this block.</param>
+    /// <param name="groupNumber">The group number (1 or 2) for this block as per QR code specification.</param>
+    /// <param name="blockNumber">The sequential block number within the group.</param>
+    /// <returns>A <see cref="CodewordBlock"/> containing the data and ECC codewords for this block.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static CodewordBlock CreateCodewordBlock(string bitString, int offset, int codewordCount, EccTextEncoder eccEncoder, int eccPerBlock, int groupNumber, int blockNumber)
     {
@@ -264,10 +264,10 @@ public class QRCodeGenerator : IDisposable
     /// <summary>
     /// Creates the QR code matrix by placing patterns, data, applying mask, and adding format/version info. 
     /// </summary>
-    /// <param name="version"></param>
-    /// <param name="interleavedData"></param>
-    /// <param name="eccLevel"></param>
-    /// <returns></returns>
+    /// <param name="version">The QR code version (1-40) to generate.</param>
+    /// <param name="interleavedData">The encoded and interleaved data string to be placed in the QR code.</param>
+    /// <param name="eccLevel">The error correction level to use for the QR code.</param>
+    /// <returns>A <see cref="QRCodeData"/> object containing the generated QR code matrix.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static QRCodeData CreateQRMatrix(int version, string interleavedData, ECCLevel eccLevel)
     {
@@ -300,9 +300,9 @@ public class QRCodeGenerator : IDisposable
     /// <summary>
     /// Places all fixed patterns on the QR code matrix and reserves their areas.
     /// </summary>
-    /// <param name="qrCodeData"></param>
-    /// <param name="version"></param>
-    /// <param name="blockedModules"></param>
+    /// <param name="qrCodeData">The QRCodeData object representing the QR code matrix to modify.</param>
+    /// <param name="version">The QR code version (1-40) determining pattern placement.</param>
+    /// <param name="blockedModules">A list of rectangles representing reserved areas in the matrix where patterns are placed.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void PlacePatterns(ref QRCodeData qrCodeData, int version, ref List<Rectangle> blockedModules)
     {
@@ -319,8 +319,8 @@ public class QRCodeGenerator : IDisposable
     /// <summary>
     /// Retrieves alignment pattern positions for the specified version.
     /// </summary>
-    /// <param name="version"></param>
-    /// <returns></returns>
+    /// <param name="version">The QR code version for which to retrieve alignment pattern positions.</param>
+    /// <returns>A list of alignment pattern positions as points for the specified QR code version.</returns>
     /// <exception cref="InvalidOperationException"></exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static List<Point> GetAlignmentPatternPositions(int version)
@@ -339,10 +339,10 @@ public class QRCodeGenerator : IDisposable
     /// <summary>
     /// Applies the optimal mask to the QR code data and places the format information.
     /// </summary>
-    /// <param name="qrCodeData"></param>
-    /// <param name="version"></param>
-    /// <param name="eccLevel"></param>
-    /// <param name="blockedModules"></param>
+    /// <param name="qrCodeData">The QRCodeData matrix to apply the mask and format information to.</param>
+    /// <param name="version">The QR code version (1-40).</param>
+    /// <param name="eccLevel">The error correction level to use.</param>
+    /// <param name="blockedModules">A list of rectangles representing modules that should not be masked (reserved areas).</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ApplyMaskAndFormat(ref QRCodeData qrCodeData, int version, ECCLevel eccLevel, ref List<Rectangle> blockedModules)
     {
@@ -673,12 +673,12 @@ public class QRCodeGenerator : IDisposable
     /// <summary>
     /// Holds QR configuration parameters determined during setup.
     /// </summary>
-    /// <param name="Version"></param>
-    /// <param name="EccLevel"></param>
-    /// <param name="Encoding"></param>
-    /// <param name="EciMode"></param>
-    /// <param name="Utf8BOM"></param>
-    /// <param name="EccInfo"></param>
+    /// <param name="Version">QR code version (1-40) selected for encoding.</param>
+    /// <param name="EccLevel">Error correction level used for the QR code.</param>
+    /// <param name="Encoding">Encoding mode (Numeric, Alphanumeric, Byte, etc.).</param>
+    /// <param name="EciMode">ECI mode specifying character encoding.</param>
+    /// <param name="Utf8BOM">Indicates if UTF-8 BOM is included in the encoded data.</param>
+    /// <param name="EccInfo">Error correction information for the selected version and ECC level.</param>
     private readonly record struct QRConfiguration(int Version, ECCLevel EccLevel, EncodingMode Encoding, EciMode EciMode, bool Utf8BOM, in ECCInfo EccInfo);
 
     public void Dispose()
