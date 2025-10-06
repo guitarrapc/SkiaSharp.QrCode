@@ -207,7 +207,7 @@ internal class QRTextEncoder
             EciMode.Default => IsValidISO(text)
                 ? Encoding.GetEncoding("ISO-8859-1").GetBytes(text)
                 : utf8BOM
-                    ? [.. Encoding.UTF8.GetPreamble(), ..Encoding.UTF8.GetBytes(text)]
+                    ? [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(text)]
                     : Encoding.UTF8.GetBytes(text),
             EciMode.Iso8859_1 => Encoding.GetEncoding("ISO-8859-1").GetBytes(text),
             EciMode.Utf8 => utf8BOM

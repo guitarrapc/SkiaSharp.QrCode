@@ -380,7 +380,7 @@ public class QRCodeGeneratorUnitTest
         return sizeWithoutQuietSone + (quietZoneSize * 2);
     }
 
-    private static string SerializeMatrix(QRCodeData  qrCode)
+    private static string SerializeMatrix(QRCodeData qrCode)
     {
         var size = qrCode.Size;
         var sb = new StringBuilder(size * size);
