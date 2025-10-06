@@ -41,6 +41,29 @@ public class QRCodeData : IDisposable
         internal set => _moduleMatrix[row, col] = value;
     }
 
+    /// <summary>
+    /// Creates a deep copy of an existing <see cref="QRCodeData"/> instance
+    /// All module states are copied to ensure independence from the source.
+    /// </summary>
+    /// <param name="source">Source QR code data to copy</param>
+    /// <remarks>
+    /// This constructor is useful for creating temporary QR codes during mask pattern selection.
+    /// The copied instance is completely independent and modifications do not affect the source.
+    /// </remarks>
+    public QRCodeData(QRCodeData source)
+    {
+        Version = source.Version;
+        var size = source.Size;
+        _moduleMatrix = new bool[size, size];
+
+        // Copy matrix data
+        Array.Copy(source._moduleMatrix, _moduleMatrix, source._moduleMatrix.Length);
+    }
+
+    /// <summary>
+    /// Initializes with the specified version.
+    /// </summary>
+    /// <param name="version"></param>
     public QRCodeData(int version)
     {
         Version = version;
@@ -48,6 +71,21 @@ public class QRCodeData : IDisposable
         _moduleMatrix = new bool[size, size];
     }
 
+    /// <summary>
+    /// Initializes using the specified raw data and compression
+    /// mode.
+    /// </summary>
+    /// <remarks>
+    /// This constructor processes the provided raw data to initialize the QR code's module matrix
+    /// and determine its version. The raw data is expected to follow the QR code format, including a valid header and
+    /// size information.
+    /// </remarks>
+    /// <param name="rawData">The raw byte array representing the QR code data. This data may be compressed based on the specified <paramref
+    /// name="compressMode"/>.</param>
+    /// <param name="compressMode">The compression mode used to encode the <paramref name="rawData"/>. Determines how the data will be
+    /// decompressed.</param>
+    /// <exception cref="InvalidDataException">Thrown if the decompressed data is invalid.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if the decompressed data does not contain enough bits to fully populate the QR code matrix.</exception>
     public QRCodeData(byte[] rawData, Compression compressMode)
     {
         // Decompress
