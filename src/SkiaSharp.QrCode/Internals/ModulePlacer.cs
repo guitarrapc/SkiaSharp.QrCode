@@ -109,15 +109,8 @@ internal static class ModulePlacer
         // Test all 8 patterns
         for (var patternIndex = 0; patternIndex < 8; patternIndex++)
         {
-            // Create temporary QR code matrix
-            var qrTemp = new QRCodeData(version);
-            for (var row = 0; row < size; row++)
-            {
-                for (var col = 0; col < size; col++)
-                {
-                    qrTemp[row, col] = qrCode[row, col];
-                }
-            }
+            // Create temporary QR code with deep copy
+            var qrTemp = new QRCodeData(qrCode);
 
             // Apply format and version information
             var formatStr = GetFormatString(eccLevel, patternIndex);
@@ -353,6 +346,7 @@ internal static class ModulePlacer
         if (text.Length == 0) return string.Empty;
 
         // We are .NET Standard 2.0 compatible, so we can't use this method.
+        // Leave this comment for future optimization if we move to .NET Standard 2.1+ or .NET 5+
         //return string.Create(text.Length, text, (span, source) =>
         //{
         //    for (int i = 0; i < source.Length; i++)
