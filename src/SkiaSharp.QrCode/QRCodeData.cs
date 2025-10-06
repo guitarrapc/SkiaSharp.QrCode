@@ -15,8 +15,6 @@ namespace SkiaSharp.QrCode;
 /// </remarks>
 public class QRCodeData : IDisposable
 {
-    private static readonly byte[] _headerSignature = [0x51, 0x52, 0x52]; // "QRR"
-
     /// <summary>
     /// Get the QR code version (1-40)
     /// </summary>
@@ -138,6 +136,9 @@ public class QRCodeData : IDisposable
     /// <param name="compressMode"></param>
     internal byte[] GetRawData(Compression compressMode)
     {
+        // "QRR"
+        ReadOnlySpan<byte> _headerSignature = [0x51, 0x52, 0x52];
+
         // size calculations
         var size = Size;
         var totalBits = size * size;
