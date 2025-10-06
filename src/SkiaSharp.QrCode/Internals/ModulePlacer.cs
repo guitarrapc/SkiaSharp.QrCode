@@ -129,13 +129,13 @@ internal static class ModulePlacer
             }
 
             // Apply mask pattern to data area only
-            for (var x = 0; x < size; x++)
+            for (var col = 0; col < size; col++)
             {
-                for (var y = 0; y < size; y++)
+                for (var row = 0; row < size; row++)
                 {
-                    if (!IsBlocked(new Rectangle(x, y, 1, 1), blockedModules))
+                    if (!IsBlocked(new Rectangle(col, row, 1, 1), blockedModules))
                     {
-                        qrTemp[y, x] ^= MaskPattern.Apply(patternIndex, x, y);
+                        qrTemp[row, col] ^= MaskPattern.Apply(patternIndex, col, row);
                     }
                 }
             }
@@ -149,13 +149,13 @@ internal static class ModulePlacer
             }
         }
 
-        for (var x = 0; x < size; x++)
+        for (var col = 0; col < size; col++)
         {
-            for (var y = 0; y < size; y++)
+            for (var row = 0; row < size; row++)
             {
-                if (!IsBlocked(new Rectangle(x, y, 1, 1), blockedModules))
+                if (!IsBlocked(new Rectangle(col, row, 1, 1), blockedModules))
                 {
-                    qrCode[y, x] ^= MaskPattern.Apply(bestPatternIndex, x, y);
+                    qrCode[row, col] ^= MaskPattern.Apply(bestPatternIndex, col, row);
                 }
             }
         }
