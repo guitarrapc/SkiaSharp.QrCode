@@ -57,5 +57,7 @@ public class QRCodeRenderer : IDisposable
     /// <see cref="T:SkiaSharp.QRCodeGeneration.QRCodeRenderer"/> so the garbage collector can reclaim the memory
     /// that the <see cref="T:SkiaSharp.QRCodeGeneration.QRCodeRenderer"/> was occupying.</remarks>
     public void Dispose()
-    { }
+    {
+        // will be removed in future, or remain.
+    }
 }
