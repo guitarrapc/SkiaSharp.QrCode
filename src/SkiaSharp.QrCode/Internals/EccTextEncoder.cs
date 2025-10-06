@@ -44,25 +44,27 @@ internal class EccTextEncoder
         var generatorPolynom = CalculateGeneratorPolynom(eccWordCount);
 
         // Multiply message polynomial by x^eccWordCount (shift exponents)
-        for (var i = 0; i < messagePolynom.PolyItems.Count; i++)
+        for (var i = 0; i < messagePolynom.Count; i++)
         {
-            var coefficient = messagePolynom.PolyItems[i].Coefficient;
-            var exponent = messagePolynom.PolyItems[i].Exponent + eccWordCount;
-            messagePolynom.PolyItems[i] = new PolynomItem(coefficient, exponent);
+            var coefficient = messagePolynom[i].Coefficient;
+            var exponent = messagePolynom[i].Exponent + eccWordCount;
+            messagePolynom[i] = new PolynomItem(coefficient, exponent);
         }
 
         // Perform polynomial division in GF(256)
         var leadTermSource = messagePolynom;
-        for (var i = 0; (leadTermSource.PolyItems.Count > 0 && leadTermSource.PolyItems[^1].Exponent > 0); i++)
+        for (var i = 0; (leadTermSource.Count > 0 && leadTermSource[^1].Exponent > 0); i++)
         {
-            if (leadTermSource.PolyItems[0].Coefficient == 0)
+            if (leadTermSource[0].Coefficient == 0)
             {
-                leadTermSource.PolyItems.RemoveAt(0);
-                leadTermSource.PolyItems.Add(new PolynomItem(0, leadTermSource.PolyItems[^1].Exponent - 1));
+                // Shift zero coefficient: remove lead term and add zero at lower degree
+                leadTermSource.RemoveAt(0);
+                leadTermSource.Add(new PolynomItem(0, leadTermSource[^1].Exponent - 1));
             }
             else
             {
-                var resPoly = MultiplyGeneratorPolynomByLeadterm(generatorPolynom, ConvertToAlphaNotation(leadTermSource).PolyItems[0], i);
+                // Multiply generator by lead term, convert to decimal, and XOR with current polynomial
+                var resPoly = MultiplyGeneratorPolynomByLeadterm(generatorPolynom, ConvertToAlphaNotation(leadTermSource)[0], i);
                 resPoly = ConvertToDecNotation(resPoly);
                 resPoly = XORPolynoms(leadTermSource, resPoly);
                 leadTermSource = resPoly;
@@ -73,7 +75,7 @@ internal class EccTextEncoder
         // Reed-Solomon remainder polynomial R(x) has degree < eccWordCount,
         // so we need exactly eccWordCount coefficients (from x^(n-1) down to x^0).
         // Missing exponents are implicitly 0 (e.g., sparse polynomials).
-        var coeffByExp = BuildCoeffDictionary(leadTermSource.PolyItems, eccWordCount);
+        var coeffByExp = BuildCoeffDictionary(leadTermSource.Items, eccWordCount);
         var ecc = new List<string>(eccWordCount);
         for (int exp = eccWordCount - 1; exp >= 0; exp--)
         {
@@ -83,21 +85,16 @@ internal class EccTextEncoder
         return ecc;
 
         // Same as `var coeffByExp = leadTermSource.PolyItems.ToDictionary(p => p.Exponent, p => p.Coefficient);`, but avoid exception on duplicates
-        static Dictionary<int, int> BuildCoeffDictionary(List<PolynomItem> polyItems, int eccWordCount)
+        static Dictionary<int, int> BuildCoeffDictionary(IReadOnlyList<PolynomItem> polyItems, int eccWordCount)
         {
             var coeffByExp = new Dictionary<int, int>(Math.Min(polyItems.Count, eccWordCount));
             foreach (var item in polyItems)
             {
                 // If the same exponent already exists, combine using XOR (equivalent to addition in GF(256))
                 // exp: α^3 + α^3 = 0, α^3 + α^2 + α^3 = α^2
-                if (coeffByExp.TryGetValue(item.Exponent, out var existing))
-                {
-                    coeffByExp[item.Exponent] = existing ^ item.Coefficient;
-                }
-                else
-                {
-                    coeffByExp[item.Exponent] = item.Coefficient;
-                }
+                coeffByExp[item.Exponent] = coeffByExp.TryGetValue(item.Exponent, out var existing)
+                    ? existing ^ item.Coefficient
+                    : item.Coefficient;
             }
             return coeffByExp;
         }
@@ -110,7 +107,6 @@ internal class EccTextEncoder
     /// <param name="bitString">Binary data string.</param>
     /// <returns>Polynomial representation of message.</returns>
     /// <remarks>
-    /// Example: "11010011 10101100" → α^1·x^1 + α^0·x^0
     /// Example:
     /// Input: "01000000 01010110 10000110 01010110" (32 bits = 4 bytes)
     /// Output: M(x) = 64x^3 + 86x^2 + 134x + 86
@@ -125,12 +121,14 @@ internal class EccTextEncoder
     {
         var messagePol = new Polynom();
         var byteCount = bitString.Length / 8;
+
+        // Process from left to right, highest degree to lowest
         for (var i = byteCount - 1; i >= 0; i--)
         {
-            var byteBits = bitString.Substring(0, 8);
+            var byteBits = bitString[..8];
             var coefficient = BinToDec(byteBits);
-            messagePol.PolyItems.Add(new PolynomItem(coefficient, i));
-            bitString = bitString.Remove(0, 8);
+            messagePol.Add(new (coefficient, i));
+            bitString = bitString[8..];
         }
         return messagePol;
     }
@@ -156,18 +154,18 @@ internal class EccTextEncoder
     {
         // init with (x - α^0)
         var generatorPolynom = new Polynom();
-        generatorPolynom.PolyItems.AddRange([
-            new PolynomItem(0, 1), // α^0 x^1
-            new PolynomItem(0, 0), // α^0 x^0
+        generatorPolynom.AddRange([
+            new (0, 1), // α^0 x^1
+            new (0, 0), // α^0 x^0
         ]);
 
         // Multiply by (x - α^i) for i = 1 to eccWordCount - 1
         for (var i = 1; i <= eccWordCount - 1; i++)
         {
             var multiplierPolynom = new Polynom();
-            multiplierPolynom.PolyItems.AddRange([
-                new PolynomItem(0, 1), // α^0 x^1
-                new PolynomItem(i, 0) // α^i x^0
+            multiplierPolynom.AddRange([
+                new (0, 1), // α^0 x^1
+                new (i, 0) // α^i x^0
             ]);
             generatorPolynom = MultiplyAlphaPolynoms(generatorPolynom, multiplierPolynom);
         }
@@ -192,13 +190,12 @@ internal class EccTextEncoder
     private Polynom ConvertToAlphaNotation(Polynom poly)
     {
         var newPoly = new Polynom();
-        for (var i = 0; i < poly.PolyItems.Count; i++)
+        foreach (var item in poly.Items)
         {
-            var coefficient = poly.PolyItems[i].Coefficient != 0
-                ? GetAlphaExpFromIntVal(poly.PolyItems[i].Coefficient)
+            var coefficient = item.Coefficient != 0
+                ? GetAlphaExpFromIntVal(item.Coefficient)
                 : 0;
-            var data = new PolynomItem(coefficient, poly.PolyItems[i].Exponent);
-            newPoly.PolyItems.Add(data);
+            newPoly.Add(new PolynomItem(coefficient, item.Exponent));
         }
         return newPoly;
     }
@@ -218,11 +215,10 @@ internal class EccTextEncoder
     private Polynom ConvertToDecNotation(Polynom poly)
     {
         var newPoly = new Polynom();
-        for (var i = 0; i < poly.PolyItems.Count; i++)
+        foreach (var item in poly.Items)
         {
-            var coefficient = GetIntValFromAlphaExp(poly.PolyItems[i].Coefficient);
-            var data = new PolynomItem(coefficient, poly.PolyItems[i].Exponent);
-            newPoly.PolyItems.Add(data);
+            var coefficient = GetIntValFromAlphaExp(item.Coefficient);
+            newPoly.Add(new PolynomItem(coefficient, item.Exponent));
         }
         return newPoly;
     }
@@ -246,7 +242,7 @@ internal class EccTextEncoder
     {
         var resultPolynom = new Polynom();
         Polynom longPoly, shortPoly;
-        if (messagePolynom.PolyItems.Count >= resPolynom.PolyItems.Count)
+        if (messagePolynom.Count >= resPolynom.Count)
         {
             longPoly = messagePolynom;
             shortPoly = resPolynom;
@@ -257,14 +253,14 @@ internal class EccTextEncoder
             shortPoly = messagePolynom;
         }
 
-        for (var i = 0; i < longPoly.PolyItems.Count; i++)
+        for (var i = 0; i < longPoly.Count; i++)
         {
-            var coefficient = longPoly.PolyItems[i].Coefficient
-                ^ (shortPoly.PolyItems.Count > i ? shortPoly.PolyItems[i].Coefficient : 0);
-            var data = new PolynomItem(coefficient, messagePolynom.PolyItems[0].Exponent - i);
-            resultPolynom.PolyItems.Add(data);
+            var coefficient = longPoly[i].Coefficient
+                ^ (shortPoly.Count > i ? shortPoly[i].Coefficient : 0);
+            var data = new PolynomItem(coefficient, messagePolynom[0].Exponent - i);
+            resultPolynom.Add(data);
         }
-        resultPolynom.PolyItems.RemoveAt(0);
+        resultPolynom.RemoveAt(0);
         return resultPolynom;
     }
 
@@ -290,38 +286,38 @@ internal class EccTextEncoder
         var resultPolynom = new Polynom();
 
         // Multiply each term of multiplier with each term of base
-        foreach (var polItemBase in polynomMultiplier.PolyItems)
+        foreach (var polItemBase in polynomMultiplier.Items)
         {
-            foreach (var polItemMulti in polynomBase.PolyItems)
+            foreach (var polItemMulti in polynomBase.Items)
             {
                 var coefficient = ShrinkAlphaExp(polItemBase.Coefficient + polItemMulti.Coefficient);
-                var polItemRes = new PolynomItem(coefficient, (polItemBase.Exponent + polItemMulti.Exponent));
-                resultPolynom.PolyItems.Add(polItemRes);
+                var exponent = polItemBase.Exponent + polItemMulti.Exponent;
+                resultPolynom.Add(new PolynomItem(coefficient, exponent));
             }
         }
 
-        // Find duplicate exponents
-        var exponentsToGlue = resultPolynom.PolyItems
+        // Find exponents that appear multiple times (need to combine via XOR)
+        var duplicateExponents = resultPolynom.Items
             .GroupBy(x => x.Exponent)
             .Where(x => x.Count() > 1)
             .Select(x => x.Key)
             .ToList();
 
-        // Combine duplicates using XOR
-        var gluedPolynoms = new List<PolynomItem>();
-        foreach (var exponent in exponentsToGlue)
+        // Combine duplicate exponents using XOR (GF(256) addition)
+        var combinedTerms = new List<PolynomItem>(duplicateExponents.Count);
+        foreach (var exponent in duplicateExponents)
         {
-            var coefficient = resultPolynom.PolyItems
+            var coefficient = resultPolynom.Items
                 .Where(x => x.Exponent == exponent)
-                .Aggregate(0, (current, polynomOld) => current ^ GetIntValFromAlphaExp(polynomOld.Coefficient));
-            var polynomFixed = new PolynomItem(GetAlphaExpFromIntVal(coefficient), exponent);
-            gluedPolynoms.Add(polynomFixed);
+                .Select(x => GetIntValFromAlphaExp(x.Coefficient))
+                .Aggregate(0, (current, val) => current ^ val);
+            combinedTerms.Add(new PolynomItem(GetAlphaExpFromIntVal(coefficient), exponent));
         }
 
         // Remove duplicates and add combined terms
-        resultPolynom.PolyItems.RemoveAll(x => exponentsToGlue.Contains(x.Exponent));
-        resultPolynom.PolyItems.AddRange(gluedPolynoms);
-        resultPolynom.PolyItems = resultPolynom.PolyItems.OrderByDescending(x => x.Exponent).ToList();
+        resultPolynom.RemoveAll(x => duplicateExponents.Contains(x.Exponent));
+        resultPolynom.AddRange(combinedTerms);
+        resultPolynom.SortByExponentDescending();
 
         return resultPolynom;
     }
@@ -337,11 +333,11 @@ internal class EccTextEncoder
     private Polynom MultiplyGeneratorPolynomByLeadterm(Polynom genPolynom, PolynomItem leadTerm, int lowerExponentBy)
     {
         var resultPolynom = new Polynom();
-        foreach (var polItemBase in genPolynom.PolyItems)
+        foreach (var polItemBase in genPolynom.Items)
         {
             var coefficient = (polItemBase.Coefficient + leadTerm.Coefficient) % 255;
             var polItemRes = new PolynomItem(coefficient, polItemBase.Exponent - lowerExponentBy);
-            resultPolynom.PolyItems.Add(polItemRes);
+            resultPolynom.Add(polItemRes);
         }
         return resultPolynom;
     }
