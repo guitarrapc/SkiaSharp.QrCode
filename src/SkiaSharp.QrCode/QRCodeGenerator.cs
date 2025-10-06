@@ -367,7 +367,7 @@ public class QRCodeGenerator : IDisposable
         // QR codes are always padded to full capacity with 0xEC/0x11 bytes
         // So the final bit string length = data capacity in bits
         // ECCInfo contains the actual byte capacity (TotalDataCodewords)
-        var eccInfo = CapacityECCTable.Single(x => x.Version == version && x.ErrorCorrectionLevel == eccLevel);
+        var eccInfo = GetEccInfo(version, eccLevel);
         return eccInfo.TotalDataCodewords * 8; // Convert bytes to bits
     }
 
@@ -492,7 +492,7 @@ public class QRCodeGenerator : IDisposable
 
             // Get actual capacity for this version and ECC level
             // Use CapacityTable (which has VersionInfo structure)
-            var eccInfo = CapacityECCTable.Single(x => x.Version == version && x.ErrorCorrectionLevel == eccLevel);
+            var eccInfo = GetEccInfo(version, eccLevel);
             var capacityBits = eccInfo.TotalDataCodewords * 8; // convert bytes to bits
 
             if (capacityBits >= totalRequiredBits)
