@@ -341,7 +341,7 @@ internal static class ModulePlacer
         }
         blockedModules.AddRange([
             new Rectangle(6, 8, 1, size-16),
-                new Rectangle(8, 6, size-16, 1)
+            new Rectangle(8, 6, size-16, 1)
         ]);
     }
 
@@ -349,17 +349,13 @@ internal static class ModulePlacer
     /// Reverses a string character by character.
     /// Used for version and format string bit ordering.
     /// </summary>
-    private static string ReverseString(string inp)
+    private static string ReverseString(string text)
     {
-        string newStr = string.Empty;
-        if (inp.Length > 0)
-        {
-            for (int i = inp.Length - 1; i >= 0; i--)
-            {
-                newStr += inp[i];
-            }
-        }
-        return newStr;
+        if (text.Length == 0) return string.Empty;
+
+        var chars = text.ToCharArray();
+        Array.Reverse(chars);
+        return new string(chars);
     }
 
     /// <summary>
