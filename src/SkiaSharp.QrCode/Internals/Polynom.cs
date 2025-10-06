@@ -8,12 +8,12 @@ namespace SkiaSharp.QrCode.Internals;
 /// </summary>
 internal class Polynom
 {
+    public List<PolynomItem> PolyItems { get; set; }
+
     public Polynom()
     {
-        this.PolyItems = new List<PolynomItem>();
+        PolyItems = new List<PolynomItem>();
     }
-
-    public List<PolynomItem> PolyItems { get; set; }
 
     public override string ToString()
     {
@@ -33,14 +33,4 @@ internal class Polynom
 /// Used in Reed-Solomon error correction algorithm.
 /// Can represent both alpha notation (α^n·x^m) and decimal notation.
 /// </summary>
-internal struct PolynomItem
-{
-    public PolynomItem(int coefficient, int exponent)
-    {
-        this.Coefficient = coefficient;
-        this.Exponent = exponent;
-    }
-
-    public int Coefficient { get; }
-    public int Exponent { get; }
-}
+internal readonly record struct PolynomItem(int Coefficient, int Exponent);
