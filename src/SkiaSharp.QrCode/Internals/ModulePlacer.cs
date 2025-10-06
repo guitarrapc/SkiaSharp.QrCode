@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
@@ -103,65 +102,65 @@ internal static class ModulePlacer
     /// <returns>Selected mask pattern number (0-7).</returns>
     public static int MaskCode(ref QRCodeData qrCode, int version, ref List<Rectangle> blockedModules, ECCLevel eccLevel)
     {
-        var patternName = string.Empty;
-        var patternScore = 0;
         var size = qrCode.Size;
+        var bestPatternIndex = 0;
+        var bestScore = int.MaxValue;
 
-        var methods = typeof(MaskPattern).GetTypeInfo().DeclaredMethods;
-
-        foreach (var pattern in methods)
+        // Test all 8 patterns
+        for (var patternIndex = 0; patternIndex < 8; patternIndex++)
         {
-            if (pattern.Name.Length == 8 && pattern.Name.Substring(0, 7) == "Pattern")
+            // Create temporary QR code matrix
+            var qrTemp = new QRCodeData(version);
+            for (var row = 0; row < size; row++)
             {
-                var qrTemp = new QRCodeData(version);
-                for (var y = 0; y < size; y++)
+                for (var col = 0; col < size; col++)
                 {
-                    for (var x = 0; x < size; x++)
+                    qrTemp[row, col] = qrCode[row, col];
+                }
+            }
+
+            // Apply format and version information
+            var formatStr = GetFormatString(eccLevel, patternIndex);
+            PlaceFormat(ref qrTemp, formatStr);
+            if (version >= 7)
+            {
+                var versionString = GetVersionString(version);
+                PlaceVersion(ref qrTemp, versionString);
+            }
+
+            // Apply mask pattern to data area only
+            for (var col = 0; col < size; col++)
+            {
+                for (var row = 0; row < size; row++)
+                {
+                    if (!IsBlocked(new Rectangle(col, row, 1, 1), blockedModules))
                     {
-                        qrTemp[y, x] = qrCode[y, x];
+                        qrTemp[row, col] ^= MaskPattern.Apply(patternIndex, col, row);
                     }
                 }
+            }
 
-                var formatStr = GetFormatString(eccLevel, Convert.ToInt32((pattern.Name.Substring(7, 1))) - 1);
-                PlaceFormat(ref qrTemp, formatStr);
-                if (version >= 7)
-                {
-                    var versionString = GetVersionString(version);
-                    PlaceVersion(ref qrTemp, versionString);
-                }
+            // Calculate score
+            var score = MaskPattern.Score(ref qrTemp);
+            if (score < bestScore)
+            {
+                bestPatternIndex = patternIndex;
+                bestScore = score;
+            }
+        }
 
-                for (var x = 0; x < size; x++)
+        for (var col = 0; col < size; col++)
+        {
+            for (var row = 0; row < size; row++)
+            {
+                if (!IsBlocked(new Rectangle(col, row, 1, 1), blockedModules))
                 {
-                    for (var y = 0; y < size; y++)
-                    {
-                        if (!IsBlocked(new Rectangle(x, y, 1, 1), blockedModules))
-                        {
-                            qrTemp[y, x] ^= (bool)pattern.Invoke(null, [x, y]);
-                        }
-                    }
-                }
-
-                var score = MaskPattern.Score(ref qrTemp);
-                if (string.IsNullOrEmpty(patternName) || patternScore > score)
-                {
-                    patternName = pattern.Name;
-                    patternScore = score;
+                    qrCode[row, col] ^= MaskPattern.Apply(bestPatternIndex, col, row);
                 }
             }
         }
 
-        var patterMethod = typeof(MaskPattern).GetTypeInfo().GetDeclaredMethod(patternName);
-        for (var x = 0; x < size; x++)
-        {
-            for (var y = 0; y < size; y++)
-            {
-                if (!IsBlocked(new Rectangle(x, y, 1, 1), blockedModules))
-                {
-                    qrCode[y, x] ^= (bool)patterMethod.Invoke(null, [x, y]);
-                }
-            }
-        }
-        return Convert.ToInt32(patterMethod.Name.Substring(patterMethod.Name.Length - 1, 1)) - 1;
+        return bestPatternIndex;
     }
 
     /// <summary>
@@ -402,46 +401,6 @@ internal static class ModulePlacer
     private static class MaskPattern
     {
         /// <summary>
-        /// Creates a checkerboard pattern.
-        /// </summary>
-        public static bool Pattern1(int x, int y) => (x + y) % 2 == 0;
-
-        /// <summary>
-        /// Creates horizontal stripes.
-        /// </summary>
-        public static bool Pattern2(int x, int y) => y % 2 == 0;
-
-        /// <summary>
-        /// Creates vertical stripes (wider than pattern 1).
-        /// </summary>
-        public static bool Pattern3(int x, int y) => x % 3 == 0;
-
-        /// <summary>
-        /// Creates diagonal stripes (wider than pattern 0).
-        /// </summary>
-        public static bool Pattern4(int x, int y) => (x + y) % 3 == 0;
-
-        /// <summary>
-        /// Creates a combination of horizontal and vertical patterns.
-        /// </summary>
-        public static bool Pattern5(int x, int y) => ((int)(Math.Floor(y / 2d) + Math.Floor(x / 3d)) % 2) == 0;
-
-        /// <summary>
-        /// Creates a complex grid pattern.
-        /// </summary>
-        public static bool Pattern6(int x, int y) => ((x * y) % 2) + ((x * y) % 3) == 0;
-
-        /// <summary>
-        /// Creates an alternating complex pattern.
-        /// </summary>
-        public static bool Pattern7(int x, int y) => (((x * y) % 2) + ((x * y) % 3)) % 2 == 0;
-
-        /// <summary>
-        /// Creates a combination of checkerboard and grid patterns.
-        /// </summary>
-        public static bool Pattern8(int x, int y) => (((x + y) % 2) + ((x * y) % 3)) % 2 == 0;
-
-        /// <summary>
         /// Calculates penalty score for a masked QR code.
         /// Lower score = better readability and scanning reliability.
         /// Applies 4 penalty rules from ISO/IEC 18004 Section 8.8.2:
@@ -612,5 +571,77 @@ internal static class ModulePlacer
 
             return score1 + score2 + score3 + score4;
         }
+
+        /// <summary>
+        /// Applies the specified mask pattern to a module
+        /// </summary>
+        /// <param name="patternIndex">Pattern number (0-7)</param>
+        /// <param name="x">Math horizontal position = column</param>
+        /// <param name="y">Math vertical position = row</param>
+        /// <returns>True if the module is dark, false if it is light</returns>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        public static bool Apply(int patternIndex, int x, int y)
+        {
+            return patternIndex switch
+            {
+                0 => Pattern1(x, y),
+                1 => Pattern2(x, y),
+                2 => Pattern3(x, y),
+                3 => Pattern4(x, y),
+                4 => Pattern5(x, y),
+                5 => Pattern6(x, y),
+                6 => Pattern7(x, y),
+                7 => Pattern8(x, y),
+                _ => throw new ArgumentOutOfRangeException(nameof(patternIndex), "Mask pattern index must be between 0 and 7."),
+            };
+        }
+
+        /// <summary>
+        /// Creates a checkerboard pattern.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool Pattern1(int x, int y) => (x + y) % 2 == 0;
+
+        /// <summary>
+        /// Creates horizontal stripes.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool Pattern2(int x, int y) => y % 2 == 0;
+
+        /// <summary>
+        /// Creates vertical stripes (wider than pattern 1).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool Pattern3(int x, int y) => x % 3 == 0;
+
+        /// <summary>
+        /// Creates diagonal stripes (wider than pattern 0).
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool Pattern4(int x, int y) => (x + y) % 3 == 0;
+
+        /// <summary>
+        /// Creates a combination of horizontal and vertical patterns.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool Pattern5(int x, int y) => ((int)(Math.Floor(y / 2d) + Math.Floor(x / 3d)) % 2) == 0;
+
+        /// <summary>
+        /// Creates a complex grid pattern.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool Pattern6(int x, int y) => ((x * y) % 2) + ((x * y) % 3) == 0;
+
+        /// <summary>
+        /// Creates an alternating complex pattern.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool Pattern7(int x, int y) => (((x * y) % 2) + ((x * y) % 3)) % 2 == 0;
+
+        /// <summary>
+        /// Creates a combination of checkerboard and grid patterns.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool Pattern8(int x, int y) => (((x + y) % 2) + ((x * y) % 3)) % 2 == 0;
     }
 }
