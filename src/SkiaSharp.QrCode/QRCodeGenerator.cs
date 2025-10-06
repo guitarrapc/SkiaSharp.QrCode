@@ -302,13 +302,34 @@ public class QRCodeGenerator : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void PlacePatterns(ref QRCodeData qrCodeData, int version, ref List<Rectangle> blockedModules)
     {
+        var alignmentPatternLocations = GetAlignmentPatternPositions(version);
+
         ModulePlacer.PlaceFinderPatterns(ref qrCodeData, ref blockedModules);
         ModulePlacer.ReserveSeperatorAreas(qrCodeData.Size, ref blockedModules);
-        var alignmentPatternLocations = AlignmentPatternTable.Where(x => x.Version == version).Select(x => x.PatternPositions).First();
         ModulePlacer.PlaceAlignmentPatterns(ref qrCodeData, alignmentPatternLocations, ref blockedModules);
         ModulePlacer.PlaceTimingPatterns(ref qrCodeData, ref blockedModules);
         ModulePlacer.PlaceDarkModule(ref qrCodeData, version, ref blockedModules);
         ModulePlacer.ReserveVersionAreas(qrCodeData.Size, version, ref blockedModules);
+    }
+
+    /// <summary>
+    /// Retrieves alignment pattern positions for the specified version.
+    /// </summary>
+    /// <param name="version"></param>
+    /// <returns></returns>
+    /// <exception cref="InvalidOperationException"></exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static List<Point> GetAlignmentPatternPositions(int version)
+    {
+        var table = AlignmentPatternTable;
+        for (var i = 0; i < table.Count; i++)
+        {
+            var item = table[i];
+            if (item.Version == version)
+                return item.PatternPositions;
+        }
+
+        throw new InvalidOperationException($"Alignment pattern positions not found for version {version}");
     }
 
     /// <summary>
