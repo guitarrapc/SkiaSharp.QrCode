@@ -272,7 +272,11 @@ public class QRCodeGenerator : IDisposable
     private static QRCodeData CreateQRMatrix(int version, string interleavedData, ECCLevel eccLevel)
     {
         var qrCodeData = new QRCodeData(version);
-        var blockedModules = new List<Rectangle>();
+
+        // Version 1:  approximately  9
+        // Version 7:  approximately 27
+        // Version 40: approximately 57
+        var blockedModules = new List<Rectangle>(30);
 
         // place all patterns
         PlacePatterns(ref qrCodeData, version, ref blockedModules);
