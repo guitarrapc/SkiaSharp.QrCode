@@ -63,7 +63,7 @@ public class QRCodeData : IDisposable
     /// <summary>
     /// Initializes with the specified version.
     /// </summary>
-    /// <param name="version"></param>
+    /// <param name="version">QR Code version number (1-40) used to determine matrix size</param>
     public QRCodeData(int version)
     {
         Version = version;
@@ -80,10 +80,8 @@ public class QRCodeData : IDisposable
     /// and determine its version. The raw data is expected to follow the QR code format, including a valid header and
     /// size information.
     /// </remarks>
-    /// <param name="rawData">The raw byte array representing the QR code data. This data may be compressed based on the specified <paramref
-    /// name="compressMode"/>.</param>
-    /// <param name="compressMode">The compression mode used to encode the <paramref name="rawData"/>. Determines how the data will be
-    /// decompressed.</param>
+    /// <param name="rawData">The raw byte array representing the QR code data. This data may be compressed based on the specified <paramref name="compressMode"/>.</param>
+    /// <param name="compressMode">The compression mode used to encode the <paramref name="rawData"/>. Determines how the data will be decompressed.</param>
     /// <exception cref="InvalidDataException">Thrown if the decompressed data is invalid.</exception>
     /// <exception cref="InvalidOperationException">Thrown if the decompressed data does not contain enough bits to fully populate the QR code matrix.</exception>
     public QRCodeData(byte[] rawData, Compression compressMode)
