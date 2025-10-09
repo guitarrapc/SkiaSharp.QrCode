@@ -67,5 +67,5 @@ internal ref struct BitWriter
     /// Gets the written data as a read-only span
     /// </summary>
     /// <returns></returns>
-    public Span<byte> GetData() => _buffer.Slice(0, ByteCount);
+    public ReadOnlySpan<byte> GetData() => _buffer.Slice(0, ByteCount);
 }

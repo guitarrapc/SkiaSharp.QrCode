@@ -8,7 +8,7 @@ namespace SkiaSharp.QrCode.Internals;
 /// </summary>
 internal ref struct BitReader
 {
-    private Span<byte> _data;
+    private ReadOnlySpan<byte> _data;
     private int _bitPosition;
 
     /// <summary>
@@ -21,7 +21,7 @@ internal ref struct BitReader
     /// </summary>
     public bool HasBits => _bitPosition < _data.Length * 8;
 
-    public BitReader(Span<byte> data)
+    public BitReader(ReadOnlySpan<byte> data)
     {
         _data = data;
         _bitPosition = 0;
@@ -68,6 +68,8 @@ internal ref struct BitReader
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int Reads(int bitCount)
     {
+        if (bitCount < 1 || bitCount > 32)
+            throw new ArgumentOutOfRangeException(nameof(bitCount), "bitCount must be between 1 and 32");
         int result = 0;
         for (var i = 0; i < bitCount; i++)
         {

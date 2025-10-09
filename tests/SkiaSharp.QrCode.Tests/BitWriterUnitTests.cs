@@ -47,4 +47,54 @@ public class BitWriterUnitTests
 
         Assert.Equal(expected[0], buffer[0]);
     }
+
+    // Edge cases
+
+    [Fact]
+    public void RoundTrip_MaxBitCount_IdenticalData()
+    {
+        Span<byte> buffer = stackalloc byte[4];
+        var writer = new BitWriter(buffer);
+
+        writer.Write(int.MaxValue, 32); // 0x7FFFFFFF
+
+        var reader = new BitReader(writer.GetData());
+        var result = reader.Reads(32);
+
+        Assert.Equal(int.MaxValue, result);
+    }
+
+    // multiple writes with different bit counts
+    [Fact]
+    public void RoundTrip_MultipleBitCounts_IdenticalData()
+    {
+        Span<byte> buffer = stackalloc byte[10];
+        var writer = new BitWriter(buffer);
+
+        writer.Write(0b101, 3);
+        writer.Write(0b11111111, 8);
+        writer.Write(0b1010101010101010, 16);
+
+        var reader = new BitReader(writer.GetData());
+
+        Assert.Equal(0b101, reader.Reads(3));
+        Assert.Equal(0b11111111, reader.Reads(8));
+        Assert.Equal(0b1010101010101010, reader.Reads(16));
+    }
+
+    // hasBits for last bit
+    [Fact]
+    public void BitReader_HasBits_CorrectlyIndicatesEndOfData()
+    {
+        var data = new byte[] { 0xFF };
+        var reader = new BitReader(data);
+
+        for (int i = 0; i < 8; i++)
+        {
+            Assert.True(reader.HasBits);
+            reader.Read();
+        }
+
+        Assert.False(reader.HasBits);
+    }
 }

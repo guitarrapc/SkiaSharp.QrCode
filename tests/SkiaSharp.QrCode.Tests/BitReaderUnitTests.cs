@@ -48,4 +48,45 @@ public class BitReaderUnitTests
         Assert.Equal(0b_1100, reader.Reads(4));
         Assert.Equal(0b_1111, reader.Reads(4));
     }
+
+    // parameter check
+    [Theory]
+    [InlineData(0)]    // bitCount = 0
+    [InlineData(-1)]   // bitCount < 0
+    [InlineData(33)]   // bitCount > 32
+    public void Reads_InvalidBitCount_ThrowsArgumentOutOfRangeException(int bitCount)
+    {
+        var data = new byte[] { 0xFF };
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+        {
+            var reader = new BitReader(data);
+            reader.Reads(bitCount);
+        });
+        Assert.Equal(nameof(bitCount), exception.ParamName);
+    }
+
+    // 32-bit checks
+    [Fact]
+    public void Reads_32Bits_ReturnsCorrectValue()
+    {
+        var data = new byte[] { 0xFF, 0xFF, 0xFF, 0xFF }; // all 1s
+        var reader = new BitReader(data);
+
+        var result = reader.Reads(32);
+
+        Assert.Equal(-1, result); // 0xFFFFFFFF as signed int
+    }
+
+    // hasBits
+    [Fact]
+    public void Reads_1Bit_ReturnsCorrectValue()
+    {
+        var data = new byte[] { 0b10000000 };
+        var reader = new BitReader(data);
+
+        var result = reader.Reads(1);
+
+        Assert.Equal(1, result);
+    }
 }
