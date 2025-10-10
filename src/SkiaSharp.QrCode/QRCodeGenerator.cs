@@ -72,7 +72,7 @@ public class QRCodeGenerator : IDisposable
         var codewordBlocks = CalculateErrorCorrection(encodedBits, config.EccInfo);
 
         // Interleave data
-        var interleavedData = InterleaveCodewords(codewordBlocks, config.Version, config.EccInfo);
+        var interleavedData = InterleaveCodewords(codewordBlocks, config.EccInfo, config.Version);
 
         // Create QR code matrix
         var qrMatrix = CreateQRMatrix(config.Version, interleavedData, config.EccLevel);
@@ -191,9 +191,9 @@ public class QRCodeGenerator : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static string InterleaveCodewords(List<CodewordTextBlock> blocks, int version, in ECCInfo eccInfo)
+    private static string InterleaveCodewords(List<CodewordTextBlock> blocks, in ECCInfo eccInfo, int version)
     {
-        return TextInterleaver.InterleaveCodewords(blocks, version, eccInfo);
+        return TextInterleaver.InterleaveCodewords(blocks, eccInfo, version);
     }
 
     /// <summary>

@@ -8,13 +8,13 @@ internal static class TextInterleaver
     /// <summary>
     /// Calculates the final interleaved data capacity including data codewords, ECC codewords, and remainder bits.
     /// </summary>
-    /// <param name="blocks"></param>
-    /// <param name="version"></param>
-    /// <param name="eccInfo"></param>
+    /// <param name="blocks">Array of codeword blocks to interleave.</param>
+    /// <param name="eccInfo">ECC information for the QR code version.</param>
+    /// <param name="version">QR code version (1-40).</param>
     /// <returns></returns>
     public static string InterleaveCodewords(List<CodewordTextBlock> blocks, in ECCInfo eccInfo, int version)
     {
-        var interleaveCapacity = CalculateInterleavedDataCapacity(version, eccInfo);
+        var interleaveCapacity = CalculateInterleavedDataCapacity(eccInfo, version);
         var result = new StringBuilder(interleaveCapacity);
         var maxCodewordCount = Math.Max(eccInfo.CodewordsInGroup1, eccInfo.CodewordsInGroup2);
 
@@ -50,7 +50,13 @@ internal static class TextInterleaver
         return result.ToString();
     }
 
-    private static int CalculateInterleavedDataCapacity(int version, in ECCInfo eccInfo)
+    /// <summary>
+    /// Calculates the required interleaved data capacity in bits.
+    /// </summary>
+    /// <param name="eccInfo">ECC information for the QR code version.</param>
+    /// <param name="version">QR code version (1-40).</param>
+    /// <returns></returns>
+    private static int CalculateInterleavedDataCapacity(in ECCInfo eccInfo, int version)
     {
         // -----------------------------------------------------
         // QR Code Interleaved data structure (ISO/IEC 18004):
