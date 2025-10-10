@@ -1,4 +1,4 @@
-using SkiaSharp.QrCode.Internals;
+using SkiaSharp.QrCode.Internals.BinaryEncoders;
 using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;

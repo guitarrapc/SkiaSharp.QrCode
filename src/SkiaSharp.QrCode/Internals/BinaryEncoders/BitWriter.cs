@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace SkiaSharp.QrCode.Internals;
+namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 
 /// <summary>
 /// Writes bit to a byte buffer with precise bit-level control.
@@ -51,9 +51,9 @@ internal ref struct BitWriter
         // Because QR requires writing MSB first, we need to start from the highest bit
         for (var i = bitCount - 1; i >= 0; i--)
         {
-            var bit = (value >> i) & 1;
+            var bit = value >> i & 1;
             var byteIndex = _bitPosition / 8;
-            var bitIndex = 7 - (_bitPosition % 8); // 7 - (...) because we read MSB first
+            var bitIndex = 7 - _bitPosition % 8; // 7 - (...) because we read MSB first
             if (bit == 1)
             {
                 _buffer[byteIndex] |= (byte)(1 << bitIndex);

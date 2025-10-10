@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using SkiaSharp.QrCode.Internals;
+using SkiaSharp.QrCode.Internals.TextEncoders;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
 namespace SkiaSharp.QrCode;

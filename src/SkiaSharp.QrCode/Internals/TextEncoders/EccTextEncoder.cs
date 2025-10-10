@@ -1,6 +1,6 @@
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
-namespace SkiaSharp.QrCode.Internals;
+namespace SkiaSharp.QrCode.Internals.TextEncoders;
 
 /// <summary>
 /// Ecc encoder with Reed-Solomon error correction (text-based).
@@ -52,7 +52,7 @@ internal class EccTextEncoder
 
         // Perform polynomial division in GF(256)
         var leadTermSource = messagePolynom;
-        for (var i = 0; (leadTermSource.PolyItems.Count > 0 && leadTermSource.PolyItems[^1].Exponent > 0); i++)
+        for (var i = 0; leadTermSource.PolyItems.Count > 0 && leadTermSource.PolyItems[^1].Exponent > 0; i++)
         {
             if (leadTermSource.PolyItems[0].Coefficient == 0)
             {
@@ -292,7 +292,7 @@ internal class EccTextEncoder
             foreach (var polItemMulti in polynomBase.PolyItems)
             {
                 var coefficient = ShrinkAlphaExp(polItemBase.Coefficient + polItemMulti.Coefficient);
-                resultPolynom.PolyItems.Add(new PolynomItem(coefficient, (polItemBase.Exponent + polItemMulti.Exponent)));
+                resultPolynom.PolyItems.Add(new PolynomItem(coefficient, polItemBase.Exponent + polItemMulti.Exponent));
             }
         }
 
@@ -367,6 +367,6 @@ internal class EccTextEncoder
     /// </remarks>
     private static int ShrinkAlphaExp(int alphaExp)
     {
-        return (int)((alphaExp % 256) + Math.Floor((double)(alphaExp / 256)));
+        return (int)(alphaExp % 256 + Math.Floor((double)(alphaExp / 256)));
     }
 }

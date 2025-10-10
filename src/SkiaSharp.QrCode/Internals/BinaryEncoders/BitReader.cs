@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace SkiaSharp.QrCode.Internals;
+namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 
 /// <summary>
 /// Reads bits from a byte buffer with precise bit-level control.
@@ -54,8 +54,8 @@ internal ref struct BitReader
         // --------------------------------------------
 
         var byteIndex = _bitPosition / 8;
-        var bitOffset = 7 - (_bitPosition % 8); // 7 - (...) because we read MSB first
-        var bit = (_data[byteIndex] & (1 << bitOffset)) != 0;
+        var bitOffset = 7 - _bitPosition % 8; // 7 - (...) because we read MSB first
+        var bit = (_data[byteIndex] & 1 << bitOffset) != 0;
         _bitPosition++;
         return bit;
     }
@@ -73,7 +73,7 @@ internal ref struct BitReader
         int result = 0;
         for (var i = 0; i < bitCount; i++)
         {
-            result = (result << 1) | (Read() ? 1 : 0);
+            result = result << 1 | (Read() ? 1 : 0);
         }
         return result;
     }

@@ -1,4 +1,5 @@
 using SkiaSharp.QrCode.Internals;
+using SkiaSharp.QrCode.Internals.TextEncoders;
 using System.Text;
 using Xunit;
 

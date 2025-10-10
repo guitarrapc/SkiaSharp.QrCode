@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
-namespace SkiaSharp.QrCode.Internals;
+namespace SkiaSharp.QrCode.Internals.TextEncoders;
 
 /// <summary>
 /// QR code text encoder to binary string.
@@ -89,9 +89,9 @@ internal class QRTextEncoder
         }
 
         // 2. Byte boundary alignment (0-7 bits)
-        if ((_builder.Length % 8) != 0)
+        if (_builder.Length % 8 != 0)
         {
-            _builder.Append('0', 8 - (_builder.Length % 8));
+            _builder.Append('0', 8 - _builder.Length % 8);
         }
 
         // 3. Alternating pad bytes (0xEC, 0x11, 0xEC, 0x11, ...) until target length
@@ -151,7 +151,7 @@ internal class QRTextEncoder
         // Process remaining 1 digit
         if (index < length)
         {
-            var dec = (text[index] - '0');
+            var dec = text[index] - '0';
             codeText.Append(DecToBin(dec, 4));
         }
 
