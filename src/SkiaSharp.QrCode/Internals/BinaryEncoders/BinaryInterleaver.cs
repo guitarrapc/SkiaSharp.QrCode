@@ -12,36 +12,48 @@ internal static class BinaryInterleaver
     /// <param name="version">QR code version (1-40).</param>
     /// <param name="eccInfo">ECC information for the QR code version.</param>
     /// <returns></returns>
-    public static void InterleaveCodewords(ReadOnlySpan<CodewordBinaryBlock> blocks, Span<byte> output, int version, in ECCInfo eccInfo)
+    public static void InterleaveCodewords(ReadOnlySpan<byte> data, ReadOnlySpan<byte> ecc, Span<byte> output, int version, in ECCInfo eccInfo)
     {
         var outputIndex = 0;
+        var totalBlocks = eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2;
         var maxCodewordCount = Math.Max(eccInfo.CodewordsInGroup1, eccInfo.CodewordsInGroup2);
 
         // Interleave data codewords
         for (var i = 0; i < maxCodewordCount; i++)
         {
-            foreach (var block in blocks)
+            var dataOffset = 0;
+
+            // Group 1 blocks
+            for (var blockIndex = 0; blockIndex < eccInfo.BlocksInGroup1; blockIndex++)
             {
-                var dataSpan = block.DataBytes.Span;
-                if (i < dataSpan.Length)
+                if (i < eccInfo.CodewordsInGroup1)
                 {
-                    output[outputIndex] = dataSpan[i];
+                    output[outputIndex] = data[dataOffset + i];
                     outputIndex++;
                 }
+                dataOffset += eccInfo.CodewordsInGroup1;
+            }
+
+            // Group 2 blocks
+            for (var blockIndex = 0; blockIndex < eccInfo.BlocksInGroup2; blockIndex++)
+            {
+                if (i < eccInfo.CodewordsInGroup2)
+                {
+                    output[outputIndex] = data[dataOffset + i];
+                    outputIndex++;
+                }
+                dataOffset += eccInfo.CodewordsInGroup2;
             }
         }
 
         // Interleave ECC codewords
         for (var i = 0; i < eccInfo.ECCPerBlock; i++)
         {
-            foreach (var block in blocks)
+            for (var blockIndex = 0; blockIndex < totalBlocks; blockIndex++)
             {
-                var eccSpan = block.EccWords.Span;
-                if (i < eccSpan.Length)
-                {
-                    output[outputIndex] = eccSpan[i];
-                    outputIndex++;
-                }
+                var eccOffset = blockIndex * eccInfo.ECCPerBlock;
+                output[outputIndex] = ecc[eccOffset + i];
+                outputIndex++;
             }
         }
 
@@ -93,8 +105,7 @@ internal static class BinaryInterleaver
         // -----------------------------------------------------
 
         var totalDataBytes = eccInfo.TotalDataCodewords;
-        var totalEccBytes = eccInfo.BlocksInGroup1 * eccInfo.ECCPerBlock
-            + eccInfo.BlocksInGroup2 * eccInfo.ECCPerBlock;
+        var totalEccBytes = (eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock;
         var remainderBits = GetRemainderBits(version);
 
         // Total bytes = data + ECC + remainder bits (rounded up to nearest byte)
