@@ -7,7 +7,8 @@ internal static class BinaryInterleaver
     /// <summary>
     /// Calculates the final interleaved data capacity including data codewords, ECC codewords, and remainder bits.
     /// </summary>
-    /// <param name="blocks">Array of codeword blocks to interleave.</param>
+    /// <param name="data">Array of data codewords to interleave.</param>
+    /// <param name="ecc">Array of ECC codewords to interleave.</param>
     /// <param name="output">Output buffer for interleaved bits.</param>
     /// <param name="version">QR code version (1-40).</param>
     /// <param name="eccInfo">ECC information for the QR code version.</param>
@@ -21,28 +22,25 @@ internal static class BinaryInterleaver
         // Interleave data codewords
         for (var i = 0; i < maxCodewordCount; i++)
         {
-            var dataOffset = 0;
-
             // Group 1 blocks
             for (var blockIndex = 0; blockIndex < eccInfo.BlocksInGroup1; blockIndex++)
             {
                 if (i < eccInfo.CodewordsInGroup1)
                 {
-                    output[outputIndex] = data[dataOffset + i];
-                    outputIndex++;
+                    var dataIndex = blockIndex * eccInfo.CodewordsInGroup1 + i;
+                    output[outputIndex++] = data[dataIndex];
                 }
-                dataOffset += eccInfo.CodewordsInGroup1;
             }
 
             // Group 2 blocks
+            var group2Offset = eccInfo.BlocksInGroup1 * eccInfo.CodewordsInGroup1;
             for (var blockIndex = 0; blockIndex < eccInfo.BlocksInGroup2; blockIndex++)
             {
                 if (i < eccInfo.CodewordsInGroup2)
                 {
-                    output[outputIndex] = data[dataOffset + i];
-                    outputIndex++;
+                    var dataOffset = group2Offset + blockIndex * eccInfo.CodewordsInGroup2 + i;
+                    output[outputIndex++] = data[dataOffset];
                 }
-                dataOffset += eccInfo.CodewordsInGroup2;
             }
         }
 
