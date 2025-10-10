@@ -201,6 +201,8 @@ internal class QRTextEncoder
     /// </remarks>
     private string EncodeByte(string text, EciMode eciMode, bool utf8BOM)
     {
+        // TODO: following encoding detection and utf-8 fallback should be move to QRCodeGenerator.
+
         // Determine encoding based on ECI mode and validity
         var codeBytes = eciMode switch
         {
