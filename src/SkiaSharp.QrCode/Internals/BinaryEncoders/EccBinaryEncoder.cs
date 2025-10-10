@@ -39,7 +39,7 @@ internal static class EccBinaryEncoder
     {
         // Generate generator polynomial
         Span<byte> generator = stackalloc byte[eccCount + 1];
-        GenerateGeneratorpolynomial(generator, eccCount);
+        GenerateGeneratorPolynomial(generator, eccCount);
 
         // Initialize message polynomial from data bits (data + zero padding for ECC)
         Span<byte> message = stackalloc byte[data.Length + eccCount];
@@ -48,13 +48,13 @@ internal static class EccBinaryEncoder
         // Polynomial division in GF(256)
         for (var i = 0; i < data.Length; i++)
         {
-            var cofficient = message[i];
-            if (cofficient == 0) continue;
+            var coefficient = message[i];
+            if (coefficient == 0) continue;
 
             // XOR with generator polynomial scaled by lead coefficient
             for (var j = 0; j < eccCount; j++)
             {
-                message[i + j + 1] ^= GaloisField.Multiply(generator[j + 1], cofficient);
+                message[i + j + 1] ^= GaloisField.Multiply(generator[j + 1], coefficient);
             }
         }
 
@@ -80,7 +80,7 @@ internal static class EccBinaryEncoder
     /// 3. Multiply by (x - α^1): G(x) = x^2 + (α^0)x + (α^1)
     /// 4. Continue until degree = eccCount. Result has degree = eccCount.
     /// </remarks>
-    private static void GenerateGeneratorpolynomial(Span<byte> generator, int eccCount)
+    private static void GenerateGeneratorPolynomial(Span<byte> generator, int eccCount)
     {
         generator.Clear();
 
@@ -97,14 +97,14 @@ internal static class EccBinaryEncoder
 
             for (var j = 0; j <= i; j++)
             {
-                var coeficient = generator[j];
-                if (coeficient == 0) continue;
+                var coefficient = generator[j];
+                if (coefficient == 0) continue;
 
                 // (x - α^i) expansion
                 // - Multuply existing term by x: shift to temp[j]
                 // - Multuply existing term by -α^i: add to temp[j+1]
-                temp[j] ^= coeficient; // x^1 term
-                temp[j + 1] ^= GaloisField.Multiply(coeficient, GaloisField.Exp[i]);
+                temp[j] ^= coefficient; // x^1 term
+                temp[j + 1] ^= GaloisField.Multiply(coefficient, GaloisField.Exp[i]);
             }
 
             temp.CopyTo(generator);
