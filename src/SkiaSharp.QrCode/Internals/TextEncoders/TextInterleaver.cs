@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using System.Text;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
@@ -13,7 +12,7 @@ internal static class TextInterleaver
     /// <param name="version"></param>
     /// <param name="eccInfo"></param>
     /// <returns></returns>
-    public static string InterleaveCodewords(List<CodewordTextBlock> blocks, int version, in ECCInfo eccInfo)
+    public static string InterleaveCodewords(List<CodewordTextBlock> blocks, in ECCInfo eccInfo, int version)
     {
         var interleaveCapacity = CalculateInterleavedDataCapacity(version, eccInfo);
         var result = new StringBuilder(interleaveCapacity);
@@ -35,9 +34,9 @@ internal static class TextInterleaver
         {
             foreach (var codeBlock in blocks)
             {
-                if (codeBlock.ECCWords.Count > i)
+                if (codeBlock.EccWords.Count > i)
                 {
-                    result.Append(codeBlock.ECCWords[i]);
+                    result.Append(codeBlock.EccWords[i]);
                 }
             }
         }
