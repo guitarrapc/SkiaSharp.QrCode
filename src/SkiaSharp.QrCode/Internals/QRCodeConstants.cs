@@ -774,6 +774,27 @@ internal static class QRCodeConstants
         return binStr.PadLeft(padLeftUpTo, '0');
     }
 
+    /// <summary>
+    /// Retrieves ECC information for the specified version and error correction level.
+    /// </summary>
+    /// <param name="version"></param>
+    /// <param name="eccLevel"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static ECCInfo GetEccInfo(int version, ECCLevel eccLevel)
+    {
+        var table = CapacityECCTable;
+        for (var i = 0; i < table.Count; i++)
+        {
+            var item = table[i];
+            if (item.Version == version && item.ErrorCorrectionLevel == eccLevel)
+                return item;
+        }
+
+        throw new ArgumentException($"ECC info not found for version {version}, level {eccLevel}");
+    }
+
     // Format and Version String Generation
 
     /// <summary>

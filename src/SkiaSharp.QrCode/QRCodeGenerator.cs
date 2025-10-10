@@ -116,27 +116,6 @@ public class QRCodeGenerator : IDisposable
     }
 
     /// <summary>
-    /// Retrieves ECC information for the specified version and error correction level.
-    /// </summary>
-    /// <param name="version"></param>
-    /// <param name="eccLevel"></param>
-    /// <returns></returns>
-    /// <exception cref="ArgumentException"></exception>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ECCInfo GetEccInfo(int version, ECCLevel eccLevel)
-    {
-        var table = CapacityECCTable;
-        for (var i = 0; i < table.Count; i++)
-        {
-            var item = table[i];
-            if (item.Version == version && item.ErrorCorrectionLevel == eccLevel)
-                return item;
-        }
-
-        throw new ArgumentException($"ECC info not found for version {version}, level {eccLevel}");
-    }
-
-    /// <summary>
     /// Encodes the input text into a binary string based on the specified QR configuration.
     /// </summary>
     /// <param name="plainText"></param>
