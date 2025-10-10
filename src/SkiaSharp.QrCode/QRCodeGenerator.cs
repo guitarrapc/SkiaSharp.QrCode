@@ -168,14 +168,13 @@ public class QRCodeGenerator : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static List<CodewordBlock> CalculateErrorCorrection(string bitString, in ECCInfo eccInfo)
     {
-        var eccEncoder = new EccTextEncoder();
         var blocks = new List<CodewordBlock>(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2);
 
         // Process group 1 blocks
         var offset = 0;
         for (var i = 0; i < eccInfo.BlocksInGroup1; i++)
         {
-            var block = CreateCodewordBlock(bitString, offset, eccInfo.CodewordsInGroup1, eccEncoder, eccInfo.ECCPerBlock, groupNumber: 1, blockNumber: i + 1);
+            var block = CreateCodewordBlock(bitString, offset, eccInfo.CodewordsInGroup1, eccInfo.ECCPerBlock, groupNumber: 1, blockNumber: i + 1);
             blocks.Add(block);
             offset += eccInfo.CodewordsInGroup1 * 8;
         }
@@ -183,7 +182,7 @@ public class QRCodeGenerator : IDisposable
         // Process group 2 blocks
         for (var i = 0; i < eccInfo.BlocksInGroup2; i++)
         {
-            var block = CreateCodewordBlock(bitString, offset, eccInfo.CodewordsInGroup2, eccEncoder, eccInfo.ECCPerBlock, groupNumber: 2, blockNumber: i + 1);
+            var block = CreateCodewordBlock(bitString, offset, eccInfo.CodewordsInGroup2, eccInfo.ECCPerBlock, groupNumber: 2, blockNumber: i + 1);
             blocks.Add(block);
             offset += eccInfo.CodewordsInGroup2 * 8;
         }
@@ -203,11 +202,11 @@ public class QRCodeGenerator : IDisposable
     /// <param name="blockNumber">The sequential block number within the group.</param>
     /// <returns>A <see cref="CodewordBlock"/> containing the data and ECC codewords for this block.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static CodewordBlock CreateCodewordBlock(string bitString, int offset, int codewordCount, EccTextEncoder eccEncoder, int eccPerBlock, int groupNumber, int blockNumber)
+    private static CodewordBlock CreateCodewordBlock(string bitString, int offset, int codewordCount,int eccPerBlock, int groupNumber, int blockNumber)
     {
         var blockBits = bitString.Substring(offset, codewordCount * 8);
         var codeWords = BinaryStringToBitBlockList(blockBits);
-        var eccWords = eccEncoder.CalculateECC(blockBits, eccPerBlock);
+        var eccWords = EccTextEncoder.CalculateECC(blockBits, eccPerBlock);
         var codewordBlock = new CodewordBlock(groupNumber, blockNumber, blockBits, codeWords, eccWords);
 
         return codewordBlock;

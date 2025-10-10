@@ -3,7 +3,7 @@ using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 namespace SkiaSharp.QrCode.Internals.TextEncoders;
 
 /// <summary>
-/// Ecc encoder with Reed-Solomon error correction (text-based).
+/// Ecc encoder with Reed-Solomon error correction
 /// </summary>
 /// <remarks>
 /// This ecc encoder implements Reed-Solomon error correction using polynomial operations
@@ -16,7 +16,7 @@ namespace SkiaSharp.QrCode.Internals.TextEncoders;
 /// 4. Perform polynomial division in GF(256) using XOR operations
 /// 5. Remainder becomes the error correction codewords
 /// </remarks>
-internal class EccTextEncoder
+internal static class EccTextEncoder
 {
     /// <summary>
     /// Calculates error correction codewords using Reed-Solomon algorithm.
@@ -38,7 +38,7 @@ internal class EccTextEncoder
     /// - Generator: G(x) = (x-α^0)(x-α^1)...(x-α^9)
     /// - Result: 10 ECC codewords [196, 35, 39, 119, 235, 215, 231, 226, 93, 23]
     /// </remarks>
-    public List<string> CalculateECC(string dataBits, int eccWordCount)
+    public static List<string> CalculateECC(string dataBits, int eccWordCount)
     {
         var messagePolynom = CalculateMessagePolynom(dataBits);
         var generatorPolynom = CalculateGeneratorPolynom(eccWordCount);
@@ -120,7 +120,7 @@ internal class EccTextEncoder
     /// - "10000110" (134) → coefficient for x^1
     /// - "01010110" (86) → coefficient for x^0
     /// </remarks>
-    private Polynom CalculateMessagePolynom(string bitString)
+    private static Polynom CalculateMessagePolynom(string bitString)
     {
         var messagePol = new Polynom();
         var byteCount = bitString.Length / 8;
@@ -151,7 +151,7 @@ internal class EccTextEncoder
     /// 2. Multiply by (x - α^1), (x - α^2), etc.
     /// 3. Result has degree equal to eccWordCount
     /// </remarks>
-    private Polynom CalculateGeneratorPolynom(int eccWordCount)
+    private static Polynom CalculateGeneratorPolynom(int eccWordCount)
     {
         // init with (x - α^0)
         var generatorPolynom = new Polynom();
@@ -188,7 +188,7 @@ internal class EccTextEncoder
     /// 
     /// Uses Galois field lookup: integer → α^n exponent
     /// </remarks>
-    private Polynom ConvertToAlphaNotation(Polynom poly)
+    private static Polynom ConvertToAlphaNotation(Polynom poly)
     {
         var newPoly = new Polynom();
         for (var i = 0; i < poly.PolyItems.Count; i++)
@@ -213,7 +213,7 @@ internal class EccTextEncoder
     /// 
     /// Uses Galois field lookup: α^n exponent → integer
     /// </remarks>
-    private Polynom ConvertToDecNotation(Polynom poly)
+    private static Polynom ConvertToDecNotation(Polynom poly)
     {
         var newPoly = new Polynom();
         for (var i = 0; i < poly.PolyItems.Count; i++)
@@ -239,7 +239,7 @@ internal class EccTextEncoder
     /// 
     /// In GF(256): subtraction = addition = XOR
     /// </remarks>
-    private Polynom XORPolynoms(Polynom messagePolynom, Polynom resPolynom)
+    private static Polynom XORPolynoms(Polynom messagePolynom, Polynom resPolynom)
     {
         var resultPolynom = new Polynom();
         Polynom longPoly, shortPoly;
@@ -282,7 +282,7 @@ internal class EccTextEncoder
     /// = α^2·x^2 + (α^3 ⊕ α^3)·x + α^4  (⊕ = XOR)
     /// = α^2·x^2 + 0·x + α^4
     /// </remarks>
-    private Polynom MultiplyAlphaPolynoms(Polynom polynomBase, Polynom polynomMultiplier)
+    private static Polynom MultiplyAlphaPolynoms(Polynom polynomBase, Polynom polynomMultiplier)
     {
         var resultPolynom = new Polynom();
 
@@ -344,7 +344,7 @@ internal class EccTextEncoder
     /// <param name="leadTerm">Lead term of current message polynomial.</param>
     /// <param name="lowerExponentBy">Amount to reduce exponents.</param>
     /// <returns>Multiplied polynomial.</returns>
-    private Polynom MultiplyGeneratorPolynomByLeadterm(Polynom genPolynom, PolynomItem leadTerm, int lowerExponentBy)
+    private static Polynom MultiplyGeneratorPolynomByLeadterm(Polynom genPolynom, PolynomItem leadTerm, int lowerExponentBy)
     {
         var resultPolynom = new Polynom();
         foreach (var polItemBase in genPolynom.PolyItems)
