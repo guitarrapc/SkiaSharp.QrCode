@@ -1,0 +1,104 @@
+using static SkiaSharp.QrCode.Internals.QRCodeConstants;
+
+namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
+
+internal static class BinaryInterleaver
+{
+    /// <summary>
+    /// Calculates the final interleaved data capacity including data codewords, ECC codewords, and remainder bits.
+    /// </summary>
+    /// <param name="blocks">Array of codeword blocks to interleave.</param>
+    /// <param name="output">Output buffer for interleaved bits.</param>
+    /// <param name="version">QR code version (1-40).</param>
+    /// <param name="eccInfo">ECC information for the QR code version.</param>
+    /// <returns></returns>
+    public static void InterleaveCodewords(ReadOnlySpan<CodewordBinaryBlock> blocks, Span<byte> output, int version, in ECCInfo eccInfo)
+    {
+        var outputIndex = 0;
+        var maxCodewordCount = Math.Max(eccInfo.CodewordsInGroup1, eccInfo.CodewordsInGroup2);
+
+        // Interleave data codewords
+        for (var i = 0; i < maxCodewordCount; i++)
+        {
+            foreach (var block in blocks)
+            {
+                var dataSpan = block.DataBytes.Span;
+                if (i < dataSpan.Length)
+                {
+                    output[outputIndex] = dataSpan[i];
+                    outputIndex++;
+                }
+            }
+        }
+
+        // Interleave ECC codewords
+        for (var i = 0; i < eccInfo.ECCPerBlock; i++)
+        {
+            foreach (var block in blocks)
+            {
+                var eccSpan = block.EccWords.Span;
+                if (i < eccSpan.Length)
+                {
+                    output[outputIndex] = eccSpan[i];
+                    outputIndex++;
+                }
+            }
+        }
+
+        // Remainder bits are already zeroed in the output buffer. No need to explicitly write remainder bits.
+    }
+
+    /// <summary>
+    /// Calculates the required interleaved data capacity in bits.
+    /// </summary>
+    /// <param name="eccInfo">ECC information for the QR code version.</param>
+    /// <param name="version">QR code version (1-40).</param>
+    /// <returns></returns>
+    public static int CalculateInterleavedSize(in ECCInfo eccInfo, int version)
+    {
+        // -----------------------------------------------------
+        // QR Code Interleaved data structure (ISO/IEC 18004):
+        // -----------------------------------------------------
+        //
+        // ┌──────────────────────────────────────────────────┐
+        // │ Interleaved Data Codewords                       │
+        // │ (TotalDataCodewords × 8 bits)                    │
+        // ├──────────────────────────────────────────────────┤
+        // │ Interleaved ECC Codewords                        │
+        // │ (ECCPerBlock × TotalBlocks × 8 bits)             │
+        // ├──────────────────────────────────────────────────┤
+        // │ Remainder Bits                                   │
+        // │ (0-7 bits, version dependent)                    │
+        // └──────────────────────────────────────────────────┘
+        //
+        // -----------------------------------------------------
+        // // ECCInfo for Version 5, Q
+        // eccInfo = {
+        //     Version = 5,
+        //     ErrorCorrectionLevel = Q,
+        //     TotalDataCodewords = 80,       // Data capacity
+        //     ECCPerBlock = 18,              // ECC Word count per block
+        //     BlocksInGroup1 = 2,            // Group 1 block count
+        //     CodewordsInGroup1 = 15,        // Group 1 data word count per block
+        //     BlocksInGroup2 = 2,            // Group 2 block count
+        //     CodewordsInGroup2 = 16,        // Group 2 data word count per block
+        // };
+        //
+        // // Calculation:
+        // var dataCodewordsBits = 80 * 8 = 640 bits
+        // var eccCodewordsBits = 18 * (2 + 2) * 8 = 576 bits
+        // var remainderBits = GetRemainderBits(5) = 0 bits  // Version 5 has no module remainder bits
+        //
+        // Total = 640 + 576 + 0 = 1,216 bits (152 bytes)
+        // -----------------------------------------------------
+
+        var totalDataBytes = eccInfo.TotalDataCodewords;
+        var totalEccBytes = eccInfo.BlocksInGroup1 * eccInfo.ECCPerBlock
+            + eccInfo.BlocksInGroup2 * eccInfo.ECCPerBlock;
+        var remainderBits = GetRemainderBits(version);
+
+        // Total bytes = data + ECC + remainder bits (rounded up to nearest byte)
+        return totalDataBytes + totalEccBytes + ((remainderBits + 7) / 8);
+    }
+
+}
