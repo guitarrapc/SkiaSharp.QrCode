@@ -166,9 +166,9 @@ public class QRCodeGenerator : IDisposable
     /// <param name="eccInfo">Error correction information for the QR code version and ECC level.</param>
     /// <returns>A list of codeword blocks containing data and error correction codewords.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static List<CodewordBlock> CalculateErrorCorrection(string bitString, in ECCInfo eccInfo)
+    private static List<CodewordTextBlock> CalculateErrorCorrection(string bitString, in ECCInfo eccInfo)
     {
-        var blocks = new List<CodewordBlock>(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2);
+        var blocks = new List<CodewordTextBlock>(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2);
 
         // Process group 1 blocks
         var offset = 0;
@@ -190,6 +190,12 @@ public class QRCodeGenerator : IDisposable
         return blocks;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static string InterleaveCodewords(List<CodewordTextBlock> blocks, int version, in ECCInfo eccInfo)
+    {
+        return TextInterleaver.InterleaveCodewords(blocks, version, eccInfo);
+    }
+
     /// <summary>
     /// Creates a codeword block with data and ECC codewords.
     /// </summary>
@@ -202,60 +208,14 @@ public class QRCodeGenerator : IDisposable
     /// <param name="blockNumber">The sequential block number within the group.</param>
     /// <returns>A <see cref="CodewordBlock"/> containing the data and ECC codewords for this block.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static CodewordBlock CreateCodewordBlock(string bitString, int offset, int codewordCount,int eccPerBlock, int groupNumber, int blockNumber)
+    private static CodewordTextBlock CreateCodewordBlock(string bitString, int offset, int codewordCount, int eccPerBlock, int groupNumber, int blockNumber)
     {
         var blockBits = bitString.Substring(offset, codewordCount * 8);
         var codeWords = BinaryStringToBitBlockList(blockBits);
         var eccWords = EccTextEncoder.CalculateECC(blockBits, eccPerBlock);
-        var codewordBlock = new CodewordBlock(groupNumber, blockNumber, blockBits, codeWords, eccWords);
+        var codewordBlock = new CodewordTextBlock(groupNumber, blockNumber, blockBits, codeWords, eccWords);
 
         return codewordBlock;
-    }
-
-    /// <summary>
-    /// Calculates the final interleaved data capacity including data codewords, ECC codewords, and remainder bits.
-    /// </summary>
-    /// <param name="blocks"></param>
-    /// <param name="version"></param>
-    /// <param name="eccInfo"></param>
-    /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static string InterleaveCodewords(List<CodewordBlock> blocks, int version, in ECCInfo eccInfo)
-    {
-        var interleaveCapacity = CalculateInterleavedDataCapacity(version, eccInfo);
-        var result = new StringBuilder(interleaveCapacity);
-        var maxCodewordCount = Math.Max(eccInfo.CodewordsInGroup1, eccInfo.CodewordsInGroup2);
-
-        // Interleave data codewords
-        for (var i = 0; i < maxCodewordCount; i++)
-        {
-            foreach (var codeBlock in blocks)
-            {
-                if (codeBlock.CodeWords.Count > i)
-                {
-                    result.Append(codeBlock.CodeWords[i]);
-                }
-            }
-        }
-        // Interleave ECC codewords
-        for (var i = 0; i < eccInfo.ECCPerBlock; i++)
-        {
-            foreach (var codeBlock in blocks)
-            {
-                if (codeBlock.ECCWords.Count > i)
-                {
-                    result.Append(codeBlock.ECCWords[i]);
-                }
-            }
-        }
-        // Add remainder bits
-        var remainderBitsCount = GetRemainderBits(version);
-        if (remainderBitsCount > 0)
-        {
-            result.Append('0', remainderBitsCount);
-        }
-
-        return result.ToString();
     }
 
     /// <summary>
@@ -366,52 +326,6 @@ public class QRCodeGenerator : IDisposable
         // ECCInfo contains the actual byte capacity (TotalDataCodewords)
         var eccInfo = GetEccInfo(version, eccLevel);
         return eccInfo.TotalDataCodewords * 8; // Convert bytes to bits
-    }
-
-    internal static int CalculateInterleavedDataCapacity(int version, in ECCInfo eccInfo)
-    {
-        // -----------------------------------------------------
-        // QR Code Interleaved data structure (ISO/IEC 18004):
-        // -----------------------------------------------------
-        //
-        // ┌──────────────────────────────────────────────────┐
-        // │ Interleaved Data Codewords                       │
-        // │ (TotalDataCodewords × 8 bits)                    │
-        // ├──────────────────────────────────────────────────┤
-        // │ Interleaved ECC Codewords                        │
-        // │ (ECCPerBlock × TotalBlocks × 8 bits)             │
-        // ├──────────────────────────────────────────────────┤
-        // │ Remainder Bits                                   │
-        // │ (0-7 bits, version dependent)                    │
-        // └──────────────────────────────────────────────────┘
-        //
-        // -----------------------------------------------------
-        // // ECCInfo for Version 5, Q
-        // eccInfo = {
-        //     Version = 5,
-        //     ErrorCorrectionLevel = Q,
-        //     TotalDataCodewords = 80,       // Data capacity
-        //     ECCPerBlock = 18,              // ECC Word count per block
-        //     BlocksInGroup1 = 2,            // Group 1 block count
-        //     CodewordsInGroup1 = 15,        // Group 1 data word count per block
-        //     BlocksInGroup2 = 2,            // Group 2 block count
-        //     CodewordsInGroup2 = 16,        // Group 2 data word count per block
-        // };
-        //
-        // // Calculation:
-        // var dataCodewordsBits = 80 * 8 = 640 bits
-        // var eccCodewordsBits = 18 * (2 + 2) * 8 = 576 bits
-        // var remainderBits = GetRemainderBits(5) = 0 bits  // Version 5 has no module remainder bits
-        //
-        // Total = 640 + 576 + 0 = 1,216 bits (152 bytes)
-        // -----------------------------------------------------
-
-        var dataCodewordsBits = eccInfo.TotalDataCodewords * 8;
-        var eccCodewordsBits = eccInfo.ECCPerBlock
-            * (eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2)
-            * 8;
-        var remainderBits = GetRemainderBits(version);
-        return dataCodewordsBits + eccCodewordsBits + remainderBits;
     }
 
     // Utilities
@@ -625,12 +539,6 @@ public class QRCodeGenerator : IDisposable
         }
         return result;
     }
-
-    /// <summary>
-    /// Represents a codeword block in the interleaving process.
-    /// QR codes split data into multiple blocks for error correction.
-    /// </summary>
-    private readonly record struct CodewordBlock(int GroupNumber, int BlockNumber, string BitString, IReadOnlyList<string> CodeWords, IReadOnlyList<string> ECCWords);
 
     /// <summary>
     /// Holds QR configuration parameters determined during setup.
