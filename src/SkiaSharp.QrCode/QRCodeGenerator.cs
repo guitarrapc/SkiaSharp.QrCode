@@ -94,7 +94,7 @@ public class QRCodeGenerator : IDisposable
     /// <param name="requestedVersion">Specific version to use (1-40), or -1 for automatic selection.</param>
     /// <param name="quietZoneSize">Size of the quiet zone (white border) in modules.</param>
     /// <returns>QRCodeData containing the generated QR code matrix.</returns>
-    internal QRCodeData CreateQrCodeBinary(string plainText, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
+    public QRCodeData CreateQrCodeBinary(string plainText, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
     {
         // QR code generation process:
         // ------------------------------------------------
