@@ -3,11 +3,11 @@ using System.Runtime.CompilerServices;
 namespace SkiaSharp.QrCode.Internals;
 
 /// <summary>
-/// 8-bit Galois Field GF(256) arthmetic for Reed-Solomon error correction.
+/// 8-bit Galois Field GF(256) arithmetic for Reed-Solomon error correction.
 /// Primitive polynomial: x^8 + x^4 + x^3 + x^2 + 1 (0x11d)
 /// </summary>
 /// <remarks>
-/// For more information, see: <see href="https://en.wikipedia.org/wiki/Finite_field"/> 
+/// For more information, see: <see href="https://en.wikipedia.org/wiki/Finite_field"/>
 /// </remarks>
 internal static class GaloisField
 {
@@ -67,7 +67,7 @@ internal static class GaloisField
     // (i - j) can be negative, so we adjust it by adding 255
     // expTable[(i - j + 255) % 255] = α^(i - j)
     // ```
-    
+
     // 5. Why 255, not 256?
     // Because α^255 = 1, the exponents repeat every 255 steps.
     // Exponents range from 0 to 254, and since α^255 = 1, the exponents wrap every 255 steps.

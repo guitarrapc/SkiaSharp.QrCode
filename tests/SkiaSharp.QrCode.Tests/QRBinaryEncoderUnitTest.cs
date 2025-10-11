@@ -119,8 +119,8 @@ public class QRBinaryEncoderUnitTest
     [Theory]
     [InlineData("AC-42", EciMode.Default, "0011100111011100111001000010")]  // ISO/IEC 18004
     [InlineData("AC-42", EciMode.Iso8859_1, "0011100111011100111001000010")]  // ISO/IEC 18004
-    [InlineData("HELLO WORLD", EciMode.Default, "0110000101101111000110100010111001011011100010011010100001101")] // tipical alphanumeric
-    [InlineData("HELLO WORLD", EciMode.Iso8859_1, "0110000101101111000110100010111001011011100010011010100001101")] // tipical alphanumeric
+    [InlineData("HELLO WORLD", EciMode.Default, "0110000101101111000110100010111001011011100010011010100001101")] // typical alphanumeric
+    [InlineData("HELLO WORLD", EciMode.Iso8859_1, "0110000101101111000110100010111001011011100010011010100001101")] // typical alphanumeric
     [InlineData("A", EciMode.Default, "001010")]                          // 1 letter: 6 bit
     [InlineData("A", EciMode.Iso8859_1, "001010")]                          // 1 letter: 6 bit
     [InlineData("AB", EciMode.Default, "00111001101")]                    // 2 letters: 11 bit
@@ -228,7 +228,7 @@ public class QRBinaryEncoderUnitTest
 
         encoder.WriteMode(EncodingMode.Numeric, EciMode.Default); // 4 bits
         encoder.WriteCharacterCount(1, 10); // 10 bits
-        encoder.WritePadding(16); // Taget 2 bytes
+        encoder.WritePadding(16); // target 2 bytes
 
         // Expected: 0001_0000_0000_01   | 00_1110_1100
         //           Mode(4) + Count(10) | Align(2) + Pad(8 bits but only 6 bits space)

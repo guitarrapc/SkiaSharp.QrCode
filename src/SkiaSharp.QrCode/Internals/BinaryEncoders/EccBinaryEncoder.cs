@@ -14,7 +14,7 @@ internal static class EccBinaryEncoder
     // 3. Multiply message polynomial M(x) by x^n to shift coefficients (shift by eccCount positions)
     // 4. Perform polynomial division in GF(256) using XOR operations: M(x)·x^n by G(x)
     // 5. Remainder R(x) contains the ECC codewords
-    // 
+    //
     // Example (simplified):
     // - Data: [64, 86, 134, 86] → M(x) = 64x^3 + 86x^2 + 134x + 86
     // - ECC count: 10
@@ -75,7 +75,7 @@ internal static class EccBinaryEncoder
     /// G(x) = (x - α^0)(x - α^1)(x - α^2)
     ///      = (x - 1)(x - α)(x - α^2)
     ///      = x^3 + α^0·x^2 + α^1·x + α^0
-    /// 
+    ///
     /// The generator polynomial is built iteratively:
     /// 1. Start: G(x) = 1 (polynomial of degree 0)
     /// 2. Multiply by (x - α^0): G(x) = (1)(x - 1) = x - 1 (degree 1)
@@ -106,8 +106,8 @@ internal static class EccBinaryEncoder
                 if (coefficient == 0) continue;
 
                 // (x - α^i) expansion
-                // - Multuply existing term by x: shift to temp[j]
-                // - Multuply existing term by -α^i: add to temp[j+1]
+                // - Multiply existing term by x: shift to temp[j]
+                // - Multiply existing term by -α^i: add to temp[j+1]
                 temp[j] ^= coefficient; // x^1 term
                 temp[j + 1] ^= GaloisField.Multiply(coefficient, GaloisField.Exp[i]);
             }

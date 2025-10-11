@@ -235,7 +235,7 @@ public class EccBinaryEncoderUnitTest
     [InlineData(new byte[] { 64, 86, 134, 86 }, 10)]
     [InlineData(new byte[] { 0x40, 0x0C, 0x56, 0x61, 0x80, 0xEC, 0x11, 0xEC }, 10)]
     [InlineData(new byte[] { 16, 32, 48, 64 }, 7)]
-    public void CalculateECC_MNatchesEccTextEncoder(byte[] data, int eccCount)
+    public void CalculateECC_MatchesEccTextEncoder(byte[] data, int eccCount)
     {
         // Arrange
         var dataBits = string.Join("", data.Select(x => Convert.ToString(x, 2).PadLeft(8, '0')));
@@ -263,7 +263,7 @@ public class EccBinaryEncoderUnitTest
         const int macEccsize = 30;
         Span<byte> ecc = stackalloc byte[macEccsize];
 
-        // Text all QR code versions and ECC levels
+        // Test all QR code versions and ECC levels
         foreach (var eccInfo in QRCodeConstants.CapacityECCTable)
         {
             var data = new byte[eccInfo.TotalDataCodewords];

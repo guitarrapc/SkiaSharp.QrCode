@@ -160,7 +160,7 @@ public class BinaryInterleaverUnitTest
         int expectedEccBytes = (eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock;
         int expectedSize = expectedDataBytes + expectedEccBytes;
 
-        Assert.True(size >= expectedSize); // concider Remainder bits
+        Assert.True(size >= expectedSize); // consider remainder bits
         Assert.True(size <= expectedSize + 1); // maximum added 1 byte
     }
 }

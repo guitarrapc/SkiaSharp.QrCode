@@ -266,7 +266,7 @@ public class QRCodeGenerator : IDisposable
     }
 
     /// <summary>
-    /// Creates the QR code matrix by placing patterns, data, applying mask, and adding format/version info. 
+    /// Creates the QR code matrix by placing patterns, data, applying mask, and adding format/version info.
     /// </summary>
     /// <param name="version">The QR code version (1-40) to generate.</param>
     /// <param name="interleavedData">The encoded and interleaved data string to be placed in the QR code.</param>
@@ -378,7 +378,7 @@ public class QRCodeGenerator : IDisposable
     // Binary
 
     /// <summary>
-    /// Encodes the input text into a binary based and writes then to the provided buffer.
+    /// Encodes the input text into a binary based and writes them to the provided buffer.
     /// </summary>
     /// <param name="plainText"></param>
     /// <param name="config"></param>
@@ -400,7 +400,7 @@ public class QRCodeGenerator : IDisposable
     }
 
     /// <summary>
-    /// Calculates Reed-Solomon error correction codewords and writes then to the provided ECC buffer.
+    /// Calculates Reed-Solomon error correction codewords and writes them to the provided ECC buffer.
     /// </summary>
     /// <param name="encodedBytes">The byte representing the encoded QR code data.</param>
     /// <param name="eccInfo">Error correction information for the QR code version and ECC level.</param>
@@ -443,7 +443,7 @@ public class QRCodeGenerator : IDisposable
     }
 
     /// <summary>
-    /// Creates the QR code matrix by placing patterns, data, applying mask, and adding format/version info. 
+    /// Creates the QR code matrix by placing patterns, data, applying mask, and adding format/version info.
     /// </summary>
     /// <param name="version">The QR code version (1-40) to generate.</param>
     /// <param name="interleavedData">The encoded and interleaved data bytes to be placed in the QR code.</param>
