@@ -49,26 +49,6 @@ internal class QRTextEncoder
     }
 
     /// <summary>
-    /// Writes encoded data based on mode
-    /// </summary>
-    /// <param name="plainText">Input text to encode</param>
-    /// <param name="encoding">Encoding mode</param>
-    /// <param name="eci">ECI mode for character encoding</param>
-    /// <param name="utf8Bom">Whether to include UTF-8 BOM</param>
-    public void WriteData(string plainText, EncodingMode encoding, EciMode eci, bool utf8Bom)
-    {
-        var encoded = encoding switch
-        {
-            EncodingMode.Numeric => EncodeNumeric(plainText),
-            EncodingMode.Alphanumeric => EncodeAlphanumeric(plainText),
-            EncodingMode.Byte => EncodeByte(plainText, eci, utf8Bom),
-            EncodingMode.Kanji => throw new NotImplementedException("Kanji encoding not yet implemented, use Byte mode with UTF-8 encoding for Japanese text."),
-            _ => throw new ArgumentOutOfRangeException(nameof(encoding), "Invalid encoding mode"),
-        };
-        _builder.Append(encoded);
-    }
-
-    /// <summary>
     /// Writes terminator (up to 4 bits), byte alignment (0-7 bits) and pad bytes (0-16 bits) to reach target capacity
     /// </summary>
     /// <param name="targetBitCount">Target total bit count</param>
@@ -108,12 +88,30 @@ internal class QRTextEncoder
     }
 
     /// <summary>
+    /// Writes encoded data based on mode
+    /// </summary>
+    /// <param name="plainText">Input text to encode</param>
+    /// <param name="encoding">Encoding mode</param>
+    /// <param name="eci">ECI mode for character encoding</param>
+    /// <param name="utf8Bom">Whether to include UTF-8 BOM</param>
+    public void WriteData(string plainText, EncodingMode encoding, EciMode eci, bool utf8Bom)
+    {
+        var encoded = encoding switch
+        {
+            EncodingMode.Numeric => EncodeNumeric(plainText),
+            EncodingMode.Alphanumeric => EncodeAlphanumeric(plainText),
+            EncodingMode.Byte => EncodeByte(plainText, eci, utf8Bom),
+            EncodingMode.Kanji => throw new NotImplementedException("Kanji encoding not yet implemented, use Byte mode with UTF-8 encoding for Japanese text."),
+            _ => throw new ArgumentOutOfRangeException(nameof(encoding), "Invalid encoding mode"),
+        };
+        _builder.Append(encoded);
+    }
+
+    /// <summary>
     /// Returns the encoded binary string
     /// </summary>
     /// <returns>Binary string representation</returns>
     public string ToBinaryString() => _builder.ToString();
-
-    // private methods
 
     /// <summary>
     /// Encodes numeric text (0-9) to binary string
@@ -201,8 +199,6 @@ internal class QRTextEncoder
     /// </remarks>
     private string EncodeByte(string text, EciMode eciMode, bool utf8BOM)
     {
-        // TODO: following encoding detection and utf-8 fallback should be move to QRCodeGenerator.
-
         // Determine encoding based on ECI mode and validity
         var codeBytes = eciMode switch
         {
