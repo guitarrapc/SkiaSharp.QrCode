@@ -28,8 +28,7 @@ public class BitReaderUnitTests
         var reader = new BitReader(data);
 
         Assert.Equal(0b_1111, reader.Reads(4));
-        Assert.Equal(0b_0010,reader.Reads(4));
-
+        Assert.Equal(0b_0010, reader.Reads(4));
     }
 
     [Fact]
@@ -70,7 +69,7 @@ public class BitReaderUnitTests
     [Fact]
     public void Reads_32Bits_ReturnsCorrectValue()
     {
-        var data = new byte[] { 0xFF, 0xFF, 0xFF, 0xFF }; // all 1s
+        ReadOnlySpan<byte> data = [0xFF, 0xFF, 0xFF, 0xFF]; // all 1s
         var reader = new BitReader(data);
 
         var result = reader.Reads(32);
@@ -82,7 +81,7 @@ public class BitReaderUnitTests
     [Fact]
     public void Reads_1Bit_ReturnsCorrectValue()
     {
-        var data = new byte[] { 0b10000000 };
+        ReadOnlySpan<byte> data = [0b10000000];
         var reader = new BitReader(data);
 
         var result = reader.Reads(1);

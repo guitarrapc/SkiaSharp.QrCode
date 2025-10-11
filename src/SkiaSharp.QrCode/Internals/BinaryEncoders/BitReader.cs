@@ -4,7 +4,7 @@ namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 
 /// <summary>
 /// Reads bits from a byte buffer with precise bit-level control.
-/// Used for QR code data encoding.
+/// Used for QR code data decoding/placement.
 /// </summary>
 internal ref struct BitReader
 {
