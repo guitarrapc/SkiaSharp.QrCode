@@ -114,10 +114,16 @@ internal ref struct QRBinaryEncoder
     private void EncodeNumeric(string text)
     {
         // Convert string to ASCII bytes (numeric chars are ASCII compatible)
+#if NETSTANDARD2_1_OR_GREATER
         Span<byte> asciiBytes = stackalloc byte[text.Length];
         var bytesWritten = Encoding.ASCII.GetBytes(text.AsSpan(), asciiBytes);
 
         WriteNumericData(asciiBytes.Slice(0, bytesWritten));
+#else
+        // Fallback for older frameworks without Span support
+        var asciiBytes = Encoding.ASCII.GetBytes(text);
+        WriteNumericData(asciiBytes.AsSpan());
+#endif
     }
 
     /// <summary>
@@ -127,10 +133,16 @@ internal ref struct QRBinaryEncoder
     private void EncodeAlphanumeric(string text)
     {
         // Convert string to ASCII bytes (numeric chars are ASCII compatible)
+#if NETSTANDARD2_1_OR_GREATER
         Span<byte> asciiBytes = stackalloc byte[text.Length];
         var bytesWritten = Encoding.ASCII.GetBytes(text.AsSpan(), asciiBytes);
 
         WriteAlphanumericData(asciiBytes.Slice(0, bytesWritten));
+#else
+        // Fallback for older frameworks without Span support
+        var asciiBytes = Encoding.ASCII.GetBytes(text);
+        WriteAlphanumericData(asciiBytes.AsSpan());
+#endif
     }
 
     /// <summary>
