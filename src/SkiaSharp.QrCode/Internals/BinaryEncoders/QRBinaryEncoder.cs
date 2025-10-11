@@ -86,7 +86,7 @@ internal ref struct QRBinaryEncoder
     }
 
     /// <summary>
-    /// Writes encoded data based on mode
+    /// Writes encoded data byte based on mode
     /// </summary>
     /// <param name="plainText">Input text to encode</param>
     /// <param name="encoding">Encoding mode</param>
