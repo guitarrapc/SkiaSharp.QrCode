@@ -41,9 +41,8 @@ internal class QRTextEncoder
     /// <param name="count">Number of input characters</param>
     /// <param name="version">QR code version (1-40)</param>
     /// <param name="encoding">Encoding mode (affects bit length of count indicator)</param>
-    public void WriteCharacterCount(int count, int version, EncodingMode encoding)
+    public void WriteCharacterCount(int count, int bitsLength)
     {
-        var bitsLength = encoding.GetCountIndicatorLength(version);
         _builder.Append(QRCodeConstants.DecToBin(count, bitsLength));
     }
 

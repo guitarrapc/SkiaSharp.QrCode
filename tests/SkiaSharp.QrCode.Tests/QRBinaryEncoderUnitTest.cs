@@ -252,7 +252,7 @@ public class QRBinaryEncoderUnitTest
         // Act - Text Encoder
         var textEncoder = new Internals.TextEncoders.QRTextEncoder(targetBits);
         textEncoder.WriteMode(mode, EciMode.Default);
-        textEncoder.WriteCharacterCount(input.Length, version, mode);
+        textEncoder.WriteCharacterCount(input.Length, mode.GetCountIndicatorLength(version));
         textEncoder.WriteData(input, mode, EciMode.Default, false);
         textEncoder.WritePadding(targetBits);
         var textBits = textEncoder.ToBinaryString();

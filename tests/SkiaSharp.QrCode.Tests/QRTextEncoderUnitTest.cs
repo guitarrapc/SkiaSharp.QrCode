@@ -62,7 +62,7 @@ public class QRTextEncoderUnitTest
     internal void WriteCharacterCount_Numeric_ProducesCorrectBitLength(int version, EncodingMode mode, int count, string expected)
     {
         var encoder = new QRTextEncoder(100);
-        encoder.WriteCharacterCount(count, version, mode);
+        encoder.WriteCharacterCount(count, mode.GetCountIndicatorLength(version));
         Assert.Equal(expected, encoder.ToBinaryString());
     }
 
@@ -73,7 +73,7 @@ public class QRTextEncoderUnitTest
     internal void WriteCharacterCount_Alphanumeric_ProducesCorrectBitLength(int version, EncodingMode mode, int count, string expected)
     {
         var encoder = new QRTextEncoder(100);
-        encoder.WriteCharacterCount(count, version, mode);
+        encoder.WriteCharacterCount(count, mode.GetCountIndicatorLength(version));
         Assert.Equal(expected, encoder.ToBinaryString());
     }
 

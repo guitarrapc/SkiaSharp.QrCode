@@ -66,7 +66,7 @@ public class QRCodeGenerator : IDisposable
         var config = PrepareConfiguration(plainText, eccLevel, utf8BOM, eciMode, requestedVersion);
 
         // Encode data
-        var encodedBits = EncodeData(plainText, config);
+        var encodedBits = EncodeDataText(plainText, config);
 
         // Calculate Error Correction
         var codewordBlocks = CalculateErrorCorrection(encodedBits, config.EccInfo);
@@ -122,7 +122,7 @@ public class QRCodeGenerator : IDisposable
     /// <param name="config"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static string EncodeData(string plainText, in QRConfiguration config)
+    private static string EncodeDataText(string plainText, in QRConfiguration config)
     {
         var capacity = CalculateMaxBitStringLength(config.Version, config.EccLevel, config.Encoding);
         var encoder = new QRTextEncoder(capacity);
@@ -130,7 +130,7 @@ public class QRCodeGenerator : IDisposable
         var dataInputLength = GetDataLength(config.Encoding, plainText, config.EciMode);
 
         encoder.WriteMode(config.Encoding, config.EciMode);
-        encoder.WriteCharacterCount(dataInputLength, config.Version, config.Encoding);
+        encoder.WriteCharacterCount(dataInputLength, config.Encoding.GetCountIndicatorLength(config.Version));
         encoder.WriteData(plainText, config.Encoding, config.EciMode, config.Utf8BOM);
         encoder.WritePadding(config.EccInfo.TotalDataCodewords * 8);
 
