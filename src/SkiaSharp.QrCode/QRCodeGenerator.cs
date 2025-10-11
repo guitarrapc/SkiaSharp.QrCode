@@ -1,7 +1,9 @@
 using System.Runtime.CompilerServices;
 using System.Text;
 using SkiaSharp.QrCode.Internals;
-using static SkiaSharp.QrCode.Internals.QRCodeConstants;
+using SkiaSharp.QrCode.Internals.BinaryEncoders;
+using SkiaSharp.QrCode.Internals.TextEncoders;
+
 
 namespace SkiaSharp.QrCode;
 
@@ -65,16 +67,81 @@ public class QRCodeGenerator : IDisposable
         var config = PrepareConfiguration(plainText, eccLevel, utf8BOM, eciMode, requestedVersion);
 
         // Encode data
-        var encodedBits = EncodeData(plainText, config);
+        var encodedBits = EncodeDataText(plainText, config);
 
         // Calculate Error Correction
         var codewordBlocks = CalculateErrorCorrection(encodedBits, config.EccInfo);
 
         // Interleave data
-        var interleavedData = InterleaveCodewords(codewordBlocks, config.Version, config.EccInfo);
+        var interleavedData = InterleaveCodewords(codewordBlocks, config.EccInfo, config.Version);
 
         // Create QR code matrix
         var qrMatrix = CreateQRMatrix(config.Version, interleavedData, config.EccLevel);
+
+        // Add quiet zone
+        ModulePlacer.AddQuietZone(ref qrMatrix, quietZoneSize);
+
+        return qrMatrix;
+    }
+
+    /// <summary>
+    /// Creates a QR code from the provided plain text.
+    /// </summary>
+    /// <param name="plainText">The text to encode in the QR code.</param>
+    /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
+    /// <param name="utf8BOM">Include UTF-8 BOM (Byte Order Mark) in encoded data.</param>
+    /// <param name="eciMode">ECI mode for character encoding.</param>
+    /// <param name="requestedVersion">Specific version to use (1-40), or -1 for automatic selection.</param>
+    /// <param name="quietZoneSize">Size of the quiet zone (white border) in modules.</param>
+    /// <returns>QRCodeData containing the generated QR code matrix.</returns>
+    public QRCodeData CreateQrCodeBinary(string plainText, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
+    {
+        // QR code generation process:
+        // ------------------------------------------------
+        // 1. Determine optimal encoding mode (Numeric/Alphanumeric/Byte)
+        // 2. Encode data to binary string
+        // 3. Select QR code version (based on data length and ECC level)
+        // 4. Add mode indicator and character count indicator
+        // 5. Pad data to fill code word capacity
+        // 6. Calculate error correction codewords using Reed-Solomon
+        // 7. Interleave data and ECC codewords
+        // 8. Place finder patterns, alignment patterns, timing patterns
+        // 9. Place data modules in zigzag pattern
+        // 10. Apply optimal mask pattern (test all 8 patterns)
+        // 11. Add format and version information
+        // 12. Add quiet zone (white border)
+
+        if (requestedVersion is < -1 or > 40)
+            throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be -1 (auto) or 1-40, got {requestedVersion}");
+        if (quietZoneSize < 0)
+            throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be non-negative, got {quietZoneSize}");
+
+        // prepare configuration
+        var config = PrepareConfiguration(plainText, eccLevel, utf8BOM, eciMode, requestedVersion);
+
+        // Calculate buffer sizes
+        var dataCapacity = CalculateMaxBitStringLength(config.Version, config.EccLevel, config.Encoding);
+        var dataBufferSize = (dataCapacity + 7) / 8; // bits to bytes, rounded up
+        var totalBlocks = config.EccInfo.BlocksInGroup1 + config.EccInfo.BlocksInGroup2;
+        var eccBufferSize = totalBlocks * config.EccInfo.ECCPerBlock;
+        var interleavedSize = BinaryInterleaver.CalculateInterleavedSize(config.EccInfo, config.Version);
+
+        Span<byte> dataBuffer = stackalloc byte[dataBufferSize];
+        Span<byte> eccBuffer = stackalloc byte[eccBufferSize];
+        Span<byte> interleavedBuffer = stackalloc byte[interleavedSize];
+
+        // Encode data
+        var encodedLength = EncodeDataBinary(plainText, config, dataBuffer);
+        var encodedData = dataBuffer.Slice(0, encodedLength);
+
+        // Calculate Error Correction
+        CalculateErrorCorrectionBinary(encodedData, config.EccInfo, eccBuffer);
+
+        // Interleave data
+        InterleaveCodewordsBinary(encodedData, eccBuffer, config.EccInfo, config.Version, interleavedBuffer);
+
+        // Create QR code matrix
+        var qrMatrix = CreateQRMatrixBinary(config.Version, interleavedBuffer, config.EccLevel);
 
         // Add quiet zone
         ModulePlacer.AddQuietZone(ref qrMatrix, quietZoneSize);
@@ -109,40 +176,21 @@ public class QRCodeGenerator : IDisposable
             : requestedVersion;
 
         // Create ECCInfo
-        var eccInfo = GetEccInfo(version, eccLevel);
+        var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
 
         return new QRConfiguration(version, eccLevel, encoding, actualEciMode, utf8Bom, eccInfo);
     }
 
-    /// <summary>
-    /// Retrieves ECC information for the specified version and error correction level.
-    /// </summary>
-    /// <param name="version"></param>
-    /// <param name="eccLevel"></param>
-    /// <returns></returns>
-    /// <exception cref="ArgumentException"></exception>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ECCInfo GetEccInfo(int version, ECCLevel eccLevel)
-    {
-        var table = CapacityECCTable;
-        for (var i = 0; i < table.Count; i++)
-        {
-            var item = table[i];
-            if (item.Version == version && item.ErrorCorrectionLevel == eccLevel)
-                return item;
-        }
-
-        throw new ArgumentException($"ECC info not found for version {version}, level {eccLevel}");
-    }
+    // Text
 
     /// <summary>
-    /// Encodes the input text into a binary string based on the specified QR configuration.
+    /// Encodes the input text into a binary string.
     /// </summary>
     /// <param name="plainText"></param>
     /// <param name="config"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static string EncodeData(string plainText, in QRConfiguration config)
+    private static string EncodeDataText(string plainText, in QRConfiguration config)
     {
         var capacity = CalculateMaxBitStringLength(config.Version, config.EccLevel, config.Encoding);
         var encoder = new QRTextEncoder(capacity);
@@ -150,7 +198,7 @@ public class QRCodeGenerator : IDisposable
         var dataInputLength = GetDataLength(config.Encoding, plainText, config.EciMode);
 
         encoder.WriteMode(config.Encoding, config.EciMode);
-        encoder.WriteCharacterCount(dataInputLength, config.Version, config.Encoding);
+        encoder.WriteCharacterCount(dataInputLength, config.Encoding.GetCountIndicatorLength(config.Version));
         encoder.WriteData(plainText, config.Encoding, config.EciMode, config.Utf8BOM);
         encoder.WritePadding(config.EccInfo.TotalDataCodewords * 8);
 
@@ -165,16 +213,15 @@ public class QRCodeGenerator : IDisposable
     /// <param name="eccInfo">Error correction information for the QR code version and ECC level.</param>
     /// <returns>A list of codeword blocks containing data and error correction codewords.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static List<CodewordBlock> CalculateErrorCorrection(string bitString, in ECCInfo eccInfo)
+    private static List<CodewordTextBlock> CalculateErrorCorrection(string bitString, in ECCInfo eccInfo)
     {
-        var eccEncoder = new EccTextEncoder();
-        var blocks = new List<CodewordBlock>(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2);
+        var blocks = new List<CodewordTextBlock>(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2);
 
         // Process group 1 blocks
         var offset = 0;
         for (var i = 0; i < eccInfo.BlocksInGroup1; i++)
         {
-            var block = CreateCodewordBlock(bitString, offset, eccInfo.CodewordsInGroup1, eccEncoder, eccInfo.ECCPerBlock, groupNumber: 1, blockNumber: i + 1);
+            var block = CreateCodewordBlock(bitString, offset, eccInfo.CodewordsInGroup1, eccInfo.ECCPerBlock, groupNumber: 1, blockNumber: i + 1);
             blocks.Add(block);
             offset += eccInfo.CodewordsInGroup1 * 8;
         }
@@ -182,12 +229,18 @@ public class QRCodeGenerator : IDisposable
         // Process group 2 blocks
         for (var i = 0; i < eccInfo.BlocksInGroup2; i++)
         {
-            var block = CreateCodewordBlock(bitString, offset, eccInfo.CodewordsInGroup2, eccEncoder, eccInfo.ECCPerBlock, groupNumber: 2, blockNumber: i + 1);
+            var block = CreateCodewordBlock(bitString, offset, eccInfo.CodewordsInGroup2, eccInfo.ECCPerBlock, groupNumber: 2, blockNumber: i + 1);
             blocks.Add(block);
             offset += eccInfo.CodewordsInGroup2 * 8;
         }
 
         return blocks;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static string InterleaveCodewords(List<CodewordTextBlock> blocks, in ECCInfo eccInfo, int version)
+    {
+        return TextInterleaver.InterleaveCodewords(blocks, eccInfo, version);
     }
 
     /// <summary>
@@ -202,64 +255,18 @@ public class QRCodeGenerator : IDisposable
     /// <param name="blockNumber">The sequential block number within the group.</param>
     /// <returns>A <see cref="CodewordBlock"/> containing the data and ECC codewords for this block.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static CodewordBlock CreateCodewordBlock(string bitString, int offset, int codewordCount, EccTextEncoder eccEncoder, int eccPerBlock, int groupNumber, int blockNumber)
+    private static CodewordTextBlock CreateCodewordBlock(string bitString, int offset, int codewordCount, int eccPerBlock, int groupNumber, int blockNumber)
     {
         var blockBits = bitString.Substring(offset, codewordCount * 8);
         var codeWords = BinaryStringToBitBlockList(blockBits);
-        var eccWords = eccEncoder.CalculateECC(blockBits, eccPerBlock);
-        var codewordBlock = new CodewordBlock(groupNumber, blockNumber, blockBits, codeWords, eccWords);
+        var eccWords = EccTextEncoder.CalculateECC(blockBits, eccPerBlock);
+        var codewordBlock = new CodewordTextBlock(groupNumber, blockNumber, blockBits, codeWords, eccWords);
 
         return codewordBlock;
     }
 
     /// <summary>
-    /// Calculates the final interleaved data capacity including data codewords, ECC codewords, and remainder bits.
-    /// </summary>
-    /// <param name="blocks"></param>
-    /// <param name="version"></param>
-    /// <param name="eccInfo"></param>
-    /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static string InterleaveCodewords(List<CodewordBlock> blocks, int version, in ECCInfo eccInfo)
-    {
-        var interleaveCapacity = CalculateInterleavedDataCapacity(version, eccInfo);
-        var result = new StringBuilder(interleaveCapacity);
-        var maxCodewordCount = Math.Max(eccInfo.CodewordsInGroup1, eccInfo.CodewordsInGroup2);
-
-        // Interleave data codewords
-        for (var i = 0; i < maxCodewordCount; i++)
-        {
-            foreach (var codeBlock in blocks)
-            {
-                if (codeBlock.CodeWords.Count > i)
-                {
-                    result.Append(codeBlock.CodeWords[i]);
-                }
-            }
-        }
-        // Interleave ECC codewords
-        for (var i = 0; i < eccInfo.ECCPerBlock; i++)
-        {
-            foreach (var codeBlock in blocks)
-            {
-                if (codeBlock.ECCWords.Count > i)
-                {
-                    result.Append(codeBlock.ECCWords[i]);
-                }
-            }
-        }
-        // Add remainder bits
-        var remainderBitsCount = GetRemainderBits(version);
-        if (remainderBitsCount > 0)
-        {
-            result.Append('0', remainderBitsCount);
-        }
-
-        return result.ToString();
-    }
-
-    /// <summary>
-    /// Creates the QR code matrix by placing patterns, data, applying mask, and adding format/version info. 
+    /// Creates the QR code matrix by placing patterns, data, applying mask, and adding format/version info.
     /// </summary>
     /// <param name="version">The QR code version (1-40) to generate.</param>
     /// <param name="interleavedData">The encoded and interleaved data string to be placed in the QR code.</param>
@@ -287,7 +294,7 @@ public class QRCodeGenerator : IDisposable
         // Place version information (version 7+)
         if (version >= 7)
         {
-            var versionString = GetVersionString(version);
+            var versionString = QRCodeConstants.GetVersionString(version);
             ModulePlacer.PlaceVersion(ref qrCodeData, versionString);
         }
 
@@ -322,7 +329,7 @@ public class QRCodeGenerator : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static List<Point> GetAlignmentPatternPositions(int version)
     {
-        var table = AlignmentPatternTable;
+        var table = QRCodeConstants.AlignmentPatternTable;
         for (var i = 0; i < table.Count; i++)
         {
             var item = table[i];
@@ -344,7 +351,7 @@ public class QRCodeGenerator : IDisposable
     private static void ApplyMaskAndFormat(ref QRCodeData qrCodeData, int version, ECCLevel eccLevel, ref List<Rectangle> blockedModules)
     {
         var maskVersion = ModulePlacer.MaskCode(ref qrCodeData, version, ref blockedModules, eccLevel);
-        var formatStr = GetFormatString(eccLevel, maskVersion);
+        var formatStr = QRCodeConstants.GetFormatString(eccLevel, maskVersion);
         ModulePlacer.PlaceFormat(ref qrCodeData, formatStr);
     }
 
@@ -364,54 +371,111 @@ public class QRCodeGenerator : IDisposable
         // QR codes are always padded to full capacity with 0xEC/0x11 bytes
         // So the final bit string length = data capacity in bits
         // ECCInfo contains the actual byte capacity (TotalDataCodewords)
-        var eccInfo = GetEccInfo(version, eccLevel);
+        var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
         return eccInfo.TotalDataCodewords * 8; // Convert bytes to bits
     }
 
-    internal static int CalculateInterleavedDataCapacity(int version, in ECCInfo eccInfo)
-    {
-        // -----------------------------------------------------
-        // QR Code Interleaved data structure (ISO/IEC 18004):
-        // -----------------------------------------------------
-        //
-        // ┌──────────────────────────────────────────────────┐
-        // │ Interleaved Data Codewords                       │
-        // │ (TotalDataCodewords × 8 bits)                    │
-        // ├──────────────────────────────────────────────────┤
-        // │ Interleaved ECC Codewords                        │
-        // │ (ECCPerBlock × TotalBlocks × 8 bits)             │
-        // ├──────────────────────────────────────────────────┤
-        // │ Remainder Bits                                   │
-        // │ (0-7 bits, version dependent)                    │
-        // └──────────────────────────────────────────────────┘
-        //
-        // -----------------------------------------------------
-        // // ECCInfo for Version 5, Q
-        // eccInfo = {
-        //     Version = 5,
-        //     ErrorCorrectionLevel = Q,
-        //     TotalDataCodewords = 80,       // Data capacity
-        //     ECCPerBlock = 18,              // ECC Word count per block
-        //     BlocksInGroup1 = 2,            // Group 1 block count
-        //     CodewordsInGroup1 = 15,        // Group 1 data word count per block
-        //     BlocksInGroup2 = 2,            // Group 2 block count
-        //     CodewordsInGroup2 = 16,        // Group 2 data word count per block
-        // };
-        //
-        // // Calculation:
-        // var dataCodewordsBits = 80 * 8 = 640 bits
-        // var eccCodewordsBits = 18 * (2 + 2) * 8 = 576 bits
-        // var remainderBits = GetRemainderBits(5) = 0 bits  // Version 5 has no module remainder bits
-        //
-        // Total = 640 + 576 + 0 = 1,216 bits (152 bytes)
-        // -----------------------------------------------------
+    // Binary
 
-        var dataCodewordsBits = eccInfo.TotalDataCodewords * 8;
-        var eccCodewordsBits = eccInfo.ECCPerBlock
-            * (eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2)
-            * 8;
-        var remainderBits = GetRemainderBits(version);
-        return dataCodewordsBits + eccCodewordsBits + remainderBits;
+    /// <summary>
+    /// Encodes the input text into a binary based and writes them to the provided buffer.
+    /// </summary>
+    /// <param name="plainText"></param>
+    /// <param name="config"></param>
+    /// <param name="buffer">Output buffer for encoded data.</param>
+    /// <returns>Number of bytes written to the buffer.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int EncodeDataBinary(string plainText, in QRConfiguration config, Span<byte> buffer)
+    {
+        var encoder = new QRBinaryEncoder(buffer);
+
+        var dataInputLength = GetDataLength(config.Encoding, plainText, config.EciMode);
+
+        encoder.WriteMode(config.Encoding, config.EciMode);
+        encoder.WriteCharacterCount(dataInputLength, config.Encoding.GetCountIndicatorLength(config.Version));
+        encoder.WriteData(plainText, config.Encoding, config.EciMode, config.Utf8BOM);
+        encoder.WritePadding(config.EccInfo.TotalDataCodewords * 8);
+
+        return encoder.ByteCount;
+    }
+
+    /// <summary>
+    /// Calculates Reed-Solomon error correction codewords and writes them to the provided ECC buffer.
+    /// </summary>
+    /// <param name="encodedBytes">The byte representing the encoded QR code data.</param>
+    /// <param name="eccInfo">Error correction information for the QR code version and ECC level.</param>
+    /// <param name="eccBuffer">Output buffer for ECC codewords <c>(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock</c> bytes.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CalculateErrorCorrectionBinary(ReadOnlySpan<byte> encodedBytes, in ECCInfo eccInfo, Span<byte> eccBuffer)
+    {
+        var dataOffset = 0;
+        var eccOffset = 0;
+
+        // Process group 1 blocks
+        for (var i = 0; i < eccInfo.BlocksInGroup1; i++)
+        {
+            var blockData = encodedBytes.Slice(dataOffset, eccInfo.CodewordsInGroup1);
+            var blockEcc = eccBuffer.Slice(eccOffset, eccInfo.ECCPerBlock);
+
+            EccBinaryEncoder.CalculateECC(blockData, blockEcc, eccInfo.ECCPerBlock);
+
+            dataOffset += eccInfo.CodewordsInGroup1;
+            eccOffset += eccInfo.ECCPerBlock;
+        }
+
+        // Process group 2 blocks
+        for (var i = 0; i < eccInfo.BlocksInGroup2; i++)
+        {
+            var blockData = encodedBytes.Slice(dataOffset, eccInfo.CodewordsInGroup2);
+            var blockEcc = eccBuffer.Slice(eccOffset, eccInfo.ECCPerBlock);
+
+            EccBinaryEncoder.CalculateECC(blockData, blockEcc, eccInfo.ECCPerBlock);
+
+            dataOffset += eccInfo.CodewordsInGroup2;
+            eccOffset += eccInfo.ECCPerBlock;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void InterleaveCodewordsBinary(ReadOnlySpan<byte> dataBuffer, ReadOnlySpan<byte> eccBuffer, in ECCInfo eccInfo, int version, Span<byte> output)
+    {
+        BinaryInterleaver.InterleaveCodewords(dataBuffer, eccBuffer, output, version, eccInfo);
+    }
+
+    /// <summary>
+    /// Creates the QR code matrix by placing patterns, data, applying mask, and adding format/version info.
+    /// </summary>
+    /// <param name="version">The QR code version (1-40) to generate.</param>
+    /// <param name="interleavedData">The encoded and interleaved data bytes to be placed in the QR code.</param>
+    /// <param name="eccLevel">The error correction level to use for the QR code.</param>
+    /// <returns>A <see cref="QRCodeData"/> object containing the generated QR code matrix.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static QRCodeData CreateQRMatrixBinary(int version, ReadOnlySpan<byte> interleavedData, ECCLevel eccLevel)
+    {
+        var qrCodeData = new QRCodeData(version);
+
+        // Version 1:  approximately  9
+        // Version 7:  approximately 27
+        // Version 40: approximately 57
+        var blockedModules = new List<Rectangle>(30);
+
+        // place all patterns
+        PlacePatterns(ref qrCodeData, version, ref blockedModules);
+
+        // place data
+        ModulePlacer.PlaceDataWords(ref qrCodeData, interleavedData, ref blockedModules);
+
+        // Apply mask and format
+        ApplyMaskAndFormat(ref qrCodeData, version, eccLevel, ref blockedModules);
+
+        // Place version information (version 7+)
+        if (version >= 7)
+        {
+            var versionString = QRCodeConstants.GetVersionString(version);
+            ModulePlacer.PlaceVersion(ref qrCodeData, versionString);
+        }
+
+        return qrCodeData;
     }
 
     // Utilities
@@ -436,7 +500,7 @@ public class QRCodeGenerator : IDisposable
         }
 
         // ISO-8859-1 compatible → ECI 3
-        if (IsValidISO88591(plainText))
+        if (QRCodeConstants.IsValidISO88591(plainText))
         {
             return EciMode.Iso8859_1;
         }
@@ -489,7 +553,7 @@ public class QRCodeGenerator : IDisposable
 
             // Get actual capacity for this version and ECC level
             // Use CapacityTable (which has VersionInfo structure)
-            var eccInfo = GetEccInfo(version, eccLevel);
+            var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
             var capacityBits = eccInfo.TotalDataCodewords * 8; // convert bytes to bits
 
             if (capacityBits >= totalRequiredBits)
@@ -542,10 +606,10 @@ public class QRCodeGenerator : IDisposable
 
         foreach (char c in plainText)
         {
-            if (IsNumeric(c)) continue;
+            if (QRCodeConstants.IsNumeric(c)) continue;
 
             result = EncodingMode.Alphanumeric;
-            if (!IsAlphanumeric(c))
+            if (!QRCodeConstants.IsAlphanumeric(c))
             {
                 return EncodingMode.Byte;
             }
@@ -578,7 +642,7 @@ public class QRCodeGenerator : IDisposable
             // ISO-8859-x encoding based on ECI mode
             return eciMode switch
             {
-                EciMode.Default => IsValidISO88591(plainText)
+                EciMode.Default => QRCodeConstants.IsValidISO88591(plainText)
                     ? Encoding.GetEncoding("ISO-8859-1").GetByteCount(plainText)
                     : Encoding.UTF8.GetByteCount(plainText),
                 EciMode.Iso8859_1 => Encoding.GetEncoding("ISO-8859-1").GetByteCount(plainText),
@@ -625,12 +689,6 @@ public class QRCodeGenerator : IDisposable
         }
         return result;
     }
-
-    /// <summary>
-    /// Represents a codeword block in the interleaving process.
-    /// QR codes split data into multiple blocks for error correction.
-    /// </summary>
-    private readonly record struct CodewordBlock(int GroupNumber, int BlockNumber, string BitString, IReadOnlyList<string> CodeWords, IReadOnlyList<string> ECCWords);
 
     /// <summary>
     /// Holds QR configuration parameters determined during setup.

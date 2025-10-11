@@ -1,4 +1,4 @@
-using SkiaSharp.QrCode.Internals;
+using SkiaSharp.QrCode.Internals.TextEncoders;
 using System.Text;
 using Xunit;
 
@@ -6,13 +6,6 @@ namespace SkiaSharp.QrCode.Tests;
 
 public class EccTextEncoderUnitTest
 {
-    private readonly EccTextEncoder _encoder;
-
-    public EccTextEncoderUnitTest()
-    {
-        _encoder = new EccTextEncoder();
-    }
-
     // ISO/IEC 18004 Standard Examples
 
     /// <summary>
@@ -42,7 +35,7 @@ public class EccTextEncoderUnitTest
         };
 
         // Act
-        var result = _encoder.CalculateECC(dataBits, eccWordCount);
+        var result = EccTextEncoder.CalculateECC(dataBits, eccWordCount);
 
         //// Debug output
         //var resultDec = result.Select(x => Convert.ToInt32(x, 2)).ToArray();
@@ -66,7 +59,7 @@ public class EccTextEncoderUnitTest
     public void CalculateECC_VariousDataSizes_ProducesCorrectWordCount(string dataBits, int eccWordCount)
     {
         // Act
-        var result = _encoder.CalculateECC(dataBits, eccWordCount);
+        var result = EccTextEncoder.CalculateECC(dataBits, eccWordCount);
 
         // Assert
         Assert.Equal(eccWordCount, result.Count);
@@ -82,7 +75,7 @@ public class EccTextEncoderUnitTest
         var eccWordCount = 5;
 
         // Act
-        var result = _encoder.CalculateECC(dataBits, eccWordCount);
+        var result = EccTextEncoder.CalculateECC(dataBits, eccWordCount);
 
         // Assert
         Assert.Equal(eccWordCount, result.Count);
@@ -101,7 +94,7 @@ public class EccTextEncoderUnitTest
         var eccWordCount = 30;
 
         // Act
-        var result = _encoder.CalculateECC(dataBits, eccWordCount);
+        var result = EccTextEncoder.CalculateECC(dataBits, eccWordCount);
 
         // Assert
         Assert.Equal(eccWordCount, result.Count);
@@ -118,7 +111,7 @@ public class EccTextEncoderUnitTest
         var eccWordCount = 7;
 
         // Act
-        var result = _encoder.CalculateECC(dataBits, eccWordCount);
+        var result = EccTextEncoder.CalculateECC(dataBits, eccWordCount);
 
         // Assert
         Assert.Equal(eccWordCount, result.Count);
@@ -133,7 +126,7 @@ public class EccTextEncoderUnitTest
         var eccWordCount = 10;
 
         // Act
-        var result = _encoder.CalculateECC(dataBits, eccWordCount);
+        var result = EccTextEncoder.CalculateECC(dataBits, eccWordCount);
 
         // Assert
         Assert.Equal(eccWordCount, result.Count);
@@ -151,7 +144,7 @@ public class EccTextEncoderUnitTest
         var dataBits = pattern + pattern + pattern + pattern; // Repeat pattern 4 times
 
         // Act
-        var result = _encoder.CalculateECC(dataBits, eccCount);
+        var result = EccTextEncoder.CalculateECC(dataBits, eccCount);
 
         // Assert
         Assert.Equal(eccCount, result.Count);
@@ -171,7 +164,7 @@ public class EccTextEncoderUnitTest
         var eccWordCount = 7;
 
         // Act
-        var result = _encoder.CalculateECC(dataBits, eccWordCount);
+        var result = EccTextEncoder.CalculateECC(dataBits, eccWordCount);
 
         // Assert - ECC count should match generator polynomial degree
         Assert.Equal(eccWordCount, result.Count);
@@ -187,7 +180,7 @@ public class EccTextEncoderUnitTest
         var dataBits = new string('0', 16 * 8); // 16 bytes of data
 
         // Act
-        var result = _encoder.CalculateECC(dataBits, eccWordCount);
+        var result = EccTextEncoder.CalculateECC(dataBits, eccWordCount);
 
         // Assert - Generator polynomial degree = eccWordCount - 1
         Assert.Equal(eccWordCount, result.Count);
@@ -203,7 +196,7 @@ public class EccTextEncoderUnitTest
         var eccWordCount = 3;
 
         // Act
-        var result = _encoder.CalculateECC(dataBits, eccWordCount);
+        var result = EccTextEncoder.CalculateECC(dataBits, eccWordCount);
 
         // Assert
         Assert.Equal(eccWordCount, result.Count);
@@ -227,8 +220,8 @@ public class EccTextEncoderUnitTest
         var xor12 = XorBinaryStrings(data1, data2);
         var xor21 = XorBinaryStrings(data2, data1);
 
-        var ecc1 = _encoder.CalculateECC(xor12, eccCount);
-        var ecc2 = _encoder.CalculateECC(xor21, eccCount);
+        var ecc1 = EccTextEncoder.CalculateECC(xor12, eccCount);
+        var ecc2 = EccTextEncoder.CalculateECC(xor21, eccCount);
 
         // Assert
         Assert.Equal(ecc1, ecc2); // XOR is commutative

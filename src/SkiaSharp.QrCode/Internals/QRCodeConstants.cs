@@ -774,6 +774,27 @@ internal static class QRCodeConstants
         return binStr.PadLeft(padLeftUpTo, '0');
     }
 
+    /// <summary>
+    /// Retrieves ECC information for the specified version and error correction level.
+    /// </summary>
+    /// <param name="version"></param>
+    /// <param name="eccLevel"></param>
+    /// <returns></returns>
+    /// <exception cref="ArgumentException"></exception>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static ECCInfo GetEccInfo(int version, ECCLevel eccLevel)
+    {
+        var table = CapacityECCTable;
+        for (var i = 0; i < table.Count; i++)
+        {
+            var item = table[i];
+            if (item.Version == version && item.ErrorCorrectionLevel == eccLevel)
+                return item;
+        }
+
+        throw new ArgumentException($"ECC info not found for version {version}, level {eccLevel}");
+    }
+
     // Format and Version String Generation
 
     /// <summary>
@@ -1057,33 +1078,6 @@ internal static class QRCodeConstants
     {
         public int Version;
         public List<Point> PatternPositions;
-    }
-
-    /// <summary>
-    /// Error correction configuration for a specific version and ECC level.
-    /// </summary>
-    public readonly struct ECCInfo
-    {
-        public ECCInfo(int version, ECCLevel errorCorrectionLevel, int totalDataCodewords, int eccPerBlock, int blocksInGroup1,
-            int codewordsInGroup1, int blocksInGroup2, int codewordsInGroup2)
-        {
-            Version = version;
-            ErrorCorrectionLevel = errorCorrectionLevel;
-            TotalDataCodewords = totalDataCodewords;
-            ECCPerBlock = eccPerBlock;
-            BlocksInGroup1 = blocksInGroup1;
-            CodewordsInGroup1 = codewordsInGroup1;
-            BlocksInGroup2 = blocksInGroup2;
-            CodewordsInGroup2 = codewordsInGroup2;
-        }
-        public int Version { get; }
-        public ECCLevel ErrorCorrectionLevel { get; }
-        public int TotalDataCodewords { get; }
-        public int ECCPerBlock { get; }
-        public int BlocksInGroup1 { get; }
-        public int CodewordsInGroup1 { get; }
-        public int BlocksInGroup2 { get; }
-        public int CodewordsInGroup2 { get; }
     }
 
     /// <summary>

@@ -1,10 +1,11 @@
 using SkiaSharp.QrCode.Internals;
+using SkiaSharp.QrCode.Internals.TextEncoders;
 using System.Text;
 using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
-public class QRCodeTextEncoderUnitTest
+public class QRTextEncoderUnitTest
 {
     // Basic test - WriteMode
 
@@ -61,7 +62,7 @@ public class QRCodeTextEncoderUnitTest
     internal void WriteCharacterCount_Numeric_ProducesCorrectBitLength(int version, EncodingMode mode, int count, string expected)
     {
         var encoder = new QRTextEncoder(100);
-        encoder.WriteCharacterCount(count, version, mode);
+        encoder.WriteCharacterCount(count, mode.GetCountIndicatorLength(version));
         Assert.Equal(expected, encoder.ToBinaryString());
     }
 
@@ -72,16 +73,16 @@ public class QRCodeTextEncoderUnitTest
     internal void WriteCharacterCount_Alphanumeric_ProducesCorrectBitLength(int version, EncodingMode mode, int count, string expected)
     {
         var encoder = new QRTextEncoder(100);
-        encoder.WriteCharacterCount(count, version, mode);
+        encoder.WriteCharacterCount(count, mode.GetCountIndicatorLength(version));
         Assert.Equal(expected, encoder.ToBinaryString());
     }
 
     // WriteData
 
     [Theory]
-    [InlineData("123", "0001111011")]                              // 3 digits: 10 bits
-    [InlineData("12", "0001100")]                                  // 2 digits: 7 bits
     [InlineData("1", "0001")]                                      // 1 digit : 4 bits
+    [InlineData("12", "0001100")]                                  // 2 digits: 7 bits
+    [InlineData("123", "0001111011")]                              // 3 digits: 10 bits
     [InlineData("8675309", "110110001110000100101001")]            // Mixed
     [InlineData("0123456789", "0000001100010101100110101001101001")] // Border
     public void WriteData_Numeric_ProducesCorrectBits(string input, string expected)
@@ -92,14 +93,18 @@ public class QRCodeTextEncoderUnitTest
     }
 
     [Theory]
-    [InlineData("AC-42", "0011100111011100111001000010")]  // ISO/IEC 18004
-    [InlineData("HELLO WORLD", "0110000101101111000110100010111001011011100010011010100001101")] // tipical alphanumeric
-    [InlineData("A", "001010")]                          // 1 letter: 6 bit
-    [InlineData("AB", "00111001101")]                    // 2 letters: 11 bit
-    public void WriteData_Alphanumeric_ProducesCorrectBits(string input, string expected)
+    [InlineData("AC-42", EciMode.Default, "0011100111011100111001000010")]  // ISO/IEC 18004
+    [InlineData("AC-42", EciMode.Iso8859_1, "0011100111011100111001000010")]  // ISO/IEC 18004
+    [InlineData("HELLO WORLD", EciMode.Default, "0110000101101111000110100010111001011011100010011010100001101")] // typical alphanumeric
+    [InlineData("HELLO WORLD", EciMode.Iso8859_1, "0110000101101111000110100010111001011011100010011010100001101")] // typical alphanumeric
+    [InlineData("A", EciMode.Default, "001010")]                          // 1 letter: 6 bit
+    [InlineData("A", EciMode.Iso8859_1, "001010")]                          // 1 letter: 6 bit
+    [InlineData("AB", EciMode.Default, "00111001101")]                    // 2 letters: 11 bit
+    [InlineData("AB", EciMode.Iso8859_1, "00111001101")]                    // 2 letters: 11 bit
+    public void WriteData_Alphanumeric_ProducesCorrectBits(string input, EciMode eci, string expected)
     {
         var encoder = new QRTextEncoder(1000);
-        encoder.WriteData(input, EncodingMode.Alphanumeric, EciMode.Default, false);
+        encoder.WriteData(input, EncodingMode.Alphanumeric, eci, false);
         Assert.Equal(expected, encoder.ToBinaryString());
     }
 

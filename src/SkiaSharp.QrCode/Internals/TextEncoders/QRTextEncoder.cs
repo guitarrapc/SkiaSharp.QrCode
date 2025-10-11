@@ -1,8 +1,7 @@
-using System.Runtime.CompilerServices;
 using System.Text;
-using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
-namespace SkiaSharp.QrCode.Internals;
+
+namespace SkiaSharp.QrCode.Internals.TextEncoders;
 
 /// <summary>
 /// QR code text encoder to binary string.
@@ -27,13 +26,13 @@ internal class QRTextEncoder
         if (eci != EciMode.Default)
         {
             // ECI mode indicator: 0111 (4 bits)
-            _builder.Append(DecToBin((int)EncodingMode.ECI, 4));
+            _builder.Append(QRCodeConstants.DecToBin((int)EncodingMode.ECI, 4));
             // ECI assignment number (8 bits for 00000000-000000FF)
-            _builder.Append(DecToBin((int)eci, 8));
+            _builder.Append(QRCodeConstants.DecToBin((int)eci, 8));
         }
 
         // Standard mode indicator (4 bits)
-        _builder.Append(DecToBin((int)encoding, 4));
+        _builder.Append(QRCodeConstants.DecToBin((int)encoding, 4));
     }
 
     /// <summary>
@@ -42,30 +41,9 @@ internal class QRTextEncoder
     /// <param name="count">Number of input characters</param>
     /// <param name="version">QR code version (1-40)</param>
     /// <param name="encoding">Encoding mode (affects bit length of count indicator)</param>
-    public void WriteCharacterCount(int count, int version, EncodingMode encoding)
+    public void WriteCharacterCount(int count, int bitsLength)
     {
-        var bitsLength = encoding.GetCountIndicatorLength(version);
-        _builder.Append(DecToBin(count, bitsLength));
-    }
-
-    /// <summary>
-    /// Writes encoded data based on mode
-    /// </summary>
-    /// <param name="plainText">Input text to encode</param>
-    /// <param name="encoding">Encoding mode</param>
-    /// <param name="eci">ECI mode for character encoding</param>
-    /// <param name="utf8Bom">Whether to include UTF-8 BOM</param>
-    public void WriteData(string plainText, EncodingMode encoding, EciMode eci, bool utf8Bom)
-    {
-        var encoded = encoding switch
-        {
-            EncodingMode.Numeric => EncodeNumeric(plainText),
-            EncodingMode.Alphanumeric => EncodeAlphanumeric(plainText),
-            EncodingMode.Byte => EncodeByte(plainText, eci, utf8Bom),
-            EncodingMode.Kanji => throw new NotImplementedException("Kanji encoding not yet implemented, use Byte mode with UTF-8 encoding for Japanese text."),
-            _ => throw new ArgumentOutOfRangeException(nameof(encoding), "Invalid encoding mode"),
-        };
-        _builder.Append(encoded);
+        _builder.Append(QRCodeConstants.DecToBin(count, bitsLength));
     }
 
     /// <summary>
@@ -89,9 +67,9 @@ internal class QRTextEncoder
         }
 
         // 2. Byte boundary alignment (0-7 bits)
-        if ((_builder.Length % 8) != 0)
+        if (_builder.Length % 8 != 0)
         {
-            _builder.Append('0', 8 - (_builder.Length % 8));
+            _builder.Append('0', 8 - _builder.Length % 8);
         }
 
         // 3. Alternating pad bytes (0xEC, 0x11, 0xEC, 0x11, ...) until target length
@@ -108,12 +86,30 @@ internal class QRTextEncoder
     }
 
     /// <summary>
+    /// Writes encoded data bit based on mode
+    /// </summary>
+    /// <param name="plainText">Input text to encode</param>
+    /// <param name="encoding">Encoding mode</param>
+    /// <param name="eci">ECI mode for character encoding</param>
+    /// <param name="utf8Bom">Whether to include UTF-8 BOM</param>
+    public void WriteData(string plainText, EncodingMode encoding, EciMode eci, bool utf8Bom)
+    {
+        var encoded = encoding switch
+        {
+            EncodingMode.Numeric => EncodeNumeric(plainText),
+            EncodingMode.Alphanumeric => EncodeAlphanumeric(plainText),
+            EncodingMode.Byte => EncodeByte(plainText, eci, utf8Bom),
+            EncodingMode.Kanji => throw new NotImplementedException("Kanji encoding not yet implemented, use Byte mode with UTF-8 encoding for Japanese text."),
+            _ => throw new ArgumentOutOfRangeException(nameof(encoding), "Invalid encoding mode"),
+        };
+        _builder.Append(encoded);
+    }
+
+    /// <summary>
     /// Returns the encoded binary string
     /// </summary>
     /// <returns>Binary string representation</returns>
     public string ToBinaryString() => _builder.ToString();
-
-    // private methods
 
     /// <summary>
     /// Encodes numeric text (0-9) to binary string
@@ -135,7 +131,7 @@ internal class QRTextEncoder
             var dec = (text[index] - '0') * 100
                 + (text[index + 1] - '0') * 10
                 + (text[index + 2] - '0');
-            codeText.Append(DecToBin(dec, 10));
+            codeText.Append(QRCodeConstants.DecToBin(dec, 10));
             index += 3;
         }
 
@@ -144,15 +140,15 @@ internal class QRTextEncoder
         {
             var dec = (text[index] - '0') * 10
                 + (text[index + 1] - '0');
-            codeText.Append(DecToBin(dec, 7));
+            codeText.Append(QRCodeConstants.DecToBin(dec, 7));
             index += 2;
         }
 
         // Process remaining 1 digit
         if (index < length)
         {
-            var dec = (text[index] - '0');
-            codeText.Append(DecToBin(dec, 4));
+            var dec = text[index] - '0';
+            codeText.Append(QRCodeConstants.DecToBin(dec, 4));
         }
 
         return codeText.ToString();
@@ -174,17 +170,17 @@ internal class QRTextEncoder
         // Process 2 characters at a time
         while (index + 1 < length)
         {
-            var dec = GetAlphanumericValue(text[index]) * 45
-                + GetAlphanumericValue(text[index + 1]);
-            codeText.Append(DecToBin(dec, 11));
+            var dec = QRCodeConstants.GetAlphanumericValue(text[index]) * 45
+                + QRCodeConstants.GetAlphanumericValue(text[index + 1]);
+            codeText.Append(QRCodeConstants.DecToBin(dec, 11));
             index += 2;
         }
 
         // Process remaining 1 character
         if (index < length)
         {
-            var dec = GetAlphanumericValue(text[index]);
-            codeText.Append(DecToBin(dec, 6));
+            var dec = QRCodeConstants.GetAlphanumericValue(text[index]);
+            codeText.Append(QRCodeConstants.DecToBin(dec, 6));
         }
 
         return codeText.ToString();
@@ -204,7 +200,7 @@ internal class QRTextEncoder
         // Determine encoding based on ECI mode and validity
         var codeBytes = eciMode switch
         {
-            EciMode.Default => IsValidISO(text)
+            EciMode.Default => QRCodeConstants.IsValidISO88591(text)
                 ? Encoding.GetEncoding("ISO-8859-1").GetBytes(text)
                 : utf8BOM
                     ? [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(text)]
@@ -220,22 +216,9 @@ internal class QRTextEncoder
         var codeText = new StringBuilder(codeBytes.Length * 8);
         foreach (var b in codeBytes)
         {
-            codeText.Append(DecToBin(b, 8));
+            codeText.Append(QRCodeConstants.DecToBin(b, 8));
         }
 
         return codeText.ToString();
-    }
-
-    // helpers
-
-    /// <summary>
-    /// Validates if text can be encoded in ISO-8859-1 without data loss.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsValidISO(string input)
-    {
-        var bytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(input);
-        var result = Encoding.GetEncoding("ISO-8859-1").GetString(bytes, 0, bytes.Length);
-        return string.Equals(input, result);
     }
 }

@@ -1,5 +1,6 @@
+using SkiaSharp.QrCode.Internals.BinaryEncoders;
 using System.Runtime.CompilerServices;
-using static SkiaSharp.QrCode.Internals.QRCodeConstants;
+
 
 namespace SkiaSharp.QrCode.Internals;
 
@@ -113,11 +114,11 @@ internal static class ModulePlacer
             var qrTemp = new QRCodeData(qrCode);
 
             // Apply format and version information
-            var formatStr = GetFormatString(eccLevel, patternIndex);
+            var formatStr = QRCodeConstants.GetFormatString(eccLevel, patternIndex);
             PlaceFormat(ref qrTemp, formatStr);
             if (version >= 7)
             {
-                var versionString = GetVersionString(version);
+                var versionString = QRCodeConstants.GetVersionString(version);
                 PlaceVersion(ref qrTemp, versionString);
             }
 
@@ -160,6 +161,61 @@ internal static class ModulePlacer
     /// Places encoded data and ECC words into the QR code matrix.
     /// Fills modules in zigzag pattern from bottom-right to top-left.
     /// </summary>
+    /// <param name="qrCode">QR code data structure to populate.</param>
+    /// <param name="data">Interleaved data and ECC bytes.</param>
+    /// <param name="blockedModules">List of reserved module areas.</param>
+    /// <remarks>
+    /// Bits are read MSG-first (most significant bit first) from the byte array.
+    ///
+    /// Data placement pattern (ISO/IEC 18004 Section 7.7.3):
+    /// - Start from bottom-right corner
+    /// - Move upwards in a 2-column strips (zigzag pattern).
+    /// - Alternate direction at top/bottom edges.
+    /// - Skip timing pattern column (column 6)
+    /// - Fill out non-blocked modules
+    /// </remarks>
+    public static void PlaceDataWords(ref QRCodeData qrCode, ReadOnlySpan<byte> data, ref List<Rectangle> blockedModules)
+    {
+        var size = qrCode.Size;
+        var up = true;
+        var bitReader = new BitReader(data);
+
+        for (var x = size - 1; x >= 0; x -=2)
+        {
+            // Skip timing pattern column
+            if (x == 6)
+                x--;
+
+            for (var yMod = 1; yMod <= size; yMod++)
+            {
+                var y = up ? size - yMod : yMod - 1;
+
+                // Process 2 columns (x and x-1)
+                for (var xOffset = 0; xOffset < 2; xOffset++)
+                {
+                    var xModule = x - xOffset;
+
+                    // Skip blocked module (finder patterns, timing patterns, format/version info, etc.)
+                    if (IsBlocked(new Rectangle(xModule, y, 1, 1), blockedModules))
+                        continue;
+
+                    // Place bit if available
+                    qrCode[y, xModule] = bitReader.HasBits ? bitReader.Read() : false;
+                }
+            }
+
+            // alternate direction
+            up = !up;
+        }
+    }
+
+    /// <summary>
+    /// Places encoded data and ECC words into the QR code matrix.
+    /// Fills modules in zigzag pattern from bottom-right to top-left.
+    /// </summary>
+    /// <param name="qrCode">QR code data structure to populate.</param>
+    /// <param name="data">Interleaved data and ECC bytes string.</param>
+    /// <param name="blockedModules">List of reserved module areas.</param>
     public static void PlaceDataWords(ref QRCodeData qrCode, string data, ref List<Rectangle> blockedModules)
     {
         var size = qrCode.Size;
@@ -172,7 +228,8 @@ internal static class ModulePlacer
         for (var x = size - 1; x >= 0; x = x - 2)
         {
             if (x == 6)
-                x = 5;
+                x--;
+
             for (var yMod = 1; yMod <= size; yMod++)
             {
                 int y;
@@ -193,6 +250,8 @@ internal static class ModulePlacer
                         qrCode[y, x - 1] = datawords.Dequeue();
                 }
             }
+
+            // alternate direction
             up = !up;
         }
     }

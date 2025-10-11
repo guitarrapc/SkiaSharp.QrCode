@@ -1,44 +1,35 @@
-using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
-namespace SkiaSharp.QrCode.Internals;
+
+namespace SkiaSharp.QrCode.Internals.TextEncoders;
 
 /// <summary>
-/// Ecc encoder with Reed-Solomon error correction (text-based).
+/// Reed-Solomon error correction encoder for QR code generation.
 /// </summary>
 /// <remarks>
-/// This ecc encoder implements Reed-Solomon error correction using polynomial operations
-/// on binary string representations.
-/// 
-/// Reed-Solomon error correction process:
-/// 1. Convert data bit string to message polynomial
-/// 2. Generate Reed-Solomon generator polynomial (based on required ECC words)
-/// 3. Multiply message polynomial by x^n (where n = ECC word count)
-/// 4. Perform polynomial division in GF(256) using XOR operations
-/// 5. Remainder becomes the error correction codewords
+/// This encoder implements the Reed-Solomon error correction algorithm as specified in ISO/IEC 18004 Section 8.5.
 /// </remarks>
-internal class EccTextEncoder
+internal static class EccTextEncoder
 {
+    // Algorithm (ISO/IEC 18004 Section 8.5):
+    // 1. Create Reed-solomon generator polynomial G(x) = G(256) = (x-α^0)(x-α^1)...(x-α^(n-1))
+    // 2. Convert data bit string to message polynomial M(x)
+    // 3. Multiply message polynomial M(x) by x^n to shift coefficients (shift by eccCount positions)
+    // 4. Perform polynomial division in GF(256) using XOR operations: M(x)·x^n by G(x)
+    // 5. Remainder R(x) contains the ECC codewords
+    //
+    // Example (simplified):
+    // - Data: [64, 86, 134, 86] → M(x) = 64x^3 + 86x^2 + 134x + 86
+    // - ECC count: 10
+    // - Generator: G(x) = (x-α^0)(x-α^1)...(x-α^9)
+    // - Result: 10 ECC codewords [196, 35, 39, 119, 235, 215, 231, 226, 93, 23]
+
     /// <summary>
     /// Calculates error correction codewords using Reed-Solomon algorithm.
     /// </summary>
     /// <param name="dataBits">Binary string representing data codewords (multiple of 8 bits).</param>
     /// <param name="eccWordCount">Number of error correction codewords to generate.</param>
     /// <returns>List of ECC codewords as binary strings (8 bits each).</returns>
-    /// <remarks>
-    /// Algorithm (ISO/IEC 18004 Section 8.5):
-    /// 1. Create message polynomial M(x) from data bits
-    /// 2. Create generator polynomial G(x) = (x-α^0)(x-α^1)...(x-α^(n-1))
-    /// 3. Multiply M(x) by x^n to shift coefficients
-    /// 4. Divide M(x)·x^n by G(x) using GF(256) arithmetic
-    /// 5. Remainder R(x) contains the ECC codewords
-    /// 
-    /// Example (simplified):
-    /// - Data: [64, 86, 134, 86] → M(x) = 64x^3 + 86x^2 + 134x + 86
-    /// - ECC count: 10
-    /// - Generator: G(x) = (x-α^0)(x-α^1)...(x-α^9)
-    /// - Result: 10 ECC codewords [196, 35, 39, 119, 235, 215, 231, 226, 93, 23]
-    /// </remarks>
-    public List<string> CalculateECC(string dataBits, int eccWordCount)
+    public static List<string> CalculateECC(string dataBits, int eccWordCount)
     {
         var messagePolynom = CalculateMessagePolynom(dataBits);
         var generatorPolynom = CalculateGeneratorPolynom(eccWordCount);
@@ -52,7 +43,7 @@ internal class EccTextEncoder
 
         // Perform polynomial division in GF(256)
         var leadTermSource = messagePolynom;
-        for (var i = 0; (leadTermSource.PolyItems.Count > 0 && leadTermSource.PolyItems[^1].Exponent > 0); i++)
+        for (var i = 0; leadTermSource.PolyItems.Count > 0 && leadTermSource.PolyItems[^1].Exponent > 0; i++)
         {
             if (leadTermSource.PolyItems[0].Coefficient == 0)
             {
@@ -77,7 +68,7 @@ internal class EccTextEncoder
         for (int exp = eccWordCount - 1; exp >= 0; exp--)
         {
             coeffByExp.TryGetValue(exp, out int c); // 0 if missing
-            ecc.Add(DecToBin(c, 8));
+            ecc.Add(QRCodeConstants.DecToBin(c, 8));
         }
         return ecc;
 
@@ -120,14 +111,14 @@ internal class EccTextEncoder
     /// - "10000110" (134) → coefficient for x^1
     /// - "01010110" (86) → coefficient for x^0
     /// </remarks>
-    private Polynom CalculateMessagePolynom(string bitString)
+    private static Polynom CalculateMessagePolynom(string bitString)
     {
         var messagePol = new Polynom();
         var byteCount = bitString.Length / 8;
         for (var i = byteCount - 1; i >= 0; i--)
         {
             var byteBits = bitString.Substring(0, 8);
-            var coefficient = BinToDec(byteBits);
+            var coefficient = QRCodeConstants.BinToDec(byteBits);
             messagePol.PolyItems.Add(new PolynomItem(coefficient, i));
             bitString = bitString.Remove(0, 8);
         }
@@ -151,7 +142,7 @@ internal class EccTextEncoder
     /// 2. Multiply by (x - α^1), (x - α^2), etc.
     /// 3. Result has degree equal to eccWordCount
     /// </remarks>
-    private Polynom CalculateGeneratorPolynom(int eccWordCount)
+    private static Polynom CalculateGeneratorPolynom(int eccWordCount)
     {
         // init with (x - α^0)
         var generatorPolynom = new Polynom();
@@ -188,13 +179,13 @@ internal class EccTextEncoder
     /// 
     /// Uses Galois field lookup: integer → α^n exponent
     /// </remarks>
-    private Polynom ConvertToAlphaNotation(Polynom poly)
+    private static Polynom ConvertToAlphaNotation(Polynom poly)
     {
         var newPoly = new Polynom();
         for (var i = 0; i < poly.PolyItems.Count; i++)
         {
             var coefficient = poly.PolyItems[i].Coefficient != 0
-                ? GetAlphaExpFromIntVal(poly.PolyItems[i].Coefficient)
+                ? QRCodeConstants.GetAlphaExpFromIntVal(poly.PolyItems[i].Coefficient)
                 : 0;
             newPoly.PolyItems.Add(new PolynomItem(coefficient, poly.PolyItems[i].Exponent));
         }
@@ -213,12 +204,12 @@ internal class EccTextEncoder
     /// 
     /// Uses Galois field lookup: α^n exponent → integer
     /// </remarks>
-    private Polynom ConvertToDecNotation(Polynom poly)
+    private static Polynom ConvertToDecNotation(Polynom poly)
     {
         var newPoly = new Polynom();
         for (var i = 0; i < poly.PolyItems.Count; i++)
         {
-            var coefficient = GetIntValFromAlphaExp(poly.PolyItems[i].Coefficient);
+            var coefficient = QRCodeConstants.GetIntValFromAlphaExp(poly.PolyItems[i].Coefficient);
             newPoly.PolyItems.Add(new PolynomItem(coefficient, poly.PolyItems[i].Exponent));
         }
         return newPoly;
@@ -239,7 +230,7 @@ internal class EccTextEncoder
     /// 
     /// In GF(256): subtraction = addition = XOR
     /// </remarks>
-    private Polynom XORPolynoms(Polynom messagePolynom, Polynom resPolynom)
+    private static Polynom XORPolynoms(Polynom messagePolynom, Polynom resPolynom)
     {
         var resultPolynom = new Polynom();
         Polynom longPoly, shortPoly;
@@ -282,7 +273,7 @@ internal class EccTextEncoder
     /// = α^2·x^2 + (α^3 ⊕ α^3)·x + α^4  (⊕ = XOR)
     /// = α^2·x^2 + 0·x + α^4
     /// </remarks>
-    private Polynom MultiplyAlphaPolynoms(Polynom polynomBase, Polynom polynomMultiplier)
+    private static Polynom MultiplyAlphaPolynoms(Polynom polynomBase, Polynom polynomMultiplier)
     {
         var resultPolynom = new Polynom();
 
@@ -292,7 +283,7 @@ internal class EccTextEncoder
             foreach (var polItemMulti in polynomBase.PolyItems)
             {
                 var coefficient = ShrinkAlphaExp(polItemBase.Coefficient + polItemMulti.Coefficient);
-                resultPolynom.PolyItems.Add(new PolynomItem(coefficient, (polItemBase.Exponent + polItemMulti.Exponent)));
+                resultPolynom.PolyItems.Add(new PolynomItem(coefficient, polItemBase.Exponent + polItemMulti.Exponent));
             }
         }
 
@@ -313,10 +304,10 @@ internal class EccTextEncoder
                 var item = resultPolynom.PolyItems[i];
                 if (item.Exponent == exponent)
                 {
-                    coefficient ^= GetIntValFromAlphaExp(item.Coefficient);
+                    coefficient ^= QRCodeConstants.GetIntValFromAlphaExp(item.Coefficient);
                 }
             }
-            gluedPolynoms.Add(new PolynomItem(GetAlphaExpFromIntVal(coefficient), exponent));
+            gluedPolynoms.Add(new PolynomItem(QRCodeConstants.GetAlphaExpFromIntVal(coefficient), exponent));
         }
 
         // Remove duplicate
@@ -344,7 +335,7 @@ internal class EccTextEncoder
     /// <param name="leadTerm">Lead term of current message polynomial.</param>
     /// <param name="lowerExponentBy">Amount to reduce exponents.</param>
     /// <returns>Multiplied polynomial.</returns>
-    private Polynom MultiplyGeneratorPolynomByLeadterm(Polynom genPolynom, PolynomItem leadTerm, int lowerExponentBy)
+    private static Polynom MultiplyGeneratorPolynomByLeadterm(Polynom genPolynom, PolynomItem leadTerm, int lowerExponentBy)
     {
         var resultPolynom = new Polynom();
         foreach (var polItemBase in genPolynom.PolyItems)
@@ -367,6 +358,6 @@ internal class EccTextEncoder
     /// </remarks>
     private static int ShrinkAlphaExp(int alphaExp)
     {
-        return (int)((alphaExp % 256) + Math.Floor((double)(alphaExp / 256)));
+        return (int)(alphaExp % 256 + Math.Floor((double)(alphaExp / 256)));
     }
 }
