@@ -345,6 +345,32 @@ public class QRCodeGeneratorUnitTest
         Assert.Equal(SerializeMatrix(qr1), SerializeMatrix(qr2));
     }
 
+    // Text and Binary consistency
+
+    [Theory]
+    [InlineData("HELLO WORLD", ECCLevel.Q, 1)]
+    [InlineData("https://example.com", ECCLevel.M, -1)]
+    [InlineData("0123456789", ECCLevel.H, 5)]
+    public void CreateQrCodeBinary_MatchesTextImplementation(string text, ECCLevel level, int version)
+    {
+        var generator = new QRCodeGenerator();
+
+        var qrText = generator.CreateQrCode(text, level, requestedVersion: version);
+        var qrBinary = generator.CreateQrCodeBinary(text, level, requestedVersion: version);
+
+        // Compare sizes
+        Assert.Equal(qrText.Size, qrBinary.Size);
+
+        // Compare every module
+        for (int y = 0; y < qrText.Size; y++)
+        {
+            for (int x = 0; x < qrText.Size; x++)
+            {
+                Assert.Equal(qrText[y, x], qrBinary[y, x]);
+            }
+        }
+    }
+
     // Helpers
 
     /// <summary>
