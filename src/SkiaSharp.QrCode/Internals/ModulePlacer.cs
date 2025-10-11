@@ -1,6 +1,6 @@
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
 using System.Runtime.CompilerServices;
-using static SkiaSharp.QrCode.Internals.QRCodeConstants;
+
 
 namespace SkiaSharp.QrCode.Internals;
 
@@ -114,11 +114,11 @@ internal static class ModulePlacer
             var qrTemp = new QRCodeData(qrCode);
 
             // Apply format and version information
-            var formatStr = GetFormatString(eccLevel, patternIndex);
+            var formatStr = QRCodeConstants.GetFormatString(eccLevel, patternIndex);
             PlaceFormat(ref qrTemp, formatStr);
             if (version >= 7)
             {
-                var versionString = GetVersionString(version);
+                var versionString = QRCodeConstants.GetVersionString(version);
                 PlaceVersion(ref qrTemp, versionString);
             }
 

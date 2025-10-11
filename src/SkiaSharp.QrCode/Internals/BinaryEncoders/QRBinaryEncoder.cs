@@ -1,5 +1,4 @@
 using System.Text;
-using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
 namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 
@@ -213,8 +212,8 @@ internal ref struct QRBinaryEncoder
         // Process 2 characters at a time
         while (i + 1 < length)
         {
-            var value = GetAlphanumericValue((char)chars[i]) * 45
-                + GetAlphanumericValue((char)chars[i + 1]);
+            var value = QRCodeConstants.GetAlphanumericValue((char)chars[i]) * 45
+                + QRCodeConstants.GetAlphanumericValue((char)chars[i + 1]);
             _writer.Write(value, 11);
             i += 2;
         }
@@ -222,7 +221,7 @@ internal ref struct QRBinaryEncoder
         // Process remaining 1 character
         if (i < length)
         {
-            var value = GetAlphanumericValue((char)chars[i]);
+            var value = QRCodeConstants.GetAlphanumericValue((char)chars[i]);
             _writer.Write(value, 6);
         }
     }
@@ -257,7 +256,7 @@ internal ref struct QRBinaryEncoder
     {
         return eciMode switch
         {
-            EciMode.Default => IsValidISO88591(text)
+            EciMode.Default => QRCodeConstants.IsValidISO88591(text)
                 ? EncodeISO88591(text, buffer)
                 : EncodeUtf8(text, utf8BOM, buffer),
             EciMode.Iso8859_1 => EncodeISO88591(text, buffer),

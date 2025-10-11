@@ -1,5 +1,4 @@
 using System.Text;
-using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
 namespace SkiaSharp.QrCode.Internals.TextEncoders;
 
@@ -41,7 +40,7 @@ internal static class TextInterleaver
             }
         }
         // Add remainder bits
-        var remainderBitsCount = GetRemainderBits(version);
+        var remainderBitsCount = QRCodeConstants.GetRemainderBits(version);
         if (remainderBitsCount > 0)
         {
             result.Append('0', remainderBitsCount);
@@ -98,7 +97,7 @@ internal static class TextInterleaver
         var eccCodewordsBits = eccInfo.ECCPerBlock
             * (eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2)
             * 8;
-        var remainderBits = GetRemainderBits(version);
+        var remainderBits = QRCodeConstants.GetRemainderBits(version);
         return dataCodewordsBits + eccCodewordsBits + remainderBits;
     }
 }

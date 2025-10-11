@@ -1,5 +1,5 @@
 using System.Text;
-using static SkiaSharp.QrCode.Internals.QRCodeConstants;
+
 
 namespace SkiaSharp.QrCode.Internals.TextEncoders;
 
@@ -26,13 +26,13 @@ internal class QRTextEncoder
         if (eci != EciMode.Default)
         {
             // ECI mode indicator: 0111 (4 bits)
-            _builder.Append(DecToBin((int)EncodingMode.ECI, 4));
+            _builder.Append(QRCodeConstants.DecToBin((int)EncodingMode.ECI, 4));
             // ECI assignment number (8 bits for 00000000-000000FF)
-            _builder.Append(DecToBin((int)eci, 8));
+            _builder.Append(QRCodeConstants.DecToBin((int)eci, 8));
         }
 
         // Standard mode indicator (4 bits)
-        _builder.Append(DecToBin((int)encoding, 4));
+        _builder.Append(QRCodeConstants.DecToBin((int)encoding, 4));
     }
 
     /// <summary>
@@ -44,7 +44,7 @@ internal class QRTextEncoder
     public void WriteCharacterCount(int count, int version, EncodingMode encoding)
     {
         var bitsLength = encoding.GetCountIndicatorLength(version);
-        _builder.Append(DecToBin(count, bitsLength));
+        _builder.Append(QRCodeConstants.DecToBin(count, bitsLength));
     }
 
     /// <summary>
@@ -132,7 +132,7 @@ internal class QRTextEncoder
             var dec = (text[index] - '0') * 100
                 + (text[index + 1] - '0') * 10
                 + (text[index + 2] - '0');
-            codeText.Append(DecToBin(dec, 10));
+            codeText.Append(QRCodeConstants.DecToBin(dec, 10));
             index += 3;
         }
 
@@ -141,7 +141,7 @@ internal class QRTextEncoder
         {
             var dec = (text[index] - '0') * 10
                 + (text[index + 1] - '0');
-            codeText.Append(DecToBin(dec, 7));
+            codeText.Append(QRCodeConstants.DecToBin(dec, 7));
             index += 2;
         }
 
@@ -149,7 +149,7 @@ internal class QRTextEncoder
         if (index < length)
         {
             var dec = text[index] - '0';
-            codeText.Append(DecToBin(dec, 4));
+            codeText.Append(QRCodeConstants.DecToBin(dec, 4));
         }
 
         return codeText.ToString();
@@ -171,17 +171,17 @@ internal class QRTextEncoder
         // Process 2 characters at a time
         while (index + 1 < length)
         {
-            var dec = GetAlphanumericValue(text[index]) * 45
-                + GetAlphanumericValue(text[index + 1]);
-            codeText.Append(DecToBin(dec, 11));
+            var dec = QRCodeConstants.GetAlphanumericValue(text[index]) * 45
+                + QRCodeConstants.GetAlphanumericValue(text[index + 1]);
+            codeText.Append(QRCodeConstants.DecToBin(dec, 11));
             index += 2;
         }
 
         // Process remaining 1 character
         if (index < length)
         {
-            var dec = GetAlphanumericValue(text[index]);
-            codeText.Append(DecToBin(dec, 6));
+            var dec = QRCodeConstants.GetAlphanumericValue(text[index]);
+            codeText.Append(QRCodeConstants.DecToBin(dec, 6));
         }
 
         return codeText.ToString();
@@ -201,7 +201,7 @@ internal class QRTextEncoder
         // Determine encoding based on ECI mode and validity
         var codeBytes = eciMode switch
         {
-            EciMode.Default => IsValidISO88591(text)
+            EciMode.Default => QRCodeConstants.IsValidISO88591(text)
                 ? Encoding.GetEncoding("ISO-8859-1").GetBytes(text)
                 : utf8BOM
                     ? [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(text)]
@@ -217,7 +217,7 @@ internal class QRTextEncoder
         var codeText = new StringBuilder(codeBytes.Length * 8);
         foreach (var b in codeBytes)
         {
-            codeText.Append(DecToBin(b, 8));
+            codeText.Append(QRCodeConstants.DecToBin(b, 8));
         }
 
         return codeText.ToString();

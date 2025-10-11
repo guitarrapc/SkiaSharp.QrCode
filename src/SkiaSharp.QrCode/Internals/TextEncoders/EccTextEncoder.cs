@@ -1,4 +1,4 @@
-using static SkiaSharp.QrCode.Internals.QRCodeConstants;
+
 
 namespace SkiaSharp.QrCode.Internals.TextEncoders;
 
@@ -68,7 +68,7 @@ internal static class EccTextEncoder
         for (int exp = eccWordCount - 1; exp >= 0; exp--)
         {
             coeffByExp.TryGetValue(exp, out int c); // 0 if missing
-            ecc.Add(DecToBin(c, 8));
+            ecc.Add(QRCodeConstants.DecToBin(c, 8));
         }
         return ecc;
 
@@ -118,7 +118,7 @@ internal static class EccTextEncoder
         for (var i = byteCount - 1; i >= 0; i--)
         {
             var byteBits = bitString.Substring(0, 8);
-            var coefficient = BinToDec(byteBits);
+            var coefficient = QRCodeConstants.BinToDec(byteBits);
             messagePol.PolyItems.Add(new PolynomItem(coefficient, i));
             bitString = bitString.Remove(0, 8);
         }
@@ -185,7 +185,7 @@ internal static class EccTextEncoder
         for (var i = 0; i < poly.PolyItems.Count; i++)
         {
             var coefficient = poly.PolyItems[i].Coefficient != 0
-                ? GetAlphaExpFromIntVal(poly.PolyItems[i].Coefficient)
+                ? QRCodeConstants.GetAlphaExpFromIntVal(poly.PolyItems[i].Coefficient)
                 : 0;
             newPoly.PolyItems.Add(new PolynomItem(coefficient, poly.PolyItems[i].Exponent));
         }
@@ -209,7 +209,7 @@ internal static class EccTextEncoder
         var newPoly = new Polynom();
         for (var i = 0; i < poly.PolyItems.Count; i++)
         {
-            var coefficient = GetIntValFromAlphaExp(poly.PolyItems[i].Coefficient);
+            var coefficient = QRCodeConstants.GetIntValFromAlphaExp(poly.PolyItems[i].Coefficient);
             newPoly.PolyItems.Add(new PolynomItem(coefficient, poly.PolyItems[i].Exponent));
         }
         return newPoly;
@@ -304,10 +304,10 @@ internal static class EccTextEncoder
                 var item = resultPolynom.PolyItems[i];
                 if (item.Exponent == exponent)
                 {
-                    coefficient ^= GetIntValFromAlphaExp(item.Coefficient);
+                    coefficient ^= QRCodeConstants.GetIntValFromAlphaExp(item.Coefficient);
                 }
             }
-            gluedPolynoms.Add(new PolynomItem(GetAlphaExpFromIntVal(coefficient), exponent));
+            gluedPolynoms.Add(new PolynomItem(QRCodeConstants.GetAlphaExpFromIntVal(coefficient), exponent));
         }
 
         // Remove duplicate

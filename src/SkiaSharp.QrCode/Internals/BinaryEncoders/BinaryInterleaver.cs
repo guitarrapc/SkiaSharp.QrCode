@@ -1,5 +1,3 @@
-using static SkiaSharp.QrCode.Internals.QRCodeConstants;
-
 namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 
 internal static class BinaryInterleaver
@@ -110,7 +108,7 @@ internal static class BinaryInterleaver
 
         var totalDataBytes = eccInfo.TotalDataCodewords;
         var totalEccBytes = (eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock;
-        var remainderBits = GetRemainderBits(version);
+        var remainderBits = QRCodeConstants.GetRemainderBits(version);
 
         // Calculate total size in bits, then round up to bytes
         var totalBits = totalDataBytes * 8 + totalEccBytes * 8 + remainderBits;

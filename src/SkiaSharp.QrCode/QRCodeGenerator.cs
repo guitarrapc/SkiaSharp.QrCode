@@ -2,7 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using SkiaSharp.QrCode.Internals;
 using SkiaSharp.QrCode.Internals.TextEncoders;
-using static SkiaSharp.QrCode.Internals.QRCodeConstants;
+
 
 namespace SkiaSharp.QrCode;
 
@@ -110,7 +110,7 @@ public class QRCodeGenerator : IDisposable
             : requestedVersion;
 
         // Create ECCInfo
-        var eccInfo = GetEccInfo(version, eccLevel);
+        var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
 
         return new QRConfiguration(version, eccLevel, encoding, actualEciMode, utf8Bom, eccInfo);
     }
@@ -226,7 +226,7 @@ public class QRCodeGenerator : IDisposable
         // Place version information (version 7+)
         if (version >= 7)
         {
-            var versionString = GetVersionString(version);
+            var versionString = QRCodeConstants.GetVersionString(version);
             ModulePlacer.PlaceVersion(ref qrCodeData, versionString);
         }
 
@@ -261,7 +261,7 @@ public class QRCodeGenerator : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static List<Point> GetAlignmentPatternPositions(int version)
     {
-        var table = AlignmentPatternTable;
+        var table = QRCodeConstants.AlignmentPatternTable;
         for (var i = 0; i < table.Count; i++)
         {
             var item = table[i];
@@ -283,7 +283,7 @@ public class QRCodeGenerator : IDisposable
     private static void ApplyMaskAndFormat(ref QRCodeData qrCodeData, int version, ECCLevel eccLevel, ref List<Rectangle> blockedModules)
     {
         var maskVersion = ModulePlacer.MaskCode(ref qrCodeData, version, ref blockedModules, eccLevel);
-        var formatStr = GetFormatString(eccLevel, maskVersion);
+        var formatStr = QRCodeConstants.GetFormatString(eccLevel, maskVersion);
         ModulePlacer.PlaceFormat(ref qrCodeData, formatStr);
     }
 
@@ -303,7 +303,7 @@ public class QRCodeGenerator : IDisposable
         // QR codes are always padded to full capacity with 0xEC/0x11 bytes
         // So the final bit string length = data capacity in bits
         // ECCInfo contains the actual byte capacity (TotalDataCodewords)
-        var eccInfo = GetEccInfo(version, eccLevel);
+        var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
         return eccInfo.TotalDataCodewords * 8; // Convert bytes to bits
     }
 
@@ -329,7 +329,7 @@ public class QRCodeGenerator : IDisposable
         }
 
         // ISO-8859-1 compatible → ECI 3
-        if (IsValidISO88591(plainText))
+        if (QRCodeConstants.IsValidISO88591(plainText))
         {
             return EciMode.Iso8859_1;
         }
@@ -382,7 +382,7 @@ public class QRCodeGenerator : IDisposable
 
             // Get actual capacity for this version and ECC level
             // Use CapacityTable (which has VersionInfo structure)
-            var eccInfo = GetEccInfo(version, eccLevel);
+            var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
             var capacityBits = eccInfo.TotalDataCodewords * 8; // convert bytes to bits
 
             if (capacityBits >= totalRequiredBits)
@@ -435,10 +435,10 @@ public class QRCodeGenerator : IDisposable
 
         foreach (char c in plainText)
         {
-            if (IsNumeric(c)) continue;
+            if (QRCodeConstants.IsNumeric(c)) continue;
 
             result = EncodingMode.Alphanumeric;
-            if (!IsAlphanumeric(c))
+            if (!QRCodeConstants.IsAlphanumeric(c))
             {
                 return EncodingMode.Byte;
             }
@@ -471,7 +471,7 @@ public class QRCodeGenerator : IDisposable
             // ISO-8859-x encoding based on ECI mode
             return eciMode switch
             {
-                EciMode.Default => IsValidISO88591(plainText)
+                EciMode.Default => QRCodeConstants.IsValidISO88591(plainText)
                     ? Encoding.GetEncoding("ISO-8859-1").GetByteCount(plainText)
                     : Encoding.UTF8.GetByteCount(plainText),
                 EciMode.Iso8859_1 => Encoding.GetEncoding("ISO-8859-1").GetByteCount(plainText),

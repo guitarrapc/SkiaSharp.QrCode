@@ -1,5 +1,6 @@
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
 using Xunit;
+using SkiaSharp.QrCode.Internals;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
 namespace SkiaSharp.QrCode.Tests;
@@ -161,17 +162,5 @@ public class BinaryInterleaverUnitTest
 
         Assert.True(size >= expectedSize); // concider Remainder bits
         Assert.True(size <= expectedSize + 1); // maximum added 1 byte
-    }
-
-    // Comparison with Text-based Interleaver
-
-    [Theory]
-    [InlineData(1, ECCLevel.M)]
-    [InlineData(5, ECCLevel.H)]
-    [InlineData(10, ECCLevel.Q)]
-    public void InterleaveCodewords_MatchesTextBasedInterleaver(int version, ECCLevel eccLevel)
-    {
-        // This test will be implemented after integrating with QRCodeGenerator
-        // It will compare byte-based interleaving with existing string-based interleaving
     }
 }
