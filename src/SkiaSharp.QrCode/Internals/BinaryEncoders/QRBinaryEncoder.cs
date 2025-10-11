@@ -152,9 +152,9 @@ internal ref struct QRBinaryEncoder
     private void EncodeByte(string text, EciMode eci, bool utf8Bom)
     {
         // Determine encoding based on ECI mode
-        ReadOnlySpan<byte> byteData = GetByteData(text, eci, utf8Bom);
-
-        WriteByteData(byteData);
+        Span<byte> buffer = stackalloc byte[text.Length * 4];
+        var length = GetByteData(text, eci, utf8Bom, buffer);
+        WriteByteData(buffer.Slice(0, length));
     }
 
     /// <summary>
@@ -246,25 +246,65 @@ internal ref struct QRBinaryEncoder
     /// <param name="text">Text to encode.</param>
     /// <param name="eciMode">ECI mode for character encoding.</param>
     /// <param name="utf8BOM">Whether to include UTF-8 BOM.</param>
+    /// <param name="buffer">Buffer to use for encoding.</param>
     /// <returns>Byte array representing the encoded text.</returns>
-    private static ReadOnlySpan<byte> GetByteData(string text, EciMode eciMode, bool utf8BOM)
+    private static int GetByteData(string text, EciMode eciMode, bool utf8BOM, Span<byte> buffer)
     {
         return eciMode switch
         {
             EciMode.Default => IsValidISO88591(text)
-                ? Encoding.GetEncoding("ISO-8859-1").GetBytes(text)
-                : utf8BOM
-                    ? [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(text)]
-                    : Encoding.UTF8.GetBytes(text),
-
-            EciMode.Iso8859_1 => Encoding.GetEncoding("ISO-8859-1").GetBytes(text),
-
-            EciMode.Utf8 => utf8BOM
-                ? [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(text)]
-                : Encoding.UTF8.GetBytes(text),
-
-            _ => throw new ArgumentOutOfRangeException(nameof(eciMode),
-                "Unsupported ECI mode for Byte encoding"),
+                ? EncodeISO88591(text, buffer)
+                : EncodeUtf8(text, utf8BOM, buffer),
+            EciMode.Iso8859_1 => EncodeISO88591(text, buffer),
+            EciMode.Utf8 => EncodeUtf8(text, utf8BOM, buffer),
+            _ => throw new ArgumentOutOfRangeException(nameof(eciMode), "Unsupported ECI mode for Byte encoding"),
         };
+
+        static int EncodeISO88591(string text, Span<byte> buffer)
+        {
+#if NETSTANDARD2_1_OR_GREATER
+            return Encoding.GetEncoding("ISO-8859-1").GetBytes(text, buffer);
+#else
+            ReadOnlySpan<byte> bytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(text);
+            bytes.CopyTo(buffer);
+            return bytes.Length;
+#endif
+        }
+
+        static int EncodeUtf8(string text, bool utf8BOM, Span<byte> buffer)
+        {
+            var offset = 0;
+#if NETSTANDARD2_1_OR_GREATER
+            if (utf8BOM)
+            {
+                var preamble = Encoding.UTF8.GetPreamble();
+                preamble.CopyTo(buffer);
+                offset += preamble.Length;
+
+                return offset + Encoding.UTF8.GetBytes(text, buffer.Slice(offset));
+            }
+            else
+            {
+                return Encoding.UTF8.GetBytes(text, buffer);
+            }
+#else
+            if (utf8BOM)
+            {
+                var preamble = Encoding.UTF8.GetPreamble();
+                preamble.CopyTo(buffer);
+                offset += preamble.Length;
+
+                ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(text);
+                utf8bytes.CopyTo(buffer.Slice(offset));
+                return offset + utf8bytes.Length;
+            }
+            else
+            {
+                ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(text);
+                utf8bytes.CopyTo(buffer);
+                return utf8bytes.Length;
+            }
+#endif
+        }
     }
 }

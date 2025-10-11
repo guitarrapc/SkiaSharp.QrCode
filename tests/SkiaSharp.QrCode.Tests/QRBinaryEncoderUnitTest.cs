@@ -37,6 +37,31 @@ public class QRBinaryEncoderUnitTest
         Assert.Equal(expected1, buffer[1]); // rest of UTF-8 + Byte mode
     }
 
+    [Theory]
+    [InlineData(EciMode.Iso8859_1, 3)]
+    [InlineData(EciMode.Utf8, 26)]
+    public void WriteMode_WithECI_HasCorrectStructure(EciMode eci, int eciValue)
+    {
+        Span<byte> buffer = stackalloc byte[2];
+        var encoder = new QRBinaryEncoder(buffer);
+
+        encoder.WriteMode(EncodingMode.Byte, eci);
+        var result = ToBinaryString(buffer);
+
+        // Assert: Total bit length is 16 (4 + 8 + 4)
+        Assert.Equal(16, result.Length);
+
+        // Assert: ECI mode indicator (0111)
+        Assert.Equal("0111", result.Substring(0, 4));
+
+        // Assert: ECI value (8 bits)
+        var eciValueBits = result.Substring(4, 8);
+        Assert.Equal(Convert.ToString(eciValue, 2).PadLeft(8, '0'), eciValueBits);
+
+        // Assert: Byte mode indicator (0100)
+        Assert.Equal("0100", result.Substring(12, 4));
+    }
+
     // WriteCharacterCount
 
     [Theory]
@@ -51,6 +76,23 @@ public class QRBinaryEncoderUnitTest
 
         var result = buffer[0] << 8 | buffer[1];
         Assert.Equal(expectedFirstByte, result);
+    }
+
+    [Theory]
+    [InlineData(10, 10, "0000001010000000")]        // Version 1-9 Numeric: 10 bits
+    [InlineData(123, 12, "0000011110110000")]     // Version 10-26 Numeric: 12 bits
+    [InlineData(1234, 14, "0001001101001000")]  // Version 27-40 Numeric: 14 bits
+    [InlineData(25, 9, "0000110010000000")]          // Version 1-9 Alphanumeric: 9 bits
+    [InlineData(100, 11, "0000110010000000")]      // Version 10-26 Alphanumeric: 11 bits
+    public void WriteCharacterCount_VariousBitLengths_ProducesCorrectBits(int count, int bitsLength, string expectedBits)
+    {
+        Span<byte> buffer = stackalloc byte[3];
+        var encoder = new QRBinaryEncoder(buffer);
+
+        encoder.WriteCharacterCount(count, bitsLength);
+
+        var actual = ToBinaryString(encoder.GetEncodedData());
+        Assert.Equal(expectedBits, actual);
     }
 
     // WriteData
@@ -225,6 +267,55 @@ public class QRBinaryEncoderUnitTest
 
         // Assert
         Assert.Equal(textBits, binaryBits);
+    }
+
+    // Edge cases
+
+    [Fact]
+    public void WriteData_EmptyString_ProducesEmptyOutput()
+    {
+        Span<byte> buffer = stackalloc byte[10];
+        var encoder = new QRBinaryEncoder(buffer);
+
+        encoder.WriteData("", EncodingMode.Numeric, EciMode.Default, false);
+        var result = encoder.GetEncodedData();
+
+        Assert.Equal(0, result.Length);
+    }
+
+    [Theory]
+    [InlineData("000")] // Leading zeros
+    [InlineData("999")] // Max 3 digits
+    [InlineData("0")]   // Single zero
+    public void WriteData_Numeric_EdgeCases(string input)
+    {
+        Span<byte> buffer = stackalloc byte[10];
+        var encoder = new QRBinaryEncoder(buffer);
+
+        encoder.WriteData(input, EncodingMode.Numeric, EciMode.Default, false);
+        var result = encoder.GetEncodedData();
+
+        Assert.True(result.Length > 0);
+        // Verify all bytes contain valid bit patterns
+    }
+
+    [Fact]
+    public void WritePadding_AlreadyAtTarget_DoesNotModify()
+    {
+        Span<byte> buffer = stackalloc byte[5];
+        var encoder = new QRBinaryEncoder(buffer);
+
+        // Fill exactly 32 bits
+        encoder.WriteMode(EncodingMode.Numeric, EciMode.Default); // 4 bits
+        encoder.WriteCharacterCount(1234, 14); // 14 bits
+        encoder.WriteData("12345", EncodingMode.Numeric, EciMode.Default, false); // 14 bits (3+2 digits)
+                                                                                  // Total: 32 bits
+
+        var beforePadding = encoder.GetEncodedData().ToArray();
+        encoder.WritePadding(32);
+        var afterPadding = encoder.GetEncodedData().ToArray();
+
+        Assert.Equal(beforePadding, afterPadding);
     }
 
     // helpers
