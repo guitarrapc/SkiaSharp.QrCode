@@ -1,7 +1,6 @@
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
-namespace SkiaSharp.QrCode.Internals;
+namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 
 internal ref struct QRBinaryEncoder
 {
@@ -142,7 +141,7 @@ internal ref struct QRBinaryEncoder
         }
 
         // 2. Byte boundary alignment (0-7 bits)
-        var alignmentBits = (8 - (_writer.BitPosition % 8)) % 8;
+        var alignmentBits = (8 - _writer.BitPosition % 8) % 8;
         if (alignmentBits > 0)
         {
             _writer.Write(0, alignmentBits);
