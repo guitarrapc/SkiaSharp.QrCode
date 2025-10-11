@@ -7,6 +7,11 @@ internal ref struct QRBinaryEncoder
 {
     private BitWriter _writer;
 
+    /// <summary>
+    /// Gets the current bit position (actual number of bits written).
+    /// </summary>
+    public int BitPosition => _writer.BitPosition;
+
     public QRBinaryEncoder(Span<byte> buffer)
     {
         _writer = new BitWriter(buffer);

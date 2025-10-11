@@ -46,7 +46,7 @@ public class QRBinaryEncoderUnitTest
         var encoder = new QRBinaryEncoder(buffer);
 
         encoder.WriteMode(EncodingMode.Byte, eci);
-        var result = ToBinaryString(buffer);
+        var result = ToBinaryString(buffer, encoder.BitPosition);
 
         // Assert: Total bit length is 16 (4 + 8 + 4)
         Assert.Equal(16, result.Length);
@@ -79,11 +79,11 @@ public class QRBinaryEncoderUnitTest
     }
 
     [Theory]
-    [InlineData(10, 10, "0000001010000000")]        // Version 1-9 Numeric: 10 bits
-    [InlineData(123, 12, "0000011110110000")]     // Version 10-26 Numeric: 12 bits
-    [InlineData(1234, 14, "0001001101001000")]  // Version 27-40 Numeric: 14 bits
-    [InlineData(25, 9, "0000110010000000")]          // Version 1-9 Alphanumeric: 9 bits
-    [InlineData(100, 11, "0000110010000000")]      // Version 10-26 Alphanumeric: 11 bits
+    [InlineData(10, 10, "0000001010")]        // Version 1-9 Numeric: 10 bits
+    [InlineData(123, 12, "000001111011")]     // Version 10-26 Numeric: 12 bits
+    [InlineData(1234, 14, "00010011010010")]  // Version 27-40 Numeric: 14 bits
+    [InlineData(25, 9, "000011001")]          // Version 1-9 Alphanumeric: 9 bits
+    [InlineData(100, 11, "00001100100")]      // Version 10-26 Alphanumeric: 11 bits
     public void WriteCharacterCount_VariousBitLengths_ProducesCorrectBits(int count, int bitsLength, string expectedBits)
     {
         Span<byte> buffer = stackalloc byte[3];
@@ -91,7 +91,7 @@ public class QRBinaryEncoderUnitTest
 
         encoder.WriteCharacterCount(count, bitsLength);
 
-        var actual = ToBinaryString(encoder.GetEncodedData());
+        var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
         Assert.Equal(expectedBits, actual);
     }
 
@@ -101,7 +101,9 @@ public class QRBinaryEncoderUnitTest
     [InlineData("1", "0001")] // 1 = 0001 (4 bits)
     [InlineData("12", "000_1100")] // 12 = 0001100 (7 bits)
     [InlineData("123", "00_0111_1011")] // 123 = 0001111011 (10 bits)
-    [InlineData("12345", "00011110_11010110_10000000")] // 123(10) + 45(10)
+    [InlineData("12345", "00011110_11010110_1")] // 123(10) + 45(10)
+    [InlineData("8675309", "110110001110000100101001")]            // Mixed
+    [InlineData("0123456789", "0000001100010101100110101001101001")] // Border
     public void WriteNumericData_ProducesCorrectBits(string input, string expectedBits)
     {
         Span<byte> buffer = stackalloc byte[10];
@@ -109,20 +111,20 @@ public class QRBinaryEncoderUnitTest
 
         encoder.WriteData(input, EncodingMode.Numeric, EciMode.Default, false);
 
-        var actual = ToBinaryString(encoder.GetEncodedData());
+        var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
         var expected = expectedBits.Replace("_", "");
-        Assert.StartsWith(expected, actual);
+        Assert.Equal(expected, actual);
     }
 
     [Theory]
-    [InlineData("AC-42", EciMode.Default, "0011_1001_1101_1100_1110_0100_0010_0000")]  // ISO/IEC 18004
-    [InlineData("AC-42", EciMode.Iso8859_1, "0011_1001_1101_1100_1110_0100_0010_0000")]  // ISO/IEC 18004
-    [InlineData("HELLO WORLD", EciMode.Default, "0110000101101111000110100010111001011011100010011010100001101000")] // tipical alphanumeric
-    [InlineData("HELLO WORLD", EciMode.Iso8859_1, "0110000101101111000110100010111001011011100010011010100001101000")] // tipical alphanumeric
-    [InlineData("A", EciMode.Default, "0010_1000")]                          // 1 letter: 6 bit
-    [InlineData("A", EciMode.Iso8859_1, "0010_1000")]                          // 1 letter: 6 bit
-    [InlineData("AB", EciMode.Default, "0011_1001_1010_0000")]                    // 2 letters: 11 bit
-    [InlineData("AB", EciMode.Iso8859_1, "0011_1001_1010_0000")]                    // 2 letters: 11 bit
+    [InlineData("AC-42", EciMode.Default, "0011100111011100111001000010")]  // ISO/IEC 18004
+    [InlineData("AC-42", EciMode.Iso8859_1, "0011100111011100111001000010")]  // ISO/IEC 18004
+    [InlineData("HELLO WORLD", EciMode.Default, "0110000101101111000110100010111001011011100010011010100001101")] // tipical alphanumeric
+    [InlineData("HELLO WORLD", EciMode.Iso8859_1, "0110000101101111000110100010111001011011100010011010100001101")] // tipical alphanumeric
+    [InlineData("A", EciMode.Default, "001010")]                          // 1 letter: 6 bit
+    [InlineData("A", EciMode.Iso8859_1, "001010")]                          // 1 letter: 6 bit
+    [InlineData("AB", EciMode.Default, "00111001101")]                    // 2 letters: 11 bit
+    [InlineData("AB", EciMode.Iso8859_1, "00111001101")]                    // 2 letters: 11 bit
     public void WriteData_Alphanumeric_ProducesCorrectBits(string input, EciMode eci, string expectedBits)
     {
         Span<byte> buffer = stackalloc byte[8];
@@ -130,7 +132,7 @@ public class QRBinaryEncoderUnitTest
 
         encoder.WriteData(input, EncodingMode.Alphanumeric, eci, false);
 
-        var actual = ToBinaryString(encoder.GetEncodedData());
+        var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
         var expected = expectedBits.Replace("_", "");
         Assert.Equal(expected, actual);
     }
@@ -150,7 +152,7 @@ public class QRBinaryEncoderUnitTest
 
         encoder.WriteData(input, EncodingMode.Byte, eci, false);
 
-        var actual = ToBinaryString(encoder.GetEncodedData());
+        var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
         var expected = expectedBits.Replace("_", "");
         Assert.Equal(expected, actual);
     }
@@ -174,7 +176,7 @@ public class QRBinaryEncoderUnitTest
         var encoder = new QRBinaryEncoder(buffer);
         encoder.WriteData(input, EncodingMode.Byte, eci, false);
 
-        var actual = ToBinaryString(encoder.GetEncodedData());
+        var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
         Assert.Equal(expected, actual);
     }
 
@@ -195,7 +197,7 @@ public class QRBinaryEncoderUnitTest
         var encoder = new QRBinaryEncoder(buffer);
         encoder.WriteData(input, EncodingMode.Byte, EciMode.Utf8, true);
 
-        var actual = ToBinaryString(encoder.GetEncodedData());
+        var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
         Assert.Equal(expected, actual);
     }
 
@@ -263,7 +265,7 @@ public class QRBinaryEncoderUnitTest
         binaryEncoder.WriteCharacterCount(input.Length, countBitLength);
         binaryEncoder.WriteData(input, mode, EciMode.Default, false);
         binaryEncoder.WritePadding(targetBits);
-        var binaryBits = ToBinaryString(binaryEncoder.GetEncodedData());
+        var binaryBits = ToBinaryString(binaryEncoder.GetEncodedData(), binaryEncoder.BitPosition);
 
         // Assert
         Assert.Equal(textBits, binaryBits);
@@ -320,8 +322,11 @@ public class QRBinaryEncoderUnitTest
 
     // helpers
 
-    private static string ToBinaryString(ReadOnlySpan<byte> data)
+    private static string ToBinaryString(ReadOnlySpan<byte> data, int bitCount)
     {
-        return string.Concat(data.ToArray().Select(b => Convert.ToString(b, 2).PadLeft(8, '0')));
+        var binaryString = string.Concat(data.ToArray().Select(b => Convert.ToString(b, 2).PadLeft(8, '0')));
+
+        // Trim to actual bit count
+        return binaryString.Substring(0, bitCount);
     }
 }
