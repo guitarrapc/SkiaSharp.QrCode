@@ -99,9 +99,9 @@ public class QRBinaryEncoderUnitTest
 
     [Theory]
     [InlineData("1", "0001")] // 1 = 0001 (4 bits)
-    [InlineData("12", "000_1100")] // 12 = 0001100 (7 bits)
-    [InlineData("123", "00_0111_1011")] // 123 = 0001111011 (10 bits)
-    [InlineData("12345", "00011110_11010110_1")] // 123(10) + 45(10)
+    [InlineData("12", "0001100")] // 12 = 0001100 (7 bits)
+    [InlineData("123", "0001111011")] // 123 = 0001111011 (10 bits)
+    [InlineData("12345", "00011110110101101")] // 12345 = 00011110110101101
     [InlineData("8675309", "110110001110000100101001")]            // Mixed
     [InlineData("0123456789", "0000001100010101100110101001101001")] // Border
     public void WriteNumericData_ProducesCorrectBits(string input, string expectedBits)
