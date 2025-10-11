@@ -184,7 +184,7 @@ internal static class ModulePlacer
         {
             // Skip timing pattern column
             if (x == 6)
-                x = 5;
+                x--;
 
             for (var yMod = 1; yMod <= size; yMod++)
             {
@@ -228,7 +228,8 @@ internal static class ModulePlacer
         for (var x = size - 1; x >= 0; x = x - 2)
         {
             if (x == 6)
-                x = 5;
+                x--;
+
             for (var yMod = 1; yMod <= size; yMod++)
             {
                 int y;

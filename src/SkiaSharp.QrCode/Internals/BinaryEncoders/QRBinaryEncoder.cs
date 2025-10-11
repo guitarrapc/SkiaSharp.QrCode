@@ -11,6 +11,11 @@ internal ref struct QRBinaryEncoder
     /// </summary>
     public int BitPosition => _writer.BitPosition;
 
+    /// <summary>
+    /// Gets the number of bytes written (rounded up to nearest byte)
+    /// </summary>
+    public int ByteCount => _writer.ByteCount;
+
     public QRBinaryEncoder(Span<byte> buffer)
     {
         _writer = new BitWriter(buffer);
