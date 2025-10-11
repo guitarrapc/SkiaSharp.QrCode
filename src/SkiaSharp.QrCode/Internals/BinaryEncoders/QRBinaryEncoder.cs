@@ -1,4 +1,3 @@
-using System.Runtime.CompilerServices;
 using System.Text;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
@@ -255,16 +254,5 @@ internal ref struct QRBinaryEncoder
             _ => throw new ArgumentOutOfRangeException(nameof(eciMode),
                 "Unsupported ECI mode for Byte encoding"),
         };
-    }
-
-    /// <summary>
-    /// Validates if text can be encoded in ISO-8859-1 without data loss.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsValidISO(string input)
-    {
-        var bytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(input);
-        var result = Encoding.GetEncoding("ISO-8859-1").GetString(bytes, 0, bytes.Length);
-        return string.Equals(input, result);
     }
 }
