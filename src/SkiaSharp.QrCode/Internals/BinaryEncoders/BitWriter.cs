@@ -48,6 +48,9 @@ internal ref struct BitWriter
         // Result: _buffer[0] = 0b10100000
         // --------------------------------------------
 
+        if (_bitPosition + bitCount > _buffer.Length * 8)
+            throw new InvalidOperationException($"Buffer overflow: trying to write {bitCount} bits at position {_bitPosition}, buffer size: {_buffer.Length * 8} bits");
+
         // Because QR requires writing MSB first, we need to start from the highest bit
         for (var i = bitCount - 1; i >= 0; i--)
         {

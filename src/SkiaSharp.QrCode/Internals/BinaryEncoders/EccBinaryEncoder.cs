@@ -34,6 +34,11 @@ internal static class EccBinaryEncoder
     /// </remarks>
     public static void CalculateECC(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
     {
+        if (ecc.Length < eccCount)
+            throw new ArgumentException($"ECC buffer too small: required {eccCount}, got {ecc.Length}", nameof(ecc));
+        if (eccCount < 1 || eccCount > 255)
+            throw new ArgumentOutOfRangeException(nameof(eccCount), $"ECC count must be 1-255, got {eccCount}");
+
         // Generate generator polynomial
         Span<byte> generator = stackalloc byte[eccCount + 1];
         GenerateGeneratorPolynomial(generator, eccCount);

@@ -53,6 +53,9 @@ internal ref struct BitReader
         // AND => 0b00000000 != 0 => false
         // --------------------------------------------
 
+        if (_bitPosition >= _data.Length * 8)
+            throw new InvalidOperationException($"Buffer underflow: trying to read beyond data length ({_data.Length * 8} bits)");
+
         var byteIndex = _bitPosition / 8;
         var bitOffset = 7 - _bitPosition % 8; // 7 - (...) because we read MSB first
         var bit = (_data[byteIndex] & 1 << bitOffset) != 0;
