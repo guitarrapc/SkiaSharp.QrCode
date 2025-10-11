@@ -3,41 +3,32 @@ using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 namespace SkiaSharp.QrCode.Internals.TextEncoders;
 
 /// <summary>
-/// Ecc encoder with Reed-Solomon error correction
+/// Reed-Solomon error correction encoder for QR code generation.
 /// </summary>
 /// <remarks>
-/// This ecc encoder implements Reed-Solomon error correction using polynomial operations
-/// on binary string representations.
-/// 
-/// Reed-Solomon error correction process:
-/// 1. Convert data bit string to message polynomial
-/// 2. Generate Reed-Solomon generator polynomial (based on required ECC words)
-/// 3. Multiply message polynomial by x^n (where n = ECC word count)
-/// 4. Perform polynomial division in GF(256) using XOR operations
-/// 5. Remainder becomes the error correction codewords
+/// This encoder implements the Reed-Solomon error correction algorithm as specified in ISO/IEC 18004 Section 8.5.
 /// </remarks>
 internal static class EccTextEncoder
 {
+    // Algorithm (ISO/IEC 18004 Section 8.5):
+    // 1. Create Reed-solomon generator polynomial G(x) = G(256) = (x-α^0)(x-α^1)...(x-α^(n-1))
+    // 2. Convert data bit string to message polynomial M(x)
+    // 3. Multiply message polynomial M(x) by x^n to shift coefficients (shift by eccCount positions)
+    // 4. Perform polynomial division in GF(256) using XOR operations: M(x)·x^n by G(x)
+    // 5. Remainder R(x) contains the ECC codewords
+    //
+    // Example (simplified):
+    // - Data: [64, 86, 134, 86] → M(x) = 64x^3 + 86x^2 + 134x + 86
+    // - ECC count: 10
+    // - Generator: G(x) = (x-α^0)(x-α^1)...(x-α^9)
+    // - Result: 10 ECC codewords [196, 35, 39, 119, 235, 215, 231, 226, 93, 23]
+
     /// <summary>
     /// Calculates error correction codewords using Reed-Solomon algorithm.
     /// </summary>
     /// <param name="dataBits">Binary string representing data codewords (multiple of 8 bits).</param>
     /// <param name="eccWordCount">Number of error correction codewords to generate.</param>
     /// <returns>List of ECC codewords as binary strings (8 bits each).</returns>
-    /// <remarks>
-    /// Algorithm (ISO/IEC 18004 Section 8.5):
-    /// 1. Create message polynomial M(x) from data bits
-    /// 2. Create generator polynomial G(x) = (x-α^0)(x-α^1)...(x-α^(n-1))
-    /// 3. Multiply M(x) by x^n to shift coefficients
-    /// 4. Divide M(x)·x^n by G(x) using GF(256) arithmetic
-    /// 5. Remainder R(x) contains the ECC codewords
-    /// 
-    /// Example (simplified):
-    /// - Data: [64, 86, 134, 86] → M(x) = 64x^3 + 86x^2 + 134x + 86
-    /// - ECC count: 10
-    /// - Generator: G(x) = (x-α^0)(x-α^1)...(x-α^9)
-    /// - Result: 10 ECC codewords [196, 35, 39, 119, 235, 215, 231, 226, 93, 23]
-    /// </remarks>
     public static List<string> CalculateECC(string dataBits, int eccWordCount)
     {
         var messagePolynom = CalculateMessagePolynom(dataBits);

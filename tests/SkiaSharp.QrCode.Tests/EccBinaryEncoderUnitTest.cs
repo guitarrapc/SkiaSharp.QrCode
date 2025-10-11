@@ -257,21 +257,23 @@ public class EccBinaryEncoderUnitTest
     }
 
     [Fact]
-    public void CalcukateECC_AllQRVersions_Functional()
+    public void CalculateECC_AllQRVersions_Functional()
     {
+        // Max ECC size across all versions. Version 40-H requires 30 ECC codewords per block.
+        const int macEccsize = 30;
+        Span<byte> ecc = stackalloc byte[macEccsize];
+
         // Text all QR code versions and ECC levels
         foreach (var eccInfo in QRCodeConstants.CapacityECCTable)
         {
             var data = new byte[eccInfo.TotalDataCodewords];
             Random.Shared.NextBytes(data);
 
-            // Move stackalloc out of the loop to avoid potential stack overflow
-            Span<byte> ecc = new byte[eccInfo.ECCPerBlock];
+            // result buffer slice for current ECC size
+            var eccSlice = ecc[..eccInfo.ECCPerBlock];
+            EccBinaryEncoder.CalculateECC(data, eccSlice, eccInfo.ECCPerBlock);
 
-            // Should not throw
-            EccBinaryEncoder.CalculateECC(data, ecc, eccInfo.ECCPerBlock);
-
-            Assert.Equal(eccInfo.ECCPerBlock, ecc.Length);
+            Assert.Equal(eccInfo.ECCPerBlock, eccSlice.Length);
         }
     }
 }

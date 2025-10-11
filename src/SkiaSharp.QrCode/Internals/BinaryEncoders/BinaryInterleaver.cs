@@ -67,7 +67,7 @@ internal static class BinaryInterleaver
     /// Buffer includes:
     /// - Data codewords (TotalDataCodewords bytes)
     /// - ECC codewords (ECCPerBlock * TotalBlocks bytes)
-    /// - Remainder bits space (0-7 bits, rounded up to nearlest byte)
+    /// - Remainder bits space (0-7 bits, rounded up to nearest byte)
     /// </remarks>
     /// <returns></returns>
     public static int CalculateInterleavedSize(in ECCInfo eccInfo, int version)
