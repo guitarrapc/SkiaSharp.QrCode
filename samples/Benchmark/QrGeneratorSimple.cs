@@ -35,7 +35,7 @@ public class QrGeneratorSimple
     [Arguments("Very long text that will definitely require multiple string concatenations and cause significant memory allocations during the QR code generation process", ECCLevel.Q)]
     public QRCodeData Binary(string text, ECCLevel level)
     {
-        return _generator.CreateQrCodeBinary(text, level);
+        return _generator.CreateQrCode(text.AsSpan(), level);
     }
 
     [GlobalCleanup]

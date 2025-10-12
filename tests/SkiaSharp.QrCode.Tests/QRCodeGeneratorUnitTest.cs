@@ -356,7 +356,7 @@ public class QRCodeGeneratorUnitTest
         var generator = new QRCodeGenerator();
 
         var qrText = generator.CreateQrCode(text, level, requestedVersion: version);
-        var qrBinary = generator.CreateQrCodeBinary(text, level, requestedVersion: version);
+        var qrBinary = generator.CreateQrCode(text.AsSpan(), level, requestedVersion: version);
 
         // Compare sizes
         Assert.Equal(qrText.Size, qrBinary.Size);
