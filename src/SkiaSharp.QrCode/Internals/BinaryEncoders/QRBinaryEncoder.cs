@@ -130,8 +130,7 @@ internal ref struct QRBinaryEncoder
         WriteNumericData(asciiBytes.Slice(0, bytesWritten));
 #else
         // Fallback for older frameworks without Span support
-        var input = new char[textSpan.Length];
-        textSpan.CopyTo(input);
+        var input = textSpan.ToString();
         var asciiBytes = Encoding.ASCII.GetBytes(input);
         WriteNumericData(asciiBytes.AsSpan());
 #endif
@@ -151,8 +150,7 @@ internal ref struct QRBinaryEncoder
         WriteAlphanumericData(asciiBytes.Slice(0, bytesWritten));
 #else
         // Fallback for older frameworks without Span support
-        var input = new char[textSpan.Length];
-        textSpan.CopyTo(input);
+        var input = textSpan.ToString();
         var asciiBytes = Encoding.ASCII.GetBytes(input);
         WriteAlphanumericData(asciiBytes.AsSpan());
 #endif
@@ -278,8 +276,7 @@ internal ref struct QRBinaryEncoder
 #if NETSTANDARD2_1_OR_GREATER
             return Encoding.GetEncoding("ISO-8859-1").GetBytes(textSpan, buffer);
 #else
-            var input = new char[textSpan.Length];
-            textSpan.CopyTo(input);
+            var input = textSpan.ToString();
             ReadOnlySpan<byte> bytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(input);
             bytes.CopyTo(buffer);
             return bytes.Length;
@@ -309,16 +306,14 @@ internal ref struct QRBinaryEncoder
                 preamble.CopyTo(buffer);
                 offset += preamble.Length;
 
-                var input = new char[textSpan.Length];
-                textSpan.CopyTo(input);
+                var input = textSpan.ToString();
                 ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(input);
                 utf8bytes.CopyTo(buffer.Slice(offset));
                 return offset + utf8bytes.Length;
             }
             else
             {
-                var input = new char[textSpan.Length];
-                textSpan.CopyTo(input);
+                var input = textSpan.ToString();
                 ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(input);
                 utf8bytes.CopyTo(buffer);
                 return utf8bytes.Length;
