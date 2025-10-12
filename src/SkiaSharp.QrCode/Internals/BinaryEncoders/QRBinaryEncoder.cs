@@ -92,22 +92,22 @@ internal ref struct QRBinaryEncoder
     /// <summary>
     /// Writes encoded data byte based on mode
     /// </summary>
-    /// <param name="plainText">Input text to encode</param>
+    /// <param name="textSpan">Input text to encode</param>
     /// <param name="encoding">Encoding mode</param>
     /// <param name="eci">ECI mode for character encoding</param>
     /// <param name="utf8Bom">Whether to include UTF-8 BOM</param>
-    public void WriteData(string plainText, EncodingMode encoding, EciMode eci, bool utf8Bom)
+    public void WriteData(ReadOnlySpan<char> textSpan, EncodingMode encoding, EciMode eci, bool utf8Bom)
     {
         switch (encoding)
         {
             case EncodingMode.Numeric:
-                EncodeNumeric(plainText);
+                EncodeNumeric(textSpan);
                 break;
             case EncodingMode.Alphanumeric:
-                EncodeAlphanumeric(plainText);
+                EncodeAlphanumeric(textSpan);
                 break;
             case EncodingMode.Byte:
-                EncodeByte(plainText, eci, utf8Bom);
+                EncodeByte(textSpan, eci, utf8Bom);
                 break;
             case EncodingMode.Kanji:
                 throw new NotImplementedException("Kanji encoding not yet implemented, use Byte mode with UTF-8 encoding for Japanese text.");
@@ -119,18 +119,19 @@ internal ref struct QRBinaryEncoder
     /// <summary>
     /// Writes numeric data from string 
     /// </summary>
-    /// <param name="text"></param>
-    private void EncodeNumeric(string text)
+    /// <param name="textSpan"></param>
+    private void EncodeNumeric(ReadOnlySpan<char> textSpan)
     {
         // Convert string to ASCII bytes (numeric chars are ASCII compatible)
 #if NETSTANDARD2_1_OR_GREATER
-        Span<byte> asciiBytes = stackalloc byte[text.Length];
-        var bytesWritten = Encoding.ASCII.GetBytes(text.AsSpan(), asciiBytes);
+        Span<byte> asciiBytes = stackalloc byte[textSpan.Length];
+        var bytesWritten = Encoding.ASCII.GetBytes(textSpan, asciiBytes);
 
         WriteNumericData(asciiBytes.Slice(0, bytesWritten));
 #else
         // Fallback for older frameworks without Span support
-        var asciiBytes = Encoding.ASCII.GetBytes(text);
+        var input = textSpan.ToString();
+        var asciiBytes = Encoding.ASCII.GetBytes(input);
         WriteNumericData(asciiBytes.AsSpan());
 #endif
     }
@@ -138,18 +139,19 @@ internal ref struct QRBinaryEncoder
     /// <summary>
     ///  Writes alphanumeric data from string
     /// </summary>
-    /// <param name="text"></param>
-    private void EncodeAlphanumeric(string text)
+    /// <param name="textSpan"></param>
+    private void EncodeAlphanumeric(ReadOnlySpan<char> textSpan)
     {
         // Convert string to ASCII bytes (numeric chars are ASCII compatible)
 #if NETSTANDARD2_1_OR_GREATER
-        Span<byte> asciiBytes = stackalloc byte[text.Length];
-        var bytesWritten = Encoding.ASCII.GetBytes(text.AsSpan(), asciiBytes);
+        Span<byte> asciiBytes = stackalloc byte[textSpan.Length];
+        var bytesWritten = Encoding.ASCII.GetBytes(textSpan, asciiBytes);
 
         WriteAlphanumericData(asciiBytes.Slice(0, bytesWritten));
 #else
         // Fallback for older frameworks without Span support
-        var asciiBytes = Encoding.ASCII.GetBytes(text);
+        var input = textSpan.ToString();
+        var asciiBytes = Encoding.ASCII.GetBytes(input);
         WriteAlphanumericData(asciiBytes.AsSpan());
 #endif
     }
@@ -157,12 +159,12 @@ internal ref struct QRBinaryEncoder
     /// <summary>
     ///  Writes alphanumeric data from string
     /// </summary>
-    /// <param name="text"></param>
-    private void EncodeByte(string text, EciMode eci, bool utf8Bom)
+    /// <param name="textSpan"></param>
+    private void EncodeByte(ReadOnlySpan<char> textSpan, EciMode eci, bool utf8Bom)
     {
         // Determine encoding based on ECI mode
-        Span<byte> buffer = stackalloc byte[text.Length * 4];
-        var length = GetByteData(text, eci, utf8Bom, buffer);
+        Span<byte> buffer = stackalloc byte[textSpan.Length * 4];
+        var length = GetByteData(textSpan, eci, utf8Bom, buffer);
         WriteByteData(buffer.Slice(0, length));
     }
 
@@ -252,35 +254,36 @@ internal ref struct QRBinaryEncoder
     /// <summary>
     /// Gets byte data for Byte mode encoding.
     /// </summary>
-    /// <param name="text">Text to encode.</param>
+    /// <param name="textSpan">Text to encode.</param>
     /// <param name="eciMode">ECI mode for character encoding.</param>
     /// <param name="utf8BOM">Whether to include UTF-8 BOM.</param>
     /// <param name="buffer">Buffer to use for encoding.</param>
     /// <returns>Byte array representing the encoded text.</returns>
-    private static int GetByteData(string text, EciMode eciMode, bool utf8BOM, Span<byte> buffer)
+    private static int GetByteData(ReadOnlySpan<char> textSpan, EciMode eciMode, bool utf8BOM, Span<byte> buffer)
     {
         return eciMode switch
         {
-            EciMode.Default => QRCodeConstants.IsValidISO88591(text)
-                ? EncodeISO88591(text, buffer)
-                : EncodeUtf8(text, utf8BOM, buffer),
-            EciMode.Iso8859_1 => EncodeISO88591(text, buffer),
-            EciMode.Utf8 => EncodeUtf8(text, utf8BOM, buffer),
+            EciMode.Default => QRCodeConstants.IsValidISO88591(textSpan)
+                ? EncodeISO88591(textSpan, buffer)
+                : EncodeUtf8(textSpan, utf8BOM, buffer),
+            EciMode.Iso8859_1 => EncodeISO88591(textSpan, buffer),
+            EciMode.Utf8 => EncodeUtf8(textSpan, utf8BOM, buffer),
             _ => throw new ArgumentOutOfRangeException(nameof(eciMode), "Unsupported ECI mode for Byte encoding"),
         };
 
-        static int EncodeISO88591(string text, Span<byte> buffer)
+        static int EncodeISO88591(ReadOnlySpan<char> textSpan, Span<byte> buffer)
         {
 #if NETSTANDARD2_1_OR_GREATER
-            return Encoding.GetEncoding("ISO-8859-1").GetBytes(text, buffer);
+            return Encoding.GetEncoding("ISO-8859-1").GetBytes(textSpan, buffer);
 #else
-            ReadOnlySpan<byte> bytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(text);
+            var input = textSpan.ToString();
+            ReadOnlySpan<byte> bytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(input);
             bytes.CopyTo(buffer);
             return bytes.Length;
 #endif
         }
 
-        static int EncodeUtf8(string text, bool utf8BOM, Span<byte> buffer)
+        static int EncodeUtf8(ReadOnlySpan<char> textSpan, bool utf8BOM, Span<byte> buffer)
         {
             var offset = 0;
 #if NETSTANDARD2_1_OR_GREATER
@@ -290,11 +293,11 @@ internal ref struct QRBinaryEncoder
                 preamble.CopyTo(buffer);
                 offset += preamble.Length;
 
-                return offset + Encoding.UTF8.GetBytes(text, buffer.Slice(offset));
+                return offset + Encoding.UTF8.GetBytes(textSpan, buffer.Slice(offset));
             }
             else
             {
-                return Encoding.UTF8.GetBytes(text, buffer);
+                return Encoding.UTF8.GetBytes(textSpan, buffer);
             }
 #else
             if (utf8BOM)
@@ -303,13 +306,15 @@ internal ref struct QRBinaryEncoder
                 preamble.CopyTo(buffer);
                 offset += preamble.Length;
 
-                ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(text);
+                var input = textSpan.ToString();
+                ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(input);
                 utf8bytes.CopyTo(buffer.Slice(offset));
                 return offset + utf8bytes.Length;
             }
             else
             {
-                ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(text);
+                var input = textSpan.ToString();
+                ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(input);
                 utf8bytes.CopyTo(buffer);
                 return utf8bytes.Length;
             }
