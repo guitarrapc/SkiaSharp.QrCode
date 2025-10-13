@@ -135,13 +135,7 @@ public class QRCodeData : IDisposable
         var size = source.Size;
 
         // Direct 2D array copy (faster than nested loops for small matrices)
-        for (var row = 0; row < size; row++)
-        {
-            for (var col = 0; col < size; col++)
-            {
-                this[row, col] = source[row, col];
-            }
-        }
+        Array.Copy(source._moduleMatrix, _moduleMatrix, source._moduleMatrix.Length);
     }
 
     /// <summary>
