@@ -17,7 +17,7 @@ public static class QRCodeRenderer
     public static void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? qrColor, SKColor? backgroundColor, IconData? iconData = null)
     {
         if (data is null)
-            return;
+            throw new ArgumentNullException(nameof(data));
 
         using var lightPaint = new SKPaint() { Color = (backgroundColor.HasValue ? backgroundColor.Value : SKColors.White), Style = SKPaintStyle.StrokeAndFill };
         using var darkPaint = new SKPaint() { Color = (qrColor.HasValue ? qrColor.Value : SKColors.Black), Style = SKPaintStyle.StrokeAndFill };
