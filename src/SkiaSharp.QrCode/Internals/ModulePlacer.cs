@@ -69,11 +69,11 @@ internal static class ModulePlacer
             ApplyMaskToDataArea(ref qrTemp, patternIndex, size, blockedModules);
 
             // Apply format and version information
-            var formatBits = QRCodeConstants.GetFormatBits(eccLevel, patternIndex);
+            var formatBits = QRCodeConstants.GetFormat(eccLevel, patternIndex);
             PlaceFormat(ref qrTemp, formatBits);
             if (version >= 7)
             {
-                var versionBits = QRCodeConstants.GetVersionBits(version);
+                var versionBits = QRCodeConstants.GetVersion(version);
                 PlaceVersion(ref qrTemp, versionBits);
             }
 

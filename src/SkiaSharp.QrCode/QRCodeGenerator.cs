@@ -294,7 +294,7 @@ public class QRCodeGenerator : IDisposable
         // Place version information (version 7+)
         if (version >= 7)
         {
-            var versionBits = QRCodeConstants.GetVersionBits(version);
+            var versionBits = QRCodeConstants.GetVersion(version);
             ModulePlacer.PlaceVersion(ref qrCodeData, versionBits);
         }
 
@@ -351,7 +351,7 @@ public class QRCodeGenerator : IDisposable
     private static void ApplyMaskAndFormat(ref QRCodeData qrCodeData, int version, ECCLevel eccLevel, ref List<Rectangle> blockedModules)
     {
         var maskVersion = ModulePlacer.MaskCode(ref qrCodeData, version, ref blockedModules, eccLevel);
-        var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
+        var formatBit = QRCodeConstants.GetFormat(eccLevel, maskVersion);
         ModulePlacer.PlaceFormat(ref qrCodeData, formatBit);
     }
 
@@ -503,7 +503,7 @@ public class QRCodeGenerator : IDisposable
         // Place version information (version 7+)
         if (version >= 7)
         {
-            var versionBit = QRCodeConstants.GetVersionBits(version);
+            var versionBit = QRCodeConstants.GetVersion(version);
             ModulePlacer.PlaceVersion(ref qrCodeData, versionBit);
         }
 

@@ -809,47 +809,6 @@ internal static class QRCodeConstants
     // Format and Version String Generation
 
     /// <summary>
-    /// Generates 15-bit format information string.
-    /// Contains ECC level and mask pattern with error correction.
-    /// Formula: (ECC bits + mask bits) + BCH(15,5) error correction + XOR mask
-    /// </summary>
-    /// <param name="level">Error correction level.</param>
-    /// <param name="maskVersion">Mask pattern version (0-7).</param>
-    /// <returns>15-bit format string.</returns>
-    public static string GetFormatString(ECCLevel level, int maskVersion)
-    {
-        var generator = "10100110111";
-        var fStrMask = "101010000010010";
-
-        // ECC level bits (2bit)
-        var fStr = (level == ECCLevel.L) ? "01" : (level == ECCLevel.M) ? "00" : (level == ECCLevel.Q) ? "11" : "10";
-
-        // Add mask pattern bits (3bits)
-        fStr += DecToBin(maskVersion, 3);
-
-        // Calculate BCH(15,5) error correction
-        var fStrEcc = fStr.PadRight(15, '0').TrimStart('0');
-        while (fStrEcc.Length > 10)
-        {
-            var sb = new StringBuilder();
-            generator = generator.PadRight(fStrEcc.Length, '0');
-            for (var i = 0; i < fStrEcc.Length; i++)
-            {
-                sb.Append((Convert.ToInt32(fStrEcc[i]) ^ Convert.ToInt32(generator[i])).ToString());
-            }
-            fStrEcc = sb.ToString().TrimStart('0');
-        }
-        fStrEcc = fStrEcc.PadLeft(10, '0');
-        fStr += fStrEcc;
-
-        // Combine data and ECC bits, then apply XOR mask
-        var sbMask = new StringBuilder();
-        for (var i = 0; i < fStr.Length; i++)
-            sbMask.Append((Convert.ToInt32(fStr[i]) ^ Convert.ToInt32(fStrMask[i])).ToString());
-        return sbMask.ToString();
-    }
-
-    /// <summary>
     /// Generates 15-bit format information bits.
     /// Contains ECC level and mask pattern with error correction.
     /// Formula: (ECC bits + mask bits) + BCH(15,5) error correction + XOR mask
@@ -857,7 +816,7 @@ internal static class QRCodeConstants
     /// <param name="level">Error correction level.</param>
     /// <param name="maskVersion">Mask pattern version (0-7).</param>
     /// <returns>15-bit format string.</returns>
-    public static ushort GetFormatBits(ECCLevel level, int maskVersion)
+    public static ushort GetFormat(ECCLevel level, int maskVersion)
     {
         const ushort generator = 0b10100110111;
         const ushort mask = 0b101010000010010;
@@ -890,42 +849,13 @@ internal static class QRCodeConstants
     }
 
     /// <summary>
-    /// Generates 18-bit version information string (for version 7+).
-    /// Contains version number with error correction.
-    /// Formula: (6 bits version) + BCH(18,6) error correction
-    /// </summary>
-    /// <param name="version">QR code version (7-40).</param>
-    /// <returns>18-bit version string.</returns>
-    public static string GetVersionString(int version)
-    {
-        var generator = "1111100100101";
-
-        var vStr = DecToBin(version, 6);
-        var vStrEcc = vStr.PadRight(18, '0').TrimStart('0');
-        while (vStrEcc.Length > 12)
-        {
-            var sb = new StringBuilder();
-            generator = generator.PadRight(vStrEcc.Length, '0');
-            for (var i = 0; i < vStrEcc.Length; i++)
-            {
-                sb.Append((Convert.ToInt32(vStrEcc[i]) ^ Convert.ToInt32(generator[i])).ToString());
-            }
-            vStrEcc = sb.ToString().TrimStart('0');
-        }
-        vStrEcc = vStrEcc.PadLeft(12, '0');
-        vStr += vStrEcc;
-
-        return vStr;
-    }
-
-    /// <summary>
     /// Generates 18-bit version information bits (for version 7+).
     /// Contains version number with error correction.
     /// Formula: (6 bits version) + BCH(18,6) error correction
     /// </summary>
     /// <param name="version">QR code version (7-40).</param>
     /// <returns>18-bit version string.</returns>
-    public static uint GetVersionBits(int version)
+    public static uint GetVersion(int version)
     {
         const uint generator = 0b1111100100101;
 
