@@ -9,6 +9,9 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="QRCoder" />
+    <PackageReference Include="ZXing.Net" />
+    <PackageReference Include="ZXing.Net.Bindings.SkiaSharp.V2" />
   </ItemGroup>
 
   <ItemGroup>
