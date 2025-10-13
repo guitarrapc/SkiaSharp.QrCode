@@ -119,6 +119,9 @@ internal static class ModulePlacer
                 qrTemp.ResetTo(ref qrCode);
             }
 
+            // Apply mask pattern to data area only
+            ApplyMaskToDataArea(ref qrTemp, patternIndex, size, blockedModules);
+
             // Apply format and version information
             var formatStr = QRCodeConstants.GetFormatString(eccLevel, patternIndex);
             PlaceFormat(ref qrTemp, formatStr);
@@ -127,9 +130,6 @@ internal static class ModulePlacer
                 var versionString = QRCodeConstants.GetVersionString(version);
                 PlaceVersion(ref qrTemp, versionString);
             }
-
-            // Apply mask pattern to data area only
-            ApplyMaskToDataArea(ref qrTemp, patternIndex, size, blockedModules);
 
             // Calculate score
             var score = CalculateScore(ref qrTemp);
