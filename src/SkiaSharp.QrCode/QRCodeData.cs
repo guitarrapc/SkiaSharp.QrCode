@@ -129,7 +129,7 @@ public class QRCodeData : IDisposable
     /// <summary>
     /// Resets the current instance's module matrix to match another <see cref="QRCodeData"/> instance.
     /// </summary>
-    /// <param name="source"></param>
+    /// <param name="source">The source <see cref="QRCodeData"/> instance to copy the module matrix from.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ResetTo(ref QRCodeData source)
     {
