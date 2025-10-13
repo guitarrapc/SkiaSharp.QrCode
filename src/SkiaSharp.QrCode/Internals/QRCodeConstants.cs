@@ -809,69 +809,103 @@ internal static class QRCodeConstants
     // Format and Version String Generation
 
     /// <summary>
-    /// Generates 15-bit format information string.
+    /// Generates 15-bit format information bits using BCH(15,5) error correction.
     /// Contains ECC level and mask pattern with error correction.
-    /// Formula: (ECC bits + mask bits) + BCH(15,5) error correction + XOR mask
     /// </summary>
-    /// <param name="level">Error correction level.</param>
-    /// <param name="maskVersion">Mask pattern version (0-7).</param>
-    /// <returns>15-bit format string.</returns>
-    public static string GetFormatString(ECCLevel level, int maskVersion)
+    /// <param name="level">Error correction level</param>
+    /// <param name="maskVersion">Mask pattern version (0-7)</param>
+    /// <returns>
+    /// 15-bit format information:
+    /// <code>
+    /// Bit layout: [ECC(2) | Mask(3) | BCH(10)] XOR 0b101010000010010
+    /// - Bits 14-13: ECC level (L=01, M=00, Q=11, H=10)
+    /// - Bits 12-10: Mask pattern (0-7)
+    /// - Bits 9-0:   BCH error correction
+    /// </code>
+    /// </returns>
+    /// <remarks>
+    /// Based on ISO/IEC 18004 Section 7.8.2
+    /// </remarks>
+    public static ushort GetFormatBits(ECCLevel level, int maskVersion)
     {
-        var generator = "10100110111";
-        var fStrMask = "101010000010010";
+        // BCH(15,5) error correction
+        // BCH generator polynomial: x^10 + x^8 + x^5 + x^4 + x^2 + x + 1 (0b10100110111)
+        const ushort BCH_GENERATOR_POLYNOMIAL = 0b10100110111;
+        // Format information mask pattern (ISO/IEC 18004 Section 7.8.2)
+        const ushort FORMAT_MASK_PATTERN = 0b101010000010010;
 
-        var fStr = (level == ECCLevel.L) ? "01" : (level == ECCLevel.M) ? "00" : (level == ECCLevel.Q) ? "11" : "10";
-        fStr += DecToBin(maskVersion, 3);
-        var fStrEcc = fStr.PadRight(15, '0').TrimStart('0');
-        while (fStrEcc.Length > 10)
+        // const int ECC_LEVEL_BITS = 2; // not use directly
+        const int MASK_PATTERN_BITS = 3;
+        // const int DATA_BITS = ECC_LEVEL_BITS + MASK_PATTERN_BITS; // not use directly
+        const int ECC_CORRECTION_BITS = 10;
+        const int TOTAL_BITS = 15;
+
+        // ECC level bits (2bit)
+        var formatBits = level switch
         {
-            var sb = new StringBuilder();
-            generator = generator.PadRight(fStrEcc.Length, '0');
-            for (var i = 0; i < fStrEcc.Length; i++)
-            {
-                sb.Append((Convert.ToInt32(fStrEcc[i]) ^ Convert.ToInt32(generator[i])).ToString());
-            }
-            fStrEcc = sb.ToString().TrimStart('0');
-        }
-        fStrEcc = fStrEcc.PadLeft(10, '0');
-        fStr += fStrEcc;
+            ECCLevel.L => 0b01,
+            ECCLevel.M => 0b00,
+            ECCLevel.Q => 0b11,
+            ECCLevel.H => 0b10,
+            _ => throw new ArgumentOutOfRangeException(nameof(level), level, "ECCLevel was out of range"),
+        };
 
-        var sbMask = new StringBuilder();
-        for (var i = 0; i < fStr.Length; i++)
-            sbMask.Append((Convert.ToInt32(fStr[i]) ^ Convert.ToInt32(fStrMask[i])).ToString());
-        return sbMask.ToString();
+        // Add mask pattern bits (3bits)
+        formatBits = (ushort)(formatBits << MASK_PATTERN_BITS | maskVersion);
+
+        // Calculate BCH(15,5) error correction
+        var temp = (ushort)(formatBits << ECC_CORRECTION_BITS);
+        for (var i = TOTAL_BITS - 1; i >= ECC_CORRECTION_BITS; i--)
+        {
+            if ((temp & (1 << i)) != 0)
+            {
+                temp ^= (ushort)(BCH_GENERATOR_POLYNOMIAL << (i - ECC_CORRECTION_BITS));
+            }
+        }
+
+        // Combine data and ECC bits, then apply mask (XOR)
+        return (ushort)(((formatBits << ECC_CORRECTION_BITS) | temp) ^ FORMAT_MASK_PATTERN);
     }
 
     /// <summary>
-    /// Generates 18-bit version information string (for version 7+).
+    /// Generates 18-bit version information bits (for version 7+) using BCH(18,6) error correction.
     /// Contains version number with error correction.
-    /// Formula: (6 bits version) + BCH(18,6) error correction
     /// </summary>
     /// <param name="version">QR code version (7-40).</param>
-    /// <returns>18-bit version string.</returns>
-    public static string GetVersionString(int version)
+    /// <returns>
+    /// 18-bit version information:
+    /// <code>
+    /// Bit layout: [Version(6) | BCH(12)]
+    /// - Bits 17-12: Version number (7-40)
+    /// - Bits 11-0:  BCH error correction
+    /// </code>
+    /// </returns>
+    /// <remarks>
+    /// Based on ISO/IEC 18004 Section 7.10
+    /// </remarks>
+    public static uint GetVersionBits(int version)
     {
-        var generator = "1111100100101";
+        // BCH(18,6) error correction
+        // BCH generator polynomial: x^12 + x^11 + x^10 + x^9 + x^8 + x^5 + x^2 + 1 (0b1111100100101)
+        const uint BCH_GENERATOR_POLYNOMIAL = 0b1111100100101;
 
-        var vStr = DecToBin(version, 6);
-        var vStrEcc = vStr.PadRight(18, '0').TrimStart('0');
-        while (vStrEcc.Length > 12)
+        // const int VERSION_DATA_BITS = 6; // not use directly
+        const int ECC_CORRECTION_BITS = 12;
+        const int TOTAL_BITS = 18;
+
+        var vBits = (uint)version;
+        var temp = vBits << ECC_CORRECTION_BITS;
+
+        for (var i = TOTAL_BITS - 1; i >= ECC_CORRECTION_BITS; i--)
         {
-            var sb = new StringBuilder();
-            generator = generator.PadRight(vStrEcc.Length, '0');
-            for (var i = 0; i < vStrEcc.Length; i++)
+            if ((temp & (1u << i)) != 0)
             {
-                sb.Append((Convert.ToInt32(vStrEcc[i]) ^ Convert.ToInt32(generator[i])).ToString());
+                temp ^= (BCH_GENERATOR_POLYNOMIAL << (i - ECC_CORRECTION_BITS));
             }
-            vStrEcc = sb.ToString().TrimStart('0');
         }
-        vStrEcc = vStrEcc.PadLeft(12, '0');
-        vStr += vStrEcc;
 
-        return vStr;
+        return (vBits << ECC_CORRECTION_BITS) | temp;
     }
-
 
     // Lookup Table Initialization
 
