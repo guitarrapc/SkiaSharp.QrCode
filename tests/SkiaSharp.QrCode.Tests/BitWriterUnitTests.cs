@@ -7,7 +7,7 @@ public class BitWriterUnitTests
 {
     [Fact]
     public void WriteBits_Singlebyte_CorrectPlacement()
-            {
+    {
         Span<byte> buffer = stackalloc byte[1];
         var writer = new BitWriter(buffer);
 
