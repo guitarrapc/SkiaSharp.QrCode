@@ -276,14 +276,12 @@ internal static class ModulePlacer
     /// </summary>
     public static void ReserveSeperatorAreas(int size, ref List<Rectangle> blockedModules)
     {
-        blockedModules.AddRange([
-            new Rectangle(7, 0, 1, 8),
-            new Rectangle(0, 7, 7, 1),
-            new Rectangle(0, size-8, 8, 1),
-            new Rectangle(7, size-7, 1, 7),
-            new Rectangle(size-8, 0, 1, 8),
-            new Rectangle(size-7, 7, 7, 1)
-        ]);
+        blockedModules.Add(new Rectangle(7, 0, 1, 8));
+        blockedModules.Add(new Rectangle(0, 7, 7, 1));
+        blockedModules.Add(new Rectangle(0, size - 8, 8, 1));
+        blockedModules.Add(new Rectangle(7, size - 7, 1, 7));
+        blockedModules.Add(new Rectangle(size - 8, 0, 1, 8));
+        blockedModules.Add(new Rectangle(size - 7, 7, 7, 1));
     }
 
     /// <summary>
@@ -292,21 +290,17 @@ internal static class ModulePlacer
     /// </summary>
     public static void ReserveVersionAreas(int size, int version, ref List<Rectangle> blockedModules)
     {
-        blockedModules.AddRange([
-            new Rectangle(8, 0, 1, 6),
-            new Rectangle(8, 7, 1, 1),
-            new Rectangle(0, 8, 6, 1),
-            new Rectangle(7, 8, 2, 1),
-            new Rectangle(size-8, 8, 8, 1),
-            new Rectangle(8, size-7, 1, 7)
-        ]);
+        blockedModules.Add(new Rectangle(8, 0, 1, 6));
+        blockedModules.Add(new Rectangle(8, 7, 1, 1));
+        blockedModules.Add(new Rectangle(0, 8, 6, 1));
+        blockedModules.Add(new Rectangle(7, 8, 2, 1));
+        blockedModules.Add(new Rectangle(size - 8, 8, 8, 1));
+        blockedModules.Add(new Rectangle(8, size - 7, 1, 7));
 
         if (version >= 7)
         {
-            blockedModules.AddRange([
-                new Rectangle(size-11, 0, 3, 6),
-                new Rectangle(0, size-11, 6, 3)
-            ]);
+            blockedModules.Add(new Rectangle(size - 11, 0, 3, 6));
+            blockedModules.Add(new Rectangle(0, size - 11, 6, 3));
         }
     }
 
