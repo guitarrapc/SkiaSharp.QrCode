@@ -135,7 +135,7 @@ internal static class ModulePlacer
             }
 
             // Calculate score
-            var score = MaskPattern.Score(ref qrTemp);
+            var score = CalculateScore(ref qrTemp);
             if (score < bestScore)
             {
                 bestPatternIndex = patternIndex;
@@ -143,16 +143,8 @@ internal static class ModulePlacer
             }
         }
 
-        for (var col = 0; col < size; col++)
-        {
-            for (var row = 0; row < size; row++)
-            {
-                if (!IsBlocked(new Rectangle(col, row, 1, 1), blockedModules))
-                {
-                    qrCode[row, col] ^= MaskPattern.Apply(bestPatternIndex, col, row);
-                }
-            }
-        }
+        // Apply mask to original QR code
+        ApplyMaskToDataArea(ref qrCode, bestPatternIndex, size, blockedModules);
 
         return bestPatternIndex;
     }
@@ -404,19 +396,19 @@ internal static class ModulePlacer
     {
         if (text.Length == 0) return string.Empty;
 
-        // We are .NET Standard 2.0 compatible, so we can't use this method.
-        // Leave this comment for future optimization if we move to .NET Standard 2.1+ or .NET 5+
-        //return string.Create(text.Length, text, (span, source) =>
-        //{
-        //    for (int i = 0; i < source.Length; i++)
-        //    {
-        //        span[i] = source[source.Length - 1 - i];
-        //    }
-        //});
-
+#if NETSTANDARD2_1_OR_GREATER
+        return string.Create(text.Length, text, (span, source) =>
+        {
+            for (int i = 0; i < source.Length; i++)
+            {
+                span[i] = source[source.Length - 1 - i];
+            }
+        });
+#else
         var chars = text.ToCharArray();
         Array.Reverse(chars);
         return new string(chars);
+#endif
     }
 
     /// <summary>
@@ -447,6 +439,196 @@ internal static class ModulePlacer
         return false;
     }
 
+    /// <summary>
+    /// Apply the mask pattern to the data area only, skipping blocked modules.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ApplyMaskToDataArea(ref QRCodeData qrCode, int patternIndex, int size, List<Rectangle> blockedModules)
+    {
+        for (var col = 0; col < size; col++)
+        {
+            for (var row = 0; row < size; row++)
+            {
+                if (!IsBlocked(new Rectangle(col, row, 1, 1), blockedModules))
+                {
+                    qrCode[row, col] ^= MaskPattern.Apply(patternIndex, col, row);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Calculates penalty score for a masked QR code.
+    /// Lower score = better readability and scanning reliability.
+    /// Applies 4 penalty rules from ISO/IEC 18004 Section 8.8.2:
+    ///
+    /// Rule 1 (Consecutive modules):
+    ///   - 5 consecutive modules: +3 points
+    ///   - Each additional consecutive module: +1 point
+    ///   - Applied to both rows and columns
+    ///
+    /// Rule 2 (Block patterns):
+    ///   - Each 2×2 block of same color: +3 points
+    ///
+    /// Rule 3 (Finder-like patterns):
+    ///   - Pattern "1:1:3:1:1 ratio with 4 light modules on either side": +40 points
+    ///   - Helps avoid false positives during QR code detection
+    ///
+    /// Rule 4 (Balance):
+    ///   - Deviation from 50% dark modules
+    ///   - Score = (|percentage - 50| / 5) × 10
+    ///   - Encourages even distribution of dark/light modules
+    /// </summary>
+    private static int CalculateScore(ref QRCodeData qrCode)
+    {
+        int score1 = 0,
+            score2 = 0,
+            score3 = 0,
+            score4 = 0;
+        var size = qrCode.Size;
+
+        // Penalty 1: Consecutive modules
+        for (var y = 0; y < size; y++)
+        {
+            var modInRow = 0;
+            var modInColumn = 0;
+            var lastValRow = qrCode[y, 0];
+            var lastValColumn = qrCode[0, y];
+            for (var x = 0; x < size; x++)
+            {
+                if (qrCode[y, x] == lastValRow)
+                {
+                    modInRow++;
+                }
+                else
+                {
+                    modInRow = 1;
+                }
+                if (modInRow == 5)
+                {
+                    score1 += 3;
+                }
+                else if (modInRow > 5)
+                {
+                    score1++;
+                }
+                lastValRow = qrCode[y, x];
+
+                if (qrCode[x, y] == lastValColumn)
+                {
+                    modInColumn++;
+                }
+                else
+                {
+                    modInColumn = 1;
+                }
+                if (modInColumn == 5)
+                {
+                    score1 += 3;
+                }
+                else if (modInColumn > 5)
+                {
+                    score1++;
+                }
+                lastValColumn = qrCode[x, y];
+            }
+        }
+
+
+        // Penalty 2: Block patterns
+        for (var y = 0; y < size - 1; y++)
+        {
+            for (var x = 0; x < size - 1; x++)
+            {
+                if (qrCode[y, x] == qrCode[y, x + 1] &&
+                    qrCode[y, x] == qrCode[y + 1, x] &&
+                    qrCode[y, x] == qrCode[y + 1, x + 1])
+                {
+                    score2 += 3;
+                }
+            }
+        }
+
+        // Penalty 3: Finder-like patterns
+        for (var y = 0; y < size; y++)
+        {
+            for (var x = 0; x < size - 10; x++)
+            {
+                if ((qrCode[y, x] &&
+                    !qrCode[y, x + 1] &&
+                    qrCode[y, x + 2] &&
+                    qrCode[y, x + 3] &&
+                    qrCode[y, x + 4] &&
+                    !qrCode[y, x + 5] &&
+                    qrCode[y, x + 6] &&
+                    !qrCode[y, x + 7] &&
+                    !qrCode[y, x + 8] &&
+                    !qrCode[y, x + 9] &&
+                    !qrCode[y, x + 10]) ||
+                    (!qrCode[y, x] &&
+                    !qrCode[y, x + 1] &&
+                    !qrCode[y, x + 2] &&
+                    !qrCode[y, x + 3] &&
+                    qrCode[y, x + 4] &&
+                    !qrCode[y, x + 5] &&
+                    qrCode[y, x + 6] &&
+                    qrCode[y, x + 7] &&
+                    qrCode[y, x + 8] &&
+                    !qrCode[y, x + 9] &&
+                    qrCode[y, x + 10]))
+                {
+                    score3 += 40;
+                }
+
+                if ((qrCode[x, y] &&
+                    !qrCode[x + 1, y] &&
+                    qrCode[x + 2, y] &&
+                    qrCode[x + 3, y] &&
+                    qrCode[x + 4, y] &&
+                    !qrCode[x + 5, y] &&
+                    qrCode[x + 6, y] &&
+                    !qrCode[x + 7, y] &&
+                    !qrCode[x + 8, y] &&
+                    !qrCode[x + 9, y] &&
+                    !qrCode[x + 10, y]) ||
+                    (!qrCode[x, y] &&
+                    !qrCode[x + 1, y] &&
+                    !qrCode[x + 2, y] &&
+                    !qrCode[x + 3, y] &&
+                    qrCode[x + 4, y] &&
+                    !qrCode[x + 5, y] &&
+                    qrCode[x + 6, y] &&
+                    qrCode[x + 7, y] &&
+                    qrCode[x + 8, y] &&
+                    !qrCode[x + 9, y] &&
+                    qrCode[x + 10, y]))
+                {
+                    score3 += 40;
+                }
+            }
+        }
+
+        // Penalty 4: Dark/light balance
+        double blackModules = 0;
+        for (var row = 0; row < size; row++)
+        {
+            for (var col = 0; col < size; col++)
+            {
+                if (qrCode[row, col])
+                {
+                    blackModules++;
+                }
+            }
+        }
+
+        var percent = (blackModules / (size * size)) * 100;
+        var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
+        var nextMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 45) / 5;
+        score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
+
+        return score1 + score2 + score3 + score4;
+    }
+
     // private class/strusts
 
     /// <summary>
@@ -455,178 +637,6 @@ internal static class ModulePlacer
     /// </summary>
     private static class MaskPattern
     {
-        /// <summary>
-        /// Calculates penalty score for a masked QR code.
-        /// Lower score = better readability and scanning reliability.
-        /// Applies 4 penalty rules from ISO/IEC 18004 Section 8.8.2:
-        ///
-        /// Rule 1 (Consecutive modules):
-        ///   - 5 consecutive modules: +3 points
-        ///   - Each additional consecutive module: +1 point
-        ///   - Applied to both rows and columns
-        ///
-        /// Rule 2 (Block patterns):
-        ///   - Each 2×2 block of same color: +3 points
-        ///
-        /// Rule 3 (Finder-like patterns):
-        ///   - Pattern "1:1:3:1:1 ratio with 4 light modules on either side": +40 points
-        ///   - Helps avoid false positives during QR code detection
-        ///
-        /// Rule 4 (Balance):
-        ///   - Deviation from 50% dark modules
-        ///   - Score = (|percentage - 50| / 5) × 10
-        ///   - Encourages even distribution of dark/light modules
-        /// </summary>
-        public static int Score(ref QRCodeData qrCode)
-        {
-            int score1 = 0,
-                score2 = 0,
-                score3 = 0,
-                score4 = 0;
-            var size = qrCode.Size;
-
-            // Penalty 1: Consecutive modules
-            for (var y = 0; y < size; y++)
-            {
-                var modInRow = 0;
-                var modInColumn = 0;
-                var lastValRow = qrCode[y, 0];
-                var lastValColumn = qrCode[0, y];
-                for (var x = 0; x < size; x++)
-                {
-                    if (qrCode[y, x] == lastValRow)
-                    {
-                        modInRow++;
-                    }
-                    else
-                    {
-                        modInRow = 1;
-                    }
-                    if (modInRow == 5)
-                    {
-                        score1 += 3;
-                    }
-                    else if (modInRow > 5)
-                    {
-                        score1++;
-                    }
-                    lastValRow = qrCode[y, x];
-
-                    if (qrCode[x, y] == lastValColumn)
-                    {
-                        modInColumn++;
-                    }
-                    else
-                    {
-                        modInColumn = 1;
-                    }
-                    if (modInColumn == 5)
-                    {
-                        score1 += 3;
-                    }
-                    else if (modInColumn > 5)
-                    {
-                        score1++;
-                    }
-                    lastValColumn = qrCode[x, y];
-                }
-            }
-
-
-            // Penalty 2: Block patterns
-            for (var y = 0; y < size - 1; y++)
-            {
-                for (var x = 0; x < size - 1; x++)
-                {
-                    if (qrCode[y, x] == qrCode[y, x + 1] &&
-                        qrCode[y, x] == qrCode[y + 1, x] &&
-                        qrCode[y, x] == qrCode[y + 1, x + 1])
-                    {
-                        score2 += 3;
-                    }
-                }
-            }
-
-            // Penalty 3: Finder-like patterns
-            for (var y = 0; y < size; y++)
-            {
-                for (var x = 0; x < size - 10; x++)
-                {
-                    if ((qrCode[y, x] &&
-                        !qrCode[y, x + 1] &&
-                        qrCode[y, x + 2] &&
-                        qrCode[y, x + 3] &&
-                        qrCode[y, x + 4] &&
-                        !qrCode[y, x + 5] &&
-                        qrCode[y, x + 6] &&
-                        !qrCode[y, x + 7] &&
-                        !qrCode[y, x + 8] &&
-                        !qrCode[y, x + 9] &&
-                        !qrCode[y, x + 10]) ||
-                        (!qrCode[y, x] &&
-                        !qrCode[y, x + 1] &&
-                        !qrCode[y, x + 2] &&
-                        !qrCode[y, x + 3] &&
-                        qrCode[y, x + 4] &&
-                        !qrCode[y, x + 5] &&
-                        qrCode[y, x + 6] &&
-                        qrCode[y, x + 7] &&
-                        qrCode[y, x + 8] &&
-                        !qrCode[y, x + 9] &&
-                        qrCode[y, x + 10]))
-                    {
-                        score3 += 40;
-                    }
-
-                    if ((qrCode[x, y] &&
-                        !qrCode[x + 1, y] &&
-                        qrCode[x + 2, y] &&
-                        qrCode[x + 3, y] &&
-                        qrCode[x + 4, y] &&
-                        !qrCode[x + 5, y] &&
-                        qrCode[x + 6, y] &&
-                        !qrCode[x + 7, y] &&
-                        !qrCode[x + 8, y] &&
-                        !qrCode[x + 9, y] &&
-                        !qrCode[x + 10, y]) ||
-                        (!qrCode[x, y] &&
-                        !qrCode[x + 1, y] &&
-                        !qrCode[x + 2, y] &&
-                        !qrCode[x + 3, y] &&
-                        qrCode[x + 4, y] &&
-                        !qrCode[x + 5, y] &&
-                        qrCode[x + 6, y] &&
-                        qrCode[x + 7, y] &&
-                        qrCode[x + 8, y] &&
-                        !qrCode[x + 9, y] &&
-                        qrCode[x + 10, y]))
-                    {
-                        score3 += 40;
-                    }
-                }
-            }
-
-            // Penalty 4: Dark/light balance
-            double blackModules = 0;
-            for (var row = 0; row < size; row++)
-            {
-                for (var col = 0; col < size; col++)
-                {
-                    if (qrCode[row, col])
-                    {
-                        blackModules++;
-                    }
-                }
-            }
-
-            var percent = (blackModules / (size * size)) * 100;
-            var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
-            var nextMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 45) / 5;
-            score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
-
-            return score1 + score2 + score3 + score4;
-        }
-
         /// <summary>
         /// Applies the specified mask pattern to a module
         /// </summary>
