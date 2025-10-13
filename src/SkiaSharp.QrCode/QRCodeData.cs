@@ -16,12 +16,8 @@ namespace SkiaSharp.QrCode;
 /// </remarks>
 public class QRCodeData : IDisposable
 {
-    /// <summary>
-    /// Get the QR code version (1-40)
-    /// </summary>
-    public int Version { get; private set; }
-
     private bool[,] _moduleMatrix;
+
     /// <summary>
     /// Gets the size of the QR code matrix (modules per side).
     /// Includes quiet zone if added via <see cref="SetModuleMatrix"/>.
@@ -39,6 +35,11 @@ public class QRCodeData : IDisposable
         get => _moduleMatrix[row, col];
         internal set => _moduleMatrix[row, col] = value;
     }
+
+    /// <summary>
+    /// Get the QR code version (1-40)
+    /// </summary>
+    public int Version { get; private set; }
 
     /// <summary>
     /// Creates a deep copy of an existing <see cref="QRCodeData"/> instance
