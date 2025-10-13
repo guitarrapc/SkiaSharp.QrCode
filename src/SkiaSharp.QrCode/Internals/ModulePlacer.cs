@@ -69,11 +69,11 @@ internal static class ModulePlacer
             ApplyMaskToDataArea(ref qrTemp, patternIndex, size, blockedModules);
 
             // Apply format and version information
-            var formatBits = QRCodeConstants.GetFormat(eccLevel, patternIndex);
+            var formatBits = QRCodeConstants.GetFormatBits(eccLevel, patternIndex);
             PlaceFormat(ref qrTemp, formatBits);
             if (version >= 7)
             {
-                var versionBits = QRCodeConstants.GetVersion(version);
+                var versionBits = QRCodeConstants.GetVersionBits(version);
                 PlaceVersion(ref qrTemp, versionBits);
             }
 
@@ -192,29 +192,20 @@ internal static class ModulePlacer
     }
 
     /// <summary>
-    /// Places version information patterns (for QR code version 7 and above).
-    /// Two identical 3×6 patterns placed at top-right and bottom-left corners.
-    /// </summary>
-    public static void PlaceVersion(ref QRCodeData qrCode, uint versionBits)
-    {
-        var size = qrCode.Size;
-        for (var x = 0; x < 6; x++)
-        {
-            for (var y = 0; y < 3; y++)
-            {
-                var bitIndex = x * 3 + y;
-                var bit = (versionBits & (1 << bitIndex)) != 0;
-                qrCode[y + size - 11, x] = bit;
-                qrCode[x, y + size - 11] = bit;
-            }
-        }
-    }
-
-    /// <summary>
     /// Places format information patterns around finder patterns.
     /// Contains error correction level and mask pattern information.
     /// Two identical 15-bit sequences for redundancy.
     /// </summary>
+    /// <param name="qrCode">QR code matrix.</param>
+    /// <param name="formatBits">15-bit format information (LSB first).</param>
+    /// <remarks>
+    /// Places two identical copies for redundancy (ISO/IEC 18004 Section 7.9):
+    /// <code>
+    /// - Copy 1: Around top-left and top-right finder patterns
+    /// - Copy 2: Around top-left and bottom-left finder patterns
+    /// </code>
+    /// Bits are placed from LSB (bit 0) to MSB (bit 14).
+    /// </remarks>
     public static void PlaceFormat(ref QRCodeData qrCode, ushort formatBits)
     {
         var size = qrCode.Size;
@@ -244,6 +235,35 @@ internal static class ModulePlacer
             var p2 = new Point(modules[i, 2], modules[i, 3]);
             qrCode[p1.Y, p1.X] = bit;
             qrCode[p2.Y, p2.X] = bit;
+        }
+    }
+
+    /// <summary>
+    /// Places version information patterns (version 7+ only).
+    /// Two identical 3×6 patterns placed at top-right and bottom-left corners.
+    /// </summary>
+    /// <param name="qrCode">QR code matrix</param>
+    /// <param name="versionBits">18-bit version information (LSB first)</param>
+    /// <remarks>
+    /// Places two identical 3×6 patterns (ISO/IEC 18004 Section 7.10):
+    /// <code>
+    /// - Pattern 1: Bottom-left corner (vertical)
+    /// - Pattern 2: Top-right corner (horizontal)
+    /// </code>
+    /// Bits are placed from LSB (bit 0) to MSB (bit 17) in reading order.
+    /// </remarks>
+    public static void PlaceVersion(ref QRCodeData qrCode, uint versionBits)
+    {
+        var size = qrCode.Size;
+        for (var x = 0; x < 6; x++)
+        {
+            for (var y = 0; y < 3; y++)
+            {
+                var bitIndex = x * 3 + y;
+                var bit = (versionBits & (1 << bitIndex)) != 0;
+                qrCode[y + size - 11, x] = bit;
+                qrCode[x, y + size - 11] = bit;
+            }
         }
     }
 

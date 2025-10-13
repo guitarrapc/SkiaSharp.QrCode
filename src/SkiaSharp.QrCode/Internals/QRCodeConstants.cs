@@ -809,25 +809,39 @@ internal static class QRCodeConstants
     // Format and Version String Generation
 
     /// <summary>
-    /// Generates 15-bit format information bits.
+    /// Generates 15-bit format information bits using BCH(15,5) error correction.
     /// Contains ECC level and mask pattern with error correction.
-    /// Formula: (ECC bits + mask bits) + BCH(15,5) error correction + XOR mask
     /// </summary>
-    /// <param name="level">Error correction level.</param>
-    /// <param name="maskVersion">Mask pattern version (0-7).</param>
-    /// <returns>15-bit format string.</returns>
-    public static ushort GetFormat(ECCLevel level, int maskVersion)
+    /// <param name="level">Error correction level</param>
+    /// <param name="maskVersion">Mask pattern version (0-7)</param>
+    /// <returns>
+    /// 15-bit format information:
+    /// <code>
+    /// Bit layout: [ECC(2) | Mask(3) | BCH(10)] XOR 0b101010000010010
+    /// - Bits 14-13: ECC level (L=01, M=00, Q=11, H=10)
+    /// - Bits 12-10: Mask pattern (0-7)
+    /// - Bits 9-0:   BCH error correction
+    /// </code>
+    /// </returns>
+    /// <remarks>
+    /// Based on ISO/IEC 18004 Section 7.8.2
+    /// </remarks>
+    public static ushort GetFormatBits(ECCLevel level, int maskVersion)
     {
-        // BCH(15,5) generator polynomial: x^10 + x^8 + x^5 + x^4 + x^2 + x + 1
+        // BCH(15,5) error correction
+        // BCH generator polynomial: x^10 + x^8 + x^5 + x^4 + x^2 + x + 1 (0b10100110111)
         const ushort BCH_GENERATOR_POLYNOMIAL = 0b10100110111;
         // Format information mask pattern (ISO/IEC 18004 Section 7.8.2)
         const ushort FORMAT_MASK_PATTERN = 0b101010000010010;
+
+        // const int ECC_LEVEL_BITS = 2; // not use directly
         const int MASK_PATTERN_BITS = 3;
+        // const int DATA_BITS = ECC_LEVEL_BITS + MASK_PATTERN_BITS; // not use directly
         const int ECC_CORRECTION_BITS = 10;
         const int TOTAL_BITS = 15;
 
         // ECC level bits (2bit)
-        var fBits = level switch
+        var formatBits = level switch
         {
             ECCLevel.L => 0b01,
             ECCLevel.M => 0b00,
@@ -837,10 +851,10 @@ internal static class QRCodeConstants
         };
 
         // Add mask pattern bits (3bits)
-        fBits = (ushort)(fBits << MASK_PATTERN_BITS | maskVersion);
+        formatBits = (ushort)(formatBits << MASK_PATTERN_BITS | maskVersion);
 
         // Calculate BCH(15,5) error correction
-        var temp = (ushort)(fBits << ECC_CORRECTION_BITS);
+        var temp = (ushort)(formatBits << ECC_CORRECTION_BITS);
         for (var i = TOTAL_BITS - 1; i >= ECC_CORRECTION_BITS; i--)
         {
             if ((temp & (1 << i)) != 0)
@@ -849,21 +863,33 @@ internal static class QRCodeConstants
             }
         }
 
-        // Combine data and ECC bits, then apply XOR mask
-        return (ushort)(((fBits << ECC_CORRECTION_BITS) | temp) ^ FORMAT_MASK_PATTERN);
+        // Combine data and ECC bits, then apply mask (XOR)
+        return (ushort)(((formatBits << ECC_CORRECTION_BITS) | temp) ^ FORMAT_MASK_PATTERN);
     }
 
     /// <summary>
-    /// Generates 18-bit version information bits (for version 7+).
+    /// Generates 18-bit version information bits (for version 7+) using BCH(18,6) error correction.
     /// Contains version number with error correction.
-    /// Formula: (6 bits version) + BCH(18,6) error correction
     /// </summary>
     /// <param name="version">QR code version (7-40).</param>
-    /// <returns>18-bit version string.</returns>
-    public static uint GetVersion(int version)
+    /// <returns>
+    /// 18-bit version information:
+    /// <code>
+    /// Bit layout: [Version(6) | BCH(12)]
+    /// - Bits 17-12: Version number (7-40)
+    /// - Bits 11-0:  BCH error correction
+    /// </code>
+    /// </returns>
+    /// <remarks>
+    /// Based on ISO/IEC 18004 Section 7.10
+    /// </remarks>
+    public static uint GetVersionBits(int version)
     {
-        // BCH(18,6) generator polynomial: x^12 + x^11 + x^10 + x^9 + x^8 + x^5 + x^2 + 1
+        // BCH(18,6) error correction
+        // BCH generator polynomial: x^12 + x^11 + x^10 + x^9 + x^8 + x^5 + x^2 + 1 (0b1111100100101)
         const uint BCH_GENERATOR_POLYNOMIAL = 0b1111100100101;
+
+        // const int VERSION_DATA_BITS = 6; // not use directly
         const int ECC_CORRECTION_BITS = 12;
         const int TOTAL_BITS = 18;
 
