@@ -1,7 +1,6 @@
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
 using System.Runtime.CompilerServices;
 
-
 namespace SkiaSharp.QrCode.Internals;
 
 /// <summary>
@@ -131,7 +130,7 @@ internal static class ModulePlacer
                     var xModule = x - xOffset;
 
                     // Skip blocked module (finder patterns, timing patterns, format/version info, etc.)
-                    if (IsBlocked(new Rectangle(xModule, y, 1, 1), blockedModules))
+                    if (IsPointBlocked(xModule, y, blockedModules))
                         continue;
 
                     // Place bit if available
@@ -155,34 +154,37 @@ internal static class ModulePlacer
     {
         var size = qrCode.Size;
         var up = true;
-        var datawords = new Queue<bool>();
-        for (int i = 0; i < data.Length; i++)
-        {
-            datawords.Enqueue(data[i] != '0');
-        }
+        var bitIndex = 0;
+
         for (var x = size - 1; x >= 0; x = x - 2)
         {
+            // Skip timing pattern column
             if (x == 6)
                 x--;
 
             for (var yMod = 1; yMod <= size; yMod++)
             {
-                int y;
-                if (up)
+                int y = up ? size - yMod : yMod -1;
+
+                // Process 2 columns (x and x-1)
+                for (var xOffset = 0; xOffset < 2; xOffset++)
                 {
-                    y = size - yMod;
-                    if (datawords.Count > 0 && !IsBlocked(new Rectangle(x, y, 1, 1), blockedModules))
-                        qrCode[y, x] = datawords.Dequeue();
-                    if (datawords.Count > 0 && x > 0 && !IsBlocked(new Rectangle(x - 1, y, 1, 1), blockedModules))
-                        qrCode[y, x - 1] = datawords.Dequeue();
-                }
-                else
-                {
-                    y = yMod - 1;
-                    if (datawords.Count > 0 && !IsBlocked(new Rectangle(x, y, 1, 1), blockedModules))
-                        qrCode[y, x] = datawords.Dequeue();
-                    if (datawords.Count > 0 && x > 0 && !IsBlocked(new Rectangle(x - 1, y, 1, 1), blockedModules))
-                        qrCode[y, x - 1] = datawords.Dequeue();
+                    var xModule = x - xOffset;
+
+                    // Skip blocked module (finder patterns, timing patterns, format/version info, etc.)
+                    if (IsPointBlocked(xModule, y, blockedModules))
+                        continue;
+
+                    // Place bit if available
+                    if (bitIndex < data.Length)
+                    {
+                        qrCode[y, xModule] = data[bitIndex] != '0';
+                        bitIndex++;
+                    }
+                    else
+                    {
+                        qrCode[y, xModule] = false;
+                    }
                 }
             }
 
@@ -421,8 +423,33 @@ internal static class ModulePlacer
     }
 
     /// <summary>
+    /// Checks if a single point (module) is blocked.
+    /// Optimized for 1x1 point checks without Rectanble allocations.
+    /// </summary>
+    /// <param name="x">Column position</param>
+    /// <param name="y">Row position</param>
+    /// <param name="blockedModules">List of reserved module areas</param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsPointBlocked(int x, int y, List<Rectangle> blockedModules)
+    {
+        foreach (var rect in blockedModules)
+        {
+            if (x >= rect.X && x < rect.X + rect.Width &&
+                y >= rect.Y && y < rect.Y + rect.Height)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Checks if a rectangle overlaps with any blocked module area.
     /// </summary>
+    /// <param name="r1"></param>
+    /// <param name="blockedModules"></param>
+    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsBlocked(Rectangle r1, List<Rectangle> blockedModules)
     {
@@ -446,7 +473,7 @@ internal static class ModulePlacer
         {
             for (var row = 0; row < size; row++)
             {
-                if (!IsBlocked(new Rectangle(col, row, 1, 1), blockedModules))
+                if (!IsPointBlocked(col, row, blockedModules))
                 {
                     qrCode[row, col] ^= MaskPattern.Apply(patternIndex, col, row);
                 }
