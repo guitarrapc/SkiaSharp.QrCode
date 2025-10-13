@@ -618,7 +618,11 @@ internal static class ModulePlacer
             }
         }
 
+        // Calculate percentage of dark modules
         var percent = (blackModules / (size * size)) * 100;
+
+        // ISO/IEC 18004:2015 Section 8.8.2: Score = (|percentage - 50| / 5) × 10
+        // Find closest multiple of 5 to the percentage
         var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
         var nextMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 45) / 5;
         score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
