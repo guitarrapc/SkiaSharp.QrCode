@@ -113,6 +113,12 @@ internal static class ModulePlacer
         // Test all 8 patterns
         for (var patternIndex = 0; patternIndex < 8; patternIndex++)
         {
+            // Reset to original state (skip for first iteration)
+            if (patternIndex > 0)
+            {
+                qrTemp.ResetTo(ref qrCode);
+            }
+
             // Apply format and version information
             var formatStr = QRCodeConstants.GetFormatString(eccLevel, patternIndex);
             PlaceFormat(ref qrTemp, formatStr);
@@ -131,12 +137,6 @@ internal static class ModulePlacer
             {
                 bestPatternIndex = patternIndex;
                 bestScore = score;
-            }
-
-            // Last iteration, no need to reset
-            if (patternIndex < 7)
-            {
-                qrTemp.ResetTo(ref qrCode);
             }
         }
 
