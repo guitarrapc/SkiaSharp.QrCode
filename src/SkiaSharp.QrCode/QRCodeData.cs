@@ -126,6 +126,25 @@ public class QRCodeData : IDisposable
     }
 
     /// <summary>
+    /// Resets the current instance's module matrix to match another <see cref="QRCodeData"/> instance.
+    /// </summary>
+    /// <param name="source"></param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void ResetTo(ref QRCodeData source)
+    {
+        var size = source.Size;
+
+        // Direct 2D array copy (faster than nested loops for small matrices)
+        for (var row = 0; row < size; row++)
+        {
+            for (var col = 0; col < size; col++)
+            {
+                this[row, col] = source[row, col];
+            }
+        }
+    }
+
+    /// <summary>
     /// Generates a raw byte array representation of the data, with optional compression.
     /// </summary>
     /// <remarks>

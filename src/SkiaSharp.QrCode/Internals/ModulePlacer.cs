@@ -107,12 +107,12 @@ internal static class ModulePlacer
         var bestPatternIndex = 0;
         var bestScore = int.MaxValue;
 
+        // Create temporary QR code with deep copy
+        var qrTemp = new QRCodeData(qrCode);
+
         // Test all 8 patterns
         for (var patternIndex = 0; patternIndex < 8; patternIndex++)
         {
-            // Create temporary QR code with deep copy
-            var qrTemp = new QRCodeData(qrCode);
-
             // Apply format and version information
             var formatStr = QRCodeConstants.GetFormatString(eccLevel, patternIndex);
             PlaceFormat(ref qrTemp, formatStr);
@@ -132,6 +132,8 @@ internal static class ModulePlacer
                 bestPatternIndex = patternIndex;
                 bestScore = score;
             }
+
+            qrTemp.ResetTo(ref qrCode);
         }
 
         // Apply mask to original QR code
