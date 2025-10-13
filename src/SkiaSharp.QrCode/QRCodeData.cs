@@ -1,6 +1,8 @@
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
+#if NETSTANDARD2_1_OR_GREATER
 using System.Runtime.InteropServices;
+#endif
 
 namespace SkiaSharp.QrCode;
 
