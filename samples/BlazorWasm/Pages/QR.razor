@@ -138,10 +138,9 @@
 
         var canvas = e.Surface.Canvas;
         canvas.Clear(SKColors.Red);
-        using var generator = new QRCodeGenerator();
 
         // Generate QrCode
-        var qr = generator.CreateQrCode(content, Model.EccLevel, eciMode: Model.EciMode, quietZoneSize: Model.QuietZoneSize);
+        var qr = QRCodeGenerator.CreateQrCode(content, Model.EccLevel, eciMode: Model.EciMode, quietZoneSize: Model.QuietZoneSize);
 
         // Render to canvas
         var info = new SKImageInfo(Model.Size, Model.Size); // Make sure match with SKCanvasView width & height.

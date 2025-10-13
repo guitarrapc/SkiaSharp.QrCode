@@ -108,8 +108,7 @@ public class QRCodeGeneratorUnitTest
     [InlineData("123456789012345678901234567890123", ECCLevel.M)]
     public void CreateQrCode_Numeric_ProducesValidQr(string text, ECCLevel eccLevel)
     {
-        var generator = new QRCodeGenerator();
-        var qr = generator.CreateQrCode(text, eccLevel);
+        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
 
         Assert.True(qr.Size >= 21); // Min size = 21x21
     }
@@ -128,10 +127,9 @@ public class QRCodeGeneratorUnitTest
     {
         var expectedSize = CalculateSize(expectedVersion);
 
-        var generator = new QRCodeGenerator();
         var text = new string('1', maxChars);
 
-        var qr = generator.CreateQrCode(text, eccLevel);
+        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
         var version = CalculateVersion(qr.Size);
         var actualSize = qr.Size;
 
@@ -168,8 +166,7 @@ public class QRCodeGeneratorUnitTest
     [InlineData("ABC-123 $%*+-./:", ECCLevel.Q)]
     public void CreateQrCode_Alphanumeric_ProducesValidQr(string text, ECCLevel eccLevel)
     {
-        var generator = new QRCodeGenerator();
-        var qr = generator.CreateQrCode(text, eccLevel);
+        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
 
         Assert.True(qr.Size >= 21);
     }
@@ -188,10 +185,9 @@ public class QRCodeGeneratorUnitTest
     {
         var expectedSize = CalculateSize(expectedVersion);
 
-        var generator = new QRCodeGenerator();
         var text = new string('A', maxChars);
 
-        var qr = generator.CreateQrCode(text, eccLevel);
+        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
         var version = CalculateVersion(qr.Size);
         var actualSize = qr.Size;
 
@@ -235,8 +231,7 @@ public class QRCodeGeneratorUnitTest
     [InlineData("🎉", EciMode.Utf8)]
     public void CreateQrCode_Utf8_ProducesValidQr(string text, EciMode eciMode)
     {
-        var generator = new QRCodeGenerator();
-        var qr = generator.CreateQrCode(text, ECCLevel.M, eciMode: eciMode);
+        var qr = QRCodeGenerator.CreateQrCode(text, ECCLevel.M, eciMode: eciMode);
 
         Assert.True(qr.Size >= 21);
     }
@@ -255,10 +250,9 @@ public class QRCodeGeneratorUnitTest
     {
         var expectedSize = CalculateSize(expectedVersion);
 
-        var generator = new QRCodeGenerator();
         var text = new string('a', maxBytes); // ASCII = 1 byte each
 
-        var qr = generator.CreateQrCode(text, eccLevel, eciMode: EciMode.Utf8);
+        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel, eciMode: EciMode.Utf8);
         var version = CalculateVersion(qr.Size);
         var actualSize = qr.Size;
 
@@ -273,8 +267,7 @@ public class QRCodeGeneratorUnitTest
     [InlineData("Café", EciMode.Utf8)]
     public void CreateQrCode_DifferentEci_ProducesValidQr(string text, EciMode eciMode)
     {
-        var generator = new QRCodeGenerator();
-        var qr = generator.CreateQrCode(text, ECCLevel.M, eciMode: eciMode);
+        var qr = QRCodeGenerator.CreateQrCode(text, ECCLevel.M, eciMode: eciMode);
 
         Assert.True(qr.Size > 0);
     }
@@ -282,11 +275,9 @@ public class QRCodeGeneratorUnitTest
     [Fact]
     public void CreateQrCode_DifferentEci_ProducesDifferentQr()
     {
-        var generator = new QRCodeGenerator();
-
-        var qrDefault = generator.CreateQrCode("HELLO", ECCLevel.M, eciMode: EciMode.Default);
-        var qrIso = generator.CreateQrCode("HELLO", ECCLevel.M, eciMode: EciMode.Iso8859_1);
-        var qrUtf8 = generator.CreateQrCode("HELLO", ECCLevel.M, eciMode: EciMode.Utf8);
+        var qrDefault = QRCodeGenerator.CreateQrCode("HELLO", ECCLevel.M, eciMode: EciMode.Default);
+        var qrIso = QRCodeGenerator.CreateQrCode("HELLO", ECCLevel.M, eciMode: EciMode.Iso8859_1);
+        var qrUtf8 = QRCodeGenerator.CreateQrCode("HELLO", ECCLevel.M, eciMode: EciMode.Utf8);
 
         // Different ECI headers → different QR codes
         Assert.NotEqual(SerializeMatrix(qrDefault), SerializeMatrix(qrIso));
@@ -301,8 +292,7 @@ public class QRCodeGeneratorUnitTest
     [InlineData("café", ECCLevel.H, EciMode.Utf8, 1)]    // Version 1 で OK
     public void CreateQrCode_VersionSelection_IsCorrect(string content, ECCLevel eccLevel, EciMode eciMode, int expectedVersion)
     {
-        using var generator = new QRCodeGenerator();
-        var qr = generator.CreateQrCode(content, eccLevel, eciMode: eciMode);
+        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, eciMode: eciMode);
 
         Assert.Equal(expectedVersion, qr.Version);
     }
@@ -314,10 +304,9 @@ public class QRCodeGeneratorUnitTest
     [InlineData(ECCLevel.H, 3057)]  // V40-H numeric max
     public void CreateQrCode_MaxNumeric_FitsInVersion40(ECCLevel eccLevel, int maxChars)
     {
-        var generator = new QRCodeGenerator();
         var text = new string('1', maxChars);
 
-        var qr = generator.CreateQrCode(text, eccLevel);
+        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
         var version = CalculateVersion(qr.Size);
 
         Assert.Equal(40, version);
@@ -326,10 +315,9 @@ public class QRCodeGeneratorUnitTest
     [Fact]
     public void CreateQrCode_ExceedsMaxCapacity_Throws()
     {
-        var generator = new QRCodeGenerator();
         var tooLarge = new string('1', 7090); // V40-L max + 1
 
-        Assert.Throws<InvalidOperationException>(() => generator.CreateQrCode(tooLarge, ECCLevel.L));
+        Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.CreateQrCode(tooLarge, ECCLevel.L));
     }
 
     // Consistency Tests
@@ -337,10 +325,8 @@ public class QRCodeGeneratorUnitTest
     [Fact]
     public void CreateQrCode_SameInput_ProducesSameOutput()
     {
-        var generator = new QRCodeGenerator();
-
-        var qr1 = generator.CreateQrCode("HELLO WORLD", ECCLevel.M);
-        var qr2 = generator.CreateQrCode("HELLO WORLD", ECCLevel.M);
+        var qr1 = QRCodeGenerator.CreateQrCode("HELLO WORLD", ECCLevel.M);
+        var qr2 = QRCodeGenerator.CreateQrCode("HELLO WORLD", ECCLevel.M);
 
         Assert.Equal(SerializeMatrix(qr1), SerializeMatrix(qr2));
     }
@@ -353,10 +339,8 @@ public class QRCodeGeneratorUnitTest
     [InlineData("0123456789", ECCLevel.H, 5)]
     public void CreateQrCodeBinary_MatchesTextImplementation(string text, ECCLevel level, int version)
     {
-        var generator = new QRCodeGenerator();
-
-        var qrText = generator.CreateQrCode(text, level, requestedVersion: version);
-        var qrBinary = generator.CreateQrCode(text.AsSpan(), level, requestedVersion: version);
+        var qrText = QRCodeGenerator.CreateQrCode(text, level, requestedVersion: version);
+        var qrBinary = QRCodeGenerator.CreateQrCode(text.AsSpan(), level, requestedVersion: version);
 
         // Compare sizes
         Assert.Equal(qrText.Size, qrBinary.Size);

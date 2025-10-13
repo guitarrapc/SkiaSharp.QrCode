@@ -100,8 +100,7 @@ public class QrCode
     /// <returns></returns>
     private SKImage CreateQrImage(ECCLevel eccLevel)
     {
-        using var generator = new QRCodeGenerator();
-        var qrCodeData = generator.CreateQrCode(_content, eccLevel);
+        var qrCodeData = QRCodeGenerator.CreateQrCode(_content, eccLevel);
 
         using var qrSurface = SKSurface.Create(_qrInfo);
         var qrCanvas = qrSurface.Canvas;

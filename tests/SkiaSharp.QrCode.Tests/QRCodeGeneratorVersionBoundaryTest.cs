@@ -58,10 +58,9 @@ public class QRCodeGeneratorVersionBoundaryTest
     {
         // Arrange
         var plainText = new string('1', maxChars); // Numeric mode
-        var generator = new QRCodeGenerator();
 
         // Act
-        var qrCode = generator.CreateQrCode(plainText, eccLevel);
+        var qrCode = QRCodeGenerator.CreateQrCode(plainText, eccLevel);
 
         // Assert
         Assert.Equal(expectedVersion, qrCode.Version);
@@ -101,10 +100,9 @@ public class QRCodeGeneratorVersionBoundaryTest
     {
         // Arrange
         var plainText = new string('A', maxChars); // Alphanumeric mode
-        var generator = new QRCodeGenerator();
 
         // Act
-        var qrCode = generator.CreateQrCode(plainText, eccLevel);
+        var qrCode = QRCodeGenerator.CreateQrCode(plainText, eccLevel);
 
         // Assert
         Assert.Equal(expectedVersion, qrCode.Version);
@@ -143,10 +141,9 @@ public class QRCodeGeneratorVersionBoundaryTest
     {
         // Arrange
         var plainText = new string('あ', maxChars); // UTF-8 multi-byte (3 bytes per char)
-        var generator = new QRCodeGenerator();
 
         // Act
-        var qrCode = generator.CreateQrCode(plainText, eccLevel);
+        var qrCode = QRCodeGenerator.CreateQrCode(plainText, eccLevel);
 
         // Assert
         Assert.Equal(expectedVersion, qrCode.Version);
@@ -168,17 +165,16 @@ public class QRCodeGeneratorVersionBoundaryTest
     {
         // Arrange
         var plainText = new string('1', charCount);
-        var generator = new QRCodeGenerator();
 
         // Act & Assert
         if (expectedNextVersion == -1)
         {
             // Data too long for max version
-            Assert.Throws<InvalidOperationException>(() => generator.CreateQrCode(plainText, eccLevel));
+            Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.CreateQrCode(plainText, eccLevel));
         }
         else
         {
-            var qrCode = generator.CreateQrCode(plainText, eccLevel);
+            var qrCode = QRCodeGenerator.CreateQrCode(plainText, eccLevel);
             Assert.Equal(expectedNextVersion, qrCode.Version);
         }
     }
@@ -202,11 +198,10 @@ public class QRCodeGeneratorVersionBoundaryTest
     public void CreateQrCode_ForcedVersion_GeneratesCorrectly(int requestedVersion)
     {
         // Arrange
-        var generator = new QRCodeGenerator();
         var plainText = "TEST";
 
         // Act
-        var qrCode = generator.CreateQrCode(plainText, ECCLevel.L, requestedVersion: requestedVersion);
+        var qrCode = QRCodeGenerator.CreateQrCode(plainText, ECCLevel.L, requestedVersion: requestedVersion);
 
         // Assert
         Assert.Equal(requestedVersion, qrCode.Version);
@@ -220,14 +215,11 @@ public class QRCodeGeneratorVersionBoundaryTest
     [Fact]
     public void CreateQrCode_AllVersions_WithRequestedVersion_GenerateSuccessfully()
     {
-        // Arrange
-        var generator = new QRCodeGenerator();
-
         // Act & Assert
         for (int version = 1; version <= 40; version++)
         {
             var plainText = "1";
-            var qrCode = generator.CreateQrCode(plainText, ECCLevel.L, requestedVersion: version);
+            var qrCode = QRCodeGenerator.CreateQrCode(plainText, ECCLevel.L, requestedVersion: version);
 
             Assert.Equal(version, qrCode.Version);
             var expectedSize = 21 + (version - 1) * 4 + 8;
@@ -252,10 +244,9 @@ public class QRCodeGeneratorVersionBoundaryTest
     {
         // Arrange
         var plainText = new string('1', charCount);
-        var generator = new QRCodeGenerator();
 
         // Act
-        var qrCode = generator.CreateQrCode(plainText, eccLevel);
+        var qrCode = QRCodeGenerator.CreateQrCode(plainText, eccLevel);
 
         // Assert
         Assert.Equal(expectedVersion, qrCode.Version);
@@ -276,11 +267,10 @@ public class QRCodeGeneratorVersionBoundaryTest
     public void CreateQrCode_AutoVersionSelection_InRange(int charCount, int minVersion, int maxVersion)
     {
         // Arrange
-        var generator = new QRCodeGenerator();
         var plainText = new string('1', charCount);
 
         // Act
-        var qrCode = generator.CreateQrCode(plainText, ECCLevel.L);
+        var qrCode = QRCodeGenerator.CreateQrCode(plainText, ECCLevel.L);
 
         // Assert
         Assert.InRange(qrCode.Version, minVersion, maxVersion);
@@ -293,7 +283,6 @@ public class QRCodeGeneratorVersionBoundaryTest
     [Fact(Skip = "Diagnostic test - run manually to discover actual capacities")]
     public void DiagnoseActualCapacities_AllModes()
     {
-        var generator = new QRCodeGenerator();
         var results = new System.Text.StringBuilder();
         results.AppendLine("# Actual QR Code Capacities (including overhead)");
         results.AppendLine();
@@ -312,9 +301,9 @@ public class QRCodeGeneratorVersionBoundaryTest
 
             for (int version = 1; version <= 40; version++)
             {
-                int numericCap = FindMaxCapacity(generator, version, eccLevel, '1');
-                int alphaCap = FindMaxCapacity(generator, version, eccLevel, 'A');
-                int byteCap = FindMaxCapacity(generator, version, eccLevel, 'あ'); // Multi-byte
+                int numericCap = FindMaxCapacity(version, eccLevel, '1');
+                int alphaCap = FindMaxCapacity(version, eccLevel, 'A');
+                int byteCap = FindMaxCapacity(version, eccLevel, 'あ'); // Multi-byte
 
                 results.AppendLine($"| {version,2} | {numericCap,7} | {alphaCap,12} | {byteCap,4} |");
             }
@@ -327,7 +316,7 @@ public class QRCodeGeneratorVersionBoundaryTest
         Assert.True(true, "Capacity report written to actual_qr_capacities.md");
     }
 
-    private static int FindMaxCapacity(QRCodeGenerator generator, int targetVersion, ECCLevel eccLevel, char fillChar)
+    private static int FindMaxCapacity(int targetVersion, ECCLevel eccLevel, char fillChar)
     {
         int low = 1, high = 10000;
         int maxCapacity = 0;
@@ -339,7 +328,7 @@ public class QRCodeGeneratorVersionBoundaryTest
 
             try
             {
-                var qr = generator.CreateQrCode(text, eccLevel);
+                var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
 
                 if (qr.Version == targetVersion)
                 {

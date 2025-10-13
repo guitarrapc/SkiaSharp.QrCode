@@ -1,13 +1,6 @@
 [MemoryDiagnoser]
 public class QrGeneratorSimple
 {
-    private QRCodeGenerator _generator;
-
-    public QrGeneratorSimple()
-    {
-        _generator = new QRCodeGenerator();
-    }
-
     [Benchmark(Baseline = true)]
     [Arguments("https://exmaple.com/foobar", ECCLevel.L)]
     [Arguments("https://exmaple.com/foobar", ECCLevel.M)]
@@ -20,7 +13,7 @@ public class QrGeneratorSimple
     [Arguments("Very long text that will definitely require multiple string concatenations and cause significant memory allocations during the QR code generation process", ECCLevel.Q)]
     public QRCodeData Text(string text, ECCLevel level)
     {
-        return _generator.CreateQrCode(text, level);
+        return QRCodeGenerator.CreateQrCode(text, level);
     }
 
     [Benchmark]
@@ -35,12 +28,6 @@ public class QrGeneratorSimple
     [Arguments("Very long text that will definitely require multiple string concatenations and cause significant memory allocations during the QR code generation process", ECCLevel.Q)]
     public QRCodeData Binary(string text, ECCLevel level)
     {
-        return _generator.CreateQrCode(text.AsSpan(), level);
-    }
-
-    [GlobalCleanup]
-    public void Cleanup()
-    {
-        _generator?.Dispose();
+        return QRCodeGenerator.CreateQrCode(text.AsSpan(), level);
     }
 }
