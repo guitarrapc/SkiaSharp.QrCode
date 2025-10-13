@@ -211,24 +211,6 @@ internal static class ModulePlacer
     }
 
     /// <summary>
-    /// Places version information patterns (for QR code version 7 and above).
-    /// Two identical 3×6 patterns placed at top-right and bottom-left corners.
-    /// </summary>
-    public static void PlaceVersion(ref QRCodeData qrCode, string versionStr)
-    {
-        var size = qrCode.Size;
-        var vStr = ReverseString(versionStr);
-        for (var x = 0; x < 6; x++)
-        {
-            for (var y = 0; y < 3; y++)
-            {
-                qrCode[y + size - 11, x] = vStr[x * 3 + y] == '1';
-                qrCode[x, y + size - 11] = vStr[x * 3 + y] == '1';
-            }
-        }
-    }
-
-    /// <summary>
     /// Places format information patterns around finder patterns.
     /// Contains error correction level and mask pattern information.
     /// Two identical 15-bit sequences for redundancy.
@@ -262,42 +244,6 @@ internal static class ModulePlacer
             var p2 = new Point(modules[i, 2], modules[i, 3]);
             qrCode[p1.Y, p1.X] = bit;
             qrCode[p2.Y, p2.X] = bit;
-        }
-    }
-
-    /// <summary>
-    /// Places format information patterns around finder patterns.
-    /// Contains error correction level and mask pattern information.
-    /// Two identical 15-bit sequences for redundancy.
-    /// </summary>
-    public static void PlaceFormat(ref QRCodeData qrCode, string formatStr)
-    {
-        var size = qrCode.Size;
-        var fStr = ReverseString(formatStr);
-        var modules = new[,]
-        {
-            { 8, 0, size - 1, 8 },
-            { 8, 1, size - 2, 8 },
-            { 8, 2, size - 3, 8 },
-            { 8, 3, size - 4, 8 },
-            { 8, 4, size - 5, 8 },
-            { 8, 5, size - 6, 8 },
-            { 8, 7, size - 7, 8 },
-            { 8, 8, size - 8, 8 },
-            { 7, 8, 8, size - 7 },
-            { 5, 8, 8, size - 6 },
-            { 4, 8, 8, size - 5 },
-            { 3, 8, 8, size - 4 },
-            { 2, 8, 8, size - 3 },
-            { 1, 8, 8, size - 2 },
-            { 0, 8, 8, size - 1 }
-        };
-        for (var i = 0; i < 15; i++)
-        {
-            var p1 = new Point(modules[i, 0], modules[i, 1]);
-            var p2 = new Point(modules[i, 2], modules[i, 3]);
-            qrCode[p1.Y, p1.X] = fStr[i] == '1';
-            qrCode[p2.Y, p2.X] = fStr[i] == '1';
         }
     }
 
@@ -439,29 +385,6 @@ internal static class ModulePlacer
             new Rectangle(6, 8, 1, size-16),
             new Rectangle(8, 6, size-16, 1)
         ]);
-    }
-
-    /// <summary>
-    /// Reverses a string character by character.
-    /// Used for version and format string bit ordering.
-    /// </summary>
-    private static string ReverseString(string text)
-    {
-        if (text.Length == 0) return string.Empty;
-
-#if NETSTANDARD2_1_OR_GREATER
-        return string.Create(text.Length, text, (span, source) =>
-        {
-            for (int i = 0; i < source.Length; i++)
-            {
-                span[i] = source[source.Length - 1 - i];
-            }
-        });
-#else
-        var chars = text.ToCharArray();
-        Array.Reverse(chars);
-        return new string(chars);
-#endif
     }
 
     /// <summary>
