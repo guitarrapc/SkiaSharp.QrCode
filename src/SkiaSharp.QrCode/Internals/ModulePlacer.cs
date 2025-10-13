@@ -209,32 +209,33 @@ internal static class ModulePlacer
     public static void PlaceFormat(ref QRCodeData qrCode, ushort formatBits)
     {
         var size = qrCode.Size;
-        var modules = new[,]
+
+        // Stack allocation: 15 tuples × 4 ints × 4 bytes = 240 bytes
+        Span<(int x1, int y1, int x2, int y2)> positions = stackalloc (int, int, int, int)[15]
         {
-            { 8, 0, size - 1, 8 },
-            { 8, 1, size - 2, 8 },
-            { 8, 2, size - 3, 8 },
-            { 8, 3, size - 4, 8 },
-            { 8, 4, size - 5, 8 },
-            { 8, 5, size - 6, 8 },
-            { 8, 7, size - 7, 8 },
-            { 8, 8, size - 8, 8 },
-            { 7, 8, 8, size - 7 },
-            { 5, 8, 8, size - 6 },
-            { 4, 8, 8, size - 5 },
-            { 3, 8, 8, size - 4 },
-            { 2, 8, 8, size - 3 },
-            { 1, 8, 8, size - 2 },
-            { 0, 8, 8, size - 1 }
+            ( 8, 0, size - 1, 8 ),
+            ( 8, 1, size - 2, 8 ),
+            ( 8, 2, size - 3, 8 ),
+            ( 8, 3, size - 4, 8 ),
+            ( 8, 4, size - 5, 8 ),
+            ( 8, 5, size - 6, 8 ),
+            ( 8, 7, size - 7, 8 ),
+            ( 8, 8, size - 8, 8 ),
+            ( 7, 8, 8, size - 7 ),
+            ( 5, 8, 8, size - 6 ),
+            ( 4, 8, 8, size - 5 ),
+            ( 3, 8, 8, size - 4 ),
+            ( 2, 8, 8, size - 3 ),
+            ( 1, 8, 8, size - 2 ),
+            ( 0, 8, 8, size - 1 ),
         };
 
         for (var i = 0; i < 15; i++)
         {
             var bit = (formatBits & (1 << i)) != 0;
-            var p1 = new Point(modules[i, 0], modules[i, 1]);
-            var p2 = new Point(modules[i, 2], modules[i, 3]);
-            qrCode[p1.Y, p1.X] = bit;
-            qrCode[p2.Y, p2.X] = bit;
+            var (x1, y1, x2, y2) = positions[i];
+            qrCode[y1, x1] = bit;
+            qrCode[y2, x2] = bit;
         }
     }
 
