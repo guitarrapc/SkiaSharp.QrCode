@@ -443,7 +443,7 @@ internal static class ModulePlacer
     /// <param name="blockedModules"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsBlocked(Rectangle r1, List<Rectangle> blockedModules)
+    private static bool IsBlocked(Rectangle r1, ReadOnlySpan<Rectangle> blockedModules)
     {
         // Tried HashSet pattern for O(1) lookup, but it was slower than this simple loop O(n) and has memory overhead.
         // Keep this implementation for now.
