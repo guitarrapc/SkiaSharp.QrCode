@@ -123,16 +123,7 @@ internal static class ModulePlacer
             }
 
             // Apply mask pattern to data area only
-            for (var col = 0; col < size; col++)
-            {
-                for (var row = 0; row < size; row++)
-                {
-                    if (!IsBlocked(new Rectangle(col, row, 1, 1), blockedModules))
-                    {
-                        qrTemp[row, col] ^= MaskPattern.Apply(patternIndex, col, row);
-                    }
-                }
-            }
+            ApplyMaskToDataArea(ref qrTemp, patternIndex, size, blockedModules);
 
             // Calculate score
             var score = CalculateScore(ref qrTemp);
@@ -172,7 +163,7 @@ internal static class ModulePlacer
         var up = true;
         var bitReader = new BitReader(data);
 
-        for (var x = size - 1; x >= 0; x -=2)
+        for (var x = size - 1; x >= 0; x -= 2)
         {
             // Skip timing pattern column
             if (x == 6)
