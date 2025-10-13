@@ -277,10 +277,15 @@ public class QRCodeGenerator : IDisposable
     {
         var qrCodeData = new QRCodeData(version);
 
+        // Version 1-16: stack allocation (covers 95%+ use cases)
+        // Version 17+: heap allocation (large/rare QR codes)
+        const int StackAllocThreshold = 16;
+        const int StackAllocSize = 40; // Sufficient for version 16 (33 modules needed)
+
         // Version 1:  approximately  9
         // Version 7:  approximately 27
         // Version 40: approximately 57
-        Span<Rectangle> blockedModules = stackalloc Rectangle[70];
+        Span<Rectangle> blockedModules = version <= StackAllocThreshold ? stackalloc Rectangle[StackAllocSize] : new Rectangle[CalculateBlockedModulesSize(version)];
         var blockedCount = 0;
 
         // place all patterns
@@ -487,10 +492,15 @@ public class QRCodeGenerator : IDisposable
     {
         var qrCodeData = new QRCodeData(version);
 
+        // Version 1-16: stack allocation (covers 95%+ use cases)
+        // Version 17+: heap allocation (large/rare QR codes)
+        const int StackAllocThreshold = 16;
+        const int StackAllocSize = 40; // Sufficient for version 16 (33 modules needed)
+
         // Version 1:  approximately  9
         // Version 7:  approximately 27
         // Version 40: approximately 57
-        Span<Rectangle> blockedModules = stackalloc Rectangle[70];
+        Span<Rectangle> blockedModules = version <= StackAllocThreshold ? stackalloc Rectangle[StackAllocSize] : new Rectangle[CalculateBlockedModulesSize(version)];
         var blockedCount = 0;
 
         // place all patterns
@@ -513,6 +523,26 @@ public class QRCodeGenerator : IDisposable
     }
 
     // Utilities
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int CalculateBlockedModulesSize(int version)
+    {
+        const int basePatterns = 12;
+        var formatVersionAreas = version >= 7 ? 8 : 6;
+        var alignmentPatternCount = CalculateAlignmentPatternCount(version);
+        return basePatterns + formatVersionAreas + alignmentPatternCount;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int CalculateAlignmentPatternCount(int version)
+    {
+        if (version == 1) return 0;
+        var positions = GetAlignmentPatternPositions(version);
+        var posCount = positions.Count;
+        var totalCombinations = posCount * posCount;
+        var overlaps = posCount >= 2 ? 3 : 0;
+        return totalCombinations - overlaps;
+    }
 
     /// <summary>
     /// Determines appropriate ECI mode based on text content.
