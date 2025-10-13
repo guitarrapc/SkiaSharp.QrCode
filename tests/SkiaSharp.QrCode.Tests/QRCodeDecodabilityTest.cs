@@ -92,11 +92,9 @@ public class QRCodeDecodabilityTest
         var utf8Bytes = System.Text.Encoding.UTF8.GetBytes(content);
         var byteCount = utf8Bytes.Length;
 
-        using var generator = new QRCodeGenerator();
-
-        var qrH = generator.CreateQrCode(content, ECCLevel.H, eciMode: EciMode.Utf8);
-        var qrM = generator.CreateQrCode(content, ECCLevel.M, eciMode: EciMode.Utf8);
-        var qrL = generator.CreateQrCode(content, ECCLevel.L, eciMode: EciMode.Utf8);
+        var qrH = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, eciMode: EciMode.Utf8);
+        var qrM = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, eciMode: EciMode.Utf8);
+        var qrL = QRCodeGenerator.CreateQrCode(content, ECCLevel.L, eciMode: EciMode.Utf8);
 
         // debug output
         Console.WriteLine($"Content: \"{content}\"");
@@ -180,8 +178,7 @@ public class QRCodeDecodabilityTest
     /// </summary>
     private void AssertQrCodeIsDecodable(string expectedContent, ECCLevel eccLevel, EciMode eciMode)
     {
-        using var generator = new QRCodeGenerator();
-        var qr = generator.CreateQrCode(expectedContent, eccLevel, eciMode: eciMode);
+        var qr = QRCodeGenerator.CreateQrCode(expectedContent, eccLevel, eciMode: eciMode);
 
         // Convert QRCodeData to SKBitmap
         using var bitmap = QrCodeToSKBitmap(qr);

@@ -12,8 +12,7 @@ var dir = Path.GetDirectoryName(fullPath) ?? throw new ArgumentException($"Inval
 Directory.CreateDirectory(dir);
 
 // Generate QrCode
-using var generator = new QRCodeGenerator();
-var qr = generator.CreateQrCode(content, ECCLevel.L, quietZoneSize: 1);
+var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.L, quietZoneSize: 1);
 
 // Render to canvas
 var info = new SKImageInfo(512, 512);

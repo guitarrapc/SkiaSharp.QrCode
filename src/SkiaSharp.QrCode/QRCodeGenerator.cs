@@ -11,7 +11,7 @@ namespace SkiaSharp.QrCode;
 /// QR code generator based on ISO/IEC 18004 standard.
 /// Supports QR code versions 1-40 with multiple encoding modes and error correction levels.
 /// </summary>
-public class QRCodeGenerator : IDisposable
+public static class QRCodeGenerator
 {
     // -----------------------------------------------------
     // QR Code Structure
@@ -41,7 +41,7 @@ public class QRCodeGenerator : IDisposable
     /// <param name="requestedVersion">Specific version to use (1-40), or -1 for automatic selection.</param>
     /// <param name="quietZoneSize">Size of the quiet zone (white border) in modules.</param>
     /// <returns>QRCodeData containing the generated QR code matrix.</returns>
-    public QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
+    public static QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
     {
         // QR code generation process:
         // ------------------------------------------------
@@ -94,7 +94,7 @@ public class QRCodeGenerator : IDisposable
     /// <param name="requestedVersion">Specific version to use (1-40), or -1 for automatic selection.</param>
     /// <param name="quietZoneSize">Size of the quiet zone (white border) in modules.</param>
     /// <returns>QRCodeData containing the generated QR code matrix.</returns>
-    public QRCodeData CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
+    public static QRCodeData CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
     {
         // QR code generation process:
         // ------------------------------------------------
@@ -807,9 +807,4 @@ public class QRCodeGenerator : IDisposable
     /// <param name="Utf8BOM">Indicates if UTF-8 BOM is included in the encoded data.</param>
     /// <param name="EccInfo">Error correction information for the selected version and ECC level.</param>
     private readonly record struct QRConfiguration(int Version, ECCLevel EccLevel, EncodingMode Encoding, EciMode EciMode, bool Utf8BOM, in ECCInfo EccInfo);
-
-    public void Dispose()
-    {
-        // will be removed in future, or remain.
-    }
 }
