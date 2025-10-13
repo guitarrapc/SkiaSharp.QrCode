@@ -210,7 +210,7 @@ internal static class ModulePlacer
     {
         var size = qrCode.Size;
 
-        // Stack allocation for coordinate pairs (15 bits × 2 copies × 2 coords = 60 bytes)
+        // Stack allocation: 15 tuples × 4 ints × 4 bytes = 240 bytes
         Span<(int x1, int y1, int x2, int y2)> positions = stackalloc (int, int, int, int)[15]
         {
             ( 8, 0, size - 1, 8 ),
