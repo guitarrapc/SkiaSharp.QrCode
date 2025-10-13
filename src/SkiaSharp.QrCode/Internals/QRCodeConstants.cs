@@ -818,8 +818,13 @@ internal static class QRCodeConstants
     /// <returns>15-bit format string.</returns>
     public static ushort GetFormat(ECCLevel level, int maskVersion)
     {
-        const ushort generator = 0b10100110111;
-        const ushort mask = 0b101010000010010;
+        // BCH(15,5) generator polynomial: x^10 + x^8 + x^5 + x^4 + x^2 + x + 1
+        const ushort BCH_GENERATOR_POLYNOMIAL = 0b10100110111;
+        // Format information mask pattern (ISO/IEC 18004 Section 7.8.2)
+        const ushort FORMAT_MASK_PATTERN = 0b101010000010010;
+        const int MASK_PATTERN_BITS = 3;
+        const int ECC_CORRECTION_BITS = 10;
+        const int TOTAL_BITS = 15;
 
         // ECC level bits (2bit)
         var fBits = level switch
@@ -832,20 +837,20 @@ internal static class QRCodeConstants
         };
 
         // Add mask pattern bits (3bits)
-        fBits = (ushort)(fBits << 3 | maskVersion);
+        fBits = (ushort)(fBits << MASK_PATTERN_BITS | maskVersion);
 
         // Calculate BCH(15,5) error correction
-        var temp = (ushort)(fBits << 10);
-        for (var i = 14; i >= 10; i--)
+        var temp = (ushort)(fBits << ECC_CORRECTION_BITS);
+        for (var i = TOTAL_BITS - 1; i >= ECC_CORRECTION_BITS; i--)
         {
             if ((temp & (1 << i)) != 0)
             {
-                temp ^= (ushort)(generator << (i - 10));
+                temp ^= (ushort)(BCH_GENERATOR_POLYNOMIAL << (i - ECC_CORRECTION_BITS));
             }
         }
 
         // Combine data and ECC bits, then apply XOR mask
-        return (ushort)(((fBits << 10) | temp) ^ mask);
+        return (ushort)(((fBits << ECC_CORRECTION_BITS) | temp) ^ FORMAT_MASK_PATTERN);
     }
 
     /// <summary>
@@ -857,20 +862,23 @@ internal static class QRCodeConstants
     /// <returns>18-bit version string.</returns>
     public static uint GetVersion(int version)
     {
-        const uint generator = 0b1111100100101;
+        // BCH(18,6) generator polynomial: x^12 + x^11 + x^10 + x^9 + x^8 + x^5 + x^2 + 1
+        const uint BCH_GENERATOR_POLYNOMIAL = 0b1111100100101;
+        const int ECC_CORRECTION_BITS = 12;
+        const int TOTAL_BITS = 18;
 
         var vBits = (uint)version;
-        var temp = vBits << 12;
+        var temp = vBits << ECC_CORRECTION_BITS;
 
-        for (var i = 17; i >= 12; i--)
+        for (var i = TOTAL_BITS - 1; i >= ECC_CORRECTION_BITS; i--)
         {
             if ((temp & (1u << i)) != 0)
             {
-                temp ^= (generator << (i - 12));
+                temp ^= (BCH_GENERATOR_POLYNOMIAL << (i - ECC_CORRECTION_BITS));
             }
         }
 
-        return (vBits << 12) | temp;
+        return (vBits << ECC_CORRECTION_BITS) | temp;
     }
 
     // Lookup Table Initialization
