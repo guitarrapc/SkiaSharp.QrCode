@@ -294,8 +294,8 @@ public class QRCodeGenerator : IDisposable
         // Place version information (version 7+)
         if (version >= 7)
         {
-            var versionString = QRCodeConstants.GetVersionString(version);
-            ModulePlacer.PlaceVersion(ref qrCodeData, versionString);
+            var versionBits = QRCodeConstants.GetVersionBits(version);
+            ModulePlacer.PlaceVersion(ref qrCodeData, versionBits);
         }
 
         return qrCodeData;

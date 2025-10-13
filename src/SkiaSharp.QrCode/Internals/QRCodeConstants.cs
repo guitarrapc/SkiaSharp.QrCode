@@ -821,8 +821,13 @@ internal static class QRCodeConstants
         var generator = "10100110111";
         var fStrMask = "101010000010010";
 
+        // ECC level bits (2bit)
         var fStr = (level == ECCLevel.L) ? "01" : (level == ECCLevel.M) ? "00" : (level == ECCLevel.Q) ? "11" : "10";
+
+        // Add mask pattern bits (3bits)
         fStr += DecToBin(maskVersion, 3);
+
+        // Calculate BCH(15,5) error correction
         var fStrEcc = fStr.PadRight(15, '0').TrimStart('0');
         while (fStrEcc.Length > 10)
         {
@@ -837,10 +842,51 @@ internal static class QRCodeConstants
         fStrEcc = fStrEcc.PadLeft(10, '0');
         fStr += fStrEcc;
 
+        // Combine data and ECC bits, then apply XOR mask
         var sbMask = new StringBuilder();
         for (var i = 0; i < fStr.Length; i++)
             sbMask.Append((Convert.ToInt32(fStr[i]) ^ Convert.ToInt32(fStrMask[i])).ToString());
         return sbMask.ToString();
+    }
+
+    /// <summary>
+    /// Generates 15-bit format information bits.
+    /// Contains ECC level and mask pattern with error correction.
+    /// Formula: (ECC bits + mask bits) + BCH(15,5) error correction + XOR mask
+    /// </summary>
+    /// <param name="level">Error correction level.</param>
+    /// <param name="maskVersion">Mask pattern version (0-7).</param>
+    /// <returns>15-bit format string.</returns>
+    public static ushort GetFormatBits(ECCLevel level, int maskVersion)
+    {
+        const ushort generator = 0b10100110111;
+        const ushort mask = 0b101010000010010;
+
+        // ECC level bits (2bit)
+        var fBits = level switch
+        {
+            ECCLevel.L => 0b01,
+            ECCLevel.M => 0b00,
+            ECCLevel.Q => 0b11,
+            ECCLevel.H => 0b10,
+            _ => throw new ArgumentOutOfRangeException(nameof(level), level, "ECCLevel was out of range"),
+        };
+
+        // Add mask pattern bits (3bits)
+        fBits = (ushort)(fBits << 3 | maskVersion);
+
+        // Calculate BCH(15,5) error correction
+        var temp = (ushort)(fBits << 10);
+        for (var i = 14; i >= 10; i--)
+        {
+            if ((temp & (1 << i)) != 0)
+            {
+                temp ^= (ushort)(generator << (i - 10));
+            }
+        }
+
+        // Combine data and ECC bits, then apply XOR mask
+        return (ushort)(((fBits << 10) | temp) ^ mask);
     }
 
     /// <summary>
@@ -872,6 +918,30 @@ internal static class QRCodeConstants
         return vStr;
     }
 
+    /// <summary>
+    /// Generates 18-bit version information bits (for version 7+).
+    /// Contains version number with error correction.
+    /// Formula: (6 bits version) + BCH(18,6) error correction
+    /// </summary>
+    /// <param name="version">QR code version (7-40).</param>
+    /// <returns>18-bit version string.</returns>
+    public static uint GetVersionBits(int version)
+    {
+        const uint generator = 0b1111100100101;
+
+        var vBits = (uint)version;
+        var temp = vBits << 12;
+
+        for (var i = 17; i >= 12; i--)
+        {
+            if ((temp & (1u << i)) != 0)
+            {
+                temp ^= (generator << (i - 12));
+            }
+        }
+
+        return (vBits << 12) | temp;
+    }
 
     // Lookup Table Initialization
 

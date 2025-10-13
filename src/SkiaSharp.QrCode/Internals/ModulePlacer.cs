@@ -43,60 +43,6 @@ internal static class ModulePlacer
     }
 
     /// <summary>
-    /// Places version information patterns (for QR code version 7 and above).
-    /// Two identical 3×6 patterns placed at top-right and bottom-left corners.
-    /// </summary>
-    public static void PlaceVersion(ref QRCodeData qrCode, string versionStr)
-    {
-        var size = qrCode.Size;
-        var vStr = ReverseString(versionStr);
-        for (var x = 0; x < 6; x++)
-        {
-            for (var y = 0; y < 3; y++)
-            {
-                qrCode[y + size - 11, x] = vStr[x * 3 + y] == '1';
-                qrCode[x, y + size - 11] = vStr[x * 3 + y] == '1';
-            }
-        }
-    }
-
-    /// <summary>
-    /// Places format information patterns around finder patterns.
-    /// Contains error correction level and mask pattern information.
-    /// Two identical 15-bit sequences for redundancy.
-    /// </summary>
-    public static void PlaceFormat(ref QRCodeData qrCode, string formatStr)
-    {
-        var size = qrCode.Size;
-        var fStr = ReverseString(formatStr);
-        var modules = new[,]
-        {
-            { 8, 0, size - 1, 8 },
-            { 8, 1, size - 2, 8 },
-            { 8, 2, size - 3, 8 },
-            { 8, 3, size - 4, 8 },
-            { 8, 4, size - 5, 8 },
-            { 8, 5, size - 6, 8 },
-            { 8, 7, size - 7, 8 },
-            { 8, 8, size - 8, 8 },
-            { 7, 8, 8, size - 7 },
-            { 5, 8, 8, size - 6 },
-            { 4, 8, 8, size - 5 },
-            { 3, 8, 8, size - 4 },
-            { 2, 8, 8, size - 3 },
-            { 1, 8, 8, size - 2 },
-            { 0, 8, 8, size - 1 }
-        };
-        for (var i = 0; i < 15; i++)
-        {
-            var p1 = new Point(modules[i, 0], modules[i, 1]);
-            var p2 = new Point(modules[i, 2], modules[i, 3]);
-            qrCode[p1.Y, p1.X] = fStr[i] == '1';
-            qrCode[p2.Y, p2.X] = fStr[i] == '1';
-        }
-    }
-
-    /// <summary>
     /// Applies mask pattern to data area and selects optimal pattern.
     /// Tests all 8 mask patterns and selects one with lowest penalty score.
     /// </summary>
@@ -123,12 +69,12 @@ internal static class ModulePlacer
             ApplyMaskToDataArea(ref qrTemp, patternIndex, size, blockedModules);
 
             // Apply format and version information
-            var formatStr = QRCodeConstants.GetFormatString(eccLevel, patternIndex);
-            PlaceFormat(ref qrTemp, formatStr);
+            var formatBits = QRCodeConstants.GetFormatBits(eccLevel, patternIndex);
+            PlaceFormat(ref qrTemp, formatBits);
             if (version >= 7)
             {
-                var versionString = QRCodeConstants.GetVersionString(version);
-                PlaceVersion(ref qrTemp, versionString);
+                var versionBits = QRCodeConstants.GetVersionBits(version);
+                PlaceVersion(ref qrTemp, versionBits);
             }
 
             // Calculate score
@@ -242,6 +188,116 @@ internal static class ModulePlacer
 
             // alternate direction
             up = !up;
+        }
+    }
+
+    /// <summary>
+    /// Places version information patterns (for QR code version 7 and above).
+    /// Two identical 3×6 patterns placed at top-right and bottom-left corners.
+    /// </summary>
+    public static void PlaceVersion(ref QRCodeData qrCode, uint versionBits)
+    {
+        var size = qrCode.Size;
+        for (var x = 0; x < 6; x++)
+        {
+            for (var y = 0; y < 3; y++)
+            {
+                var bitIndex = x * 3 + y;
+                var bit = (versionBits & (1 << bitIndex)) != 0;
+                qrCode[y + size - 11, x] = bit;
+                qrCode[x, y + size - 11] = bit;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Places version information patterns (for QR code version 7 and above).
+    /// Two identical 3×6 patterns placed at top-right and bottom-left corners.
+    /// </summary>
+    public static void PlaceVersion(ref QRCodeData qrCode, string versionStr)
+    {
+        var size = qrCode.Size;
+        var vStr = ReverseString(versionStr);
+        for (var x = 0; x < 6; x++)
+        {
+            for (var y = 0; y < 3; y++)
+            {
+                qrCode[y + size - 11, x] = vStr[x * 3 + y] == '1';
+                qrCode[x, y + size - 11] = vStr[x * 3 + y] == '1';
+            }
+        }
+    }
+
+    /// <summary>
+    /// Places format information patterns around finder patterns.
+    /// Contains error correction level and mask pattern information.
+    /// Two identical 15-bit sequences for redundancy.
+    /// </summary>
+    public static void PlaceFormat(ref QRCodeData qrCode, ushort formatBits)
+    {
+        var size = qrCode.Size;
+        var modules = new[,]
+        {
+            { 8, 0, size - 1, 8 },
+            { 8, 1, size - 2, 8 },
+            { 8, 2, size - 3, 8 },
+            { 8, 3, size - 4, 8 },
+            { 8, 4, size - 5, 8 },
+            { 8, 5, size - 6, 8 },
+            { 8, 7, size - 7, 8 },
+            { 8, 8, size - 8, 8 },
+            { 7, 8, 8, size - 7 },
+            { 5, 8, 8, size - 6 },
+            { 4, 8, 8, size - 5 },
+            { 3, 8, 8, size - 4 },
+            { 2, 8, 8, size - 3 },
+            { 1, 8, 8, size - 2 },
+            { 0, 8, 8, size - 1 }
+        };
+
+        for (var i = 0; i < 15; i++)
+        {
+            var bit = (formatBits & (1 << i)) != 0;
+            var p1 = new Point(modules[i, 0], modules[i, 1]);
+            var p2 = new Point(modules[i, 2], modules[i, 3]);
+            qrCode[p1.Y, p1.X] = bit;
+            qrCode[p2.Y, p2.X] = bit;
+        }
+    }
+
+    /// <summary>
+    /// Places format information patterns around finder patterns.
+    /// Contains error correction level and mask pattern information.
+    /// Two identical 15-bit sequences for redundancy.
+    /// </summary>
+    public static void PlaceFormat(ref QRCodeData qrCode, string formatStr)
+    {
+        var size = qrCode.Size;
+        var fStr = ReverseString(formatStr);
+        var modules = new[,]
+        {
+            { 8, 0, size - 1, 8 },
+            { 8, 1, size - 2, 8 },
+            { 8, 2, size - 3, 8 },
+            { 8, 3, size - 4, 8 },
+            { 8, 4, size - 5, 8 },
+            { 8, 5, size - 6, 8 },
+            { 8, 7, size - 7, 8 },
+            { 8, 8, size - 8, 8 },
+            { 7, 8, 8, size - 7 },
+            { 5, 8, 8, size - 6 },
+            { 4, 8, 8, size - 5 },
+            { 3, 8, 8, size - 4 },
+            { 2, 8, 8, size - 3 },
+            { 1, 8, 8, size - 2 },
+            { 0, 8, 8, size - 1 }
+        };
+        for (var i = 0; i < 15; i++)
+        {
+            var p1 = new Point(modules[i, 0], modules[i, 1]);
+            var p2 = new Point(modules[i, 2], modules[i, 3]);
+            qrCode[p1.Y, p1.X] = fStr[i] == '1';
+            qrCode[p2.Y, p2.X] = fStr[i] == '1';
         }
     }
 
