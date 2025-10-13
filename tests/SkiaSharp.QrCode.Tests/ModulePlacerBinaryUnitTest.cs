@@ -14,12 +14,14 @@ public class ModulePlacerBinaryUnitTest
         var qrCodeBinary = CreateEmptyQRCodeData(version);
         var qrCodeString = CreateEmptyQRCodeData(version);
 
-        var blockedModulesBinary = new List<Rectangle>();
-        var blockedModulesString = new List<Rectangle>();
+        Span<Rectangle> blockedModulesBinary = stackalloc Rectangle[30];
+        Span<Rectangle> blockedModulesString = stackalloc Rectangle[30];
+        var blockedCountBinary = 0;
+        var blockedCountString = 0;
 
         // Prepare patterns (same for both)
-        ModulePlacer.PlaceFinderPatterns(ref qrCodeBinary, ref blockedModulesBinary);
-        ModulePlacer.PlaceFinderPatterns(ref qrCodeString, ref blockedModulesString);
+        ModulePlacer.PlaceFinderPatterns(ref qrCodeBinary, blockedModulesBinary, ref blockedCountBinary);
+        ModulePlacer.PlaceFinderPatterns(ref qrCodeString, blockedModulesString, ref blockedCountString);
 
         // Binary data: 0xAB 0xCD = 10101011 11001101
         ReadOnlySpan<byte> binaryData = [0xAB, 0xCD];
@@ -28,8 +30,8 @@ public class ModulePlacerBinaryUnitTest
         var stringData = "1010101111001101";
 
         // Act
-        ModulePlacer.PlaceDataWords(ref qrCodeBinary, binaryData, ref blockedModulesBinary);
-        ModulePlacer.PlaceDataWords(ref qrCodeString, stringData, ref blockedModulesString);
+        ModulePlacer.PlaceDataWords(ref qrCodeBinary, binaryData, blockedModulesBinary);
+        ModulePlacer.PlaceDataWords(ref qrCodeString, stringData, blockedModulesString);
 
         // Assert - Compare matrices
         for (int row = 0; row < qrCodeBinary.Size; row++)
@@ -48,14 +50,15 @@ public class ModulePlacerBinaryUnitTest
     {
         // Arrange
         var qrCode = CreateEmptyQRCodeData(version);
-        var blockedModules = new List<Rectangle>();
+        Span<Rectangle> blockedModules = stackalloc Rectangle[30];
+        var blockedCount = 0;
 
         // Setup patterns
-        ModulePlacer.PlaceFinderPatterns(ref qrCode, ref blockedModules);
-        ModulePlacer.PlaceTimingPatterns(ref qrCode, ref blockedModules);
+        ModulePlacer.PlaceFinderPatterns(ref qrCode, blockedModules, ref blockedCount);
+        ModulePlacer.PlaceTimingPatterns(ref qrCode, blockedModules, ref blockedCount);
 
         // Act
-        ModulePlacer.PlaceDataWords(ref qrCode, data, ref blockedModules);
+        ModulePlacer.PlaceDataWords(ref qrCode, data, blockedModules);
 
         // Assert - Verify data is placed (not all zeros/all ones)
         int darkCount = 0;

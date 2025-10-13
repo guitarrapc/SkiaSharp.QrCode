@@ -280,16 +280,17 @@ public class QRCodeGenerator : IDisposable
         // Version 1:  approximately  9
         // Version 7:  approximately 27
         // Version 40: approximately 57
-        var blockedModules = new List<Rectangle>(30);
+        Span<Rectangle> blockedModules = stackalloc Rectangle[70];
+        var blockedCount = 0;
 
         // place all patterns
-        PlacePatterns(ref qrCodeData, version, ref blockedModules);
+        PlacePatterns(ref qrCodeData, version, blockedModules, ref blockedCount);
 
         // place data
-        ModulePlacer.PlaceDataWords(ref qrCodeData, interleavedData, ref blockedModules);
+        ModulePlacer.PlaceDataWords(ref qrCodeData, interleavedData, blockedModules.Slice(0, blockedCount));
 
         // Apply mask and format
-        ApplyMaskAndFormat(ref qrCodeData, version, eccLevel, ref blockedModules);
+        ApplyMaskAndFormat(ref qrCodeData, version, eccLevel, blockedModules.Slice(0, blockedCount));
 
         // Place version information (version 7+)
         if (version >= 7)
@@ -308,16 +309,16 @@ public class QRCodeGenerator : IDisposable
     /// <param name="version">The QR code version (1-40) determining pattern placement.</param>
     /// <param name="blockedModules">A list of rectangles representing reserved areas in the matrix where patterns are placed.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void PlacePatterns(ref QRCodeData qrCodeData, int version, ref List<Rectangle> blockedModules)
+    private static void PlacePatterns(ref QRCodeData qrCodeData, int version, Span<Rectangle> blockedModules, ref int blockedCount)
     {
         var alignmentPatternLocations = GetAlignmentPatternPositions(version);
 
-        ModulePlacer.PlaceFinderPatterns(ref qrCodeData, ref blockedModules);
-        ModulePlacer.ReserveSeparatorAreas(qrCodeData.Size, ref blockedModules);
-        ModulePlacer.PlaceAlignmentPatterns(ref qrCodeData, alignmentPatternLocations, ref blockedModules);
-        ModulePlacer.PlaceTimingPatterns(ref qrCodeData, ref blockedModules);
-        ModulePlacer.PlaceDarkModule(ref qrCodeData, version, ref blockedModules);
-        ModulePlacer.ReserveVersionAreas(qrCodeData.Size, version, ref blockedModules);
+        ModulePlacer.PlaceFinderPatterns(ref qrCodeData, blockedModules, ref blockedCount);
+        ModulePlacer.ReserveSeparatorAreas(qrCodeData.Size, blockedModules, ref blockedCount);
+        ModulePlacer.PlaceAlignmentPatterns(ref qrCodeData, alignmentPatternLocations, blockedModules, ref blockedCount);
+        ModulePlacer.PlaceTimingPatterns(ref qrCodeData, blockedModules, ref blockedCount);
+        ModulePlacer.PlaceDarkModule(ref qrCodeData, version, blockedModules, ref blockedCount);
+        ModulePlacer.ReserveVersionAreas(qrCodeData.Size, version, blockedModules, ref blockedCount);
     }
 
     /// <summary>
@@ -348,9 +349,9 @@ public class QRCodeGenerator : IDisposable
     /// <param name="eccLevel">The error correction level to use.</param>
     /// <param name="blockedModules">A list of rectangles representing modules that should not be masked (reserved areas).</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ApplyMaskAndFormat(ref QRCodeData qrCodeData, int version, ECCLevel eccLevel, ref List<Rectangle> blockedModules)
+    private static void ApplyMaskAndFormat(ref QRCodeData qrCodeData, int version, ECCLevel eccLevel, ReadOnlySpan<Rectangle> blockedModules)
     {
-        var maskVersion = ModulePlacer.MaskCode(ref qrCodeData, version, ref blockedModules, eccLevel);
+        var maskVersion = ModulePlacer.MaskCode(ref qrCodeData, version, blockedModules, eccLevel);
         var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
         ModulePlacer.PlaceFormat(ref qrCodeData, formatBit);
     }
@@ -489,16 +490,17 @@ public class QRCodeGenerator : IDisposable
         // Version 1:  approximately  9
         // Version 7:  approximately 27
         // Version 40: approximately 57
-        var blockedModules = new List<Rectangle>(30);
+        Span<Rectangle> blockedModules = stackalloc Rectangle[70];
+        var blockedCount = 0;
 
         // place all patterns
-        PlacePatterns(ref qrCodeData, version, ref blockedModules);
+        PlacePatterns(ref qrCodeData, version, blockedModules, ref blockedCount);
 
         // place data
-        ModulePlacer.PlaceDataWords(ref qrCodeData, interleavedData, ref blockedModules);
+        ModulePlacer.PlaceDataWords(ref qrCodeData, interleavedData, blockedModules.Slice(0, blockedCount));
 
         // Apply mask and format
-        ApplyMaskAndFormat(ref qrCodeData, version, eccLevel, ref blockedModules);
+        ApplyMaskAndFormat(ref qrCodeData, version, eccLevel, blockedModules.Slice(0, blockedCount));
 
         // Place version information (version 7+)
         if (version >= 7)
