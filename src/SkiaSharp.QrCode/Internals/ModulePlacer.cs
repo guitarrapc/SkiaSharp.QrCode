@@ -46,7 +46,7 @@ internal static class ModulePlacer
     /// Tests all 8 mask patterns and selects one with lowest penalty score.
     /// </summary>
     /// <returns>Selected mask pattern number (0-7).</returns>
-    public static int MaskCode(ref QRCodeData qrCode, int version, ref List<Rectangle> blockedModules, ECCLevel eccLevel)
+    public static int MaskCode(ref QRCodeData qrCode, int version, ReadOnlySpan<Rectangle> blockedModules, ECCLevel eccLevel)
     {
         var size = qrCode.Size;
         var bestPatternIndex = 0;
@@ -108,7 +108,7 @@ internal static class ModulePlacer
     /// - Skip timing pattern column (column 6)
     /// - Fill out non-blocked modules
     /// </remarks>
-    public static void PlaceDataWords(ref QRCodeData qrCode, ReadOnlySpan<byte> data, ref List<Rectangle> blockedModules)
+    public static void PlaceDataWords(ref QRCodeData qrCode, ReadOnlySpan<byte> data, ReadOnlySpan<Rectangle> blockedModules)
     {
         var size = qrCode.Size;
         var up = true;
@@ -150,7 +150,7 @@ internal static class ModulePlacer
     /// <param name="qrCode">QR code data structure to populate.</param>
     /// <param name="data">Interleaved data and ECC bytes string.</param>
     /// <param name="blockedModules">List of reserved module areas.</param>
-    public static void PlaceDataWords(ref QRCodeData qrCode, string data, ref List<Rectangle> blockedModules)
+    public static void PlaceDataWords(ref QRCodeData qrCode, string data, ReadOnlySpan<Rectangle> blockedModules)
     {
         var size = qrCode.Size;
         var up = true;
@@ -274,33 +274,33 @@ internal static class ModulePlacer
     /// Reserves separator areas (white borders) around finder patterns.
     /// 1-module wide white border separates finder patterns from data area.
     /// </summary>
-    public static void ReserveSeparatorAreas(int size, ref List<Rectangle> blockedModules)
+    public static void ReserveSeparatorAreas(int size, Span<Rectangle> blockedModules, ref int blockedCount)
     {
-        blockedModules.Add(new Rectangle(7, 0, 1, 8));
-        blockedModules.Add(new Rectangle(0, 7, 7, 1));
-        blockedModules.Add(new Rectangle(0, size - 8, 8, 1));
-        blockedModules.Add(new Rectangle(7, size - 7, 1, 7));
-        blockedModules.Add(new Rectangle(size - 8, 0, 1, 8));
-        blockedModules.Add(new Rectangle(size - 7, 7, 7, 1));
+        blockedModules[blockedCount++] = new Rectangle(7, 0, 1, 8);
+        blockedModules[blockedCount++] = new Rectangle(0, 7, 7, 1);
+        blockedModules[blockedCount++] = new Rectangle(0, size - 8, 8, 1);
+        blockedModules[blockedCount++] = new Rectangle(7, size - 7, 1, 7);
+        blockedModules[blockedCount++] = new Rectangle(size - 8, 0, 1, 8);
+        blockedModules[blockedCount++] = new Rectangle(size - 7, 7, 7, 1);
     }
 
     /// <summary>
     /// Reserves areas for format and version information.
     /// These areas are filled later with actual format/version data.
     /// </summary>
-    public static void ReserveVersionAreas(int size, int version, ref List<Rectangle> blockedModules)
+    public static void ReserveVersionAreas(int size, int version, Span<Rectangle> blockedModules, ref int blockedCount)
     {
-        blockedModules.Add(new Rectangle(8, 0, 1, 6));
-        blockedModules.Add(new Rectangle(8, 7, 1, 1));
-        blockedModules.Add(new Rectangle(0, 8, 6, 1));
-        blockedModules.Add(new Rectangle(7, 8, 2, 1));
-        blockedModules.Add(new Rectangle(size - 8, 8, 8, 1));
-        blockedModules.Add(new Rectangle(8, size - 7, 1, 7));
+        blockedModules[blockedCount++] = new Rectangle(8, 0, 1, 6);
+        blockedModules[blockedCount++] = new Rectangle(8, 7, 1, 1);
+        blockedModules[blockedCount++] = new Rectangle(0, 8, 6, 1);
+        blockedModules[blockedCount++] = new Rectangle(7, 8, 2, 1);
+        blockedModules[blockedCount++] = new Rectangle(size - 8, 8, 8, 1);
+        blockedModules[blockedCount++] = new Rectangle(8, size - 7, 1, 7);
 
         if (version >= 7)
         {
-            blockedModules.Add(new Rectangle(size - 11, 0, 3, 6));
-            blockedModules.Add(new Rectangle(0, size - 11, 6, 3));
+            blockedModules[blockedCount++] = new Rectangle(size - 11, 0, 3, 6);
+            blockedModules[blockedCount++] = new Rectangle(0, size - 11, 6, 3);
         }
     }
 
@@ -309,17 +309,17 @@ internal static class ModulePlacer
     /// Located at position (8, 4*version + 9).
     /// Required by QR code specification for all versions.
     /// </summary>
-    public static void PlaceDarkModule(ref QRCodeData qrCode, int version, ref List<Rectangle> blockedModules)
+    public static void PlaceDarkModule(ref QRCodeData qrCode, int version, Span<Rectangle> blockedModules, ref int blockedCount)
     {
         qrCode[4 * version + 9, 8] = true;
-        blockedModules.Add(new Rectangle(8, 4 * version + 9, 1, 1));
+        blockedModules[blockedCount++] = new Rectangle(8, 4 * version + 9, 1, 1);
     }
 
     /// <summary>
     /// Places three finder patterns (position detection patterns).
     /// 7×7 patterns located at top-left, top-right, and bottom-left corners.
     /// </summary>
-    public static void PlaceFinderPatterns(ref QRCodeData qrCode, ref List<Rectangle> blockedModules)
+    public static void PlaceFinderPatterns(ref QRCodeData qrCode, Span<Rectangle> blockedModules, ref int blockedCount)
     {
         var size = qrCode.Size;
         int[] locations = [0, 0, size - 7, 0, 0, size - 7];
@@ -338,7 +338,7 @@ internal static class ModulePlacer
                     }
                 }
             }
-            blockedModules.Add(new Rectangle(locations[i], locations[i + 1], 7, 7));
+            blockedModules[blockedCount++] = new Rectangle(locations[i], locations[i + 1], 7, 7);
         }
     }
 
@@ -347,7 +347,7 @@ internal static class ModulePlacer
     /// Number and positions vary by version (version 2+).
     /// 5×5 patterns help with image recognition and distortion correction.
     /// </summary>
-    public static void PlaceAlignmentPatterns(ref QRCodeData qrCode, List<Point> alignmentPatternLocations, ref List<Rectangle> blockedModules)
+    public static void PlaceAlignmentPatterns(ref QRCodeData qrCode, List<Point> alignmentPatternLocations, Span<Rectangle> blockedModules, ref int blockedCount)
     {
         foreach (var loc in alignmentPatternLocations)
         {
@@ -378,7 +378,7 @@ internal static class ModulePlacer
                     }
                 }
             }
-            blockedModules.Add(new Rectangle(loc.X, loc.Y, 5, 5));
+            blockedModules[blockedCount++] = new Rectangle(loc.X, loc.Y, 5, 5);
         }
     }
 
@@ -387,7 +387,7 @@ internal static class ModulePlacer
     /// Horizontal and vertical lines at row 6 and column 6.
     /// Used for module coordinate mapping during decoding.
     /// </summary>
-    public static void PlaceTimingPatterns(ref QRCodeData qrCode, ref List<Rectangle> blockedModules)
+    public static void PlaceTimingPatterns(ref QRCodeData qrCode, Span<Rectangle> blockedModules, ref int blockedCount)
     {
         var size = qrCode.Size;
         for (var i = 8; i < size - 8; i++)
@@ -398,10 +398,8 @@ internal static class ModulePlacer
                 qrCode[i, 6] = true;
             }
         }
-        blockedModules.AddRange([
-            new Rectangle(6, 8, 1, size-16),
-            new Rectangle(8, 6, size-16, 1)
-        ]);
+        blockedModules[blockedCount++] = new Rectangle(6, 8, 1, size - 16);
+        blockedModules[blockedCount++] = new Rectangle(8, 6, size - 16, 1);
     }
 
     /// <summary>
@@ -425,7 +423,7 @@ internal static class ModulePlacer
     /// <param name="blockedModules">List of reserved module areas</param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsPointBlocked(int x, int y, List<Rectangle> blockedModules)
+    private static bool IsPointBlocked(int x, int y, ReadOnlySpan<Rectangle> blockedModules)
     {
         foreach (var rect in blockedModules)
         {
@@ -461,7 +459,7 @@ internal static class ModulePlacer
     /// Apply the mask pattern to the data area only, skipping blocked modules.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ApplyMaskToDataArea(ref QRCodeData qrCode, int patternIndex, int size, List<Rectangle> blockedModules)
+    private static void ApplyMaskToDataArea(ref QRCodeData qrCode, int patternIndex, int size, ReadOnlySpan<Rectangle> blockedModules)
     {
         for (var col = 0; col < size; col++)
         {
