@@ -164,7 +164,7 @@ internal static class ModulePlacer
 
             for (var yMod = 1; yMod <= size; yMod++)
             {
-                int y = up ? size - yMod : yMod -1;
+                int y = up ? size - yMod : yMod - 1;
 
                 // Process 2 columns (x and x-1)
                 for (var xOffset = 0; xOffset < 2; xOffset++)
@@ -424,7 +424,7 @@ internal static class ModulePlacer
 
     /// <summary>
     /// Checks if a single point (module) is blocked.
-    /// Optimized for 1x1 point checks without Rectanble allocations.
+    /// Optimized for 1x1 point checks without Rectangle allocations.
     /// </summary>
     /// <param name="x">Column position</param>
     /// <param name="y">Row position</param>
