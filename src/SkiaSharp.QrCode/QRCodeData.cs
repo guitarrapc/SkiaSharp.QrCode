@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace SkiaSharp.QrCode;
 
@@ -134,8 +135,14 @@ public class QRCodeData : IDisposable
     {
         var size = source.Size;
 
+#if NETSTANDARD2_1_OR_GREATER
+        var srcSpan = MemoryMarshal.CreateSpan(ref source._moduleMatrix[0, 0], size * size);
+        var destSpan = MemoryMarshal.CreateSpan(ref _moduleMatrix[0, 0], size * size);
+        srcSpan.CopyTo(destSpan);
+#else
         // Direct 2D array copy (faster than nested loops for small matrices)
         Array.Copy(source._moduleMatrix, _moduleMatrix, source._moduleMatrix.Length);
+#endif
     }
 
     /// <summary>
