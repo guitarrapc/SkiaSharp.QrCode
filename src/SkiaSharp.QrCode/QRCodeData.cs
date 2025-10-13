@@ -16,7 +16,7 @@ namespace SkiaSharp.QrCode;
 /// - Module matrix: 2D array of boolean values (dark/light)
 /// - Serialization format: "QRR" header + size + bit-packed data
 /// </remarks>
-public class QRCodeData : IDisposable
+public class QRCodeData
 {
     private bool[,] _moduleMatrix;
 
@@ -327,10 +327,5 @@ public class QRCodeData : IDisposable
     {
         var remainder = totalBits % 8;
         return (8 - remainder) % 8;
-    }
-
-    public void Dispose()
-    {
-        // will be removed in future, or remain.
     }
 }
