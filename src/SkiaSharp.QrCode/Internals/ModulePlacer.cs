@@ -274,7 +274,7 @@ internal static class ModulePlacer
     /// Reserves separator areas (white borders) around finder patterns.
     /// 1-module wide white border separates finder patterns from data area.
     /// </summary>
-    public static void ReserveSeperatorAreas(int size, ref List<Rectangle> blockedModules)
+    public static void ReserveSeparatorAreas(int size, ref List<Rectangle> blockedModules)
     {
         blockedModules.Add(new Rectangle(7, 0, 1, 8));
         blockedModules.Add(new Rectangle(0, 7, 7, 1));

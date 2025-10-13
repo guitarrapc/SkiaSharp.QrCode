@@ -313,7 +313,7 @@ public class QRCodeGenerator : IDisposable
         var alignmentPatternLocations = GetAlignmentPatternPositions(version);
 
         ModulePlacer.PlaceFinderPatterns(ref qrCodeData, ref blockedModules);
-        ModulePlacer.ReserveSeperatorAreas(qrCodeData.Size, ref blockedModules);
+        ModulePlacer.ReserveSeparatorAreas(qrCodeData.Size, ref blockedModules);
         ModulePlacer.PlaceAlignmentPatterns(ref qrCodeData, alignmentPatternLocations, ref blockedModules);
         ModulePlacer.PlaceTimingPatterns(ref qrCodeData, ref blockedModules);
         ModulePlacer.PlaceDarkModule(ref qrCodeData, version, ref blockedModules);
