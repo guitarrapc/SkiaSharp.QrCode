@@ -71,22 +71,22 @@ internal static class ModulePlacer
         var fStr = ReverseString(formatStr);
         var modules = new[,]
         {
-                { 8, 0, size - 1, 8 },
-                { 8, 1, size - 2, 8 },
-                { 8, 2, size - 3, 8 },
-                { 8, 3, size - 4, 8 },
-                { 8, 4, size - 5, 8 },
-                { 8, 5, size - 6, 8 },
-                { 8, 7, size - 7, 8 },
-                { 8, 8, size - 8, 8 },
-                { 7, 8, 8, size - 7 },
-                { 5, 8, 8, size - 6 },
-                { 4, 8, 8, size - 5 },
-                { 3, 8, 8, size - 4 },
-                { 2, 8, 8, size - 3 },
-                { 1, 8, 8, size - 2 },
-                { 0, 8, 8, size - 1 }
-            };
+            { 8, 0, size - 1, 8 },
+            { 8, 1, size - 2, 8 },
+            { 8, 2, size - 3, 8 },
+            { 8, 3, size - 4, 8 },
+            { 8, 4, size - 5, 8 },
+            { 8, 5, size - 6, 8 },
+            { 8, 7, size - 7, 8 },
+            { 8, 8, size - 8, 8 },
+            { 7, 8, 8, size - 7 },
+            { 5, 8, 8, size - 6 },
+            { 4, 8, 8, size - 5 },
+            { 3, 8, 8, size - 4 },
+            { 2, 8, 8, size - 3 },
+            { 1, 8, 8, size - 2 },
+            { 0, 8, 8, size - 1 }
+        };
         for (var i = 0; i < 15; i++)
         {
             var p1 = new Point(modules[i, 0], modules[i, 1]);
@@ -107,11 +107,20 @@ internal static class ModulePlacer
         var bestPatternIndex = 0;
         var bestScore = int.MaxValue;
 
+        // Create temporary QR code with deep copy
+        var qrTemp = new QRCodeData(qrCode);
+
         // Test all 8 patterns
         for (var patternIndex = 0; patternIndex < 8; patternIndex++)
         {
-            // Create temporary QR code with deep copy
-            var qrTemp = new QRCodeData(qrCode);
+            // Reset to original state (skip for first iteration)
+            if (patternIndex > 0)
+            {
+                qrTemp.ResetTo(ref qrCode);
+            }
+
+            // Apply mask pattern to data area only
+            ApplyMaskToDataArea(ref qrTemp, patternIndex, size, blockedModules);
 
             // Apply format and version information
             var formatStr = QRCodeConstants.GetFormatString(eccLevel, patternIndex);
@@ -121,9 +130,6 @@ internal static class ModulePlacer
                 var versionString = QRCodeConstants.GetVersionString(version);
                 PlaceVersion(ref qrTemp, versionString);
             }
-
-            // Apply mask pattern to data area only
-            ApplyMaskToDataArea(ref qrTemp, patternIndex, size, blockedModules);
 
             // Calculate score
             var score = CalculateScore(ref qrTemp);
