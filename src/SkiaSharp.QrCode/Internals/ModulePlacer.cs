@@ -133,7 +133,11 @@ internal static class ModulePlacer
                 bestScore = score;
             }
 
-            qrTemp.ResetTo(ref qrCode);
+            // Last iteration, no need to reset
+            if (patternIndex < 7)
+            {
+                qrTemp.ResetTo(ref qrCode);
+            }
         }
 
         // Apply mask to original QR code
