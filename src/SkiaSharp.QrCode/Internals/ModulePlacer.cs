@@ -180,7 +180,7 @@ internal static class ModulePlacer
         var up = true;
         var bitReader = new BitReader(data);
 
-        for (var x = size - 1; x >= 0; x -=2)
+        for (var x = size - 1; x >= 0; x -= 2)
         {
             // Skip timing pattern column
             if (x == 6)
