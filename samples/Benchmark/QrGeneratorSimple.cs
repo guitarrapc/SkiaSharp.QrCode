@@ -1,33 +1,59 @@
 [MemoryDiagnoser]
 public class QrGeneratorSimple
 {
-    [Benchmark(Baseline = true)]
-    [Arguments("https://exmaple.com/foobar", ECCLevel.L)]
-    [Arguments("https://exmaple.com/foobar", ECCLevel.M)]
-    [Arguments("https://exmaple.com/foobar", ECCLevel.Q)]
-    [Arguments("Medium length text with some special characters !@#$%", ECCLevel.L)]
-    [Arguments("Medium length text with some special characters !@#$%", ECCLevel.M)]
-    [Arguments("Medium length text with some special characters !@#$%", ECCLevel.Q)]
-    [Arguments("Very long text that will definitely require multiple string concatenations and cause significant memory allocations during the QR code generation process", ECCLevel.L)]
-    [Arguments("Very long text that will definitely require multiple string concatenations and cause significant memory allocations during the QR code generation process", ECCLevel.M)]
-    [Arguments("Very long text that will definitely require multiple string concatenations and cause significant memory allocations during the QR code generation process", ECCLevel.Q)]
-    public QRCodeData Text(string text, ECCLevel level)
+    public IEnumerable<object[]> ByteTextDataSource()
     {
-        return QRCodeGenerator.CreateQrCode(text, level);
+        ECCLevel[] eccLevels = [ECCLevel.L, ECCLevel.M, ECCLevel.Q];
+        foreach (var ecc in eccLevels)
+        {
+            yield return ["https://exmaple.com/foobar", ecc];
+        }
+
+        foreach (var ecc in eccLevels)
+        {
+            yield return ["Medium length text with some special characters !@#$%", ecc];
+        }
+
+        foreach (var ecc in eccLevels)
+        {
+            yield return ["Very long text that will definitely require multiple string concatenations and cause significant memory allocations during the QR code generation process", ecc];
+        }
+
+        foreach (var ecc in eccLevels)
+        {
+            yield return ["Zorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam et nunc placerat, pellentesque nisi volutpat, rhoncus massa. Pellentesque pellentesque, mi ut rutrum tincidunt, nisl felis rhoncus nisi, eu ultrices odio nulla finibus diam. Nam quis velit leo. Morbi ac tortor justo. Maecenas in lectus purus. Vestibulum varius porta congue. Nulla facilisi. Mauris feugiat tincidunt metus, vel dictum ex fermentum eget.             Aenean convallis ut libero nec laoreet. Pellentesque vel mi id odio dapibus aliquet quis ac dolor. Nunc molestie lacinia diam, vitae tincidunt nunc. Donec varius ornare lorem ac dictum. Integer at posuere neque, ut accumsan dui. Fusce nec nisi accumsan, aliquam justo ac, venenatis ex. Sed eget nunc diam. Pellentesque quis arcu volutpat, facilisis sapien vitae, pharetra tellus. Sed gravida lacus sed lacus consequat porttitor. Nam a orci interdum, sollicitudin enim id, facilisis nisl. Donec ultrices fringilla tempus. Nullam vestibulum faucibus ullamcorper est.", ecc];
+        }
+    }
+
+    public IEnumerable<string> AlphanumericTextDataSource()
+    {
+        yield return "012345678900123456789001234567890012345678900123456789001234567890";
+        yield return "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./";
+    }
+
+    [Benchmark(Baseline = true)]
+    [ArgumentsSource(nameof(ByteTextDataSource))]
+    public QRCodeData TextByte(string text, ECCLevel ecc)
+    {
+        return QRCodeGenerator.CreateQrCode(text, ecc);
     }
 
     [Benchmark]
-    [Arguments("https://exmaple.com/foobar", ECCLevel.L)]
-    [Arguments("https://exmaple.com/foobar", ECCLevel.M)]
-    [Arguments("https://exmaple.com/foobar", ECCLevel.Q)]
-    [Arguments("Medium length text with some special characters !@#$%", ECCLevel.L)]
-    [Arguments("Medium length text with some special characters !@#$%", ECCLevel.M)]
-    [Arguments("Medium length text with some special characters !@#$%", ECCLevel.Q)]
-    [Arguments("Very long text that will definitely require multiple string concatenations and cause significant memory allocations during the QR code generation process", ECCLevel.L)]
-    [Arguments("Very long text that will definitely require multiple string concatenations and cause significant memory allocations during the QR code generation process", ECCLevel.M)]
-    [Arguments("Very long text that will definitely require multiple string concatenations and cause significant memory allocations during the QR code generation process", ECCLevel.Q)]
-    public QRCodeData Binary(string text, ECCLevel level)
+    [ArgumentsSource(nameof(ByteTextDataSource))]
+    public QRCodeData BinaryByte(string text, ECCLevel ecc)
     {
-        return QRCodeGenerator.CreateQrCode(text.AsSpan(), level);
+        return QRCodeGenerator.CreateQrCode(text.AsSpan(), ecc);
     }
+
+    //[Benchmark]
+    //public QRCodeData TextAlphanumeric()
+    //{
+    //    return QRCodeGenerator.CreateQrCode(AlphanumericTextData, Ecc);
+    //}
+
+    //[Benchmark]
+    //public QRCodeData BinaryAlphanumeric()
+    //{
+    //    return QRCodeGenerator.CreateQrCode(AlphanumericTextData.AsSpan(), Ecc);
+    //}
 }

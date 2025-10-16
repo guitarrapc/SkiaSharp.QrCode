@@ -312,6 +312,71 @@ public class QRCodeGeneratorUnitTest
         Assert.Equal(40, version);
     }
 
+    [Theory]
+    [InlineData(ECCLevel.L, 7089)]  // V40-L numeric max
+    [InlineData(ECCLevel.H, 3057)]  // V40-H numeric max
+    public void CreateQrCode_Span_MaxNumeric_FitsInVersion40(ECCLevel eccLevel, int maxChars)
+    {
+        var text = new string('1', maxChars);
+
+        var qr = QRCodeGenerator.CreateQrCode(text.AsSpan(), eccLevel);
+        var version = CalculateVersion(qr.Size);
+
+        Assert.Equal(40, version);
+    }
+
+    [Theory]
+    [InlineData(ECCLevel.L, 4296)]  // V40-L alphanumeric max
+    [InlineData(ECCLevel.H, 1852)]  // V40-H alphanumeric max
+    public void CreateQrCode_MaxAlphanumeric_FitsInVersion40(ECCLevel eccLevel, int maxChars)
+    {
+        var text = new string('A', maxChars);
+
+        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
+        var version = CalculateVersion(qr.Size);
+
+        Assert.Equal(40, version);
+    }
+
+    [Theory]
+    [InlineData(ECCLevel.L, 4296)]  // V40-L alphanumeric max
+    [InlineData(ECCLevel.H, 1852)]  // V40-H alphanumeric max
+    public void CreateQrCode_Span_MaxAlphanumeric_FitsInVersion40(ECCLevel eccLevel, int maxChars)
+    {
+        var text = new string('A', maxChars);
+
+        var qr = QRCodeGenerator.CreateQrCode(text.AsSpan(), eccLevel);
+        var version = CalculateVersion(qr.Size);
+
+        Assert.Equal(40, version);
+    }
+
+    [Theory]
+    [InlineData(ECCLevel.L, 984)]  // V40-L byte max
+    [InlineData(ECCLevel.H, 424)]  // V40-H byte max
+    public void CreateQrCode_MaxByte_FitsInVersion40(ECCLevel eccLevel, int maxChars)
+    {
+        var text = new string('あ', maxChars);
+
+        var qr = QRCodeGenerator.CreateQrCode(text, eccLevel);
+        var version = CalculateVersion(qr.Size);
+
+        Assert.Equal(40, version);
+    }
+
+    [Theory]
+    [InlineData(ECCLevel.L, 984)]  // V40-L byte max
+    [InlineData(ECCLevel.H, 424)]  // V40-H byte max
+    public void CreateQrCode_Span_MaxByte_FitsInVersion40(ECCLevel eccLevel, int maxChars)
+    {
+        var text = new string('あ', maxChars);
+
+        var qr = QRCodeGenerator.CreateQrCode(text.AsSpan(), eccLevel);
+        var version = CalculateVersion(qr.Size);
+
+        Assert.Equal(40, version);
+    }
+
     [Fact]
     public void CreateQrCode_ExceedsMaxCapacity_Throws()
     {
