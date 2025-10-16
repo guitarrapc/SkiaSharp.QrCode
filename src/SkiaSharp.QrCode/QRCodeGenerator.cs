@@ -734,7 +734,7 @@ public static class QRCodeGenerator
 
         static int CalculateByteCount(ReadOnlySpan<char> textSpan, EciMode eciMode)
         {
-#if NETSTANDARD2_1_OR_GREATER
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
             ReadOnlySpan<char> input = textSpan;
 #else
             string input = textSpan.ToString();

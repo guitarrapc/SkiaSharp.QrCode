@@ -1,6 +1,6 @@
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
-#if NETSTANDARD2_1_OR_GREATER
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
 using System.Runtime.InteropServices;
 #endif
 
@@ -138,7 +138,7 @@ public class QRCodeData
     {
         var size = source.Size;
 
-#if NETSTANDARD2_1_OR_GREATER
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
         var srcSpan = MemoryMarshal.CreateSpan(ref source._moduleMatrix[0, 0], size * size);
         var destSpan = MemoryMarshal.CreateSpan(ref _moduleMatrix[0, 0], size * size);
         srcSpan.CopyTo(destSpan);

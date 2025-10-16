@@ -123,7 +123,7 @@ internal ref struct QRBinaryEncoder
     private void EncodeNumeric(ReadOnlySpan<char> textSpan)
     {
         // Convert string to ASCII bytes (numeric chars are ASCII compatible)
-#if NETSTANDARD2_1_OR_GREATER
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
         Span<byte> asciiBytes = stackalloc byte[textSpan.Length];
         var bytesWritten = Encoding.ASCII.GetBytes(textSpan, asciiBytes);
 
@@ -143,7 +143,7 @@ internal ref struct QRBinaryEncoder
     private void EncodeAlphanumeric(ReadOnlySpan<char> textSpan)
     {
         // Convert string to ASCII bytes (numeric chars are ASCII compatible)
-#if NETSTANDARD2_1_OR_GREATER
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
         Span<byte> asciiBytes = stackalloc byte[textSpan.Length];
         var bytesWritten = Encoding.ASCII.GetBytes(textSpan, asciiBytes);
 
@@ -273,7 +273,7 @@ internal ref struct QRBinaryEncoder
 
         static int EncodeISO88591(ReadOnlySpan<char> textSpan, Span<byte> buffer)
         {
-#if NETSTANDARD2_1_OR_GREATER
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
             return Encoding.GetEncoding("ISO-8859-1").GetBytes(textSpan, buffer);
 #else
             var input = textSpan.ToString();
@@ -286,7 +286,7 @@ internal ref struct QRBinaryEncoder
         static int EncodeUtf8(ReadOnlySpan<char> textSpan, bool utf8BOM, Span<byte> buffer)
         {
             var offset = 0;
-#if NETSTANDARD2_1_OR_GREATER
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
             if (utf8BOM)
             {
                 var preamble = Encoding.UTF8.GetPreamble();
