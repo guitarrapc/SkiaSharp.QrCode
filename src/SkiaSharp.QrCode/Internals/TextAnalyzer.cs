@@ -31,7 +31,7 @@ internal static class TextAnalyzer
         // Empty data means no actual data to encode, so the difference in only in mode indicator bits (4 bits for Numeric/Alphanumeric vs 4+4 bits for Byte).
         //
         // Why not Numeric or Alphanumeric?
-        // - If we use Numeric mode, empty data == no number => ❌ contradiction 
+        // - If we use Numeric mode, empty data == no number => ❌ contradiction
         // - If we use Alphanumeric mode, empty data == no character => ❌ contradiction
         // - If we use Byte mode, empty data == 0 length byte => ✔️ valid
         if (text.IsEmpty)
@@ -54,7 +54,7 @@ internal static class TextAnalyzer
         }
 #endif
 
-        // Scalr fallback for .NET Standard or short text
+        // Scalar fallback for .NET Standard or short text
         return AnalyzeScalar(text, requestedEciMode);
     }
 
@@ -76,7 +76,7 @@ internal static class TextAnalyzer
         var i = 0;
         var length = text.Length;
 
-        // AVX2 proccessing 16 chars at once
+        // AVX2 processing 16 chars at once
         for (; i <= length - 16; i += 16)
         {
             // load 16 chars as Vector256<ushort>
@@ -116,7 +116,7 @@ internal static class TextAnalyzer
             {
                 var char0 = Vector256.Create((short)'0');
                 var char9 = Vector256.Create((short)'9');
-                
+
                 var lessThan0 = Avx2.CompareGreaterThan(char0, charsInt16);
                 var greaterThan9 = Avx2.CompareGreaterThan(charsInt16, char9);
                 var nonNumericMask = Avx2.Or(lessThan0, greaterThan9);
@@ -212,7 +212,7 @@ internal static class TextAnalyzer
         // combine all checks
         var isValid = Avx2.Or(Avx2.Or(isDigit, isUpper), isSpecial);
 
-        // Check all bits are flaged.
+        // Check all bits are flagged.
         var allOnes = Vector256.Create((short)-1);
         var mask = Avx2.CompareEqual(isValid, allOnes);
 
@@ -236,10 +236,10 @@ internal static class TextAnalyzer
         var i = 0;
         var length = text.Length;
 
-        // AVX2 proccessing 16 chars at once
+        // SSE2 processing 8 chars at once
         for (; i <= length - 8; i += 8)
         {
-            // load 16 chars as Vector128<ushort>
+            // load 8 chars as Vector128<ushort>
             var chars = Vector128.Create(
                 text[i], text[i + 1], text[i + 2], text[i + 3],
                 text[i + 4], text[i + 5], text[i + 6], text[i + 7]
@@ -370,7 +370,7 @@ internal static class TextAnalyzer
         // combine all checks
         var isValid = Sse2.Or(Sse2.Or(isDigit, isUpper), isSpecial);
 
-        // Check all bits are flaged.
+        // Check all bits are flagged.
         var allOnes = Vector128.Create((short)-1);
         var allValid = Sse2.CompareEqual(isValid, allOnes);
 

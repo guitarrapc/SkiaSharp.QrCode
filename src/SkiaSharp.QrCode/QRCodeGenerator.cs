@@ -527,48 +527,6 @@ public static class QRCodeGenerator
     }
 
     /// <summary>
-    /// Determines appropriate ECI mode based on text content.
-    /// </summary>
-    /// <param name="plainText">Text to analyze.</param>
-    /// <returns>
-    /// <list type="bullet">
-    /// <item><see cref="EciMode.Default"/> for ASCII-only text (no ECI header)</item>
-    /// <item><see cref="EciMode.Iso8859_1"/> for Latin-1 compatible text</item>
-    /// <item><see cref="EciMode.Utf8"/> for other Unicode text</item>
-    /// </list>
-    /// </returns>
-    private static EciMode DetermineEciMode(string plainText) => DetermineEciMode(plainText.AsSpan());
-
-    /// <summary>
-    /// Determines appropriate ECI mode based on text content.
-    /// </summary>
-    /// <param name="plainText">Text to analyze.</param>
-    /// <returns>
-    /// <list type="bullet">
-    /// <item><see cref="EciMode.Default"/> for ASCII-only text (no ECI header)</item>
-    /// <item><see cref="EciMode.Iso8859_1"/> for Latin-1 compatible text</item>
-    /// <item><see cref="EciMode.Utf8"/> for other Unicode text</item>
-    /// </list>
-    /// </returns>
-    private static EciMode DetermineEciMode(ReadOnlySpan<char> textSpan)
-    {
-        // ASCII-only → No ECI header (backward compatibility)
-        if (IsAsciiOnly(textSpan))
-        {
-            return EciMode.Default;
-        }
-
-        // ISO-8859-1 compatible → ECI 3
-        if (QRCodeConstants.IsValidISO88591(textSpan))
-        {
-            return EciMode.Iso8859_1;
-        }
-
-        // Unicode (emojis, CJK, etc.) → ECI 26
-        return EciMode.Utf8;
-    }
-
-    /// <summary>
     /// Determines the minimum QR code version required for given data length.
     /// Searches capacity table for smallest version that can hold the data.
     /// </summary>
@@ -651,59 +609,6 @@ public static class QRCodeGenerator
 
             return bits;
         }
-    }
-
-    /// <summary>
-    /// Determines the optimal encoding mode for given text.
-    /// Priority: Numeric (most efficient) > Alphanumeric > Byte (least efficient).
-    /// </summary>
-    /// <param name="plainText">Text to analyze.</param>
-    /// <returns>Optimal encoding mode.</returns>
-    private static EncodingMode GetEncoding(string plainText) => GetEncoding(plainText.AsSpan());
-
-    /// <summary>
-    /// Determines the optimal encoding mode for given text.
-    /// Priority: Numeric (most efficient) > Alphanumeric > Byte (least efficient).
-    /// </summary>
-    /// <param name="textSpan">Text to analyze.</param>
-    /// <returns>Optimal encoding mode.</returns>
-    private static EncodingMode GetEncoding(ReadOnlySpan<char> textSpan)
-    {
-        var result = EncodingMode.Numeric;
-
-        foreach (char c in textSpan)
-        {
-            if (QRCodeConstants.IsNumeric(c)) continue;
-
-            result = EncodingMode.Alphanumeric;
-            if (!QRCodeConstants.IsAlphanumeric(c))
-            {
-                return EncodingMode.Byte;
-            }
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Validates if text contains only ASCII characters (0-127).
-    /// </summary>
-    /// <param name="text">The string to check for ASCII-only characters.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsAsciiOnly(string text) => IsAsciiOnly(text.AsSpan());
-
-    /// <summary>
-    /// Validates if text contains only ASCII characters (0-127).
-    /// </summary>
-    /// <param name="textSpan">The string to check for ASCII-only characters.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsAsciiOnly(ReadOnlySpan<char> textSpan)
-    {
-        foreach (var c in textSpan)
-        {
-            if (c > 127) return false;
-        }
-        return true;
     }
 
     /// <summary>
