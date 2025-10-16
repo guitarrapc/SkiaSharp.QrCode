@@ -51,6 +51,49 @@ internal ref struct BitWriter
         if (_bitPosition + bitCount > _buffer.Length * 8)
             throw new InvalidOperationException($"Buffer overflow: trying to write {bitCount} bits at position {_bitPosition}, buffer size: {_buffer.Length * 8} bits");
 
+        // fast path for byte-aligned writes
+        // If both current position and bitCount are byte-aligned (8bit boundary), we can write whole bytes at once
+        if ((_bitPosition & 7) == 0 && (bitCount & 7) == 0)
+        {
+            WriteAlignedBytes(value, bitCount);
+            return;
+        }
+
+        // slow path for unaligned writes
+        WriteUnalignedBits(value, bitCount);
+    }
+
+    /// <summary>
+    /// Writes whole bytes directly (MSB first) when both current position and bitCount are byte-aligned (8bit boundary)
+    /// </summary>
+    /// <param name="value"></param>
+    /// <param name="bitCount"></param>
+    /// <remarks>
+    /// Target data is like Padding byte `0xEC, 0x11`, ECI Header (8bit), Character Count (8/16bit), etc.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void WriteAlignedBytes(int value, int bitCount)
+    {
+        var byteCount = bitCount / 8;
+        var byteIndex = _bitPosition / 8;
+
+        // direct byte write (MSB first)
+        for (var i = 0; i < byteCount; i++)
+        {
+            var byteValue = (byte)(value >> ((byteCount - 1 - i) * 8));
+            _buffer[byteIndex + i] = byteValue;
+        }
+        _bitPosition += bitCount;
+    }
+
+    /// <summary>
+    /// Writes specified number of bits from value (MSB first)
+    /// </summary>
+    /// <param name="value"></param>
+    /// <param name="bitCount"></param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void WriteUnalignedBits(int value, int bitCount)
+    { 
         // Because QR requires writing MSB first, we need to start from the highest bit
         for (var i = bitCount - 1; i >= 0; i--)
         {
