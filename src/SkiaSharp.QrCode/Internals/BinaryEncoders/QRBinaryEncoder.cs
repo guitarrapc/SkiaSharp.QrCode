@@ -159,22 +159,23 @@ internal ref struct QRBinaryEncoder
                 buffer[i] = (byte)textSpan[i]; // direct cast since ASCII, avoids Span.ToString() allocation
             }
             WriteNumericData(buffer);
-            return;
         }
-
-        var rented = ArrayPool<byte>.Shared.Rent(textSpan.Length);
-        try
+        else
         {
-            var buffer = rented.AsSpan(0, textSpan.Length);
-            for (int i = 0; i < textSpan.Length; i++)
+            var rented = ArrayPool<byte>.Shared.Rent(textSpan.Length);
+            try
             {
-                buffer[i] = (byte)textSpan[i];
+                var buffer = rented.AsSpan(0, textSpan.Length);
+                for (int i = 0; i < textSpan.Length; i++)
+                {
+                    buffer[i] = (byte)textSpan[i];
+                }
+                WriteNumericData(buffer);
             }
-            WriteNumericData(buffer);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented);
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
         }
 #endif
     }
@@ -217,22 +218,23 @@ internal ref struct QRBinaryEncoder
                 buffer[i] = (byte)textSpan[i]; // direct cast since ASCII, avoids Span.ToString() allocation
             }
             WriteAlphanumericData(buffer);
-            return;
         }
-
-        var rented = ArrayPool<byte>.Shared.Rent(textSpan.Length);
-        try
+        else
         {
-            var buffer = rented.AsSpan(0, textSpan.Length);
-            for (int i = 0; i < textSpan.Length; i++)
+            var rented = ArrayPool<byte>.Shared.Rent(textSpan.Length);
+            try
             {
-                buffer[i] = (byte)textSpan[i];
+                var buffer = rented.AsSpan(0, textSpan.Length);
+                for (int i = 0; i < textSpan.Length; i++)
+                {
+                    buffer[i] = (byte)textSpan[i];
+                }
+                WriteAlphanumericData(buffer);
             }
-            WriteAlphanumericData(buffer);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented);
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
         }
 #endif
     }
@@ -248,7 +250,7 @@ internal ref struct QRBinaryEncoder
 
         if (maxByteCount <= StackAllocThreshold)
         {
-            Span<byte> buffer = stackalloc byte[textSpan.Length * 4];
+            Span<byte> buffer = stackalloc byte[maxByteCount];
             var length = GetByteData(textSpan, eci, utf8Bom, buffer);
             WriteByteData(buffer.Slice(0, length));
         }
