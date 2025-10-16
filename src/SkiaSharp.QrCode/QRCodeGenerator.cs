@@ -1,5 +1,4 @@
 using System.Runtime.CompilerServices;
-using System.Text;
 using SkiaSharp.QrCode.Internals;
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
 using SkiaSharp.QrCode.Internals.TextEncoders;
@@ -163,24 +162,18 @@ public static class QRCodeGenerator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static QRConfiguration PrepareConfiguration(string plainText, ECCLevel eccLevel, bool utf8Bom, EciMode eciMode, int requestedVersion)
     {
-        // When EciMode.Default is specified, choose encoding based on text content.
-        var actualEciMode = eciMode == EciMode.Default
-            ? DetermineEciMode(plainText)
-            : eciMode;
-
-        // Auto-detect optimal encoding mode (Numeric > Alphanumeric > Byte)
-        var encoding = GetEncoding(plainText);
+        // Analyze text to determine optimal encoding and data length
+        var (detectedEncoding, actualEciMode, dataLength) = TextAnalyzer.Analyze(plainText.AsSpan(), eciMode);
 
         // Select QR code version (auto or manual)
-        var dataInputLength = GetDataLength(plainText, encoding, actualEciMode);
         var version = requestedVersion == -1
-            ? GetVersion(dataInputLength, encoding, eccLevel, actualEciMode)
+            ? GetVersion(dataLength, detectedEncoding, eccLevel, actualEciMode)
             : requestedVersion;
 
         // Create ECCInfo
         var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
 
-        return new QRConfiguration(version, eccLevel, encoding, actualEciMode, utf8Bom, eccInfo);
+        return new QRConfiguration(version, eccLevel, detectedEncoding, actualEciMode, utf8Bom, eccInfo, dataLength);
     }
 
     /// <summary>
@@ -195,10 +188,8 @@ public static class QRCodeGenerator
         var capacity = CalculateMaxBitStringLength(config.Version, config.EccLevel, config.Encoding);
         var encoder = new QRTextEncoder(capacity);
 
-        var dataInputLength = GetDataLength(plainText, config.Encoding, config.EciMode);
-
         encoder.WriteMode(config.Encoding, config.EciMode);
-        encoder.WriteCharacterCount(dataInputLength, config.Encoding.GetCountIndicatorLength(config.Version));
+        encoder.WriteCharacterCount(config.DataLength, config.Encoding.GetCountIndicatorLength(config.Version));
         encoder.WriteData(plainText, config.Encoding, config.EciMode, config.Utf8BOM);
         encoder.WritePadding(config.EccInfo.TotalDataCodewords * 8);
 
@@ -395,24 +386,17 @@ public static class QRCodeGenerator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static QRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, bool utf8Bom, EciMode eciMode, int requestedVersion)
     {
-        // When EciMode.Default is specified, choose encoding based on text content.
-        var actualEciMode = eciMode == EciMode.Default
-            ? DetermineEciMode(textSpan)
-            : eciMode;
-
-        // Auto-detect optimal encoding mode (Numeric > Alphanumeric > Byte)
-        var encoding = GetEncoding(textSpan);
+        var (detectedEncoding, actualEciMode, dataLength) = TextAnalyzer.Analyze(textSpan, eciMode);
 
         // Select QR code version (auto or manual)
-        var dataInputLength = GetDataLength(textSpan, encoding, actualEciMode);
         var version = requestedVersion == -1
-            ? GetVersion(dataInputLength, encoding, eccLevel, actualEciMode)
+            ? GetVersion(dataLength, detectedEncoding, eccLevel, actualEciMode)
             : requestedVersion;
 
         // Create ECCInfo
         var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
 
-        return new QRConfiguration(version, eccLevel, encoding, actualEciMode, utf8Bom, eccInfo);
+        return new QRConfiguration(version, eccLevel, detectedEncoding, actualEciMode, utf8Bom, eccInfo, dataLength);
     }
 
     /// <summary>
@@ -427,10 +411,8 @@ public static class QRCodeGenerator
     {
         var encoder = new QRBinaryEncoder(buffer);
 
-        var dataInputLength = GetDataLength(textSpan, config.Encoding, config.EciMode);
-
         encoder.WriteMode(config.Encoding, config.EciMode);
-        encoder.WriteCharacterCount(dataInputLength, config.Encoding.GetCountIndicatorLength(config.Version));
+        encoder.WriteCharacterCount(config.DataLength, config.Encoding.GetCountIndicatorLength(config.Version));
         encoder.WriteData(textSpan, config.Encoding, config.EciMode, config.Utf8BOM);
         encoder.WritePadding(config.EccInfo.TotalDataCodewords * 8);
 
@@ -704,55 +686,6 @@ public static class QRCodeGenerator
     }
 
     /// <summary>
-    /// Calculates actual data length for capacity checking.
-    /// Returns character count for Numeric/Alphanumeric, byte count for Byte mode.
-    /// </summary>
-    /// <param name="plainText">Original text.</param>
-    /// <param name="encoding">Encoding mode.</param>
-    /// <param name="eciMode">ECI mode for character encoding.</param>
-    /// <returns>Data length for version selection.</returns>
-    private static int GetDataLength(string plainText, EncodingMode encoding, EciMode eciMode) => GetDataLength(plainText.AsSpan(), encoding, eciMode);
-
-    /// <summary>
-    /// Calculates actual data length for capacity checking.
-    /// Returns character count for Numeric/Alphanumeric, byte count for Byte mode.
-    /// </summary>
-    /// <param name="textSpan">Original text.</param>
-    /// <param name="encoding">Encoding mode.</param>
-    /// <param name="eciMode">ECI mode for character encoding.</param>
-    /// <returns>Data length for version selection.</returns>
-    private static int GetDataLength(ReadOnlySpan<char> textSpan, EncodingMode encoding, EciMode eciMode)
-    {
-        return encoding switch
-        {
-            EncodingMode.Numeric => textSpan.Length,
-            EncodingMode.Alphanumeric => textSpan.Length,
-            EncodingMode.Byte => CalculateByteCount(textSpan, eciMode),
-            EncodingMode.Kanji => textSpan.Length,  // Not implemented
-            _ => textSpan.Length
-        };
-
-        static int CalculateByteCount(ReadOnlySpan<char> textSpan, EciMode eciMode)
-        {
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-            ReadOnlySpan<char> input = textSpan;
-#else
-            string input = textSpan.ToString();
-#endif
-            // ISO-8859-x encoding based on ECI mode
-            return eciMode switch
-            {
-                EciMode.Default => QRCodeConstants.IsValidISO88591(input)
-                    ? Encoding.GetEncoding("ISO-8859-1").GetByteCount(input)
-                    : Encoding.UTF8.GetByteCount(input),
-                EciMode.Iso8859_1 => Encoding.GetEncoding("ISO-8859-1").GetByteCount(input),
-                EciMode.Utf8 => Encoding.UTF8.GetByteCount(input),
-                _ => throw new ArgumentOutOfRangeException(nameof(eciMode), "Unsupported ECI mode for Byte encoding"),
-            };
-        }
-    }
-
-    /// <summary>
     /// Validates if text contains only ASCII characters (0-127).
     /// </summary>
     /// <param name="text">The string to check for ASCII-only characters.</param>
@@ -806,5 +739,5 @@ public static class QRCodeGenerator
     /// <param name="EciMode">ECI mode specifying character encoding.</param>
     /// <param name="Utf8BOM">Indicates if UTF-8 BOM is included in the encoded data.</param>
     /// <param name="EccInfo">Error correction information for the selected version and ECC level.</param>
-    private readonly record struct QRConfiguration(int Version, ECCLevel EccLevel, EncodingMode Encoding, EciMode EciMode, bool Utf8BOM, in ECCInfo EccInfo);
+    private readonly record struct QRConfiguration(int Version, ECCLevel EccLevel, EncodingMode Encoding, EciMode EciMode, bool Utf8BOM, in ECCInfo EccInfo, int DataLength);
 }
