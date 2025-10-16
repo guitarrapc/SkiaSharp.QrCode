@@ -173,8 +173,11 @@ public class QRBinaryEncoderUnitTest
         var utf8Bytes = Encoding.UTF8.GetBytes(input);
         var expected = string.Concat(utf8Bytes.Select(b => Convert.ToString(b, 2).PadLeft(8, '0')));
 
+        // to simulate automatic encoding mode detection, which sets EciMode
+        var (detectedEncoding, detectedEci, _) = TextAnalyzer.Analyze(input, eci);
+        // need detected as EncodingMode.Byte + EciMode.Utf8 beforehand.
         var encoder = new QRBinaryEncoder(buffer);
-        encoder.WriteData(input, EncodingMode.Byte, eci, false);
+        encoder.WriteData(input, EncodingMode.Byte, detectedEci, false);
 
         var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
         Assert.Equal(expected, actual);
