@@ -1,9 +1,14 @@
+using System.Buffers;
 using System.Text;
 
 namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 
 internal ref struct QRBinaryEncoder
 {
+    // stackalloc threshold for temporary buffers. Avoids stackoverflow for large inputs.
+    // if input length exceeds this, ArrayPool<byte> is used instead.
+    private const int StackAllocThreshold = 256;
+
     private BitWriter _writer;
 
     /// <summary>
@@ -124,15 +129,54 @@ internal ref struct QRBinaryEncoder
     {
         // Convert string to ASCII bytes (numeric chars are ASCII compatible)
 #if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        Span<byte> asciiBytes = stackalloc byte[textSpan.Length];
-        var bytesWritten = Encoding.ASCII.GetBytes(textSpan, asciiBytes);
-
-        WriteNumericData(asciiBytes.Slice(0, bytesWritten));
+        // ascii is 1 char = 1 byte, so length is same
+        if (textSpan.Length <= StackAllocThreshold)
+        {
+            Span<byte> asciiBytes = stackalloc byte[textSpan.Length];
+            var bytesWritten = Encoding.ASCII.GetBytes(textSpan, asciiBytes);
+            WriteNumericData(asciiBytes.Slice(0, bytesWritten));
+        }
+        else
+        {
+            var buffer = ArrayPool<byte>.Shared.Rent(textSpan.Length);
+            try
+            {
+                var bytesWritten = Encoding.ASCII.GetBytes(textSpan, buffer);
+                WriteNumericData(buffer.AsSpan(0, bytesWritten));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+        }
 #else
         // Fallback for older frameworks without Span support
-        var input = textSpan.ToString();
-        var asciiBytes = Encoding.ASCII.GetBytes(input);
-        WriteNumericData(asciiBytes.AsSpan());
+        if (textSpan.Length <= StackAllocThreshold)
+        {
+            Span<byte> buffer = stackalloc byte[textSpan.Length];
+            for (int i = 0; i < textSpan.Length; i++)
+            {
+                buffer[i] = (byte)textSpan[i]; // direct cast since ASCII, avoids Span.ToString() allocation
+            }
+            WriteNumericData(buffer);
+        }
+        else
+        {
+            var rented = ArrayPool<byte>.Shared.Rent(textSpan.Length);
+            try
+            {
+                var buffer = rented.AsSpan(0, textSpan.Length);
+                for (int i = 0; i < textSpan.Length; i++)
+                {
+                    buffer[i] = (byte)textSpan[i];
+                }
+                WriteNumericData(buffer);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
 #endif
     }
 
@@ -144,15 +188,54 @@ internal ref struct QRBinaryEncoder
     {
         // Convert string to ASCII bytes (numeric chars are ASCII compatible)
 #if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        Span<byte> asciiBytes = stackalloc byte[textSpan.Length];
-        var bytesWritten = Encoding.ASCII.GetBytes(textSpan, asciiBytes);
-
-        WriteAlphanumericData(asciiBytes.Slice(0, bytesWritten));
+        // ascii is 1 char = 1 byte, so length is same
+        if (textSpan.Length <= StackAllocThreshold)
+        {
+            Span<byte> asciiBytes = stackalloc byte[textSpan.Length];
+            var bytesWritten = Encoding.ASCII.GetBytes(textSpan, asciiBytes);
+            WriteAlphanumericData(asciiBytes.Slice(0, bytesWritten));
+        }
+        else
+        {
+            var buffer = ArrayPool<byte>.Shared.Rent(textSpan.Length);
+            try
+            {
+                var bytesWritten = Encoding.ASCII.GetBytes(textSpan, buffer);
+                WriteAlphanumericData(buffer.AsSpan(0, bytesWritten));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+        }
 #else
         // Fallback for older frameworks without Span support
-        var input = textSpan.ToString();
-        var asciiBytes = Encoding.ASCII.GetBytes(input);
-        WriteAlphanumericData(asciiBytes.AsSpan());
+        if (textSpan.Length <= StackAllocThreshold)
+        {
+            Span<byte> buffer = stackalloc byte[textSpan.Length];
+            for (int i = 0; i < textSpan.Length; i++)
+            {
+                buffer[i] = (byte)textSpan[i]; // direct cast since ASCII, avoids Span.ToString() allocation
+            }
+            WriteAlphanumericData(buffer);
+        }
+        else
+        {
+            var rented = ArrayPool<byte>.Shared.Rent(textSpan.Length);
+            try
+            {
+                var buffer = rented.AsSpan(0, textSpan.Length);
+                for (int i = 0; i < textSpan.Length; i++)
+                {
+                    buffer[i] = (byte)textSpan[i];
+                }
+                WriteAlphanumericData(buffer);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
 #endif
     }
 
@@ -163,9 +246,27 @@ internal ref struct QRBinaryEncoder
     private void EncodeByte(ReadOnlySpan<char> textSpan, EciMode eci, bool utf8Bom)
     {
         // Determine encoding based on ECI mode
-        Span<byte> buffer = stackalloc byte[textSpan.Length * 4];
-        var length = GetByteData(textSpan, eci, utf8Bom, buffer);
-        WriteByteData(buffer.Slice(0, length));
+        var maxByteCount = textSpan.Length * 4;
+
+        if (maxByteCount <= StackAllocThreshold)
+        {
+            Span<byte> buffer = stackalloc byte[maxByteCount];
+            var length = GetByteData(textSpan, eci, utf8Bom, buffer);
+            WriteByteData(buffer.Slice(0, length));
+        }
+        else
+        {
+            var buffer = ArrayPool<byte>.Shared.Rent(maxByteCount);
+            try
+            {
+                var length = GetByteData(textSpan, eci, utf8Bom, buffer);
+                WriteByteData(buffer.AsSpan(0, length));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+        }
     }
 
     /// <summary>
