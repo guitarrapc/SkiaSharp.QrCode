@@ -22,7 +22,7 @@ internal ref struct BitWriter
     /// <remarks>
     /// If written 9 bits, this will be 2
     /// </remarks>
-    public int ByteCount => (_bitPosition + 7) / 8;
+    public int ByteCount => (_bitPosition + 7) >> 3; // Optimize `(_bitPosition + 7) / 8;`
 
     public BitWriter(Span<byte> buffer)
     {
@@ -55,8 +55,9 @@ internal ref struct BitWriter
         for (var i = bitCount - 1; i >= 0; i--)
         {
             var bit = value >> i & 1;
-            var byteIndex = _bitPosition / 8;
-            var bitIndex = 7 - _bitPosition % 8; // 7 - (...) because we read MSB first
+            var byteIndex = _bitPosition >> 3; // Optimize `_bitPosition / 8;`
+            // 7 - (...) because we read MSB first
+            var bitIndex = 7 - (_bitPosition & 7); // Optimize `7 - _bitPosition % 8;`
             if (bit == 1)
             {
                 _buffer[byteIndex] |= (byte)(1 << bitIndex);
