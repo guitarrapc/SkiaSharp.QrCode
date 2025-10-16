@@ -364,9 +364,7 @@ internal ref struct QRBinaryEncoder
     {
         return eciMode switch
         {
-            EciMode.Default => QRCodeConstants.IsValidISO88591(textSpan)
-                ? EncodeISO88591(textSpan, buffer)
-                : EncodeUtf8(textSpan, utf8BOM, buffer),
+            EciMode.Default => EncodeISO88591(textSpan, buffer), // already validated as ISO-8859-1
             EciMode.Iso8859_1 => EncodeISO88591(textSpan, buffer),
             EciMode.Utf8 => EncodeUtf8(textSpan, utf8BOM, buffer),
             _ => throw new ArgumentOutOfRangeException(nameof(eciMode), "Unsupported ECI mode for Byte encoding"),
