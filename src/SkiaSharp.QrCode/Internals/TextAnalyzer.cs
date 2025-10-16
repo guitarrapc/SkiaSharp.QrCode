@@ -130,13 +130,9 @@ internal static class TextAnalyzer
             // Alphanumeric check (require scalar processing due to complexity)
             if (!hasNonAlphanumeric && hasNonNumeric)
             {
-                for (var j = 0; j < 16; j++)
+                if (!IsAllAlphanumericAvx2(charsInt16))
                 {
-                    if (!QRCodeConstants.IsAlphanumeric(text[i + j]))
-                    {
-                        hasNonAlphanumeric = true;
-                        break;
-                    }
+                    hasNonAlphanumeric = true;
                 }
             }
 
@@ -176,6 +172,52 @@ internal static class TextAnalyzer
         var dataLength = CalculateLength(text, encoding, actualEciMode);
 
         return (encoding, actualEciMode, dataLength);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsAllAlphanumericAvx2(Vector256<short> chars)
+    {
+        // Digits: 0-9
+        var char0 = Vector256.Create((short)'0');
+        var char9 = Vector256.Create((short)'9');
+        var lessThan0 = Avx2.CompareGreaterThan(char0, chars);
+        var greaterThan9 = Avx2.CompareGreaterThan(chars, char9);
+        var notInDigitRange = Avx2.Or(lessThan0, greaterThan9);
+        var isDigit = Avx2.AndNot(notInDigitRange, Vector256.Create((short)-1));
+
+        // Uppercase letters: A-Z
+        var charA = Vector256.Create((short)'A');
+        var charZ = Vector256.Create((short)'Z');
+        var lessThanA = Avx2.CompareGreaterThan(charA, chars);
+        var greaterThanZ = Avx2.CompareGreaterThan(chars, charZ);
+        var notInUpperRange = Avx2.Or(lessThanA, greaterThanZ);
+        var isUpper = Avx2.AndNot(notInUpperRange, Vector256.Create((short)-1));
+
+        // Special characters: space, $, %, *, +, -, ., /, :
+        var space = Avx2.CompareEqual(chars, Vector256.Create((short)' ')); // 0x20
+        var dollar = Avx2.CompareEqual(chars, Vector256.Create((short)'$')); // 0x24
+        var percent = Avx2.CompareEqual(chars, Vector256.Create((short)'%')); // 0x25
+        var asterisk = Avx2.CompareEqual(chars, Vector256.Create((short)'*')); // 0x2A
+        var plus = Avx2.CompareEqual(chars, Vector256.Create((short)'+')); // 0x2B
+        var minus = Avx2.CompareEqual(chars, Vector256.Create((short)'-')); // 0x2D
+        var period = Avx2.CompareEqual(chars, Vector256.Create((short)'.')); // 0x2E
+        var slash = Avx2.CompareEqual(chars, Vector256.Create((short)'/')); // 0x2F
+        var colon = Avx2.CompareEqual(chars, Vector256.Create((short)':')); // 0x3A
+
+        var isSpecial = Avx2.Or(
+            Avx2.Or(Avx2.Or(space, dollar), Avx2.Or(percent, asterisk)),
+            Avx2.Or(Avx2.Or(plus, minus), Avx2.Or(Avx2.Or(period, slash), colon))
+        );
+
+        // combine all checks
+        var isValid = Avx2.Or(Avx2.Or(isDigit, isUpper), isSpecial);
+
+        // Check all bits are flaged.
+        var allOnes = Vector256.Create((short)-1);
+        var mask = Avx2.CompareEqual(isValid, allOnes);
+
+        // All 32bytes must be 0xFF, so MoveMask must return 0xFFFFFFFF
+        return Avx2.MoveMask(mask.AsByte()) == -1; // 0xFFFFFFFF
     }
 
     /// <summary>
@@ -243,6 +285,14 @@ internal static class TextAnalyzer
                 }
             }
 
+            // Alphanumeric check (require scalar processing due to complexity)
+            if (!hasNonAlphanumeric && hasNonNumeric)
+            {
+                if (!IsAllAlphanumericSse2(charsInt16))
+                {
+                    hasNonAlphanumeric = true;
+                }
+            }
 
             // Early exit if all types are found
             if (hasNonNumeric && hasNonAlphanumeric && hasNonIso88591)
@@ -280,6 +330,52 @@ internal static class TextAnalyzer
         var dataLength = CalculateLength(text, encoding, actualEciMode);
 
         return (encoding, actualEciMode, dataLength);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsAllAlphanumericSse2(Vector128<short> chars)
+    {
+        // Digits: 0-9
+        var char0 = Vector128.Create((short)'0');
+        var char9 = Vector128.Create((short)'9');
+        var lessThan0 = Sse2.CompareGreaterThan(char0, chars);
+        var greaterThan9 = Sse2.CompareGreaterThan(chars, char9);
+        var notInDigitRange = Sse2.Or(lessThan0, greaterThan9);
+        var isDigit = Sse2.AndNot(notInDigitRange, Vector128.Create((short)-1));
+
+        // Uppercase letters: A-Z
+        var charA = Vector128.Create((short)'A');
+        var charZ = Vector128.Create((short)'Z');
+        var lessThanA = Sse2.CompareGreaterThan(charA, chars);
+        var greaterThanZ = Sse2.CompareGreaterThan(chars, charZ);
+        var notInUpperRange = Sse2.Or(lessThanA, greaterThanZ);
+        var isUpper = Sse2.AndNot(notInUpperRange, Vector128.Create((short)-1));
+
+        // Special characters: space, $, %, *, +, -, ., /, :
+        var space = Sse2.CompareEqual(chars, Vector128.Create((short)' ')); // 0x20
+        var dollar = Sse2.CompareEqual(chars, Vector128.Create((short)'$')); // 0x24
+        var percent = Sse2.CompareEqual(chars, Vector128.Create((short)'%')); // 0x25
+        var asterisk = Sse2.CompareEqual(chars, Vector128.Create((short)'*')); // 0x2A
+        var plus = Sse2.CompareEqual(chars, Vector128.Create((short)'+')); // 0x2B
+        var minus = Sse2.CompareEqual(chars, Vector128.Create((short)'-')); // 0x2D
+        var period = Sse2.CompareEqual(chars, Vector128.Create((short)'.')); // 0x2E
+        var slash = Sse2.CompareEqual(chars, Vector128.Create((short)'/')); // 0x2F
+        var colon = Sse2.CompareEqual(chars, Vector128.Create((short)':')); // 0x3A
+
+        var isSpecial = Sse2.Or(
+            Sse2.Or(Sse2.Or(space, dollar), Sse2.Or(percent, asterisk)),
+            Sse2.Or(Sse2.Or(plus, minus), Sse2.Or(Sse2.Or(period, slash), colon))
+        );
+
+        // combine all checks
+        var isValid = Sse2.Or(Sse2.Or(isDigit, isUpper), isSpecial);
+
+        // Check all bits are flaged.
+        var allOnes = Vector128.Create((short)-1);
+        var allValid = Sse2.CompareEqual(isValid, allOnes);
+
+        // All 16bytes must be 0xFF, so MoveMask must return 0xFFFF
+        return Sse2.MoveMask(allValid.AsByte()) == 0xFFFF;
     }
 #endif
 
