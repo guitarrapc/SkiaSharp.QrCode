@@ -151,9 +151,31 @@ internal ref struct QRBinaryEncoder
         }
 #else
         // Fallback for older frameworks without Span support
-        var input = textSpan.ToString();
-        var asciiBytes = Encoding.ASCII.GetBytes(input);
-        WriteNumericData(asciiBytes.AsSpan());
+        if (textSpan.Length <= StackAllocThreshold)
+        {
+            Span<byte> buffer = stackalloc byte[textSpan.Length];
+            for (int i = 0; i < textSpan.Length; i++)
+            {
+                buffer[i] = (byte)textSpan[i]; // direct cast since ASCII, avoids Span.ToString() allocation
+            }
+            WriteNumericData(buffer);
+            return;
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(textSpan.Length);
+        try
+        {
+            var buffer = rented.AsSpan(0, textSpan.Length);
+            for (int i = 0; i < textSpan.Length; i++)
+            {
+                buffer[i] = (byte)textSpan[i];
+            }
+            WriteNumericData(buffer);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
 #endif
     }
 
@@ -187,9 +209,31 @@ internal ref struct QRBinaryEncoder
         }
 #else
         // Fallback for older frameworks without Span support
-        var input = textSpan.ToString();
-        var asciiBytes = Encoding.ASCII.GetBytes(input);
-        WriteAlphanumericData(asciiBytes.AsSpan());
+        if (textSpan.Length <= StackAllocThreshold)
+        {
+            Span<byte> buffer = stackalloc byte[textSpan.Length];
+            for (int i = 0; i < textSpan.Length; i++)
+            {
+                buffer[i] = (byte)textSpan[i]; // direct cast since ASCII, avoids Span.ToString() allocation
+            }
+            WriteAlphanumericData(buffer);
+            return;
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(textSpan.Length);
+        try
+        {
+            var buffer = rented.AsSpan(0, textSpan.Length);
+            for (int i = 0; i < textSpan.Length; i++)
+            {
+                buffer[i] = (byte)textSpan[i];
+            }
+            WriteAlphanumericData(buffer);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
 #endif
     }
 
