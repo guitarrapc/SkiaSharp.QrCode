@@ -325,7 +325,7 @@ public static class QRCodeGenerator
             var size = qrCodeData.Size;
             var buffer = qrCodeData.GetMutableData();
             var versionBits = QRCodeConstants.GetVersionBits(version);
-            ModulePlacer.PlaceVersionInPlace(buffer, size, versionBits);
+            ModulePlacer.PlaceVersion(buffer, size, versionBits);
         }
 
         return qrCodeData;
@@ -538,7 +538,7 @@ public static class QRCodeGenerator
         if (version >= 7)
         {
             var versionBits = QRCodeConstants.GetVersionBits(version);
-            ModulePlacer.PlaceVersionInPlace(buffer, size, versionBits);
+            ModulePlacer.PlaceVersion(buffer, size, versionBits);
         }
 
         return qrCodeData;

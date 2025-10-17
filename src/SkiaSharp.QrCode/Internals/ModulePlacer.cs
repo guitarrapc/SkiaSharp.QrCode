@@ -96,7 +96,7 @@ internal static class ModulePlacer
             if (version >= 7)
             {
                 var versionBits = QRCodeConstants.GetVersionBits(version);
-                PlaceVersionInPlace(tempBuffer, size, versionBits);
+                PlaceVersion(tempBuffer, size, versionBits);
             }
 
             // Calculate score
@@ -402,7 +402,7 @@ internal static class ModulePlacer
     /// </code>
     /// Bits are placed from LSB (bit 0) to MSB (bit 17) in reading order.
     /// </remarks>
-    public static void PlaceVersionInPlace(Span<byte> buffer, int size, uint versionBits)
+    public static void PlaceVersion(Span<byte> buffer, int size, uint versionBits)
     {
         for (var x = 0; x < 6; x++)
         {
