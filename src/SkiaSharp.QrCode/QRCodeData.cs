@@ -267,32 +267,6 @@ public class QRCodeData
         Version = calculatedVersion;
     }
 
-    internal void ResizeForQuietZone(int newSize, int quietZoneSize)
-    {
-        var sizeWitrhoutQuietZone = newSize - (quietZoneSize * 2);
-        var calculatedVersion = VersionFromSize(sizeWitrhoutQuietZone);
-
-        if (calculatedVersion < 1 || calculatedVersion > 40)
-        {
-            throw new ArgumentException($"Invalid veresion: {calculatedVersion}");
-        }
-
-        _size = newSize;
-        _actualDataLength = newSize * newSize;
-
-        // reuse buffer
-        if (_moduleData == null || _moduleData.Length < _actualDataLength)
-        {
-            _moduleData = new byte[_actualDataLength];
-        }
-        else
-        {
-            Array.Clear(_moduleData, 0, _actualDataLength);
-        }
-
-        Version = calculatedVersion;
-    }
-
     /// <summary>
     /// Decompresses the given data using the specified compression mode.
     /// </summary>

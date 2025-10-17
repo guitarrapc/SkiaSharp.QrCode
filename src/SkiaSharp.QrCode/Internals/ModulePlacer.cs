@@ -27,19 +27,20 @@ internal static class ModulePlacer
         var newDataLength = newSize * newSize;
 
         // Create new matrix with quiet zone
-        var oldData = new byte[oldSize * oldSize];
-        qrCode.GetData().Slice(0, oldSize * oldSize).CopyTo(oldData);
-
-        // Expand QRCodeData buffer
-        qrCode.ResizeForQuietZone(newSize, quietZoneSize);
+        //Span<byte> newModuleData = newDataLength <= 2048
+        //    ? stackalloc byte[newDataLength]
+        //    : new byte[newDataLength];
+        Span<byte> newModuleData = new byte[newDataLength];
 
         // Copy existing data to center of new matrix
         for (var row = 0; row < oldSize; row++)
         {
-            var srcOffset = row * oldSize;
+            var srcRow = qrCode.GetRow(row);
             var destOffset = (row + quietZoneSize) * newSize + quietZoneSize;
-            oldData.AsSpan(srcOffset, oldSize).CopyTo(qrCode.GetRowMutable(row + quietZoneSize).Slice(quietZoneSize, oldSize));
+            srcRow.CopyTo(newModuleData.Slice(destOffset, oldSize));
         }
+
+        qrCode.SetModuleMatrix(newModuleData, newSize, quietZoneSize);
     }
 
     /// <summary>
