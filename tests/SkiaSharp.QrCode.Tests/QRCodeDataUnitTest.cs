@@ -45,18 +45,22 @@ public class QRCodeDataUnitTest
         {
             var oldSize = qrCode.Size;
             var newSize = oldSize + quietZone * 2;
-            var newMatrix = new bool[newSize, newSize];
+            var newModuleData = new byte[newSize * newSize];
 
             // Copy data to center
             for (int row = 0; row < oldSize; row++)
             {
                 for (int col = 0; col < oldSize; col++)
                 {
-                    newMatrix[row + quietZone, col + quietZone] = qrCode[row, col];
+                    if (qrCode[row, col])
+                    {
+                        var destIndex = (row + quietZone) * newSize + (col + quietZone);
+                        newModuleData[destIndex] = 1;
+                    }
                 }
             }
 
-            qrCode.SetModuleMatrix(newMatrix, quietZone);
+            qrCode.SetModuleMatrix(newModuleData, newSize, quietZone);
         }
 
         // Verify size
@@ -141,17 +145,14 @@ public class QRCodeDataUnitTest
         var pattern = 7;
 
         var original = new QRCodeData(1);
-        var customMatrix = new bool[matrixSize, matrixSize];
+        var customModules = new byte[matrixSize * matrixSize];
 
-        for (int row = 0; row < matrixSize; row++)
+        for (int i = 0; i < customModules.Length; i++)
         {
-            for (int col = 0; col < matrixSize; col++)
-            {
-                customMatrix[row, col] = (row * matrixSize + col) % pattern == 0;
-            }
+            customModules[i] = (byte)(i % pattern == 0 ? 1 : 0);
         }
 
-        original.SetModuleMatrix(customMatrix, quietZoneSize: 0);
+        original.SetModuleMatrix(customModules, matrixSize, quietZoneSize: 0);
 
         var rawData = original.GetRawData(Compression.Uncompressed);
         var restored = new QRCodeData(rawData, Compression.Uncompressed);
@@ -162,7 +163,8 @@ public class QRCodeDataUnitTest
         {
             for (int col = 0; col < matrixSize; col++)
             {
-                var expected = (row * matrixSize + col) % pattern == 0;
+                var index = row * matrixSize + col;
+                var expected = index % pattern == 0;
                 Assert.Equal(expected, restored[row, col]);
             }
         }
@@ -177,8 +179,9 @@ public class QRCodeDataUnitTest
         var qrCode = new QRCodeData(1);
 
         // Test Version 5 size (37×37)
-        var matrix = new bool[37, 37];
-        qrCode.SetModuleMatrix(matrix, quietZoneSize: 0);
+        var matrixSize = 37;
+        var newModuleData = new byte[matrixSize * matrixSize];
+        qrCode.SetModuleMatrix(newModuleData, matrixSize, quietZoneSize: 0);
 
         Assert.Equal(5, qrCode.Version);
         Assert.Equal(37, qrCode.Size);

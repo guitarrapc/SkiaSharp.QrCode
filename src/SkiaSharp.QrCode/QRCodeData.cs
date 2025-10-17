@@ -235,12 +235,12 @@ public class QRCodeData
     /// The expected size of the module matrix is determined by the version of the object. Ensure
     /// that the provided matrix has dimensions equal to the expected size before calling this method.
     /// </remarks>
-    /// <param name="moduleMatrix">New module matrix.</param>
+    /// <param name="moduleData">New module data in row-major order.</param>
+    /// <param name="size">Size of the module matrix (including quiet zone if present).</param>
     /// <param name="quietZoneSize">Quiet zone size in modules (0 if matrix doesn't include quiet zone).</param>
-    internal void SetModuleMatrix(bool[,] moduleMatrix, int quietZoneSize)
+    internal void SetModuleMatrix(ReadOnlySpan<byte> moduleData, int size, int quietZoneSize)
     {
-        var totalSize = moduleMatrix.GetLength(0);
-        var sizeWithoutQuietZone = totalSize - (quietZoneSize * 2);
+        var sizeWithoutQuietZone = size - (quietZoneSize * 2);
 
         // Calculate version from size (without quiet zone)
         var calculatedVersion = VersionFromSize(sizeWithoutQuietZone);
@@ -250,20 +250,46 @@ public class QRCodeData
                 $"Invalid matrix size. Size without quiet zone: {sizeWithoutQuietZone}, " +
                 $"Calculated version: {calculatedVersion}. " +
                 $"Version must be 1-40.",
-                nameof(moduleMatrix));
+                nameof(moduleData));
         }
 
-        _size = totalSize;
+        _size = size;
         _actualDataLength = _size * _size;
-        _moduleData = new byte[_actualDataLength];
 
-        for (var row = 0; row < _size; row++)
+        if (_moduleData == null || _moduleData.Length < _actualDataLength)
         {
-            for (var col = 0; col < _size; col++)
-            {
-                _moduleData[row * _size + col] = moduleMatrix[row, col] ? (byte)1 : (byte)0;
-            }
+            _moduleData = new byte[_actualDataLength];
         }
+
+        var copyLength = Math.Min(moduleData.Length, _actualDataLength);
+        moduleData.Slice(0, copyLength).CopyTo(_moduleData.AsSpan(0, copyLength));
+
+        Version = calculatedVersion;
+    }
+
+    internal void ResizeForQuietZone(int newSize, int quietZoneSize)
+    {
+        var sizeWitrhoutQuietZone = newSize - (quietZoneSize * 2);
+        var calculatedVersion = VersionFromSize(sizeWitrhoutQuietZone);
+
+        if (calculatedVersion < 1 || calculatedVersion > 40)
+        {
+            throw new ArgumentException($"Invalid veresion: {calculatedVersion}");
+        }
+
+        _size = newSize;
+        _actualDataLength = newSize * newSize;
+
+        // reuse buffer
+        if (_moduleData == null || _moduleData.Length < _actualDataLength)
+        {
+            _moduleData = new byte[_actualDataLength];
+        }
+        else
+        {
+            Array.Clear(_moduleData, 0, _actualDataLength);
+        }
+
         Version = calculatedVersion;
     }
 
