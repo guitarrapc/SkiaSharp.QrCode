@@ -739,7 +739,7 @@ internal static class ModulePlacer
             // pattern: 1011101 (dark-light-dark-dark-dark-light-dark)
             const uint PATTERN_FORWARD = 0b_0000_1011101; // 4 light modules + pattern
             const uint PATTERN_BACKWARD = 0b_1011101_0000; // pattern + 4 light modules
-            const uint MASK_11BIT = 0b_111_1111_1111; // gurantee 11 bits
+            const uint MASK_11BIT = 0b_111_1111_1111; // guarantee 11 bits
 
             // Penalty 3: Finder-like patterns with sliding 11-bit window
             for (var y = 0; y < size; y++)
