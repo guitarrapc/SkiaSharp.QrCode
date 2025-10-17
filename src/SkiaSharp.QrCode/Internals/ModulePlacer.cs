@@ -723,7 +723,7 @@ internal static class ModulePlacer
 
         var score3 = CalculateScore3(ref qrCode, size);
 
-        // Penalty 4
+        // Penalty 4: Dark/light balance
         var percent = (blackModules / (double)(size * size)) * 100;
         var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
         var nextMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 45) / 5;
@@ -731,64 +731,37 @@ internal static class ModulePlacer
 
         return score1 + score2 + score3 + score4;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         static int CalculateScore3(ref QRCodeData qrCode, int size)
         {
             var score3 = 0;
-            // Penalty 3: Finder-like patterns
+
+            // pattern: 1011101 (dark-light-dark-dark-dark-light-dark)
+            const uint PATTERN_FORWARD = 0b_0000_1011101; // 4 light modules + pattern
+            const uint PATTERN_BACKWARD = 0b_1011101_0000; // pattern + 4 light modules
+            const uint MASK_11BIT = 0b_111_1111_1111; // gurantee 11 bits
+
+            // Penalty 3: Finder-like patterns with sliding 11-bit window
             for (var y = 0; y < size; y++)
             {
-                for (var x = 0; x < size - 10; x++)
+                uint rowBits = 0;
+                uint colBits = 0;
+                for (var x = 0; x < size; x++)
                 {
-                    if ((qrCode[y, x] &&
-                        !qrCode[y, x + 1] &&
-                        qrCode[y, x + 2] &&
-                        qrCode[y, x + 3] &&
-                        qrCode[y, x + 4] &&
-                        !qrCode[y, x + 5] &&
-                        qrCode[y, x + 6] &&
-                        !qrCode[y, x + 7] &&
-                        !qrCode[y, x + 8] &&
-                        !qrCode[y, x + 9] &&
-                        !qrCode[y, x + 10]) ||
-                        (!qrCode[y, x] &&
-                        !qrCode[y, x + 1] &&
-                        !qrCode[y, x + 2] &&
-                        !qrCode[y, x + 3] &&
-                        qrCode[y, x + 4] &&
-                        !qrCode[y, x + 5] &&
-                        qrCode[y, x + 6] &&
-                        qrCode[y, x + 7] &&
-                        qrCode[y, x + 8] &&
-                        !qrCode[y, x + 9] &&
-                        qrCode[y, x + 10]))
-                    {
-                        score3 += 40;
-                    }
+                    // Build row/col bits (shift left and OR with current bit == add new bit)
+                    rowBits = ((rowBits << 1) | (qrCode[y, x] ? 1u : 0u)) & MASK_11BIT;
+                    colBits = ((colBits << 1) | (qrCode[x, y] ? 1u : 0u)) & MASK_11BIT;
 
-                    if ((qrCode[x, y] &&
-                        !qrCode[x + 1, y] &&
-                        qrCode[x + 2, y] &&
-                        qrCode[x + 3, y] &&
-                        qrCode[x + 4, y] &&
-                        !qrCode[x + 5, y] &&
-                        qrCode[x + 6, y] &&
-                        !qrCode[x + 7, y] &&
-                        !qrCode[x + 8, y] &&
-                        !qrCode[x + 9, y] &&
-                        !qrCode[x + 10, y]) ||
-                        (!qrCode[x, y] &&
-                        !qrCode[x + 1, y] &&
-                        !qrCode[x + 2, y] &&
-                        !qrCode[x + 3, y] &&
-                        qrCode[x + 4, y] &&
-                        !qrCode[x + 5, y] &&
-                        qrCode[x + 6, y] &&
-                        qrCode[x + 7, y] &&
-                        qrCode[x + 8, y] &&
-                        !qrCode[x + 9, y] &&
-                        qrCode[x + 10, y]))
+                    // 11 bits ready, check for pattern
+                    if (x >= 10)
                     {
-                        score3 += 40;
+                        // Check row bits
+                        if (rowBits == PATTERN_FORWARD || rowBits == PATTERN_BACKWARD)
+                            score3 += 40;
+
+                        // Check column bits
+                        if (colBits == PATTERN_FORWARD || colBits == PATTERN_BACKWARD)
+                            score3 += 40;
                     }
                 }
             }
