@@ -68,11 +68,11 @@ internal static class ModulePlacer
             var tempBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
             try
             {
-                bestPatternIndex = EvaluateMaskPatterns(qrCode.GetData()[..dataLength], tempBuffer.AsSpan()[..dataLength], version, size, blockedModules, eccLevel);
+                bestPatternIndex = EvaluateMaskPatterns(qrCode.GetData(), tempBuffer.AsSpan()[..dataLength], version, size, blockedModules, eccLevel);
             }
             finally
             {
-                ArrayPool<byte>.Shared.Return(tempBuffer);
+                ArrayPool<byte>.Shared.Return(tempBuffer, clearArray: true);
             }
         }
 
@@ -274,7 +274,7 @@ internal static class ModulePlacer
     /// Contains error correction level and mask pattern information.
     /// Two identical 15-bit sequences for redundancy.
     /// </summary>
-    /// <param name="qrCode">QR code matrix.</param>
+    /// <param name="buffer">QR code matrix buffer.</param>
     /// <param name="formatBits">15-bit format information (LSB first).</param>
     /// <remarks>
     /// Places two identical copies for redundancy (ISO/IEC 18004 Section 7.9):
@@ -348,7 +348,7 @@ internal static class ModulePlacer
     /// Places version information patterns (version 7+ only).
     /// Two identical 3×6 patterns placed at top-right and bottom-left corners.
     /// </summary>
-    /// <param name="qrCode">QR code matrix</param>
+    /// <param name="buffer">QR code matrix buffer</param>
     /// <param name="versionBits">18-bit version information (LSB first)</param>
     /// <remarks>
     /// Places two identical 3×6 patterns (ISO/IEC 18004 Section 7.10):
