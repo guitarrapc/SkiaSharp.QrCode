@@ -75,12 +75,29 @@ public static class QRCodeGenerator
         var interleavedData = InterleaveCodewords(codewordBlocks, config.EccInfo, config.Version);
 
         // Create QR code matrix
-        var qrMatrix = CreateQRMatrix(config.Version, interleavedData, config.EccLevel);
+        var qrCodeData = CreateQRCodeData(config.Version, interleavedData, config.EccLevel);
 
         // Add quiet zone
-        ModulePlacer.AddQuietZone(ref qrMatrix, quietZoneSize);
+        if (quietZoneSize > 0)
+        {
+            var oldSize = qrCodeData.Size;
+            var newSize = oldSize + quietZoneSize * 2;
+            var newDataLength = newSize * newSize;
 
-        return qrMatrix;
+            //Span<byte> newBuffer = newDataLength <= 2048
+            //    ? stackalloc byte[newDataLength]
+            //    : new byte[newDataLength];
+            Span<byte> newBuffer = new byte[newDataLength];
+
+            // Copy old data into new buffer with quiet zone
+            var oldBuffer = qrCodeData.GetData();
+            ModulePlacer.AddQuietZone(oldBuffer, newBuffer, oldSize, quietZoneSize);
+
+            // set to QRCodeData to expose new matrix
+            qrCodeData.SetModuleMatrix(newBuffer, newSize, quietZoneSize);
+        }
+
+        return qrCodeData;
     }
 
     /// <summary>
@@ -140,12 +157,29 @@ public static class QRCodeGenerator
         InterleaveCodewords(encodedData, eccBuffer, config.EccInfo, config.Version, interleavedBuffer);
 
         // Create QR code matrix
-        var qrMatrix = CreateQRMatrix(config.Version, interleavedBuffer, config.EccLevel);
+        var qrCodeData = CreateQRCodeData(config.Version, interleavedBuffer, config.EccLevel);
 
         // Add quiet zone
-        ModulePlacer.AddQuietZone(ref qrMatrix, quietZoneSize);
+        if (quietZoneSize > 0)
+        {
+            var oldSize = qrCodeData.Size;
+            var newSize = oldSize + quietZoneSize * 2;
+            var newDataLength = newSize * newSize;
 
-        return qrMatrix;
+            //Span<byte> newBuffer = newDataLength <= 2048
+            //    ? stackalloc byte[newDataLength]
+            //    : new byte[newDataLength];
+            Span<byte> newBuffer = new byte[newDataLength];
+
+            // Copy old data into new buffer with quiet zone
+            var oldBuffer = qrCodeData.GetData();
+            ModulePlacer.AddQuietZone(oldBuffer, newBuffer, oldSize, quietZoneSize);
+
+            // set to QRCodeData to expose new matrix
+            qrCodeData.SetModuleMatrix(newBuffer, newSize, quietZoneSize);
+        }
+
+        return qrCodeData;
     }
 
     // Text
@@ -240,7 +274,6 @@ public static class QRCodeGenerator
     /// <param name="bitString">The binary string containing the encoded data.</param>
     /// <param name="offset">The starting bit offset in the binary string for this block.</param>
     /// <param name="codewordCount">The number of data codewords in this block.</param>
-    /// <param name="eccEncoder">The ECC encoder used to generate error correction codewords.</param>
     /// <param name="eccPerBlock">The number of ECC codewords to generate for this block.</param>
     /// <param name="groupNumber">The group number (1 or 2) for this block as per QR code specification.</param>
     /// <param name="blockNumber">The sequential block number within the group.</param>
@@ -257,14 +290,14 @@ public static class QRCodeGenerator
     }
 
     /// <summary>
-    /// Creates the QR code matrix by placing patterns, data, applying mask, and adding format/version info.
+    /// Creates the QR code matrix (1D byte array) by placing patterns, data, applying mask, and adding format/version info.
     /// </summary>
     /// <param name="version">The QR code version (1-40) to generate.</param>
     /// <param name="interleavedData">The encoded and interleaved data string to be placed in the QR code.</param>
     /// <param name="eccLevel">The error correction level to use for the QR code.</param>
     /// <returns>A <see cref="QRCodeData"/> object containing the generated QR code matrix.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static QRCodeData CreateQRMatrix(int version, string interleavedData, ECCLevel eccLevel)
+    private static QRCodeData CreateQRCodeData(int version, string interleavedData, ECCLevel eccLevel)
     {
         var qrCodeData = new QRCodeData(version);
 
@@ -291,8 +324,10 @@ public static class QRCodeGenerator
         // Place version information (version 7+)
         if (version >= 7)
         {
+            var size = qrCodeData.Size;
+            var buffer = qrCodeData.GetMutableData();
             var versionBits = QRCodeConstants.GetVersionBits(version);
-            ModulePlacer.PlaceVersion(ref qrCodeData, versionBits);
+            ModulePlacer.PlaceVersionInPlace(buffer, size, versionBits);
         }
 
         return qrCodeData;
@@ -307,14 +342,16 @@ public static class QRCodeGenerator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void PlacePatterns(ref QRCodeData qrCodeData, int version, Span<Rectangle> blockedModules, ref int blockedCount)
     {
+        var buffer = qrCodeData.GetMutableData();
+        var size = qrCodeData.Size;
         var alignmentPatternLocations = GetAlignmentPatternPositions(version);
 
-        ModulePlacer.PlaceFinderPatterns(ref qrCodeData, blockedModules, ref blockedCount);
-        ModulePlacer.ReserveSeparatorAreas(qrCodeData.Size, blockedModules, ref blockedCount);
-        ModulePlacer.PlaceAlignmentPatterns(ref qrCodeData, alignmentPatternLocations, blockedModules, ref blockedCount);
-        ModulePlacer.PlaceTimingPatterns(ref qrCodeData, blockedModules, ref blockedCount);
-        ModulePlacer.PlaceDarkModule(ref qrCodeData, version, blockedModules, ref blockedCount);
-        ModulePlacer.ReserveVersionAreas(qrCodeData.Size, version, blockedModules, ref blockedCount);
+        ModulePlacer.PlaceFinderPatterns(buffer, size, blockedModules, ref blockedCount);
+        ModulePlacer.ReserveSeparatorAreas(size, blockedModules, ref blockedCount);
+        ModulePlacer.PlaceAlignmentPatterns(buffer, size, alignmentPatternLocations, blockedModules, ref blockedCount);
+        ModulePlacer.PlaceTimingPatterns(buffer, size, blockedModules, ref blockedCount);
+        ModulePlacer.PlaceDarkModule(buffer, size, version, blockedModules, ref blockedCount);
+        ModulePlacer.ReserveVersionAreas(size, version, blockedModules, ref blockedCount);
     }
 
     /// <summary>
@@ -347,9 +384,12 @@ public static class QRCodeGenerator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ApplyMaskAndFormat(ref QRCodeData qrCodeData, int version, ECCLevel eccLevel, ReadOnlySpan<Rectangle> blockedModules)
     {
-        var maskVersion = ModulePlacer.MaskCode(ref qrCodeData, version, blockedModules, eccLevel);
+        var size = qrCodeData.Size;
+        var buffer = qrCodeData.GetMutableData();
+
+        var maskVersion = ModulePlacer.MaskCode(buffer, size, version, blockedModules, eccLevel);
         var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
-        ModulePlacer.PlaceFormat(ref qrCodeData, formatBit);
+        ModulePlacer.PlaceFormat(buffer, size, formatBit);
     }
 
     /// <summary>
@@ -463,16 +503,17 @@ public static class QRCodeGenerator
     }
 
     /// <summary>
-    /// Creates the QR code matrix by placing patterns, data, applying mask, and adding format/version info.
+    /// Creates the QR code matrix (1D byte array) by placing patterns, data, applying mask, and adding format/version info.
     /// </summary>
     /// <param name="version">The QR code version (1-40) to generate.</param>
     /// <param name="interleavedData">The encoded and interleaved data bytes to be placed in the QR code.</param>
     /// <param name="eccLevel">The error correction level to use for the QR code.</param>
     /// <returns>A <see cref="QRCodeData"/> object containing the generated QR code matrix.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static QRCodeData CreateQRMatrix(int version, ReadOnlySpan<byte> interleavedData, ECCLevel eccLevel)
+    private static QRCodeData CreateQRCodeData(int version, ReadOnlySpan<byte> interleavedData, ECCLevel eccLevel)
     {
         var qrCodeData = new QRCodeData(version);
+        var size = qrCodeData.Size;
 
         // Version 1-16: stack allocation (covers 95%+ use cases)
         // Version 17+: heap allocation (large/rare QR codes)
@@ -489,7 +530,8 @@ public static class QRCodeGenerator
         PlacePatterns(ref qrCodeData, version, blockedModules, ref blockedCount);
 
         // place data
-        ModulePlacer.PlaceDataWords(ref qrCodeData, interleavedData, blockedModules.Slice(0, blockedCount));
+        var buffer = qrCodeData.GetMutableData();
+        ModulePlacer.PlaceDataWords(buffer, size, interleavedData, blockedModules.Slice(0, blockedCount));
 
         // Apply mask and format
         ApplyMaskAndFormat(ref qrCodeData, version, eccLevel, blockedModules.Slice(0, blockedCount));
@@ -498,7 +540,7 @@ public static class QRCodeGenerator
         if (version >= 7)
         {
             var versionBits = QRCodeConstants.GetVersionBits(version);
-            ModulePlacer.PlaceVersion(ref qrCodeData, versionBits);
+            ModulePlacer.PlaceVersionInPlace(buffer, size, versionBits);
         }
 
         return qrCodeData;
