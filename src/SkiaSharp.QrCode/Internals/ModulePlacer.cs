@@ -648,7 +648,7 @@ internal static class ModulePlacer
         var score2 = 0;
         var blackModules = 0; // dark modules count for Penalty 4
 
-        // Scan Panalty 1, 2, 4 in single pass
+        // Scan Penalty 1, 2, 4 in single pass
         for (var y = 0; y < size; y++)
         {
             var modInRow = 0;
@@ -680,7 +680,7 @@ internal static class ModulePlacer
                     lastValRow = current;
                 }
 
-                // Penalty 2: 2x2 block patterns (check only row direction)
+                // Penalty 2: 2x2 block patterns
                 if (x < size - 1 && y < size - 1)
                 {
                     var right = qrCode[y, x + 1];
