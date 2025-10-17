@@ -473,6 +473,151 @@ internal static class ModulePlacer
         }
     }
 
+    // ---------------------------------
+    // Basic penalty calculations for reference.
+    // ---------------------------------
+    // // Penalty 1: Consecutive modules
+    // for (var y = 0; y < size; y++)
+    // {
+    //     var modInRow = 0;
+    //     var modInColumn = 0;
+    //     var lastValRow = qrCode[y, 0];
+    //     var lastValColumn = qrCode[0, y];
+    //     for (var x = 0; x < size; x++)
+    //     {
+    //         if (qrCode[y, x] == lastValRow)
+    //         {
+    //             modInRow++;
+    //         }
+    //         else
+    //         {
+    //             modInRow = 1;
+    //         }
+    //         if (modInRow == 5)
+    //         {
+    //             score1 += 3;
+    //         }
+    //         else if (modInRow > 5)
+    //         {
+    //             score1++;
+    //         }
+    //         lastValRow = qrCode[y, x];
+    //
+    //         if (qrCode[x, y] == lastValColumn)
+    //         {
+    //             modInColumn++;
+    //         }
+    //         else
+    //         {
+    //             modInColumn = 1;
+    //         }
+    //         if (modInColumn == 5)
+    //         {
+    //             score1 += 3;
+    //         }
+    //         else if (modInColumn > 5)
+    //         {
+    //             score1++;
+    //         }
+    //         lastValColumn = qrCode[x, y];
+    //     }
+    // }
+    //
+    // // Penalty 2: Block patterns
+    // for (var y = 0; y < size - 1; y++)
+    // {
+    //     for (var x = 0; x < size - 1; x++)
+    //     {
+    //         if (qrCode[y, x] == qrCode[y, x + 1] &&
+    //             qrCode[y, x] == qrCode[y + 1, x] &&
+    //             qrCode[y, x] == qrCode[y + 1, x + 1])
+    //         {
+    //             score2 += 3;
+    //         }
+    //     }
+    // }
+    //
+    // // Penalty 3: Finder-like patterns
+    // for (var y = 0; y < size; y++)
+    // {
+    //     for (var x = 0; x < size - 10; x++)
+    //     {
+    //         if ((qrCode[y, x] &&
+    //             !qrCode[y, x + 1] &&
+    //             qrCode[y, x + 2] &&
+    //             qrCode[y, x + 3] &&
+    //             qrCode[y, x + 4] &&
+    //             !qrCode[y, x + 5] &&
+    //             qrCode[y, x + 6] &&
+    //             !qrCode[y, x + 7] &&
+    //             !qrCode[y, x + 8] &&
+    //             !qrCode[y, x + 9] &&
+    //             !qrCode[y, x + 10]) ||
+    //             (!qrCode[y, x] &&
+    //             !qrCode[y, x + 1] &&
+    //             !qrCode[y, x + 2] &&
+    //             !qrCode[y, x + 3] &&
+    //             qrCode[y, x + 4] &&
+    //             !qrCode[y, x + 5] &&
+    //             qrCode[y, x + 6] &&
+    //             qrCode[y, x + 7] &&
+    //             qrCode[y, x + 8] &&
+    //             !qrCode[y, x + 9] &&
+    //             qrCode[y, x + 10]))
+    //         {
+    //             score3 += 40;
+    //         }
+    //
+    //         if ((qrCode[x, y] &&
+    //             !qrCode[x + 1, y] &&
+    //             qrCode[x + 2, y] &&
+    //             qrCode[x + 3, y] &&
+    //             qrCode[x + 4, y] &&
+    //             !qrCode[x + 5, y] &&
+    //             qrCode[x + 6, y] &&
+    //             !qrCode[x + 7, y] &&
+    //             !qrCode[x + 8, y] &&
+    //             !qrCode[x + 9, y] &&
+    //             !qrCode[x + 10, y]) ||
+    //             (!qrCode[x, y] &&
+    //             !qrCode[x + 1, y] &&
+    //             !qrCode[x + 2, y] &&
+    //             !qrCode[x + 3, y] &&
+    //             qrCode[x + 4, y] &&
+    //             !qrCode[x + 5, y] &&
+    //             qrCode[x + 6, y] &&
+    //             qrCode[x + 7, y] &&
+    //             qrCode[x + 8, y] &&
+    //             !qrCode[x + 9, y] &&
+    //             qrCode[x + 10, y]))
+    //         {
+    //             score3 += 40;
+    //         }
+    //     }
+    // }
+    //
+    // //Penalty 4: Dark/light balance
+    // double blackModules = 0;
+    // for (var row = 0; row < size; row++)
+    // {
+    //     for (var col = 0; col < size; col++)
+    //     {
+    //         if (qrCode[row, col])
+    //         {
+    //             blackModules++;
+    //         }
+    //     }
+    // }
+    // 
+    // // Calculate percentage of dark modules
+    // var percent = (blackModules / (size * size)) * 100;
+    // 
+    // // ISO/IEC 18004:2015 Section 8.8.2: Score = (|percentage - 50| / 5) × 10
+    // // Find closest multiple of 5 to the percentage
+    // var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
+    // var nextMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 45) / 5;
+    // score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
+
     /// <summary>
     /// Calculates penalty score for a masked QR code.
     /// Lower score = better readability and scanning reliability.
@@ -497,156 +642,159 @@ internal static class ModulePlacer
     /// </summary>
     private static int CalculateScore(ref QRCodeData qrCode)
     {
-        int score1 = 0,
-            score2 = 0,
-            score3 = 0,
-            score4 = 0;
         var size = qrCode.Size;
 
-        // Penalty 1: Consecutive modules
+        var score1 = 0;
+        var score2 = 0;
+        var blackModules = 0; // dark modules count for Penalty 4
+
+        // Scan Penalty 1, 2, 4 in single pass
         for (var y = 0; y < size; y++)
         {
             var modInRow = 0;
-            var modInColumn = 0;
             var lastValRow = qrCode[y, 0];
-            var lastValColumn = qrCode[0, y];
+
             for (var x = 0; x < size; x++)
             {
-                if (qrCode[y, x] == lastValRow)
+                var current = qrCode[y, x];
+
+                // Penalty 4: Count black modules
+                if (current) blackModules++;
+
+                // Penalty 1: row direction
+                if (current == lastValRow)
                 {
                     modInRow++;
+                    if (modInRow == 5)
+                    {
+                        score1 += 3;
+                    }
+                    else if (modInRow > 5)
+                    {
+                        score1++;
+                    }
                 }
                 else
                 {
                     modInRow = 1;
+                    lastValRow = current;
                 }
-                if (modInRow == 5)
-                {
-                    score1 += 3;
-                }
-                else if (modInRow > 5)
-                {
-                    score1++;
-                }
-                lastValRow = qrCode[y, x];
 
-                if (qrCode[x, y] == lastValColumn)
+                // Penalty 2: 2x2 block patterns
+                if (x < size - 1 && y < size - 1)
+                {
+                    var right = qrCode[y, x + 1];
+                    var bottom = qrCode[y + 1, x];
+                    var diag = qrCode[y + 1, x + 1];
+                    if (current == right && current == bottom && current == diag)
+                    {
+                        score2 += 3;
+                    }
+                }
+            }
+        }
+
+        // Penalty 1: col direction
+        for (var x = 0; x < size; x++)
+        {
+            var modInColumn = 0;
+            var lastValColumn = qrCode[0, x];
+            for (var y = 0; y < size; y++)
+            {
+                if (qrCode[y, x] == lastValColumn)
                 {
                     modInColumn++;
+                    if (modInColumn == 5)
+                    {
+                        score1 += 3;
+                    }
+                    else if (modInColumn > 5)
+                    {
+                        score1++;
+                    }
                 }
                 else
                 {
                     modInColumn = 1;
-                }
-                if (modInColumn == 5)
-                {
-                    score1 += 3;
-                }
-                else if (modInColumn > 5)
-                {
-                    score1++;
-                }
-                lastValColumn = qrCode[x, y];
-            }
-        }
-
-
-        // Penalty 2: Block patterns
-        for (var y = 0; y < size - 1; y++)
-        {
-            for (var x = 0; x < size - 1; x++)
-            {
-                if (qrCode[y, x] == qrCode[y, x + 1] &&
-                    qrCode[y, x] == qrCode[y + 1, x] &&
-                    qrCode[y, x] == qrCode[y + 1, x + 1])
-                {
-                    score2 += 3;
+                    lastValColumn = qrCode[y, x];
                 }
             }
         }
 
-        // Penalty 3: Finder-like patterns
-        for (var y = 0; y < size; y++)
-        {
-            for (var x = 0; x < size - 10; x++)
-            {
-                if ((qrCode[y, x] &&
-                    !qrCode[y, x + 1] &&
-                    qrCode[y, x + 2] &&
-                    qrCode[y, x + 3] &&
-                    qrCode[y, x + 4] &&
-                    !qrCode[y, x + 5] &&
-                    qrCode[y, x + 6] &&
-                    !qrCode[y, x + 7] &&
-                    !qrCode[y, x + 8] &&
-                    !qrCode[y, x + 9] &&
-                    !qrCode[y, x + 10]) ||
-                    (!qrCode[y, x] &&
-                    !qrCode[y, x + 1] &&
-                    !qrCode[y, x + 2] &&
-                    !qrCode[y, x + 3] &&
-                    qrCode[y, x + 4] &&
-                    !qrCode[y, x + 5] &&
-                    qrCode[y, x + 6] &&
-                    qrCode[y, x + 7] &&
-                    qrCode[y, x + 8] &&
-                    !qrCode[y, x + 9] &&
-                    qrCode[y, x + 10]))
-                {
-                    score3 += 40;
-                }
+        var score3 = CalculateScore3(ref qrCode, size);
 
-                if ((qrCode[x, y] &&
-                    !qrCode[x + 1, y] &&
-                    qrCode[x + 2, y] &&
-                    qrCode[x + 3, y] &&
-                    qrCode[x + 4, y] &&
-                    !qrCode[x + 5, y] &&
-                    qrCode[x + 6, y] &&
-                    !qrCode[x + 7, y] &&
-                    !qrCode[x + 8, y] &&
-                    !qrCode[x + 9, y] &&
-                    !qrCode[x + 10, y]) ||
-                    (!qrCode[x, y] &&
-                    !qrCode[x + 1, y] &&
-                    !qrCode[x + 2, y] &&
-                    !qrCode[x + 3, y] &&
-                    qrCode[x + 4, y] &&
-                    !qrCode[x + 5, y] &&
-                    qrCode[x + 6, y] &&
-                    qrCode[x + 7, y] &&
-                    qrCode[x + 8, y] &&
-                    !qrCode[x + 9, y] &&
-                    qrCode[x + 10, y]))
-                {
-                    score3 += 40;
-                }
-            }
-        }
-
-        // Penalty 4: Dark/light balance
-        double blackModules = 0;
-        for (var row = 0; row < size; row++)
-        {
-            for (var col = 0; col < size; col++)
-            {
-                if (qrCode[row, col])
-                {
-                    blackModules++;
-                }
-            }
-        }
-
-        // Calculate percentage of dark modules
-        var percent = (blackModules / (size * size)) * 100;
-
-        // ISO/IEC 18004:2015 Section 8.8.2: Score = (|percentage - 50| / 5) × 10
-        // Find closest multiple of 5 to the percentage
+        // Penalty 4
+        var percent = (blackModules / (double)(size * size)) * 100;
         var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
         var nextMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 45) / 5;
-        score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
+        var score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
 
         return score1 + score2 + score3 + score4;
+
+        static int CalculateScore3(ref QRCodeData qrCode, int size)
+        {
+            var score3 = 0;
+            // Penalty 3: Finder-like patterns
+            for (var y = 0; y < size; y++)
+            {
+                for (var x = 0; x < size - 10; x++)
+                {
+                    if ((qrCode[y, x] &&
+                        !qrCode[y, x + 1] &&
+                        qrCode[y, x + 2] &&
+                        qrCode[y, x + 3] &&
+                        qrCode[y, x + 4] &&
+                        !qrCode[y, x + 5] &&
+                        qrCode[y, x + 6] &&
+                        !qrCode[y, x + 7] &&
+                        !qrCode[y, x + 8] &&
+                        !qrCode[y, x + 9] &&
+                        !qrCode[y, x + 10]) ||
+                        (!qrCode[y, x] &&
+                        !qrCode[y, x + 1] &&
+                        !qrCode[y, x + 2] &&
+                        !qrCode[y, x + 3] &&
+                        qrCode[y, x + 4] &&
+                        !qrCode[y, x + 5] &&
+                        qrCode[y, x + 6] &&
+                        qrCode[y, x + 7] &&
+                        qrCode[y, x + 8] &&
+                        !qrCode[y, x + 9] &&
+                        qrCode[y, x + 10]))
+                    {
+                        score3 += 40;
+                    }
+
+                    if ((qrCode[x, y] &&
+                        !qrCode[x + 1, y] &&
+                        qrCode[x + 2, y] &&
+                        qrCode[x + 3, y] &&
+                        qrCode[x + 4, y] &&
+                        !qrCode[x + 5, y] &&
+                        qrCode[x + 6, y] &&
+                        !qrCode[x + 7, y] &&
+                        !qrCode[x + 8, y] &&
+                        !qrCode[x + 9, y] &&
+                        !qrCode[x + 10, y]) ||
+                        (!qrCode[x, y] &&
+                        !qrCode[x + 1, y] &&
+                        !qrCode[x + 2, y] &&
+                        !qrCode[x + 3, y] &&
+                        qrCode[x + 4, y] &&
+                        !qrCode[x + 5, y] &&
+                        qrCode[x + 6, y] &&
+                        qrCode[x + 7, y] &&
+                        qrCode[x + 8, y] &&
+                        !qrCode[x + 9, y] &&
+                        qrCode[x + 10, y]))
+                    {
+                        score3 += 40;
+                    }
+                }
+            }
+
+            return score3;
+        }
     }
 
     // private class/strusts
