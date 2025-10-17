@@ -84,10 +84,9 @@ public static class QRCodeGenerator
             var newSize = oldSize + quietZoneSize * 2;
             var newDataLength = newSize * newSize;
 
-            //Span<byte> newBuffer = newDataLength <= 2048
-            //    ? stackalloc byte[newDataLength]
-            //    : new byte[newDataLength];
-            Span<byte> newBuffer = new byte[newDataLength];
+            Span<byte> newBuffer = newDataLength <= 2048
+                ? stackalloc byte[newDataLength]
+                : new byte[newDataLength];
 
             // Copy old data into new buffer with quiet zone
             var oldBuffer = qrCodeData.GetData();
@@ -166,10 +165,9 @@ public static class QRCodeGenerator
             var newSize = oldSize + quietZoneSize * 2;
             var newDataLength = newSize * newSize;
 
-            //Span<byte> newBuffer = newDataLength <= 2048
-            //    ? stackalloc byte[newDataLength]
-            //    : new byte[newDataLength];
-            Span<byte> newBuffer = new byte[newDataLength];
+            Span<byte> newBuffer = newDataLength <= 2048
+                ? stackalloc byte[newDataLength]
+                : new byte[newDataLength];
 
             // Copy old data into new buffer with quiet zone
             var oldBuffer = qrCodeData.GetData();
