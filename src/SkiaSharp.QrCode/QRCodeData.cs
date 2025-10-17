@@ -1,8 +1,5 @@
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-using System.Runtime.InteropServices;
-#endif
 
 namespace SkiaSharp.QrCode;
 
@@ -18,13 +15,17 @@ namespace SkiaSharp.QrCode;
 /// </remarks>
 public class QRCodeData
 {
-    private bool[,] _moduleMatrix;
+    // 1D byte array (row-major order) representing the QR code modules
+    // Aligned to 64-byte boundary for AVX-512 optimizations
+    private byte[] _moduleData;
+    private int _size;
+    private int _actualDataLength; // actual length of data used in _moduleData
 
     /// <summary>
     /// Gets the size of the QR code matrix (modules per side).
     /// Includes quiet zone if added via <see cref="SetModuleMatrix"/>.
     /// </summary>
-    public int Size => _moduleMatrix.GetLength(0);
+    public int Size => _size;
 
     /// <summary>
     /// Gets or sets the module state at the specified position.
@@ -34,14 +35,26 @@ public class QRCodeData
     /// <returns>True if module is dark/black, false if light/white.</returns>
     public bool this[int row, int col]
     {
-        get => _moduleMatrix[row, col];
-        internal set => _moduleMatrix[row, col] = value;
+        get => _moduleData[row * _size + col] != 0;
+        internal set => _moduleData[row * _size + col] = value ? (byte)1 : (byte)0;
     }
 
     /// <summary>
     /// Get the QR code version (1-40)
     /// </summary>
     public int Version { get; private set; }
+
+    /// <summary>
+    /// Initializes with the specified version.
+    /// </summary>
+    /// <param name="version">QR Code version number (1-40) used to determine matrix size</param>
+    public QRCodeData(int version)
+    {
+        Version = version;
+        _size = SizeFromVersion(version);
+        _actualDataLength = _size * _size;
+        _moduleData = new byte[_actualDataLength];
+    }
 
     /// <summary>
     /// Creates a deep copy of an existing <see cref="QRCodeData"/> instance
@@ -55,22 +68,12 @@ public class QRCodeData
     public QRCodeData(QRCodeData source)
     {
         Version = source.Version;
-        var size = source.Size;
-        _moduleMatrix = new bool[size, size];
+        _size = source.Size;
+        _actualDataLength = source._actualDataLength;
+        _moduleData = new byte[_actualDataLength];
 
-        // Copy matrix data
-        Array.Copy(source._moduleMatrix, _moduleMatrix, source._moduleMatrix.Length);
-    }
-
-    /// <summary>
-    /// Initializes with the specified version.
-    /// </summary>
-    /// <param name="version">QR Code version number (1-40) used to determine matrix size</param>
-    public QRCodeData(int version)
-    {
-        Version = version;
-        var size = SizeFromVersion(version);
-        _moduleMatrix = new bool[size, size];
+        // Copy matrix data (excluding any padding)
+        Array.Copy(source._moduleData, _moduleData, source._actualDataLength);
     }
 
     /// <summary>
@@ -106,27 +109,25 @@ public class QRCodeData
 
         // set version from size
         Version = VersionFromSize(sideLen);
+        _size = sideLen;
+        _actualDataLength = _size * _size;
+        _moduleData = new byte[_actualDataLength];
 
-        // unpack
+        // unpack bits to bytes
         var totalBits = sideLen * sideLen;
-        _moduleMatrix = new bool[sideLen, sideLen];
         var bitIndex = 0;
         for (var byteIndex = 4; byteIndex < bytes.Length && bitIndex < totalBits; byteIndex++)
         {
             var b = bytes[byteIndex];
             for (int i = 7; i >= 0 && bitIndex < totalBits; i--)
             {
-                var y = bitIndex / sideLen;
-                var x = bitIndex % sideLen;
-                _moduleMatrix[y, x] = (b & (1 << i)) != 0;
+                _moduleData[bitIndex] = (b & (1 << i)) != 0 ? (byte)1 : (byte)0;
                 bitIndex++;
             }
         }
 
         if (bitIndex < totalBits)
-        {
             throw new InvalidOperationException($"Insufficient data: expected {totalBits} bits, got {bitIndex}.");
-        }
     }
 
     /// <summary>
@@ -136,16 +137,38 @@ public class QRCodeData
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ResetTo(ref QRCodeData source)
     {
-        var size = source.Size;
-
 #if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        var srcSpan = MemoryMarshal.CreateSpan(ref source._moduleMatrix[0, 0], size * size);
-        var destSpan = MemoryMarshal.CreateSpan(ref _moduleMatrix[0, 0], size * size);
-        srcSpan.CopyTo(destSpan);
+    source._moduleData.AsSpan(0, source._actualDataLength).CopyTo(_moduleData);
 #else
-        // Direct 2D array copy (faster than nested loops for small matrices)
-        Array.Copy(source._moduleMatrix, _moduleMatrix, source._moduleMatrix.Length);
+        Array.Copy(source._moduleData, _moduleData, source._actualDataLength);
 #endif
+    }
+
+    /// <summary>
+    /// Gets a row as readonly byte span
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ReadOnlySpan<byte> GetRow(int row)
+    {
+        return new ReadOnlySpan<byte>(_moduleData, row * _size, _size);
+    }
+
+    /// <summary>
+    /// Gets a row as mutable byte span
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal Span<byte> GetRowMutable(int row)
+    {
+        return new Span<byte>(_moduleData, row * _size, _size);
+    }
+
+    /// <summary>
+    /// Gets the entire data as span
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ReadOnlySpan<byte> GetData()
+    {
+        return _moduleData.AsSpan();
     }
 
     /// <summary>
@@ -163,8 +186,7 @@ public class QRCodeData
         ReadOnlySpan<byte> _headerSignature = [0x51, 0x52, 0x52];
 
         // size calculations
-        var size = Size;
-        var totalBits = size * size;
+        var totalBits = _size * _size;
         var paddingBits = GetPaddingBits(totalBits);
         var totalBitsWithPadding = totalBits + paddingBits;
         var dataBytes = totalBitsWithPadding / 8;
@@ -177,7 +199,7 @@ public class QRCodeData
         bytes[0] = _headerSignature[0];
         bytes[1] = _headerSignature[1];
         bytes[2] = _headerSignature[2];
-        bytes[3] = (byte)Size;
+        bytes[3] = (byte)_size;
 
         // Pack bits into bytes
         var bitIndex = 0;
@@ -188,9 +210,9 @@ public class QRCodeData
             {
                 if (bitIndex < totalBits)
                 {
-                    var row = bitIndex / size;
-                    var col = bitIndex % size;
-                    if (_moduleMatrix[row, col])
+                    var row = bitIndex / _size;
+                    var col = bitIndex % _size;
+                    if (_moduleData[bitIndex] != 0)
                     {
                         b |= (byte)(1 << i);
                     }
@@ -213,26 +235,35 @@ public class QRCodeData
     /// The expected size of the module matrix is determined by the version of the object. Ensure
     /// that the provided matrix has dimensions equal to the expected size before calling this method.
     /// </remarks>
-    /// <param name="moduleMatrix">New module matrix.</param>
+    /// <param name="moduleData">New module data in row-major order.</param>
+    /// <param name="size">Size of the module matrix (including quiet zone if present).</param>
     /// <param name="quietZoneSize">Quiet zone size in modules (0 if matrix doesn't include quiet zone).</param>
-    internal void SetModuleMatrix(bool[,] moduleMatrix, int quietZoneSize)
+    internal void SetModuleMatrix(ReadOnlySpan<byte> moduleData, int size, int quietZoneSize)
     {
-        var totalSize = moduleMatrix.GetLength(0);
-        var sizeWithoutQuietZone = totalSize - (quietZoneSize * 2);
+        var sizeWithoutQuietZone = size - (quietZoneSize * 2);
 
         // Calculate version from size (without quiet zone)
         var calculatedVersion = VersionFromSize(sizeWithoutQuietZone);
-
         if (calculatedVersion < 1 || calculatedVersion > 40)
         {
             throw new ArgumentException(
                 $"Invalid matrix size. Size without quiet zone: {sizeWithoutQuietZone}, " +
                 $"Calculated version: {calculatedVersion}. " +
                 $"Version must be 1-40.",
-                nameof(moduleMatrix));
+                nameof(moduleData));
         }
 
-        _moduleMatrix = moduleMatrix;
+        _size = size;
+        _actualDataLength = _size * _size;
+
+        if (_moduleData == null || _moduleData.Length < _actualDataLength)
+        {
+            _moduleData = new byte[_actualDataLength];
+        }
+
+        var copyLength = Math.Min(moduleData.Length, _actualDataLength);
+        moduleData.Slice(0, copyLength).CopyTo(_moduleData.AsSpan(0, copyLength));
+
         Version = calculatedVersion;
     }
 
@@ -299,10 +330,7 @@ public class QRCodeData
     /// <param name="version"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int SizeFromVersion(int version)
-    {
-        return 21 + (version - 1) * 4;
-    }
+    private static int SizeFromVersion(int version) => 21 + (version - 1) * 4;
 
     /// <summary>
     /// Calculate version from size (without quiet zone)
@@ -312,10 +340,7 @@ public class QRCodeData
     /// <param name="sizeWithoutQuietZone"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int VersionFromSize(int sizeWithoutQuietZone)
-    {
-        return (sizeWithoutQuietZone - 21) / 4 + 1;
-    }
+    private static int VersionFromSize(int sizeWithoutQuietZone) => (sizeWithoutQuietZone - 21) / 4 + 1;
 
     /// <summary>
     /// Calculate number of padding bits needed to align totalBits to next byte boundary.

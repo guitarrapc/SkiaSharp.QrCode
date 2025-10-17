@@ -24,21 +24,23 @@ internal static class ModulePlacer
 
         var oldSize = qrCode.Size;
         var newSize = oldSize + quietZoneSize * 2;
+        var newDataLength = newSize * newSize;
 
         // Create new matrix with quiet zone
-        var newMatrix = new bool[newSize, newSize];
+        //Span<byte> newModuleData = newDataLength <= 2048
+        //    ? stackalloc byte[newDataLength]
+        //    : new byte[newDataLength];
+        Span<byte> newModuleData = new byte[newDataLength];
 
         // Copy existing data to center of new matrix
         for (var row = 0; row < oldSize; row++)
         {
-            for (var col = 0; col < oldSize; col++)
-            {
-                newMatrix[row + quietZoneSize, col + quietZoneSize] = qrCode[row, col];
-            }
+            var srcRow = qrCode.GetRow(row);
+            var destOffset = (row + quietZoneSize) * newSize + quietZoneSize;
+            srcRow.CopyTo(newModuleData.Slice(destOffset, oldSize));
         }
 
-        // Replace old matrix with new matrix
-        qrCode.SetModuleMatrix(newMatrix, quietZoneSize);
+        qrCode.SetModuleMatrix(newModuleData, newSize, quietZoneSize);
     }
 
     /// <summary>
