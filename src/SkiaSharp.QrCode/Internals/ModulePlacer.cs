@@ -14,16 +14,17 @@ internal static class ModulePlacer
     /// Adds white border (quiet zone) around the QR code.
     /// Required by ISO/IEC 18004 standard (minimum 4 modules width).
     /// </summary>
-    /// <param name="source">QR code data to modify.</param>
-    /// <param name="destination">Destination buffer for new QR code with quiet zone.</param>
+    /// <param name="source">QR code data to copy from.</param>
+    /// <param name="destination">Destination buffer for the new QR code with quiet zone. Must be large enough to hold (oldSize + 2 * quietZoneSize) squared elements.</param>
     /// <param name="oldSize">Original QR code size in modules.</param>
     /// <param name="quietZoneSize">Quiet zone width in modules (default: 4).</param>
     public static void AddQuietZone(ReadOnlySpan<byte> source, Span<byte> destination, int oldSize, int quietZoneSize)
     {
         if (quietZoneSize <= 0)
-        {
             return;
-        }
+
+        if (destination.Length < source.Length + quietZoneSize * 2)
+            throw new ArgumentException("Destination buffer is too small.");
 
         var newSize = oldSize + quietZoneSize * 2;
 
