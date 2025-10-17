@@ -694,7 +694,7 @@ internal static class ModulePlacer
             }
         }
 
-        // Penalty 1: col direction
+        // Penalty 1: col direction (avoid transposing in previous loop)
         for (var x = 0; x < size; x++)
         {
             var modInColumn = 0;
