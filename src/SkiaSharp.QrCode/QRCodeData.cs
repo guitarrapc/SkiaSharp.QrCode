@@ -168,7 +168,7 @@ public class QRCodeData
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal ReadOnlySpan<byte> GetData()
     {
-        return _moduleData.AsSpan();
+        return _moduleData.AsSpan()[.._actualDataLength];
     }
 
     /// <summary>
