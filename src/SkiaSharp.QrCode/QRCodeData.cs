@@ -45,6 +45,18 @@ public class QRCodeData
     public int Version { get; private set; }
 
     /// <summary>
+    /// Initializes with the specified version.
+    /// </summary>
+    /// <param name="version">QR Code version number (1-40) used to determine matrix size</param>
+    public QRCodeData(int version)
+    {
+        Version = version;
+        _size = SizeFromVersion(version);
+        _actualDataLength = _size * _size;
+        _moduleData = new byte[_actualDataLength];
+    }
+
+    /// <summary>
     /// Creates a deep copy of an existing <see cref="QRCodeData"/> instance
     /// All module states are copied to ensure independence from the source.
     /// </summary>
@@ -58,21 +70,10 @@ public class QRCodeData
         Version = source.Version;
         _size = source.Size;
         _actualDataLength = source._actualDataLength;
-        _moduleData = AllocateAlignedArray(_size * _size, out _);
+        _moduleData = new byte[_actualDataLength];
 
         // Copy matrix data (excluding any padding)
         Array.Copy(source._moduleData, _moduleData, source._actualDataLength);
-    }
-
-    /// <summary>
-    /// Initializes with the specified version.
-    /// </summary>
-    /// <param name="version">QR Code version number (1-40) used to determine matrix size</param>
-    public QRCodeData(int version)
-    {
-        Version = version;
-        _size = SizeFromVersion(version);
-        _moduleData = AllocateAlignedArray(_size * _size, out _actualDataLength);
     }
 
     /// <summary>
@@ -109,7 +110,8 @@ public class QRCodeData
         // set version from size
         Version = VersionFromSize(sideLen);
         _size = sideLen;
-        _moduleData = AllocateAlignedArray(_size * _size, out _actualDataLength);
+        _actualDataLength = _size * _size;
+        _moduleData = new byte[_actualDataLength];
 
         // unpack bits to bytes
         var totalBits = sideLen * sideLen;
@@ -135,17 +137,11 @@ public class QRCodeData
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void ResetTo(ref QRCodeData source)
     {
-        // if sizes match, copy directly
-        if (_moduleData.Length >= source._actualDataLength)
-        {
-            source._moduleData.AsSpan(0, source._actualDataLength)
-                .CopyTo(_moduleData);
-            return;
-        }
-
-        // if size differs, reallocate
-        _moduleData = AllocateAlignedArray(source._actualDataLength, out _actualDataLength);
-        source._moduleData.AsSpan(0, source._actualDataLength).CopyTo(_moduleData);
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
+    source._moduleData.AsSpan(0, source._actualDataLength).CopyTo(_moduleData);
+#else
+        Array.Copy(source._moduleData, _moduleData, source._actualDataLength);
+#endif
     }
 
     /// <summary>
@@ -258,7 +254,8 @@ public class QRCodeData
         }
 
         _size = totalSize;
-        _moduleData = AllocateAlignedArray(_size * _size, out _actualDataLength);
+        _actualDataLength = _size * _size;
+        _moduleData = new byte[_actualDataLength];
 
         for (var row = 0; row < _size; row++)
         {
@@ -268,16 +265,6 @@ public class QRCodeData
             }
         }
         Version = calculatedVersion;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static byte[] AllocateAlignedArray(int length, out int actualLength)
-    {
-        actualLength = length;
-
-        // Add padding to ensure 64-byte alignment potential
-        var paddedLength = (length + 63) & ~63;
-        return new byte[paddedLength];
     }
 
     /// <summary>
