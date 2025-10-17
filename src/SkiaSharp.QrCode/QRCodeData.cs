@@ -16,7 +16,7 @@ namespace SkiaSharp.QrCode;
 public class QRCodeData
 {
     // 1D byte array (row-major order) representing the QR code modules
-    // Alifned to 64-byte boundary for AVX-512 optimizations
+    // Aligned to 64-byte boundary for AVX-512 optimizations
     private byte[] _moduleData;
     private int _size;
     private int _actualDataLength; // actual length of data used in _moduleData
@@ -145,7 +145,7 @@ public class QRCodeData
     }
 
     /// <summary>
-    /// Get row as byte span
+    /// Gets a row as readonly byte span
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ReadOnlySpan<byte> GetRow(int row)
@@ -154,7 +154,7 @@ public class QRCodeData
     }
 
     /// <summary>
-    /// Get row as byte span
+    /// Gets a row as mutable byte span
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal Span<byte> GetRowMutable(int row)
@@ -163,7 +163,7 @@ public class QRCodeData
     }
 
     /// <summary>
-    /// Get entire dat as span
+    /// Gets the entire data as span
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal ReadOnlySpan<byte> GetData()
