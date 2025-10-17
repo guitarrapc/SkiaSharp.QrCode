@@ -14,34 +14,27 @@ internal static class ModulePlacer
     /// Adds white border (quiet zone) around the QR code.
     /// Required by ISO/IEC 18004 standard (minimum 4 modules width).
     /// </summary>
-    /// <param name="qrCode">QR code data to modify.</param>
+    /// <param name="source">QR code data to copy from.</param>
+    /// <param name="destination">Destination buffer for the new QR code with quiet zone. Must be large enough to hold (oldSize + 2 * quietZoneSize) squared elements.</param>
+    /// <param name="oldSize">Original QR code size in modules.</param>
     /// <param name="quietZoneSize">Quiet zone width in modules (default: 4).</param>
-    public static void AddQuietZone(ref QRCodeData qrCode, int quietZoneSize)
+    public static void AddQuietZone(ReadOnlySpan<byte> source, Span<byte> destination, int oldSize, int quietZoneSize)
     {
         if (quietZoneSize <= 0)
-        {
             return;
-        }
 
-        var oldSize = qrCode.Size;
+        if (destination.Length < source.Length + quietZoneSize * 2)
+            throw new ArgumentException("Destination buffer is too small.");
+
         var newSize = oldSize + quietZoneSize * 2;
-        var newDataLength = newSize * newSize;
-
-        // Create new matrix with quiet zone
-        //Span<byte> newModuleData = newDataLength <= 2048
-        //    ? stackalloc byte[newDataLength]
-        //    : new byte[newDataLength];
-        Span<byte> newModuleData = new byte[newDataLength];
 
         // Copy existing data to center of new matrix
         for (var row = 0; row < oldSize; row++)
         {
-            var srcRow = qrCode.GetRow(row);
+            var srcOffset = row * oldSize;
             var destOffset = (row + quietZoneSize) * newSize + quietZoneSize;
-            srcRow.CopyTo(newModuleData.Slice(destOffset, oldSize));
+            source.Slice(srcOffset, oldSize).CopyTo(destination.Slice(destOffset, oldSize));
         }
-
-        qrCode.SetModuleMatrix(newModuleData, newSize, quietZoneSize);
     }
 
     /// <summary>
@@ -49,10 +42,9 @@ internal static class ModulePlacer
     /// Tests all 8 mask patterns and selects one with lowest penalty score.
     /// </summary>
     /// <returns>Selected mask pattern number (0-7).</returns>
-    public static int MaskCode(ref QRCodeData qrCode, int version, ReadOnlySpan<Rectangle> blockedModules, ECCLevel eccLevel)
+    public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<Rectangle> blockedModules, ECCLevel eccLevel)
     {
-        var size = qrCode.Size;
-        var dataLength = qrCode.Size * qrCode.Size;
+        var dataLength = size * size;
         var bestPatternIndex = 0;
 
         // Select stack or heap allocation based on size
@@ -61,23 +53,23 @@ internal static class ModulePlacer
         if (dataLength <= StackAlloc_threshold)
         {
             Span<byte> tempBuffer = stackalloc byte[dataLength];
-            bestPatternIndex = EvaluateMaskPatterns(qrCode.GetData(), tempBuffer, version, size, blockedModules, eccLevel);
+            bestPatternIndex = EvaluateMaskPatterns(buffer, tempBuffer, version, size, blockedModules, eccLevel);
         }
         else
         {
-            var tempBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
+            var rentBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
             try
             {
-                bestPatternIndex = EvaluateMaskPatterns(qrCode.GetData(), tempBuffer.AsSpan()[..dataLength], version, size, blockedModules, eccLevel);
+                bestPatternIndex = EvaluateMaskPatterns(buffer, rentBuffer.AsSpan()[..dataLength], version, size, blockedModules, eccLevel);
             }
             finally
             {
-                ArrayPool<byte>.Shared.Return(tempBuffer, clearArray: true);
+                ArrayPool<byte>.Shared.Return(rentBuffer, clearArray: true);
             }
         }
 
         // Apply mask to original QR code
-        ApplyMaskToDataArea(ref qrCode, bestPatternIndex, size, blockedModules);
+        ApplyMaskToDataAreaInPlace(buffer, size, bestPatternIndex, blockedModules);
 
         return bestPatternIndex;
     }
@@ -95,16 +87,16 @@ internal static class ModulePlacer
             originalData.CopyTo(tempBuffer);
 
             // Apply mask pattern to data area only
-            ApplyMaskToDataAreaInPlace(tempBuffer, patternIndex, size, blockedModules);
+            ApplyMaskToDataAreaInPlace(tempBuffer, size, patternIndex, blockedModules);
 
             // Apply format and version information
             var formatBits = QRCodeConstants.GetFormatBits(eccLevel, patternIndex);
-            PlaceFormatInPlace(tempBuffer, formatBits, size);
+            PlaceFormat(tempBuffer, size, formatBits);
 
             if (version >= 7)
             {
                 var versionBits = QRCodeConstants.GetVersionBits(version);
-                PlaceVersionInPlace(tempBuffer, versionBits, size);
+                PlaceVersionInPlace(tempBuffer, size, versionBits);
             }
 
             // Calculate score
@@ -123,7 +115,7 @@ internal static class ModulePlacer
     /// Places encoded data and ECC words into the QR code matrix.
     /// Fills modules in zigzag pattern from bottom-right to top-left.
     /// </summary>
-    /// <param name="qrCode">QR code data structure to populate.</param>
+    /// <param name="buffer">QR code data structure to populate.</param>
     /// <param name="data">Interleaved data and ECC bytes.</param>
     /// <param name="blockedModules">List of reserved module areas.</param>
     /// <remarks>
@@ -136,9 +128,8 @@ internal static class ModulePlacer
     /// - Skip timing pattern column (column 6)
     /// - Fill out non-blocked modules
     /// </remarks>
-    public static void PlaceDataWords(ref QRCodeData qrCode, ReadOnlySpan<byte> data, ReadOnlySpan<Rectangle> blockedModules)
+    public static void PlaceDataWords(Span<byte> buffer, int size, ReadOnlySpan<byte> data, ReadOnlySpan<Rectangle> blockedModules)
     {
-        var size = qrCode.Size;
         var up = true;
         var bitReader = new BitReader(data);
 
@@ -162,7 +153,7 @@ internal static class ModulePlacer
                         continue;
 
                     // Place bit if available
-                    qrCode[y, xModule] = bitReader.HasBits ? bitReader.Read() : false;
+                    buffer[y * size + xModule] = bitReader.HasBits && bitReader.Read() ? (byte)1 : (byte)0;
                 }
             }
 
@@ -222,157 +213,6 @@ internal static class ModulePlacer
     }
 
     /// <summary>
-    /// Places format information patterns around finder patterns.
-    /// Contains error correction level and mask pattern information.
-    /// Two identical 15-bit sequences for redundancy.
-    /// </summary>
-    /// <param name="qrCode">QR code matrix.</param>
-    /// <param name="formatBits">15-bit format information (LSB first).</param>
-    /// <remarks>
-    /// Places two identical copies for redundancy (ISO/IEC 18004 Section 7.9):
-    /// <code>
-    /// - Copy 1: Around top-left and top-right finder patterns
-    /// - Copy 2: Around top-left and bottom-left finder patterns
-    /// </code>
-    /// Bits are placed from LSB (bit 0) to MSB (bit 14).
-    /// </remarks>
-    public static void PlaceFormat(ref QRCodeData qrCode, ushort formatBits)
-    {
-        var size = qrCode.Size;
-
-        // Stack allocation: 15 tuples × 4 ints × 4 bytes = 240 bytes
-        Span<(int x1, int y1, int x2, int y2)> positions = stackalloc (int, int, int, int)[15]
-        {
-            ( 8, 0, size - 1, 8 ),
-            ( 8, 1, size - 2, 8 ),
-            ( 8, 2, size - 3, 8 ),
-            ( 8, 3, size - 4, 8 ),
-            ( 8, 4, size - 5, 8 ),
-            ( 8, 5, size - 6, 8 ),
-            ( 8, 7, size - 7, 8 ),
-            ( 8, 8, size - 8, 8 ),
-            ( 7, 8, 8, size - 7 ),
-            ( 5, 8, 8, size - 6 ),
-            ( 4, 8, 8, size - 5 ),
-            ( 3, 8, 8, size - 4 ),
-            ( 2, 8, 8, size - 3 ),
-            ( 1, 8, 8, size - 2 ),
-            ( 0, 8, 8, size - 1 ),
-        };
-
-        for (var i = 0; i < 15; i++)
-        {
-            var bit = (formatBits & (1 << i)) != 0;
-            var (x1, y1, x2, y2) = positions[i];
-            qrCode[y1, x1] = bit;
-            qrCode[y2, x2] = bit;
-        }
-    }
-
-    /// <summary>
-    /// Places format information patterns around finder patterns.
-    /// Contains error correction level and mask pattern information.
-    /// Two identical 15-bit sequences for redundancy.
-    /// </summary>
-    /// <param name="buffer">QR code matrix buffer.</param>
-    /// <param name="formatBits">15-bit format information (LSB first).</param>
-    /// <remarks>
-    /// Places two identical copies for redundancy (ISO/IEC 18004 Section 7.9):
-    /// <code>
-    /// - Copy 1: Around top-left and top-right finder patterns
-    /// - Copy 2: Around top-left and bottom-left finder patterns
-    /// </code>
-    /// Bits are placed from LSB (bit 0) to MSB (bit 14).
-    /// </remarks>
-    public static void PlaceFormatInPlace(Span<byte> buffer, ushort formatBits, int size)
-    {
-        // Stack allocation: 15 tuples × 4 ints × 4 bytes = 240 bytes
-        ReadOnlySpan<(int x1, int y1, int x2, int y2)> positions = stackalloc (int, int, int, int)[15]
-        {
-            ( 8, 0, size - 1, 8 ),
-            ( 8, 1, size - 2, 8 ),
-            ( 8, 2, size - 3, 8 ),
-            ( 8, 3, size - 4, 8 ),
-            ( 8, 4, size - 5, 8 ),
-            ( 8, 5, size - 6, 8 ),
-            ( 8, 7, size - 7, 8 ),
-            ( 8, 8, size - 8, 8 ),
-            ( 7, 8, 8, size - 7 ),
-            ( 5, 8, 8, size - 6 ),
-            ( 4, 8, 8, size - 5 ),
-            ( 3, 8, 8, size - 4 ),
-            ( 2, 8, 8, size - 3 ),
-            ( 1, 8, 8, size - 2 ),
-            ( 0, 8, 8, size - 1 ),
-        };
-
-        for (var i = 0; i < 15; i++)
-        {
-            var bit = (byte)((formatBits & (1 << i)) != 0 ? 1 : 0);
-            var (x1, y1, x2, y2) = positions[i];
-            buffer[y1 * size + x1] = bit;
-            buffer[y2 * size + x2] = bit;
-        }
-    }
-
-    /// <summary>
-    /// Places version information patterns (version 7+ only).
-    /// Two identical 3×6 patterns placed at top-right and bottom-left corners.
-    /// </summary>
-    /// <param name="qrCode">QR code matrix</param>
-    /// <param name="versionBits">18-bit version information (LSB first)</param>
-    /// <remarks>
-    /// Places two identical 3×6 patterns (ISO/IEC 18004 Section 7.10):
-    /// <code>
-    /// - Pattern 1: Bottom-left corner (vertical)
-    /// - Pattern 2: Top-right corner (horizontal)
-    /// </code>
-    /// Bits are placed from LSB (bit 0) to MSB (bit 17) in reading order.
-    /// </remarks>
-    public static void PlaceVersion(ref QRCodeData qrCode, uint versionBits)
-    {
-        var size = qrCode.Size;
-        for (var x = 0; x < 6; x++)
-        {
-            for (var y = 0; y < 3; y++)
-            {
-                var bitIndex = x * 3 + y;
-                var bit = (versionBits & (1 << bitIndex)) != 0;
-                qrCode[y + size - 11, x] = bit;
-                qrCode[x, y + size - 11] = bit;
-            }
-        }
-    }
-
-    /// <summary>
-    /// Places version information patterns (version 7+ only).
-    /// Two identical 3×6 patterns placed at top-right and bottom-left corners.
-    /// </summary>
-    /// <param name="buffer">QR code matrix buffer</param>
-    /// <param name="versionBits">18-bit version information (LSB first)</param>
-    /// <remarks>
-    /// Places two identical 3×6 patterns (ISO/IEC 18004 Section 7.10):
-    /// <code>
-    /// - Pattern 1: Bottom-left corner (vertical)
-    /// - Pattern 2: Top-right corner (horizontal)
-    /// </code>
-    /// Bits are placed from LSB (bit 0) to MSB (bit 17) in reading order.
-    /// </remarks>
-    public static void PlaceVersionInPlace(Span<byte> buffer, uint versionBits, int size)
-    {
-        for (var x = 0; x < 6; x++)
-        {
-            for (var y = 0; y < 3; y++)
-            {
-                var bitIndex = x * 3 + y;
-                var bit = (byte)((versionBits & (1 << bitIndex)) != 0 ? 1 : 0);
-                buffer[(y + size - 11) * size + x] = bit;
-                buffer[x * size + (y + size - 11)] = bit;
-            }
-        }
-    }
-
-    /// <summary>
     /// Reserves separator areas (white borders) around finder patterns.
     /// 1-module wide white border separates finder patterns from data area.
     /// </summary>
@@ -407,23 +247,11 @@ internal static class ModulePlacer
     }
 
     /// <summary>
-    /// Places the dark module (always dark/black).
-    /// Located at position (8, 4*version + 9).
-    /// Required by QR code specification for all versions.
-    /// </summary>
-    public static void PlaceDarkModule(ref QRCodeData qrCode, int version, Span<Rectangle> blockedModules, ref int blockedCount)
-    {
-        qrCode[4 * version + 9, 8] = true;
-        blockedModules[blockedCount++] = new Rectangle(8, 4 * version + 9, 1, 1);
-    }
-
-    /// <summary>
     /// Places three finder patterns (position detection patterns).
     /// 7×7 patterns located at top-left, top-right, and bottom-left corners.
     /// </summary>
-    public static void PlaceFinderPatterns(ref QRCodeData qrCode, Span<Rectangle> blockedModules, ref int blockedCount)
+    public static void PlaceFinderPatterns(Span<byte> buffer, int size, Span<Rectangle> blockedModules, ref int blockedCount)
     {
-        var size = qrCode.Size;
         int[] locations = [0, 0, size - 7, 0, 0, size - 7];
 
         for (var i = 0; i < 6; i = i + 2)
@@ -436,7 +264,7 @@ internal static class ModulePlacer
                     {
                         var row = y + locations[i + 1];
                         var col = x + locations[i];
-                        qrCode[row, col] = true;
+                        buffer[row * size + col] = 1;
                     }
                 }
             }
@@ -449,7 +277,7 @@ internal static class ModulePlacer
     /// Number and positions vary by version (version 2+).
     /// 5×5 patterns help with image recognition and distortion correction.
     /// </summary>
-    public static void PlaceAlignmentPatterns(ref QRCodeData qrCode, List<Point> alignmentPatternLocations, Span<Rectangle> blockedModules, ref int blockedCount)
+    public static void PlaceAlignmentPatterns(Span<byte> buffer, int size, List<Point> alignmentPatternLocations, Span<Rectangle> blockedModules, ref int blockedCount)
     {
         foreach (var loc in alignmentPatternLocations)
         {
@@ -476,7 +304,7 @@ internal static class ModulePlacer
                     {
                         var row = loc.Y + y;
                         var col = loc.X + x;
-                        qrCode[row, col] = true;
+                        buffer[row * size + col] = 1;
                     }
                 }
             }
@@ -489,19 +317,103 @@ internal static class ModulePlacer
     /// Horizontal and vertical lines at row 6 and column 6.
     /// Used for module coordinate mapping during decoding.
     /// </summary>
-    public static void PlaceTimingPatterns(ref QRCodeData qrCode, Span<Rectangle> blockedModules, ref int blockedCount)
+    public static void PlaceTimingPatterns(Span<byte> buffer, int size, Span<Rectangle> blockedModules, ref int blockedCount)
     {
-        var size = qrCode.Size;
         for (var i = 8; i < size - 8; i++)
         {
             if (i % 2 == 0)
             {
-                qrCode[6, i] = true;
-                qrCode[i, 6] = true;
+                buffer[6 * size + i] = 1; // row 6
+                buffer[i * size + 6] = 1; // col 6
             }
         }
         blockedModules[blockedCount++] = new Rectangle(6, 8, 1, size - 16);
         blockedModules[blockedCount++] = new Rectangle(8, 6, size - 16, 1);
+    }
+
+    /// <summary>
+    /// Places the dark module (always dark/black).
+    /// Located at position (8, 4*version + 9).
+    /// Required by QR code specification for all versions.
+    /// </summary>
+    public static void PlaceDarkModule(Span<byte> buffer, int size, int version, Span<Rectangle> blockedModules, ref int blockedCount)
+    {
+        buffer[(4 * version + 9) * size + 8] = 1;
+        blockedModules[blockedCount++] = new Rectangle(8, 4 * version + 9, 1, 1);
+    }
+
+    /// <summary>
+    /// Places format information patterns around finder patterns.
+    /// Contains error correction level and mask pattern information.
+    /// Two identical 15-bit sequences for redundancy.
+    /// </summary>
+    /// <param name="buffer">QR code matrix buffer.</param>
+    /// <param name="formatBits">15-bit format information (LSB first).</param>
+    /// <remarks>
+    /// Places two identical copies for redundancy (ISO/IEC 18004 Section 7.9):
+    /// <code>
+    /// - Copy 1: Around top-left and top-right finder patterns
+    /// - Copy 2: Around top-left and bottom-left finder patterns
+    /// </code>
+    /// Bits are placed from LSB (bit 0) to MSB (bit 14).
+    /// </remarks>
+    public static void PlaceFormat(Span<byte> buffer, int size, ushort formatBits)
+    {
+        // Stack allocation: 15 tuples × 4 ints × 4 bytes = 240 bytes
+        ReadOnlySpan<(int x1, int y1, int x2, int y2)> positions = stackalloc (int, int, int, int)[15]
+        {
+            ( 8, 0, size - 1, 8 ),
+            ( 8, 1, size - 2, 8 ),
+            ( 8, 2, size - 3, 8 ),
+            ( 8, 3, size - 4, 8 ),
+            ( 8, 4, size - 5, 8 ),
+            ( 8, 5, size - 6, 8 ),
+            ( 8, 7, size - 7, 8 ),
+            ( 8, 8, size - 8, 8 ),
+            ( 7, 8, 8, size - 7 ),
+            ( 5, 8, 8, size - 6 ),
+            ( 4, 8, 8, size - 5 ),
+            ( 3, 8, 8, size - 4 ),
+            ( 2, 8, 8, size - 3 ),
+            ( 1, 8, 8, size - 2 ),
+            ( 0, 8, 8, size - 1 ),
+        };
+
+        for (var i = 0; i < 15; i++)
+        {
+            var bit = (byte)((formatBits & (1 << i)) != 0 ? 1 : 0);
+            var (x1, y1, x2, y2) = positions[i];
+            buffer[y1 * size + x1] = bit;
+            buffer[y2 * size + x2] = bit;
+        }
+    }
+
+    /// <summary>
+    /// Places version information patterns (version 7+ only).
+    /// Two identical 3×6 patterns placed at top-right and bottom-left corners.
+    /// </summary>
+    /// <param name="buffer">QR code matrix buffer</param>
+    /// <param name="versionBits">18-bit version information (LSB first)</param>
+    /// <remarks>
+    /// Places two identical 3×6 patterns (ISO/IEC 18004 Section 7.10):
+    /// <code>
+    /// - Pattern 1: Bottom-left corner (vertical)
+    /// - Pattern 2: Top-right corner (horizontal)
+    /// </code>
+    /// Bits are placed from LSB (bit 0) to MSB (bit 17) in reading order.
+    /// </remarks>
+    public static void PlaceVersionInPlace(Span<byte> buffer, int size, uint versionBits)
+    {
+        for (var x = 0; x < 6; x++)
+        {
+            for (var y = 0; y < 3; y++)
+            {
+                var bitIndex = x * 3 + y;
+                var bit = (byte)((versionBits & (1 << bitIndex)) != 0 ? 1 : 0);
+                buffer[(y + size - 11) * size + x] = bit;
+                buffer[x * size + (y + size - 11)] = bit;
+            }
+        }
     }
 
     /// <summary>
@@ -558,28 +470,10 @@ internal static class ModulePlacer
     }
 
     /// <summary>
-    /// Apply the mask pattern to the data area only, skipping blocked modules.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ApplyMaskToDataArea(ref QRCodeData qrCode, int patternIndex, int size, ReadOnlySpan<Rectangle> blockedModules)
-    {
-        for (var col = 0; col < size; col++)
-        {
-            for (var row = 0; row < size; row++)
-            {
-                if (!IsPointBlocked(col, row, blockedModules))
-                {
-                    qrCode[row, col] ^= MaskPattern.Apply(patternIndex, col, row);
-                }
-            }
-        }
-    }
-
-    /// <summary>
     /// Apply the mask pattern to the data area only in-place, skipping blocked modules.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ApplyMaskToDataAreaInPlace(Span<byte> buffer, int patternIndex, int size, ReadOnlySpan<Rectangle> blockedModules)
+    private static void ApplyMaskToDataAreaInPlace(Span<byte> buffer, int size, int patternIndex, ReadOnlySpan<Rectangle> blockedModules)
     {
         for (var row = 0; row < size; row++)
         {

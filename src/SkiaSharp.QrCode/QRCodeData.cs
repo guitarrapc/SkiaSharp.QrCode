@@ -172,6 +172,15 @@ public class QRCodeData
     }
 
     /// <summary>
+    /// Gets the entire data as a mutable span
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal Span<byte> GetMutableData()
+    {
+        return _moduleData.AsSpan()[.._actualDataLength];
+    }
+
+    /// <summary>
     /// Generates a raw byte array representation of the data, with optional compression.
     /// </summary>
     /// <remarks>
