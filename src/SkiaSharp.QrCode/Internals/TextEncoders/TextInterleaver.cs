@@ -13,6 +13,12 @@ internal static class TextInterleaver
     /// <returns></returns>
     public static string InterleaveCodewords(List<CodewordTextBlock> blocks, in ECCInfo eccInfo, int version)
     {
+        // The interleaving process:
+        // 1. Takes data codewords from each block in round-robin fashion
+        // 2. Takes ECC codewords from each block in round-robin fashion
+        // 3. Combines them into a single sequence as per QR code specification
+        // This ensures that damage to one part of the QR code is distributed across multiple blocks.
+
         var interleaveCapacity = CalculateInterleavedDataCapacity(eccInfo, version);
         var result = new StringBuilder(interleaveCapacity);
         var maxCodewordCount = Math.Max(eccInfo.CodewordsInGroup1, eccInfo.CodewordsInGroup2);

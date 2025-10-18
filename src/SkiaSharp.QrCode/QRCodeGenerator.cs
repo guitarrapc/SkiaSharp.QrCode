@@ -370,12 +370,27 @@ public static class QRCodeGenerator
         }
     }
 
+    /// <summary>
+    /// Interleaves data and ECC codewords according to QR code specification.
+    /// </summary>
+    /// <param name="blocks">List of codeword blocks containing data and ECC codewords to interleave</param>
+    /// <param name="eccInfo">Error correction information for the QR code version and ECC level</param>
+    /// <param name="version">The QR code version (1-40)</param>
+    /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static string InterleaveCodewords(List<CodewordTextBlock> blocks, in ECCInfo eccInfo, int version)
     {
         return TextInterleaver.InterleaveCodewords(blocks, eccInfo, version);
     }
 
+    /// <summary>
+    /// Interleaves data and error correction codewords according to QR code specification.
+    /// </summary>
+    /// <param name="dataBuffer">The buffer containing encoded data codewords</param>
+    /// <param name="eccBuffer">The buffer containing error correction codewords</param>
+    /// <param name="eccInfo">Error correction information for the QR code version and ECC level</param>
+    /// <param name="version">The QR code version (1-40)</param>
+    /// <param name="output">Output buffer to write interleaved codewords</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void InterleaveCodewords(ReadOnlySpan<byte> dataBuffer, ReadOnlySpan<byte> eccBuffer, in ECCInfo eccInfo, int version, Span<byte> output)
     {
@@ -591,18 +606,45 @@ public static class QRCodeGenerator
 
     // Utilities
 
+    /// <summary>
+    /// Calculates the number of blocked modules (reserved areas) for the given version.
+    /// </summary>
+    /// <param name="version">The QR code version (1-40)</param>
+    /// <returns>The number of <see cref="Rectangle"/> elements needed to store all blocked module areas.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CalculateBlockedModulesSize(int version)
     {
+        // Blocked modules are reserved areas in the QR matrix that contain fixed patterns:
+        // - Finder patterns (3x)
+        // - Separators (3x)
+        // - Timing patterns (2x)
+        // - Dark module (1x)
+        // - Format information areas (varies by version)
+        // - Version information areas (version 7+)
+        // - Alignment patterns (varies by version, 0 for version 1, increases with version)
+        // The calculation ensures sufficient buffer space for all reserved areas.
+
         const int basePatterns = 12;
         var formatVersionAreas = version >= 7 ? 8 : 6;
         var alignmentPatternCount = CalculateAlignmentPatternCount(version);
         return basePatterns + formatVersionAreas + alignmentPatternCount;
     }
 
+    /// <summary>
+    /// Calculates the number of alignment pattern positions for a given QR code version.
+    /// </summary>
+    /// <param name="version">The QR code version (1-40)</param>
+    /// <returns>The total number of alignment patterns required for the specified version.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CalculateAlignmentPatternCount(int version)
     {
+        // Alignment patterns help QR code readers correct for distortion:
+        // - Version 1: No alignment patterns (0)
+        // - Version 2+: Multiple alignment patterns arranged in a grid
+        // - Pattern count = (positions × positions) - overlaps with finder patterns
+        // - Overlaps: 3 corners where alignment patterns would conflict with finder patterns
+        // The result is used to allocate buffer space for blocked module tracking.
+
         if (version == 1) return 0;
         var positions = GetAlignmentPatternPositions(version);
         var posCount = positions.Count;

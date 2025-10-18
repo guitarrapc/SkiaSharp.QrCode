@@ -13,6 +13,11 @@ internal static class BinaryInterleaver
     /// <returns></returns>
     public static void InterleaveCodewords(ReadOnlySpan<byte> data, ReadOnlySpan<byte> ecc, Span<byte> output, int version, in ECCInfo eccInfo)
     {
+        // The interleaving process distributes data across blocks to improve error resilience:
+        // 1. Data codewords are interleaved in round-robin order from all blocks
+        // 2. ECC codewords are interleaved in round-robin order from all blocks
+        // 3. Final sequence follows QR code specification for optimal error correction
+
         var outputIndex = 0;
         var totalBlocks = eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2;
         var maxCodewordCount = Math.Max(eccInfo.CodewordsInGroup1, eccInfo.CodewordsInGroup2);
