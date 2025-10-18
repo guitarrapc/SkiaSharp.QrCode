@@ -334,12 +334,12 @@ public class QRCodeData
     }
 
     /// <summary>
-    /// Calculate size (without quiet zone) from version
+    /// Calculates the number of modules per side (excluding quiet zone) for a given QR code version.
     /// </summary>
-    /// <param name="version"></param>
-    /// <returns></returns>
+    /// <param name="version">QR code version (must be in the range 1-40)</param>
+    /// <returns>The number of modules per side for the specified QR code version.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int SizeFromVersion(int version) => 21 + (version - 1) * 4;
+    internal static int SizeFromVersion(int version) => 21 + (version - 1) * 4;
 
     /// <summary>
     /// Calculate version from size (without quiet zone)
