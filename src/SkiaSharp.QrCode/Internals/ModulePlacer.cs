@@ -151,7 +151,7 @@ internal static class ModulePlacer
                     var xModule = x - xOffset;
                     var bitIndex = y * size + xModule;
 
-                    if (!IsBlockedFast(blockedMask, bitIndex) && bitPos < totalBits)
+                    if (!IsModuleBlocked(blockedMask, bitIndex) && bitPos < totalBits)
                     {
                         var byteIndex = bitPos >> 3;
                         var bitMask = 1 << (7 - (bitPos & 7)); // MSB first
@@ -486,7 +486,7 @@ internal static class ModulePlacer
     /// <param name="bitIndex">Linear index of module</param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsBlockedFast(ReadOnlySpan<byte> mask, int bitIndex)
+    private static bool IsModuleBlocked(ReadOnlySpan<byte> mask, int bitIndex)
     {
         // Performance: O(1) constant-time lookup using bitwise operations.
         // 
@@ -516,7 +516,7 @@ internal static class ModulePlacer
             for (var col = 0; col < size; col++)
             {
                 var bitIndex = rowOffset + col;
-                if (!IsBlockedFast(blockedMask, bitIndex))
+                if (!IsModuleBlocked(blockedMask, bitIndex))
                 {
                     buffer[bitIndex] = (byte)(buffer[bitIndex] ^ (MaskPattern.Apply(patternIndex, col, row) ? 1 : 0));
                 }
