@@ -33,9 +33,15 @@ public class ModulePlacerBinaryUnitTest
         // String data: equivalent bit string
         var stringData = "1010101111001101";
 
+        // Build blocked mask
+        var maskSize = (qrCodeBinarySize * qrCodeBinarySize + 7) / 8;
+        Span<byte> blockedMask = stackalloc byte[maskSize];
+        blockedMask.Clear();
+        QRCodeGenerator.BuildBlockedMask(blockedMask, qrCodeBinarySize, blockedModulesBinary.Slice(0, blockedCountBinary));
+
         // Act
-        ModulePlacer.PlaceDataWords(qrCodeBinaryBuffer, qrCodeBinarySize, binaryData, blockedModulesBinary);
-        ModulePlacer.PlaceDataWords(ref qrCodeString, stringData, blockedModulesString);
+        ModulePlacer.PlaceDataWords(qrCodeBinaryBuffer, qrCodeBinarySize, binaryData, blockedMask);
+        ModulePlacer.PlaceDataWords(ref qrCodeString, stringData, blockedMask);
 
         // Assert - Compare matrices
         for (int row = 0; row < qrCodeBinary.Size; row++)
@@ -63,8 +69,14 @@ public class ModulePlacerBinaryUnitTest
         ModulePlacer.PlaceFinderPatterns(buffer, size, blockedModules, ref blockedCount);
         ModulePlacer.PlaceTimingPatterns(buffer, size, blockedModules, ref blockedCount);
 
+        // Build blocked mask
+        var maskSize = (size * size + 7) / 8;
+        Span<byte> blockedMask = stackalloc byte[maskSize];
+        blockedMask.Clear();
+        QRCodeGenerator.BuildBlockedMask(blockedMask, size, blockedModules.Slice(0, blockedCount));
+
         // Act
-        ModulePlacer.PlaceDataWords(buffer, size, data, blockedModules);
+        ModulePlacer.PlaceDataWords(buffer, size, data, blockedMask);
 
         // Assert - Verify data is placed (not all zeros/all ones)
         int darkCount = 0;

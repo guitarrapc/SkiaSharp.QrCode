@@ -1,4 +1,3 @@
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 
@@ -42,7 +41,7 @@ internal static class ModulePlacer
     /// Tests all 8 mask patterns and selects one with lowest penalty score.
     /// </summary>
     /// <returns>Selected mask pattern number (0-7).</returns>
-    public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<Rectangle> blockedModules, ECCLevel eccLevel)
+    public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
     {
         var dataLength = size * size;
         var bestPatternIndex = 0;
@@ -53,14 +52,14 @@ internal static class ModulePlacer
         if (dataLength <= StackAlloc_threshold)
         {
             Span<byte> tempBuffer = stackalloc byte[dataLength];
-            bestPatternIndex = EvaluateMaskPatterns(buffer, tempBuffer, version, size, blockedModules, eccLevel);
+            bestPatternIndex = EvaluateMaskPatterns(buffer, tempBuffer, version, size, blockedMask, eccLevel);
         }
         else
         {
             var rentBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
             try
             {
-                bestPatternIndex = EvaluateMaskPatterns(buffer, rentBuffer.AsSpan()[..dataLength], version, size, blockedModules, eccLevel);
+                bestPatternIndex = EvaluateMaskPatterns(buffer, rentBuffer.AsSpan()[..dataLength], version, size, blockedMask, eccLevel);
             }
             finally
             {
@@ -69,13 +68,13 @@ internal static class ModulePlacer
         }
 
         // Apply mask to original QR code
-        ApplyMaskToDataAreaInPlace(buffer, size, bestPatternIndex, blockedModules);
+        ApplyMaskToDataAreaInPlace(buffer, size, bestPatternIndex, blockedMask);
 
         return bestPatternIndex;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int EvaluateMaskPatterns(ReadOnlySpan<byte> originalData, Span<byte> tempBuffer, int version, int size, ReadOnlySpan<Rectangle> blockedModules, ECCLevel eccLevel)
+    private static int EvaluateMaskPatterns(ReadOnlySpan<byte> originalData, Span<byte> tempBuffer, int version, int size, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
     {
         var bestPatternIndex = 0;
         var bestScore = int.MaxValue;
@@ -87,7 +86,7 @@ internal static class ModulePlacer
             originalData.CopyTo(tempBuffer);
 
             // Apply mask pattern to data area only
-            ApplyMaskToDataAreaInPlace(tempBuffer, size, patternIndex, blockedModules);
+            ApplyMaskToDataAreaInPlace(tempBuffer, size, patternIndex, blockedMask);
 
             // Apply format and version information
             var formatBits = QRCodeConstants.GetFormatBits(eccLevel, patternIndex);
@@ -116,8 +115,8 @@ internal static class ModulePlacer
     /// Fills modules in zigzag pattern from bottom-right to top-left.
     /// </summary>
     /// <param name="buffer">QR code data structure to populate.</param>
-    /// <param name="data">Interleaved data and ECC bytes.</param>
-    /// <param name="blockedModules">List of reserved module areas.</param>
+    /// <param name="interleavedData">Interleaved data and ECC bytes.</param>
+    /// <param name="blockedMask">blocked mask bytes.</param>
     /// <remarks>
     /// Bits are read MSG-first (most significant bit first) from the byte array.
     ///
@@ -128,10 +127,11 @@ internal static class ModulePlacer
     /// - Skip timing pattern column (column 6)
     /// - Fill out non-blocked modules
     /// </remarks>
-    public static void PlaceDataWords(Span<byte> buffer, int size, ReadOnlySpan<byte> data, ReadOnlySpan<Rectangle> blockedModules)
+    public static void PlaceDataWords(Span<byte> buffer, int size, ReadOnlySpan<byte> interleavedData, ReadOnlySpan<byte> blockedMask)
     {
+        var bitPos = 0;
+        var totalBits = interleavedData.Length * 8;
         var up = true;
-        var bitReader = new BitReader(data);
 
         for (var x = size - 1; x >= 0; x -= 2)
         {
@@ -139,25 +139,30 @@ internal static class ModulePlacer
             if (x == 6)
                 x--;
 
+            // Process each row in zigzag pattern
             for (var yMod = 1; yMod <= size; yMod++)
             {
+                // zigzag direction
                 var y = up ? size - yMod : yMod - 1;
 
                 // Process 2 columns (x and x-1)
                 for (var xOffset = 0; xOffset < 2; xOffset++)
                 {
                     var xModule = x - xOffset;
+                    var bitIndex = y * size + xModule;
 
-                    // Skip blocked module (finder patterns, timing patterns, format/version info, etc.)
-                    if (IsPointBlocked(xModule, y, blockedModules))
-                        continue;
-
-                    // Place bit if available
-                    buffer[y * size + xModule] = bitReader.HasBits && bitReader.Read() ? (byte)1 : (byte)0;
+                    if (!IsModuleBlocked(blockedMask, bitIndex) && bitPos < totalBits)
+                    {
+                        var byteIndex = bitPos >> 3;
+                        var bitMask = 1 << (7 - (bitPos & 7)); // MSB first
+                        var module = (interleavedData[byteIndex] & bitMask) != 0 ? (byte)1 : (byte)0;
+                        buffer[bitIndex] = module;
+                        bitPos++;
+                    }
                 }
             }
 
-            // alternate direction
+            // Alternate direction
             up = !up;
         }
     }
@@ -168,8 +173,8 @@ internal static class ModulePlacer
     /// </summary>
     /// <param name="qrCode">QR code data structure to populate.</param>
     /// <param name="data">Interleaved data and ECC bytes string.</param>
-    /// <param name="blockedModules">List of reserved module areas.</param>
-    public static void PlaceDataWords(ref QRCodeData qrCode, string data, ReadOnlySpan<Rectangle> blockedModules)
+    /// <param name="blockedMask">blocked mask bytes.</param>
+    public static void PlaceDataWords(ref QRCodeData qrCode, string data, ReadOnlySpan<byte> blockedMask)
     {
         var size = qrCode.Size;
         var up = true;
@@ -189,9 +194,10 @@ internal static class ModulePlacer
                 for (var xOffset = 0; xOffset < 2; xOffset++)
                 {
                     var xModule = x - xOffset;
+                    var bitPos = y * size + xModule;
 
                     // Skip blocked module (finder patterns, timing patterns, format/version info, etc.)
-                    if (IsPointBlocked(xModule, y, blockedModules))
+                    if (IsModuleBlocked(blockedMask, bitPos))
                         continue;
 
                     // Place bit if available
@@ -434,61 +440,45 @@ internal static class ModulePlacer
     }
 
     /// <summary>
-    /// Checks if a single point (module) is blocked.
-    /// Optimized for 1x1 point checks without Rectangle allocations.
+    /// Check if a module at given bit index is blocked using a bitmask.
     /// </summary>
-    /// <param name="x">Column position</param>
-    /// <param name="y">Row position</param>
-    /// <param name="blockedModules">List of reserved module areas</param>
+    /// <param name="mask">Bitmask buffer</param>
+    /// <param name="bitIndex">Linear index of module</param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsPointBlocked(int x, int y, ReadOnlySpan<Rectangle> blockedModules)
+    private static bool IsModuleBlocked(ReadOnlySpan<byte> mask, int bitIndex)
     {
-        foreach (var rect in blockedModules)
-        {
-            if (x >= rect.X && x < rect.X + rect.Width &&
-                y >= rect.Y && y < rect.Y + rect.Height)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
+        // Performance: O(1) constant-time lookup using bitwise operations.
+        // 
+        // Bit extraction:
+        // - Byte index = bitIndex >> 3 (equivalent to bitIndex / 8)
+        // - Bit position = bitIndex & 7 (equivalent to bitIndex % 8)
+        // - Mask = 1 << bit_position
+        // - Result = (byte & mask) != 0
+        // 
+        // Example (bitIndex = 10):
+        // - Byte index: 10 >> 3 = 1 (second byte)
+        // - Bit position: 10 & 7 = 2 (third bit from LSB)
+        // - Mask: 1 << 2 = 0b00000100
 
-    /// <summary>
-    /// Checks if a rectangle overlaps with any blocked module area.
-    /// </summary>
-    /// <param name="r1"></param>
-    /// <param name="blockedModules"></param>
-    /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsBlocked(Rectangle r1, ReadOnlySpan<Rectangle> blockedModules)
-    {
-        // Tried HashSet pattern for O(1) lookup, but it was slower than this simple loop O(n) and has memory overhead.
-        // Keep this implementation for now.
-        foreach (var blockedMod in blockedModules)
-        {
-            if (Intersects(blockedMod, r1))
-                return true;
-        }
-        return false;
+        return (mask[bitIndex >> 3] & (1 << (bitIndex & 7))) != 0;
     }
 
     /// <summary>
     /// Apply the mask pattern to the data area only in-place, skipping blocked modules.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ApplyMaskToDataAreaInPlace(Span<byte> buffer, int size, int patternIndex, ReadOnlySpan<Rectangle> blockedModules)
+    private static void ApplyMaskToDataAreaInPlace(Span<byte> buffer, int size, int patternIndex, ReadOnlySpan<byte> blockedMask)
     {
         for (var row = 0; row < size; row++)
         {
             var rowOffset = row * size;
             for (var col = 0; col < size; col++)
             {
-                if (!IsPointBlocked(col, row, blockedModules))
+                var bitIndex = rowOffset + col;
+                if (!IsModuleBlocked(blockedMask, bitIndex))
                 {
-                    var idx = rowOffset + col;
-                    buffer[idx] = (byte)(buffer[idx] ^ (MaskPattern.Apply(patternIndex, col, row) ? 1 : 0));
+                    buffer[bitIndex] = (byte)(buffer[bitIndex] ^ (MaskPattern.Apply(patternIndex, col, row) ? 1 : 0));
                 }
             }
         }
