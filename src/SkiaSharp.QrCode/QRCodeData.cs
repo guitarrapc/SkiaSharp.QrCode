@@ -57,26 +57,6 @@ public class QRCodeData
     }
 
     /// <summary>
-    /// Creates a deep copy of an existing <see cref="QRCodeData"/> instance
-    /// All module states are copied to ensure independence from the source.
-    /// </summary>
-    /// <param name="source">Source QR code data to copy</param>
-    /// <remarks>
-    /// This constructor is useful for creating temporary QR codes during mask pattern selection.
-    /// The copied instance is completely independent and modifications do not affect the source.
-    /// </remarks>
-    public QRCodeData(QRCodeData source)
-    {
-        Version = source.Version;
-        _size = source.Size;
-        _actualDataLength = source._actualDataLength;
-        _moduleData = new byte[_actualDataLength];
-
-        // Copy matrix data (excluding any padding)
-        Array.Copy(source._moduleData, _moduleData, source._actualDataLength);
-    }
-
-    /// <summary>
     /// Initializes using the specified raw data and compression
     /// mode.
     /// </summary>
@@ -128,38 +108,6 @@ public class QRCodeData
 
         if (bitIndex < totalBits)
             throw new InvalidOperationException($"Insufficient data: expected {totalBits} bits, got {bitIndex}.");
-    }
-
-    /// <summary>
-    /// Resets the current instance's module matrix to match another <see cref="QRCodeData"/> instance.
-    /// </summary>
-    /// <param name="source">The source <see cref="QRCodeData"/> instance to copy the module matrix from.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void ResetTo(ref QRCodeData source)
-    {
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-    source._moduleData.AsSpan(0, source._actualDataLength).CopyTo(_moduleData);
-#else
-        Array.Copy(source._moduleData, _moduleData, source._actualDataLength);
-#endif
-    }
-
-    /// <summary>
-    /// Gets a row as readonly byte span
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ReadOnlySpan<byte> GetRow(int row)
-    {
-        return new ReadOnlySpan<byte>(_moduleData, row * _size, _size);
-    }
-
-    /// <summary>
-    /// Gets a row as mutable byte span
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal Span<byte> GetRowMutable(int row)
-    {
-        return new Span<byte>(_moduleData, row * _size, _size);
     }
 
     /// <summary>
