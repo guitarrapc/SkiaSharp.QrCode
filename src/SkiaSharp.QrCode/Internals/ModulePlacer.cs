@@ -647,7 +647,6 @@ internal static class ModulePlacer
             var lastValRow = buffer[rowOffset] != 0;
             // for Penalty 3
             uint rowBits = 0;
-            uint colBits = 0;
 
             for (var x = 0; x < size; x++)
             {
@@ -689,31 +688,30 @@ internal static class ModulePlacer
                 }
 
                 // Penalty 3: row direction (11-bit sliding window)
-                // Build row/col bits (shift left and OR with current bit == add new bit)
+                // Build row bits (shift left and OR with current bit == add new bit)
                 rowBits = ((rowBits << 1) | (buffer[rowOffset + x] != 0 ? 1u : 0u)) & MASK_11BIT;
-                colBits = ((colBits << 1) | (buffer[x * size + y] != 0 ? 1u : 0u)) & MASK_11BIT;
                 // 11 bits ready, check for pattern
                 if (x >= 10)
                 {
                     // Check row bits
                     if (rowBits == PATTERN_FORWARD || rowBits == PATTERN_BACKWARD)
                         score3 += 40;
-
-                    // Check column bits
-                    if (colBits == PATTERN_FORWARD || colBits == PATTERN_BACKWARD)
-                        score3 += 40;
                 }
             }
         }
 
-        // Penalty 1: col direction (avoid transposing in previous loop)
+        // Penalty 1 & 3: col direction (avoid transposing in previous loop)
         for (var x = 0; x < size; x++)
         {
             var modInColumn = 0;
             var lastValColumn = buffer[x] != 0;
+            uint colBits = 0;
+
             for (var y = 0; y < size; y++)
             {
                 var current = buffer[y * size + x] != 0;
+
+                // Panalty 1
                 if (current == lastValColumn)
                 {
                     modInColumn++;
@@ -730,6 +728,14 @@ internal static class ModulePlacer
                 {
                     modInColumn = 1;
                     lastValColumn = current;
+                }
+
+                // Penalty 3
+                colBits = ((colBits << 1) | (buffer[y * size + x] != 0 ? 1u : 0u)) & MASK_11BIT;
+                if (y >= 10)
+                {
+                    if (colBits == PATTERN_FORWARD || colBits == PATTERN_BACKWARD)
+                        score3 += 40;
                 }
             }
         }
