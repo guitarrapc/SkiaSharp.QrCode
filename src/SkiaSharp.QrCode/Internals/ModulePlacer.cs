@@ -252,9 +252,14 @@ internal static class ModulePlacer
     /// </summary>
     public static void PlaceFinderPatterns(Span<byte> buffer, int size, Span<Rectangle> blockedModules, ref int blockedCount)
     {
-        int[] locations = [0, 0, size - 7, 0, 0, size - 7];
+        ReadOnlySpan<Point> locations = stackalloc Point[3]
+        {
+            new Point(0, 0),
+            new Point(size - 7, 0),
+            new Point(0, size - 7),
+        };
 
-        for (var i = 0; i < 6; i = i + 2)
+        foreach (var location in locations)
         {
             for (var x = 0; x < 7; x++)
             {
@@ -262,13 +267,13 @@ internal static class ModulePlacer
                 {
                     if (!(((x == 1 || x == 5) && y > 0 && y < 6) || (x > 0 && x < 6 && (y == 1 || y == 5))))
                     {
-                        var row = y + locations[i + 1];
-                        var col = x + locations[i];
+                        var row = y + location.Y;
+                        var col = x + location.X;
                         buffer[row * size + col] = 1;
                     }
                 }
             }
-            blockedModules[blockedCount++] = new Rectangle(locations[i], locations[i + 1], 7, 7);
+            blockedModules[blockedCount++] = new Rectangle(location.X, location.Y, 7, 7);
         }
     }
 
