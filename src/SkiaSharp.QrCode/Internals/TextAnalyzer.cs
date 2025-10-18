@@ -24,8 +24,6 @@ internal static class TextAnalyzer
     /// <returns></returns>
     public static (EncodingMode encoding, EciMode eciMode, int length) Analyze(ReadOnlySpan<char> text, EciMode requestedEciMode)
     {
-        // TODO: Should change to Byte instead of Numeric.
-        //
         // ISO/IEC 18004 does not define behavior for empty data.
         // However from other practical libraries, when data was empty EncodingMode should use Byte mode.
         // Empty data means no actual data to encode, so the difference in only in mode indicator bits (4 bits for Numeric/Alphanumeric vs 4+4 bits for Byte).
@@ -37,7 +35,7 @@ internal static class TextAnalyzer
         if (text.IsEmpty)
         {
             var actualEciMode = requestedEciMode == EciMode.Default ? EciMode.Default : requestedEciMode;
-            return (EncodingMode.Numeric, actualEciMode, 0);
+            return (EncodingMode.Byte, actualEciMode, 0);
         }
 
 #if SIMD_SUPPORTED
