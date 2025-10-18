@@ -1,4 +1,3 @@
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 
@@ -116,8 +115,8 @@ internal static class ModulePlacer
     /// Fills modules in zigzag pattern from bottom-right to top-left.
     /// </summary>
     /// <param name="buffer">QR code data structure to populate.</param>
-    /// <param name="data">Interleaved data and ECC bytes.</param>
-    /// <param name="blockedModules">List of reserved module areas.</param>
+    /// <param name="interleavedData">Interleaved data and ECC bytes.</param>
+    /// <param name="blockedMask">blocked mask bytes.</param>
     /// <remarks>
     /// Bits are read MSG-first (most significant bit first) from the byte array.
     ///
@@ -128,10 +127,11 @@ internal static class ModulePlacer
     /// - Skip timing pattern column (column 6)
     /// - Fill out non-blocked modules
     /// </remarks>
-    public static void PlaceDataWords(Span<byte> buffer, int size, ReadOnlySpan<byte> data, ReadOnlySpan<Rectangle> blockedModules)
+    public static void PlaceDataWords(Span<byte> buffer, int size, ReadOnlySpan<byte> interleavedData, ReadOnlySpan<byte> blockedMask)
     {
+        var bitPos = 0;
+        var totalBits = interleavedData.Length * 8;
         var up = true;
-        var bitReader = new BitReader(data);
 
         for (var x = size - 1; x >= 0; x -= 2)
         {
@@ -139,25 +139,30 @@ internal static class ModulePlacer
             if (x == 6)
                 x--;
 
+            // Process each row in zigzag pattern
             for (var yMod = 1; yMod <= size; yMod++)
             {
+                // zigzag direction
                 var y = up ? size - yMod : yMod - 1;
 
                 // Process 2 columns (x and x-1)
                 for (var xOffset = 0; xOffset < 2; xOffset++)
                 {
                     var xModule = x - xOffset;
+                    var bitIndex = y * size + xModule;
 
-                    // Skip blocked module (finder patterns, timing patterns, format/version info, etc.)
-                    if (IsPointBlocked(xModule, y, blockedModules))
-                        continue;
-
-                    // Place bit if available
-                    buffer[y * size + xModule] = bitReader.HasBits && bitReader.Read() ? (byte)1 : (byte)0;
+                    if (!IsBlockedFast(blockedMask, bitIndex) && bitPos < totalBits)
+                    {
+                        var byteIndex = bitPos >> 3;
+                        var bitMask = 1 << (7 - (bitPos & 7)); // MSB first
+                        var module = (interleavedData[byteIndex] & bitMask) != 0 ? (byte)1 : (byte)0;
+                        buffer[bitIndex] = module;
+                        bitPos++;
+                    }
                 }
             }
 
-            // alternate direction
+            // Alternate direction
             up = !up;
         }
     }
@@ -472,6 +477,31 @@ internal static class ModulePlacer
                 return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Check if a module at given bit index is blocked using a bitmask.
+    /// </summary>
+    /// <param name="mask">Bitmask buffer</param>
+    /// <param name="bitIndex">Linear index of module</param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsBlockedFast(ReadOnlySpan<byte> mask, int bitIndex)
+    {
+        // Performance: O(1) constant-time lookup using bitwise operations.
+        // 
+        // Bit extraction:
+        // - Byte index = bitIndex >> 3 (equivalent to bitIndex / 8)
+        // - Bit position = bitIndex &amp; 7 (equivalent to bitIndex % 8)
+        // - Mask = 1 &lt;&lt; bit_position
+        // - Result = (byte &amp; mask) != 0
+        // 
+        // Example (bitIndex = 10):
+        // - Byte index: 10 >> 3 = 1 (second byte)
+        // - Bit position: 10 &amp; 7 = 2 (third bit from LSB)
+        // - Mask: 1 &lt;&lt; 2 = 0b00000100
+
+        return (mask[bitIndex >> 3] & (1 << (bitIndex & 7))) != 0;
     }
 
     /// <summary>

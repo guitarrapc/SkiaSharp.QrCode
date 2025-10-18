@@ -418,19 +418,19 @@ public static class QRCodeGenerator
         // Version 7:  approximately 27
         // Version 40: approximately 57
         Rectangle[]? rentedBlockedModules = null;
-        var blockedModulesSize = CalculateBlockedModulesSize(version);
+        byte[]? rentedBlockedMask = null;
+
         try
         {
-            if (version > StackAllocThreshold)
-                rentedBlockedModules = ArrayPool<Rectangle>.Shared.Rent(blockedModulesSize);
+            var blockedModulesSize = CalculateBlockedModulesSize(version);
             Span<Rectangle> blockedModulesBuffer = version > StackAllocThreshold
-                ? rentedBlockedModules.AsSpan(0, blockedModulesSize)
+                ? (rentedBlockedModules = ArrayPool<Rectangle>.Shared.Rent(blockedModulesSize)).AsSpan(0, blockedModulesSize)
                 : stackalloc Rectangle[StackAllocSize];
+            blockedModulesBuffer.Clear();
             var blockedCount = 0;
 
             // Place all patterns
             var alignmentPatternLocations = GetAlignmentPatternPositions(version);
-
             ModulePlacer.PlaceFinderPatterns(buffer, size, blockedModulesBuffer, ref blockedCount);
             ModulePlacer.ReserveSeparatorAreas(size, blockedModulesBuffer, ref blockedCount);
             ModulePlacer.PlaceAlignmentPatterns(buffer, size, alignmentPatternLocations, blockedModulesBuffer, ref blockedCount);
@@ -438,8 +438,16 @@ public static class QRCodeGenerator
             ModulePlacer.PlaceDarkModule(buffer, size, version, blockedModulesBuffer, ref blockedCount);
             ModulePlacer.ReserveVersionAreas(size, version, blockedModulesBuffer, ref blockedCount);
 
+            // Generate BitMask
+            var maskSize = (size * size + 7) / 8;
+            Span<byte> blockedMask = maskSize <= 1024
+                ? stackalloc byte[maskSize]
+                : (rentedBlockedMask = ArrayPool<byte>.Shared.Rent(maskSize)).AsSpan(0, maskSize);
+            blockedMask.Clear();
+            BuildBlockedMask(blockedMask, size, blockedModulesBuffer.Slice(0, blockedCount));
+
             // Place data
-            ModulePlacer.PlaceDataWords(buffer, size, interleavedData, blockedModulesBuffer.Slice(0, blockedCount));
+            ModulePlacer.PlaceDataWords(buffer, size, interleavedData, blockedMask);
 
             // Apply mask and format
             var maskVersion = ModulePlacer.MaskCode(buffer, size, version, blockedModulesBuffer.Slice(0, blockedCount), eccLevel);
@@ -457,6 +465,32 @@ public static class QRCodeGenerator
         {
             if (rentedBlockedModules is not null)
                 ArrayPool<Rectangle>.Shared.Return(rentedBlockedModules, clearArray: false);
+            if (rentedBlockedMask is not null)
+                ArrayPool<byte>.Shared.Return(rentedBlockedMask, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// Builds a bitmask from blocked module rectangles for O(1) lookup.
+    /// Each bit in the mask represents whether a module is blocked (1) or free (0).
+    /// </summary>
+    /// <param name="mask">Output bitmask buffer</param>
+    /// <param name="size">The size of the QR code matrix</param>
+    /// <param name="blockedModules">List of rectangular areas</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void BuildBlockedMask(Span<byte> mask, int size, ReadOnlySpan<Rectangle> blockedModules)
+    {
+        foreach (var rect in blockedModules)
+        {
+            for (var y = rect.Y; y < rect.Y + rect.Height; y++)
+            {
+                var rowOffset = y * size;
+                for (var x = rect.X; x < rect.X + rect.Width; x++)
+                {
+                    var bitIndex = rowOffset + x;
+                    mask[bitIndex >> 3] |= (byte)(1 << (bitIndex & 7));
+                }
+            }
         }
     }
 
