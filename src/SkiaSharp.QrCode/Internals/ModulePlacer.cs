@@ -710,7 +710,7 @@ internal static class ModulePlacer
             {
                 var current = buffer[y * size + x] != 0;
 
-                // Panalty 1
+                // Penalty 1
                 if (current == lastValColumn)
                 {
                     modInColumn++;
