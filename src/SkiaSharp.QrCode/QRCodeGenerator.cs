@@ -623,7 +623,7 @@ public static class QRCodeGenerator
     /// <param name="qrCodeData">The QRCodeData matrix to apply the mask and format information to.</param>
     /// <param name="version">The QR code version (1-40).</param>
     /// <param name="eccLevel">The error correction level to use.</param>
-    /// <param name="blockedModules">A list of rectangles representing modules that should not be masked (reserved areas).</param>
+    /// <param name="blockedMask">blocked mask bytes.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ApplyMaskAndFormat(ref QRCodeData qrCodeData, int version, ECCLevel eccLevel, ReadOnlySpan<byte> blockedMask)
     {

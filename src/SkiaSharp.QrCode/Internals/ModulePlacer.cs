@@ -173,7 +173,7 @@ internal static class ModulePlacer
     /// </summary>
     /// <param name="qrCode">QR code data structure to populate.</param>
     /// <param name="data">Interleaved data and ECC bytes string.</param>
-    /// <param name="blockedMask">List of reserved module areas.</param>
+    /// <param name="blockedMask">blocked mask bytes.</param>
     public static void PlaceDataWords(ref QRCodeData qrCode, string data, ReadOnlySpan<byte> blockedMask)
     {
         var size = qrCode.Size;
@@ -452,14 +452,14 @@ internal static class ModulePlacer
         // 
         // Bit extraction:
         // - Byte index = bitIndex >> 3 (equivalent to bitIndex / 8)
-        // - Bit position = bitIndex &amp; 7 (equivalent to bitIndex % 8)
-        // - Mask = 1 &lt;&lt; bit_position
-        // - Result = (byte &amp; mask) != 0
+        // - Bit position = bitIndex & 7 (equivalent to bitIndex % 8)
+        // - Mask = 1 << bit_position
+        // - Result = (byte & mask) != 0
         // 
         // Example (bitIndex = 10):
         // - Byte index: 10 >> 3 = 1 (second byte)
-        // - Bit position: 10 &amp; 7 = 2 (third bit from LSB)
-        // - Mask: 1 &lt;&lt; 2 = 0b00000100
+        // - Bit position: 10 & 7 = 2 (third bit from LSB)
+        // - Mask: 1 << 2 = 0b00000100
 
         return (mask[bitIndex >> 3] & (1 << (bitIndex & 7))) != 0;
     }
