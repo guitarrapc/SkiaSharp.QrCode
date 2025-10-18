@@ -547,34 +547,46 @@ public static class QRCodeGenerator
         // Version 1:  approximately  9
         // Version 7:  approximately 27
         // Version 40: approximately 57
-        Span<Rectangle> blockedModules = version <= StackAllocThreshold
-            ? stackalloc Rectangle[StackAllocSize]
-            : new Rectangle[CalculateBlockedModulesSize(version)];
-        var blockedCount = 0;
-
-        // Place all patterns
-        var alignmentPatternLocations = GetAlignmentPatternPositions(version);
-
-        ModulePlacer.PlaceFinderPatterns(buffer, size, blockedModules, ref blockedCount);
-        ModulePlacer.ReserveSeparatorAreas(size, blockedModules, ref blockedCount);
-        ModulePlacer.PlaceAlignmentPatterns(buffer, size, alignmentPatternLocations, blockedModules, ref blockedCount);
-        ModulePlacer.PlaceTimingPatterns(buffer, size, blockedModules, ref blockedCount);
-        ModulePlacer.PlaceDarkModule(buffer, size, version, blockedModules, ref blockedCount);
-        ModulePlacer.ReserveVersionAreas(size, version, blockedModules, ref blockedCount);
-
-        // Place data
-        ModulePlacer.PlaceDataWords(buffer, size, interleavedData, blockedModules.Slice(0, blockedCount));
-
-        // Apply mask and format
-        var maskVersion = ModulePlacer.MaskCode(buffer, size, version, blockedModules.Slice(0, blockedCount), eccLevel);
-        var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
-        ModulePlacer.PlaceFormat(buffer, size, formatBit);
-
-        // Place version information (version 7+)
-        if (version >= 7)
+        Rectangle[]? rentedBlockedModules = null;
+        var blockedModulesSize = CalculateBlockedModulesSize(version);
+        try
         {
-            var versionBits = QRCodeConstants.GetVersionBits(version);
-            ModulePlacer.PlaceVersion(buffer, size, versionBits);
+            if (version > StackAllocThreshold)
+                rentedBlockedModules = ArrayPool<Rectangle>.Shared.Rent(blockedModulesSize);
+            Span<Rectangle> blockedModulesBuffer = version > StackAllocThreshold
+                ? rentedBlockedModules.AsSpan(0, blockedModulesSize)
+                : stackalloc Rectangle[StackAllocSize];
+            var blockedCount = 0;
+
+            // Place all patterns
+            var alignmentPatternLocations = GetAlignmentPatternPositions(version);
+
+            ModulePlacer.PlaceFinderPatterns(buffer, size, blockedModulesBuffer, ref blockedCount);
+            ModulePlacer.ReserveSeparatorAreas(size, blockedModulesBuffer, ref blockedCount);
+            ModulePlacer.PlaceAlignmentPatterns(buffer, size, alignmentPatternLocations, blockedModulesBuffer, ref blockedCount);
+            ModulePlacer.PlaceTimingPatterns(buffer, size, blockedModulesBuffer, ref blockedCount);
+            ModulePlacer.PlaceDarkModule(buffer, size, version, blockedModulesBuffer, ref blockedCount);
+            ModulePlacer.ReserveVersionAreas(size, version, blockedModulesBuffer, ref blockedCount);
+
+            // Place data
+            ModulePlacer.PlaceDataWords(buffer, size, interleavedData, blockedModulesBuffer.Slice(0, blockedCount));
+
+            // Apply mask and format
+            var maskVersion = ModulePlacer.MaskCode(buffer, size, version, blockedModulesBuffer.Slice(0, blockedCount), eccLevel);
+            var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
+            ModulePlacer.PlaceFormat(buffer, size, formatBit);
+
+            // Place version information (version 7+)
+            if (version >= 7)
+            {
+                var versionBits = QRCodeConstants.GetVersionBits(version);
+                ModulePlacer.PlaceVersion(buffer, size, versionBits);
+            }
+        }
+        finally
+        {
+            if (rentedBlockedModules is not null)
+                ArrayPool<Rectangle>.Shared.Return(rentedBlockedModules, clearArray: false);
         }
     }
 
