@@ -689,11 +689,10 @@ internal static class ModulePlacer
 
                 // Penalty 3: row direction (11-bit sliding window)
                 // Build row bits (shift left and OR with current bit == add new bit)
-                rowBits = ((rowBits << 1) | (buffer[rowOffset + x] != 0 ? 1u : 0u)) & MASK_11BIT;
+                rowBits = ((rowBits << 1) | (current ? 1u : 0u)) & MASK_11BIT;
                 // 11 bits ready, check for pattern
                 if (x >= 10)
                 {
-                    // Check row bits
                     if (rowBits == PATTERN_FORWARD || rowBits == PATTERN_BACKWARD)
                         score3 += 40;
                 }
@@ -730,8 +729,9 @@ internal static class ModulePlacer
                     lastValColumn = current;
                 }
 
-                // Penalty 3
-                colBits = ((colBits << 1) | (buffer[y * size + x] != 0 ? 1u : 0u)) & MASK_11BIT;
+                // Penalty 3: col direction (11-bit sliding window)
+                colBits = ((colBits << 1) | (current ? 1u : 0u)) & MASK_11BIT;
+                // 11 bits ready, check for pattern
                 if (y >= 10)
                 {
                     if (colBits == PATTERN_FORWARD || colBits == PATTERN_BACKWARD)
