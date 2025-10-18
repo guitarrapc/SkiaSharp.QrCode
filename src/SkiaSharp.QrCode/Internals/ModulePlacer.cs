@@ -553,66 +553,37 @@ internal static class ModulePlacer
     //     }
     // }
     //
-    // // Penalty 3: Finder-like patterns
-    // for (var y = 0; y < size; y++)
+    // // Penalty 3: Finder-like patterns (with sliding 11-bit window)
+    // // pattern: 1011101 (dark-light-dark-dark-dark-light-dark)
+    // const uint PATTERN_FORWARD = 0b_0000_1011101; // 4 light modules + pattern
+    // const uint PATTERN_BACKWARD = 0b_1011101_0000; // pattern + 4 light modules
+    // const uint MASK_11BIT = 0b_111_1111_1111; // guarantee 11 bits
+    // for (var y = 0; y<size; y++)
     // {
-    //     for (var x = 0; x < size - 10; x++)
+    //     var rowOffset = y * size;
+    //     uint rowBits = 0;
+    //     uint colBits = 0;
+    //     for (var x = 0; x<size; x++)
     //     {
-    //         if ((qrCode[y, x] &&
-    //             !qrCode[y, x + 1] &&
-    //             qrCode[y, x + 2] &&
-    //             qrCode[y, x + 3] &&
-    //             qrCode[y, x + 4] &&
-    //             !qrCode[y, x + 5] &&
-    //             qrCode[y, x + 6] &&
-    //             !qrCode[y, x + 7] &&
-    //             !qrCode[y, x + 8] &&
-    //             !qrCode[y, x + 9] &&
-    //             !qrCode[y, x + 10]) ||
-    //             (!qrCode[y, x] &&
-    //             !qrCode[y, x + 1] &&
-    //             !qrCode[y, x + 2] &&
-    //             !qrCode[y, x + 3] &&
-    //             qrCode[y, x + 4] &&
-    //             !qrCode[y, x + 5] &&
-    //             qrCode[y, x + 6] &&
-    //             qrCode[y, x + 7] &&
-    //             qrCode[y, x + 8] &&
-    //             !qrCode[y, x + 9] &&
-    //             qrCode[y, x + 10]))
+    //         // Build row/col bits (shift left and OR with current bit == add new bit)
+    //         rowBits = ((rowBits << 1) | (buffer[rowOffset + x] != 0 ? 1u : 0u)) & MASK_11BIT;
+    //         colBits = ((colBits << 1) | (buffer[x * size + y] != 0 ? 1u : 0u)) & MASK_11BIT;
+    // 
+    //         // 11 bits ready, check for pattern
+    //         if (x >= 10)
     //         {
-    //             score3 += 40;
-    //         }
-    //
-    //         if ((qrCode[x, y] &&
-    //             !qrCode[x + 1, y] &&
-    //             qrCode[x + 2, y] &&
-    //             qrCode[x + 3, y] &&
-    //             qrCode[x + 4, y] &&
-    //             !qrCode[x + 5, y] &&
-    //             qrCode[x + 6, y] &&
-    //             !qrCode[x + 7, y] &&
-    //             !qrCode[x + 8, y] &&
-    //             !qrCode[x + 9, y] &&
-    //             !qrCode[x + 10, y]) ||
-    //             (!qrCode[x, y] &&
-    //             !qrCode[x + 1, y] &&
-    //             !qrCode[x + 2, y] &&
-    //             !qrCode[x + 3, y] &&
-    //             qrCode[x + 4, y] &&
-    //             !qrCode[x + 5, y] &&
-    //             qrCode[x + 6, y] &&
-    //             qrCode[x + 7, y] &&
-    //             qrCode[x + 8, y] &&
-    //             !qrCode[x + 9, y] &&
-    //             qrCode[x + 10, y]))
-    //         {
-    //             score3 += 40;
+    //             // Check row bits
+    //             if (rowBits == PATTERN_FORWARD || rowBits == PATTERN_BACKWARD)
+    //                 score3 += 40;
+    // 
+    //             // Check column bits
+    //             if (colBits == PATTERN_FORWARD || colBits == PATTERN_BACKWARD)
+    //                 score3 += 40;
     //         }
     //     }
     // }
     //
-    // //Penalty 4: Dark/light balance
+    // // Penalty 4: Dark/light balance
     // double blackModules = 0;
     // for (var row = 0; row < size; row++)
     // {
@@ -658,16 +629,25 @@ internal static class ModulePlacer
     /// </summary>
     private static int CalculateScore(ReadOnlySpan<byte> buffer, int size)
     {
+        // Penalty3 pattern: 1011101 (dark-light-dark-dark-dark-light-dark)
+        const uint PATTERN_FORWARD = 0b_0000_1011101; // 4 light modules + pattern
+        const uint PATTERN_BACKWARD = 0b_1011101_0000; // pattern + 4 light modules
+        const uint MASK_11BIT = 0b_111_1111_1111; // guarantee 11 bits
+
         var score1 = 0;
         var score2 = 0;
+        var score3 = 0;
         var blackModules = 0; // dark modules count for Penalty 4
 
-        // Scan Penalty 1, 2, 4 in single pass
+        // Scan Penalty 1, 2, 3, 4 in single pass
         for (var y = 0; y < size; y++)
         {
             var rowOffset = y * size;
             var modInRow = 0;
             var lastValRow = buffer[rowOffset] != 0;
+            // for Penalty 3
+            uint rowBits = 0;
+            uint colBits = 0;
 
             for (var x = 0; x < size; x++)
             {
@@ -707,6 +687,22 @@ internal static class ModulePlacer
                         score2 += 3;
                     }
                 }
+
+                // Penalty 3: row direction (11-bit sliding window)
+                // Build row/col bits (shift left and OR with current bit == add new bit)
+                rowBits = ((rowBits << 1) | (buffer[rowOffset + x] != 0 ? 1u : 0u)) & MASK_11BIT;
+                colBits = ((colBits << 1) | (buffer[x * size + y] != 0 ? 1u : 0u)) & MASK_11BIT;
+                // 11 bits ready, check for pattern
+                if (x >= 10)
+                {
+                    // Check row bits
+                    if (rowBits == PATTERN_FORWARD || rowBits == PATTERN_BACKWARD)
+                        score3 += 40;
+
+                    // Check column bits
+                    if (colBits == PATTERN_FORWARD || colBits == PATTERN_BACKWARD)
+                        score3 += 40;
+                }
             }
         }
 
@@ -738,8 +734,6 @@ internal static class ModulePlacer
             }
         }
 
-        var score3 = CalculateScore3(buffer, size);
-
         // Penalty 4: Dark/light balance
         var percent = (blackModules / (double)(size * size)) * 100;
         var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
@@ -747,45 +741,6 @@ internal static class ModulePlacer
         var score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
 
         return score1 + score2 + score3 + score4;
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static int CalculateScore3(ReadOnlySpan<byte> buffer, int size)
-        {
-            var score3 = 0;
-
-            // pattern: 1011101 (dark-light-dark-dark-dark-light-dark)
-            const uint PATTERN_FORWARD = 0b_0000_1011101; // 4 light modules + pattern
-            const uint PATTERN_BACKWARD = 0b_1011101_0000; // pattern + 4 light modules
-            const uint MASK_11BIT = 0b_111_1111_1111; // guarantee 11 bits
-
-            // Penalty 3: Finder-like patterns with sliding 11-bit window
-            for (var y = 0; y < size; y++)
-            {
-                var rowOffset = y * size;
-                uint rowBits = 0;
-                uint colBits = 0;
-                for (var x = 0; x < size; x++)
-                {
-                    // Build row/col bits (shift left and OR with current bit == add new bit)
-                    rowBits = ((rowBits << 1) | (buffer[rowOffset + x] != 0 ? 1u : 0u)) & MASK_11BIT;
-                    colBits = ((colBits << 1) | (buffer[x * size + y] != 0 ? 1u : 0u)) & MASK_11BIT;
-
-                    // 11 bits ready, check for pattern
-                    if (x >= 10)
-                    {
-                        // Check row bits
-                        if (rowBits == PATTERN_FORWARD || rowBits == PATTERN_BACKWARD)
-                            score3 += 40;
-
-                        // Check column bits
-                        if (colBits == PATTERN_FORWARD || colBits == PATTERN_BACKWARD)
-                            score3 += 40;
-                    }
-                }
-            }
-
-            return score3;
-        }
     }
 
     // private class/strusts
