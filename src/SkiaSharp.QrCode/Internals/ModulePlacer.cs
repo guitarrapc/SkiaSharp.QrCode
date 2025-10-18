@@ -440,28 +440,6 @@ internal static class ModulePlacer
     }
 
     /// <summary>
-    /// Checks if a single point (module) is blocked.
-    /// Optimized for 1x1 point checks without Rectangle allocations.
-    /// </summary>
-    /// <param name="x">Column position</param>
-    /// <param name="y">Row position</param>
-    /// <param name="blockedModules">List of reserved module areas</param>
-    /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsPointBlocked(int x, int y, ReadOnlySpan<Rectangle> blockedModules)
-    {
-        foreach (var rect in blockedModules)
-        {
-            if (x >= rect.X && x < rect.X + rect.Width &&
-                y >= rect.Y && y < rect.Y + rect.Height)
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /// <summary>
     /// Check if a module at given bit index is blocked using a bitmask.
     /// </summary>
     /// <param name="mask">Bitmask buffer</param>
