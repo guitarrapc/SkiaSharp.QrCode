@@ -461,25 +461,6 @@ internal static class ModulePlacer
     }
 
     /// <summary>
-    /// Checks if a rectangle overlaps with any blocked module area.
-    /// </summary>
-    /// <param name="r1"></param>
-    /// <param name="blockedModules"></param>
-    /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsBlocked(Rectangle r1, ReadOnlySpan<Rectangle> blockedModules)
-    {
-        // Tried HashSet pattern for O(1) lookup, but it was slower than this simple loop O(n) and has memory overhead.
-        // Keep this implementation for now.
-        foreach (var blockedMod in blockedModules)
-        {
-            if (Intersects(blockedMod, r1))
-                return true;
-        }
-        return false;
-    }
-
-    /// <summary>
     /// Check if a module at given bit index is blocked using a bitmask.
     /// </summary>
     /// <param name="mask">Bitmask buffer</param>
