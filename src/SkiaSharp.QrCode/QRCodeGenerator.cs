@@ -136,7 +136,7 @@ public static class QRCodeGenerator
         var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, requestedVersion);
 
         // Calculate buffer sizes
-        var size = SizeFromVersion(config.Version);
+        var size = QRCodeData.SizeFromVersion(config.Version);
         var dataLength = size * size;
         var sizeWithQuietZone = size + quietZoneSize * 2;
         var dataLengthWithQuietZone = sizeWithQuietZone * sizeWithQuietZone;
@@ -530,8 +530,10 @@ public static class QRCodeGenerator
     }
 
     /// <summary>
-    /// Write the QR code matrix (1D byte array) by placing patterns, data, applying mask, and adding format/version info.
+    /// Writes the QR code matrix (as a 1D byte array) into the provided buffer by placing patterns, data, applying mask, and adding format/version information.
     /// </summary>
+    /// <param name="buffer">The buffer to write the QR code matrix into.</param>
+    /// <param name="size">The size of the QR code matrix (number of modules per side).</param>
     /// <param name="version">The QR code version (1-40) to generate.</param>
     /// <param name="interleavedData">The encoded and interleaved data bytes to be placed in the QR code.</param>
     /// <param name="eccLevel">The error correction level to use for the QR code.</param>
@@ -720,14 +722,6 @@ public static class QRCodeGenerator
         }
         return result;
     }
-
-    /// <summary>
-    /// Calculate size (without quiet zone) from version
-    /// </summary>
-    /// <param name="version"></param>
-    /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int SizeFromVersion(int version) => 21 + (version - 1) * 4;
 
     /// <summary>
     /// Holds QR configuration parameters determined during setup.
