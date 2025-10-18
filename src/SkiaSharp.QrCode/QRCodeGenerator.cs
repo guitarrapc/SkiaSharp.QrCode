@@ -4,7 +4,6 @@ using SkiaSharp.QrCode.Internals;
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
 using SkiaSharp.QrCode.Internals.TextEncoders;
 
-
 namespace SkiaSharp.QrCode;
 
 /// <summary>

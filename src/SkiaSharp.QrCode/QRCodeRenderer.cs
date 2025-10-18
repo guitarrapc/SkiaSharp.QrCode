@@ -1,4 +1,4 @@
-using SkiaSharp.QrCode.Models;
+using SkiaSharp.QrCode.Image;
 
 namespace SkiaSharp.QrCode;
 
