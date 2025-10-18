@@ -41,7 +41,7 @@ public class ModulePlacerBinaryUnitTest
 
         // Act
         ModulePlacer.PlaceDataWords(qrCodeBinaryBuffer, qrCodeBinarySize, binaryData, blockedMask);
-        ModulePlacer.PlaceDataWords(ref qrCodeString, stringData, blockedModulesString);
+        ModulePlacer.PlaceDataWords(ref qrCodeString, stringData, blockedMask);
 
         // Assert - Compare matrices
         for (int row = 0; row < qrCodeBinary.Size; row++)

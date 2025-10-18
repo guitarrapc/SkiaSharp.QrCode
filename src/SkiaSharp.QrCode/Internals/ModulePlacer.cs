@@ -173,8 +173,8 @@ internal static class ModulePlacer
     /// </summary>
     /// <param name="qrCode">QR code data structure to populate.</param>
     /// <param name="data">Interleaved data and ECC bytes string.</param>
-    /// <param name="blockedModules">List of reserved module areas.</param>
-    public static void PlaceDataWords(ref QRCodeData qrCode, string data, ReadOnlySpan<Rectangle> blockedModules)
+    /// <param name="blockedMask">List of reserved module areas.</param>
+    public static void PlaceDataWords(ref QRCodeData qrCode, string data, ReadOnlySpan<byte> blockedMask)
     {
         var size = qrCode.Size;
         var up = true;
@@ -194,9 +194,10 @@ internal static class ModulePlacer
                 for (var xOffset = 0; xOffset < 2; xOffset++)
                 {
                     var xModule = x - xOffset;
+                    var bitPos = y * size + xModule;
 
                     // Skip blocked module (finder patterns, timing patterns, format/version info, etc.)
-                    if (IsPointBlocked(xModule, y, blockedModules))
+                    if (IsModuleBlocked(blockedMask, bitPos))
                         continue;
 
                     // Place bit if available

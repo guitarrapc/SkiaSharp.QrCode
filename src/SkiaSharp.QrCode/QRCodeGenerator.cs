@@ -554,7 +554,7 @@ public static class QRCodeGenerator
             BuildBlockedMask(blockedMask, size, blockedModules.Slice(0, blockedCount));
 
             // place data
-            ModulePlacer.PlaceDataWords(ref qrCodeData, interleavedData, blockedModules.Slice(0, blockedCount));
+            ModulePlacer.PlaceDataWords(ref qrCodeData, interleavedData, blockedMask);
 
             // Apply mask and format
             ApplyMaskAndFormat(ref qrCodeData, version, eccLevel, blockedMask);
