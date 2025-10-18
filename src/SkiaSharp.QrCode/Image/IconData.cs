@@ -1,4 +1,4 @@
-namespace SkiaSharp.QrCode.Models;
+namespace SkiaSharp.QrCode.Image;
 
 public class IconData
 {

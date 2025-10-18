@@ -1,6 +1,6 @@
 using SkiaSharp;
 using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Models;
+using SkiaSharp.QrCode.Image;
 
 var content = "testtesttest";
 var path = "bin/output/hoge.png";
@@ -27,18 +27,16 @@ canvas.Render(qr, info.Width, info.Height);
 //canvas.Render(qr, info.Width, info.Height, SKColor.Empty, SKColor.FromHsl(0, 100, 50));
 
 // Render icon inside QrCode
-var logo = File.ReadAllBytes(iconPath);
+using var logo = SKBitmap.Decode(File.ReadAllBytes(iconPath));
 var icon = new IconData
 {
-    Icon = SKBitmap.Decode(logo),
+    Icon = logo,
     IconSizePercent = 10,
 };
 canvas.Render(qr, info.Width, info.Height, SKColor.Empty, SKColor.Parse("000000"), icon);
 
 // Output to Stream -> File
-using (var image = surface.Snapshot())
-using (var data = image.Encode(SKEncodedImageFormat.Png, 100))
-using (var stream = File.OpenWrite(fullPath))
-{
-    data.SaveTo(stream);
-}
+using var image = surface.Snapshot();
+using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+using var stream = File.OpenWrite(fullPath);
+data.SaveTo(stream);
