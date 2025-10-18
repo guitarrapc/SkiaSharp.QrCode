@@ -64,7 +64,6 @@ public static class QRCodeGenerator
 
         // Prepare configuration
         var config = PrepareConfiguration(plainText, eccLevel, utf8BOM, eciMode, requestedVersion);
-        var size = QRCodeData.SizeFromVersion(config.Version);
 
         // Encode data
         var encodedBits = EncodeData(plainText, config);
@@ -76,7 +75,7 @@ public static class QRCodeGenerator
         var interleavedData = InterleaveCodewords(codewordBlocks, config.EccInfo, config.Version);
 
         // Create QR code matrix
-        var qrCodeData = CreateQRCodeData(config.Version, size, interleavedData, config.EccLevel);
+        var qrCodeData = CreateQRCodeData(config.Version, interleavedData, config.EccLevel);
 
         // Add quiet zone
         if (quietZoneSize > 0)
@@ -524,8 +523,9 @@ public static class QRCodeGenerator
     /// <param name="eccLevel">The error correction level to use for the QR code.</param>
     /// <returns>A <see cref="QRCodeData"/> object containing the generated QR code matrix.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static QRCodeData CreateQRCodeData(int version, int size, string interleavedData, ECCLevel eccLevel)
+    private static QRCodeData CreateQRCodeData(int version, string interleavedData, ECCLevel eccLevel)
     {
+        var size = QRCodeData.SizeFromVersion(version);
         var qrCodeData = new QRCodeData(version);
 
         // Version 1-16: stack allocation (covers 95%+ use cases)
