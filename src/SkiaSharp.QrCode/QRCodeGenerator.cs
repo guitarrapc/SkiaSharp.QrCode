@@ -239,7 +239,7 @@ public static class QRCodeGenerator
     /// <summary>
     /// Prepares QR configuration by determining encoding, ECI mode, and version.
     /// </summary>
-    /// <param name="plainText"></param>
+    /// <param name="textSpan"></param>
     /// <param name="eccLevel"></param>
     /// <param name="utf8Bom"></param>
     /// <param name="eciMode"></param>
