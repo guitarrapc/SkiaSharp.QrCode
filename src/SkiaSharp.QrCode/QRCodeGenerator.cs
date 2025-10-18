@@ -208,7 +208,7 @@ public static class QRCodeGenerator
         }
     }
 
-    // Text
+    // Pipelines
 
     /// <summary>
     /// Prepares QR configuration by determining encoding, ECI mode, and version.
@@ -224,6 +224,31 @@ public static class QRCodeGenerator
     {
         // Analyze text to determine optimal encoding and data length
         var (detectedEncoding, actualEciMode, dataLength) = TextAnalyzer.Analyze(plainText.AsSpan(), eciMode);
+
+        // Select QR code version (auto or manual)
+        var version = requestedVersion == -1
+            ? GetVersion(dataLength, detectedEncoding, eccLevel, actualEciMode)
+            : requestedVersion;
+
+        // Create ECCInfo
+        var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
+
+        return new QRConfiguration(version, eccLevel, detectedEncoding, actualEciMode, utf8Bom, eccInfo, dataLength);
+    }
+
+    /// <summary>
+    /// Prepares QR configuration by determining encoding, ECI mode, and version.
+    /// </summary>
+    /// <param name="plainText"></param>
+    /// <param name="eccLevel"></param>
+    /// <param name="utf8Bom"></param>
+    /// <param name="eciMode"></param>
+    /// <param name="requestedVersion"></param>
+    /// <returns></returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static QRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, bool utf8Bom, EciMode eciMode, int requestedVersion)
+    {
+        var (detectedEncoding, actualEciMode, dataLength) = TextAnalyzer.Analyze(textSpan, eciMode);
 
         // Select QR code version (auto or manual)
         var version = requestedVersion == -1
@@ -258,6 +283,26 @@ public static class QRCodeGenerator
     }
 
     /// <summary>
+    /// Encodes the input text into a binary format and writes it to the provided buffer.
+    /// </summary>
+    /// <param name="textSpan"></param>
+    /// <param name="config"></param>
+    /// <param name="buffer">Output buffer for encoded data.</param>
+    /// <returns>Number of bytes written to the buffer.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int EncodeData(ReadOnlySpan<char> textSpan, in QRConfiguration config, Span<byte> buffer)
+    {
+        var encoder = new QRBinaryEncoder(buffer);
+
+        encoder.WriteMode(config.Encoding, config.EciMode);
+        encoder.WriteCharacterCount(config.DataLength, config.Encoding.GetCountIndicatorLength(config.Version));
+        encoder.WriteData(textSpan, config.Encoding, config.EciMode, config.Utf8BOM);
+        encoder.WritePadding(config.EccInfo.TotalDataCodewords * 8);
+
+        return encoder.ByteCount;
+    }
+
+    /// <summary>
     /// Calculates error correction codewords for the given bit string and ECC info.
     /// </summary>
     /// <param name="bitString">The binary string representing the encoded QR code data.</param>
@@ -288,10 +333,116 @@ public static class QRCodeGenerator
         return blocks;
     }
 
+    /// <summary>
+    /// Calculates Reed-Solomon error correction codewords and writes them to the provided ECC buffer.
+    /// </summary>
+    /// <param name="encodedBytes">The byte representing the encoded QR code data.</param>
+    /// <param name="eccInfo">Error correction information for the QR code version and ECC level.</param>
+    /// <param name="eccBuffer">Output buffer for ECC codewords <c>(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock</c> bytes.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CalculateErrorCorrection(ReadOnlySpan<byte> encodedBytes, in ECCInfo eccInfo, Span<byte> eccBuffer)
+    {
+        var dataOffset = 0;
+        var eccOffset = 0;
+
+        // Process group 1 blocks
+        for (var i = 0; i < eccInfo.BlocksInGroup1; i++)
+        {
+            var blockData = encodedBytes.Slice(dataOffset, eccInfo.CodewordsInGroup1);
+            var blockEcc = eccBuffer.Slice(eccOffset, eccInfo.ECCPerBlock);
+
+            EccBinaryEncoder.CalculateECC(blockData, blockEcc, eccInfo.ECCPerBlock);
+
+            dataOffset += eccInfo.CodewordsInGroup1;
+            eccOffset += eccInfo.ECCPerBlock;
+        }
+
+        // Process group 2 blocks
+        for (var i = 0; i < eccInfo.BlocksInGroup2; i++)
+        {
+            var blockData = encodedBytes.Slice(dataOffset, eccInfo.CodewordsInGroup2);
+            var blockEcc = eccBuffer.Slice(eccOffset, eccInfo.ECCPerBlock);
+
+            EccBinaryEncoder.CalculateECC(blockData, blockEcc, eccInfo.ECCPerBlock);
+
+            dataOffset += eccInfo.CodewordsInGroup2;
+            eccOffset += eccInfo.ECCPerBlock;
+        }
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static string InterleaveCodewords(List<CodewordTextBlock> blocks, in ECCInfo eccInfo, int version)
     {
         return TextInterleaver.InterleaveCodewords(blocks, eccInfo, version);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void InterleaveCodewords(ReadOnlySpan<byte> dataBuffer, ReadOnlySpan<byte> eccBuffer, in ECCInfo eccInfo, int version, Span<byte> output)
+    {
+        BinaryInterleaver.InterleaveCodewords(dataBuffer, eccBuffer, output, version, eccInfo);
+    }
+
+    /// <summary>
+    /// Writes the QR code matrix (as a 1D byte array) into the provided buffer by placing patterns, data, applying mask, and adding format/version information.
+    /// </summary>
+    /// <param name="buffer">The buffer to write the QR code matrix into.</param>
+    /// <param name="size">The size of the QR code matrix (number of modules per side).</param>
+    /// <param name="version">The QR code version (1-40) to generate.</param>
+    /// <param name="interleavedData">The encoded and interleaved data bytes to be placed in the QR code.</param>
+    /// <param name="eccLevel">The error correction level to use for the QR code.</param>
+    /// <returns>A <see cref="QRCodeData"/> object containing the generated QR code matrix.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void WriteQRMatrix(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> interleavedData, ECCLevel eccLevel)
+    {
+        // Version 1-16: stack allocation (covers 95%+ use cases)
+        // Version 17+: heap allocation (large/rare QR codes)
+        const int StackAllocThreshold = 16;
+        const int StackAllocSize = 40; // Sufficient for version 16 (33 modules needed)
+
+        // Version 1:  approximately  9
+        // Version 7:  approximately 27
+        // Version 40: approximately 57
+        Rectangle[]? rentedBlockedModules = null;
+        var blockedModulesSize = CalculateBlockedModulesSize(version);
+        try
+        {
+            if (version > StackAllocThreshold)
+                rentedBlockedModules = ArrayPool<Rectangle>.Shared.Rent(blockedModulesSize);
+            Span<Rectangle> blockedModulesBuffer = version > StackAllocThreshold
+                ? rentedBlockedModules.AsSpan(0, blockedModulesSize)
+                : stackalloc Rectangle[StackAllocSize];
+            var blockedCount = 0;
+
+            // Place all patterns
+            var alignmentPatternLocations = GetAlignmentPatternPositions(version);
+
+            ModulePlacer.PlaceFinderPatterns(buffer, size, blockedModulesBuffer, ref blockedCount);
+            ModulePlacer.ReserveSeparatorAreas(size, blockedModulesBuffer, ref blockedCount);
+            ModulePlacer.PlaceAlignmentPatterns(buffer, size, alignmentPatternLocations, blockedModulesBuffer, ref blockedCount);
+            ModulePlacer.PlaceTimingPatterns(buffer, size, blockedModulesBuffer, ref blockedCount);
+            ModulePlacer.PlaceDarkModule(buffer, size, version, blockedModulesBuffer, ref blockedCount);
+            ModulePlacer.ReserveVersionAreas(size, version, blockedModulesBuffer, ref blockedCount);
+
+            // Place data
+            ModulePlacer.PlaceDataWords(buffer, size, interleavedData, blockedModulesBuffer.Slice(0, blockedCount));
+
+            // Apply mask and format
+            var maskVersion = ModulePlacer.MaskCode(buffer, size, version, blockedModulesBuffer.Slice(0, blockedCount), eccLevel);
+            var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
+            ModulePlacer.PlaceFormat(buffer, size, formatBit);
+
+            // Place version information (version 7+)
+            if (version >= 7)
+            {
+                var versionBits = QRCodeConstants.GetVersionBits(version);
+                ModulePlacer.PlaceVersion(buffer, size, versionBits);
+            }
+        }
+        finally
+        {
+            if (rentedBlockedModules is not null)
+                ArrayPool<Rectangle>.Shared.Return(rentedBlockedModules, clearArray: false);
+        }
     }
 
     /// <summary>
@@ -436,159 +587,6 @@ public static class QRCodeGenerator
         // ECCInfo contains the actual byte capacity (TotalDataCodewords)
         var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
         return eccInfo.TotalDataCodewords * 8; // Convert bytes to bits
-    }
-
-    // Binary
-
-    /// <summary>
-    /// Prepares QR configuration by determining encoding, ECI mode, and version.
-    /// </summary>
-    /// <param name="plainText"></param>
-    /// <param name="eccLevel"></param>
-    /// <param name="utf8Bom"></param>
-    /// <param name="eciMode"></param>
-    /// <param name="requestedVersion"></param>
-    /// <returns></returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static QRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, bool utf8Bom, EciMode eciMode, int requestedVersion)
-    {
-        var (detectedEncoding, actualEciMode, dataLength) = TextAnalyzer.Analyze(textSpan, eciMode);
-
-        // Select QR code version (auto or manual)
-        var version = requestedVersion == -1
-            ? GetVersion(dataLength, detectedEncoding, eccLevel, actualEciMode)
-            : requestedVersion;
-
-        // Create ECCInfo
-        var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
-
-        return new QRConfiguration(version, eccLevel, detectedEncoding, actualEciMode, utf8Bom, eccInfo, dataLength);
-    }
-
-    /// <summary>
-    /// Encodes the input text into a binary format and writes it to the provided buffer.
-    /// </summary>
-    /// <param name="textSpan"></param>
-    /// <param name="config"></param>
-    /// <param name="buffer">Output buffer for encoded data.</param>
-    /// <returns>Number of bytes written to the buffer.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int EncodeData(ReadOnlySpan<char> textSpan, in QRConfiguration config, Span<byte> buffer)
-    {
-        var encoder = new QRBinaryEncoder(buffer);
-
-        encoder.WriteMode(config.Encoding, config.EciMode);
-        encoder.WriteCharacterCount(config.DataLength, config.Encoding.GetCountIndicatorLength(config.Version));
-        encoder.WriteData(textSpan, config.Encoding, config.EciMode, config.Utf8BOM);
-        encoder.WritePadding(config.EccInfo.TotalDataCodewords * 8);
-
-        return encoder.ByteCount;
-    }
-
-    /// <summary>
-    /// Calculates Reed-Solomon error correction codewords and writes them to the provided ECC buffer.
-    /// </summary>
-    /// <param name="encodedBytes">The byte representing the encoded QR code data.</param>
-    /// <param name="eccInfo">Error correction information for the QR code version and ECC level.</param>
-    /// <param name="eccBuffer">Output buffer for ECC codewords <c>(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock</c> bytes.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void CalculateErrorCorrection(ReadOnlySpan<byte> encodedBytes, in ECCInfo eccInfo, Span<byte> eccBuffer)
-    {
-        var dataOffset = 0;
-        var eccOffset = 0;
-
-        // Process group 1 blocks
-        for (var i = 0; i < eccInfo.BlocksInGroup1; i++)
-        {
-            var blockData = encodedBytes.Slice(dataOffset, eccInfo.CodewordsInGroup1);
-            var blockEcc = eccBuffer.Slice(eccOffset, eccInfo.ECCPerBlock);
-
-            EccBinaryEncoder.CalculateECC(blockData, blockEcc, eccInfo.ECCPerBlock);
-
-            dataOffset += eccInfo.CodewordsInGroup1;
-            eccOffset += eccInfo.ECCPerBlock;
-        }
-
-        // Process group 2 blocks
-        for (var i = 0; i < eccInfo.BlocksInGroup2; i++)
-        {
-            var blockData = encodedBytes.Slice(dataOffset, eccInfo.CodewordsInGroup2);
-            var blockEcc = eccBuffer.Slice(eccOffset, eccInfo.ECCPerBlock);
-
-            EccBinaryEncoder.CalculateECC(blockData, blockEcc, eccInfo.ECCPerBlock);
-
-            dataOffset += eccInfo.CodewordsInGroup2;
-            eccOffset += eccInfo.ECCPerBlock;
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void InterleaveCodewords(ReadOnlySpan<byte> dataBuffer, ReadOnlySpan<byte> eccBuffer, in ECCInfo eccInfo, int version, Span<byte> output)
-    {
-        BinaryInterleaver.InterleaveCodewords(dataBuffer, eccBuffer, output, version, eccInfo);
-    }
-
-    /// <summary>
-    /// Writes the QR code matrix (as a 1D byte array) into the provided buffer by placing patterns, data, applying mask, and adding format/version information.
-    /// </summary>
-    /// <param name="buffer">The buffer to write the QR code matrix into.</param>
-    /// <param name="size">The size of the QR code matrix (number of modules per side).</param>
-    /// <param name="version">The QR code version (1-40) to generate.</param>
-    /// <param name="interleavedData">The encoded and interleaved data bytes to be placed in the QR code.</param>
-    /// <param name="eccLevel">The error correction level to use for the QR code.</param>
-    /// <returns>A <see cref="QRCodeData"/> object containing the generated QR code matrix.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void WriteQRMatrix(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> interleavedData, ECCLevel eccLevel)
-    {
-        // Version 1-16: stack allocation (covers 95%+ use cases)
-        // Version 17+: heap allocation (large/rare QR codes)
-        const int StackAllocThreshold = 16;
-        const int StackAllocSize = 40; // Sufficient for version 16 (33 modules needed)
-
-        // Version 1:  approximately  9
-        // Version 7:  approximately 27
-        // Version 40: approximately 57
-        Rectangle[]? rentedBlockedModules = null;
-        var blockedModulesSize = CalculateBlockedModulesSize(version);
-        try
-        {
-            if (version > StackAllocThreshold)
-                rentedBlockedModules = ArrayPool<Rectangle>.Shared.Rent(blockedModulesSize);
-            Span<Rectangle> blockedModulesBuffer = version > StackAllocThreshold
-                ? rentedBlockedModules.AsSpan(0, blockedModulesSize)
-                : stackalloc Rectangle[StackAllocSize];
-            var blockedCount = 0;
-
-            // Place all patterns
-            var alignmentPatternLocations = GetAlignmentPatternPositions(version);
-
-            ModulePlacer.PlaceFinderPatterns(buffer, size, blockedModulesBuffer, ref blockedCount);
-            ModulePlacer.ReserveSeparatorAreas(size, blockedModulesBuffer, ref blockedCount);
-            ModulePlacer.PlaceAlignmentPatterns(buffer, size, alignmentPatternLocations, blockedModulesBuffer, ref blockedCount);
-            ModulePlacer.PlaceTimingPatterns(buffer, size, blockedModulesBuffer, ref blockedCount);
-            ModulePlacer.PlaceDarkModule(buffer, size, version, blockedModulesBuffer, ref blockedCount);
-            ModulePlacer.ReserveVersionAreas(size, version, blockedModulesBuffer, ref blockedCount);
-
-            // Place data
-            ModulePlacer.PlaceDataWords(buffer, size, interleavedData, blockedModulesBuffer.Slice(0, blockedCount));
-
-            // Apply mask and format
-            var maskVersion = ModulePlacer.MaskCode(buffer, size, version, blockedModulesBuffer.Slice(0, blockedCount), eccLevel);
-            var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
-            ModulePlacer.PlaceFormat(buffer, size, formatBit);
-
-            // Place version information (version 7+)
-            if (version >= 7)
-            {
-                var versionBits = QRCodeConstants.GetVersionBits(version);
-                ModulePlacer.PlaceVersion(buffer, size, versionBits);
-            }
-        }
-        finally
-        {
-            if (rentedBlockedModules is not null)
-                ArrayPool<Rectangle>.Shared.Return(rentedBlockedModules, clearArray: false);
-        }
     }
 
     // Utilities
