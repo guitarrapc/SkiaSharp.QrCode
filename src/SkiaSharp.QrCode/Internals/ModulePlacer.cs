@@ -41,7 +41,7 @@ internal static class ModulePlacer
     /// Tests all 8 mask patterns and selects one with lowest penalty score.
     /// </summary>
     /// <returns>Selected mask pattern number (0-7).</returns>
-    public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<Rectangle> blockedModules, ECCLevel eccLevel)
+    public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
     {
         var dataLength = size * size;
         var bestPatternIndex = 0;
@@ -52,14 +52,14 @@ internal static class ModulePlacer
         if (dataLength <= StackAlloc_threshold)
         {
             Span<byte> tempBuffer = stackalloc byte[dataLength];
-            bestPatternIndex = EvaluateMaskPatterns(buffer, tempBuffer, version, size, blockedModules, eccLevel);
+            bestPatternIndex = EvaluateMaskPatterns(buffer, tempBuffer, version, size, blockedMask, eccLevel);
         }
         else
         {
             var rentBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
             try
             {
-                bestPatternIndex = EvaluateMaskPatterns(buffer, rentBuffer.AsSpan()[..dataLength], version, size, blockedModules, eccLevel);
+                bestPatternIndex = EvaluateMaskPatterns(buffer, rentBuffer.AsSpan()[..dataLength], version, size, blockedMask, eccLevel);
             }
             finally
             {
@@ -68,13 +68,13 @@ internal static class ModulePlacer
         }
 
         // Apply mask to original QR code
-        ApplyMaskToDataAreaInPlace(buffer, size, bestPatternIndex, blockedModules);
+        ApplyMaskToDataAreaInPlace(buffer, size, bestPatternIndex, blockedMask);
 
         return bestPatternIndex;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int EvaluateMaskPatterns(ReadOnlySpan<byte> originalData, Span<byte> tempBuffer, int version, int size, ReadOnlySpan<Rectangle> blockedModules, ECCLevel eccLevel)
+    private static int EvaluateMaskPatterns(ReadOnlySpan<byte> originalData, Span<byte> tempBuffer, int version, int size, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
     {
         var bestPatternIndex = 0;
         var bestScore = int.MaxValue;
@@ -86,7 +86,7 @@ internal static class ModulePlacer
             originalData.CopyTo(tempBuffer);
 
             // Apply mask pattern to data area only
-            ApplyMaskToDataAreaInPlace(tempBuffer, size, patternIndex, blockedModules);
+            ApplyMaskToDataAreaInPlace(tempBuffer, size, patternIndex, blockedMask);
 
             // Apply format and version information
             var formatBits = QRCodeConstants.GetFormatBits(eccLevel, patternIndex);
@@ -508,17 +508,17 @@ internal static class ModulePlacer
     /// Apply the mask pattern to the data area only in-place, skipping blocked modules.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ApplyMaskToDataAreaInPlace(Span<byte> buffer, int size, int patternIndex, ReadOnlySpan<Rectangle> blockedModules)
+    private static void ApplyMaskToDataAreaInPlace(Span<byte> buffer, int size, int patternIndex, ReadOnlySpan<byte> blockedMask)
     {
         for (var row = 0; row < size; row++)
         {
             var rowOffset = row * size;
             for (var col = 0; col < size; col++)
             {
-                if (!IsPointBlocked(col, row, blockedModules))
+                var bitIndex = rowOffset + col;
+                if (!IsBlockedFast(blockedMask, bitIndex))
                 {
-                    var idx = rowOffset + col;
-                    buffer[idx] = (byte)(buffer[idx] ^ (MaskPattern.Apply(patternIndex, col, row) ? 1 : 0));
+                    buffer[bitIndex] = (byte)(buffer[bitIndex] ^ (MaskPattern.Apply(patternIndex, col, row) ? 1 : 0));
                 }
             }
         }
