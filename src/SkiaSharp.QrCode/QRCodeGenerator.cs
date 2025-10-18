@@ -62,7 +62,7 @@ public static class QRCodeGenerator
         if (quietZoneSize < 0)
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be non-negative, got {quietZoneSize}");
 
-        // prepare configuration
+        // Prepare configuration
         var config = PrepareConfiguration(plainText, eccLevel, utf8BOM, eciMode, requestedVersion);
 
         // Encode data
@@ -131,7 +131,7 @@ public static class QRCodeGenerator
         if (quietZoneSize < 0)
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be non-negative, got {quietZoneSize}");
 
-        // prepare configuration
+        // Prepare configuration
         var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, requestedVersion);
 
         // Calculate buffer sizes
