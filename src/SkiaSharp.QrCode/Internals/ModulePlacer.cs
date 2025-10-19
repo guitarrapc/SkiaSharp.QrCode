@@ -956,6 +956,7 @@ internal static class ModulePlacer
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Pattern2(byte colMod3) => colMod3 == 0;
 
+        // same as: public static bool Pattern3(byte rowMod3, byte colMod3) => (rowMod3 + colMod3) % 3 == 0;
         /// <summary>
         /// Pattern 3: Diagonal stripes
         /// </summary>
@@ -985,6 +986,19 @@ internal static class ModulePlacer
         /// Therefore: Must apply modulo to sum: (2 + 2) % 3 = 1
         /// </code>
         /// 
+        /// Optimization - Avoid Modulo:
+        /// <code>
+        /// rowMod3 ∈ {0, 1, 2}
+        /// colMod3 ∈ {0, 1, 2}
+        /// sum = rowMod3 + colMod3 ∈ {0, 1, 2, 3, 4}
+        /// 
+        /// sum % 3 == 0 ⟺ sum ∈ {0, 3}
+        /// 
+        /// Instead of: (rowMod3 + colMod3) % 3 == 0
+        /// Use:        sum == 0 || sum == 3
+        /// Benefit:    Eliminates modulo operation
+        /// </code>
+        /// 
         /// Diagonal Pattern:
         /// <code>
         /// Slope: -1/1 (45° diagonal)
@@ -993,14 +1007,19 @@ internal static class ModulePlacer
         /// 
         /// Example:
         /// <code>
-        /// (0,0): (0+0)%3==0 → true  ■
-        /// (0,1): (0+1)%3==0 → false □
-        /// (0,2): (0+2)%3==0 → false □
-        /// (1,2): (1+2)%3==0 → true  ■
+        /// (0,0): 0+0=0 → true  ■
+        /// (0,1): 0+1=1 → false □
+        /// (0,2): 0+2=2 → false □
+        /// (1,2): 1+2=3 → true  ■
+        /// (2,1): 2+1=3 → true  ■
         /// </code>
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool Pattern3(byte rowMod3, byte colMod3) => (rowMod3 + colMod3) % 3 == 0;
+        public static bool Pattern3(byte rowMod3, byte colMod3)
+        {
+            var sum = rowMod3 + colMod3;
+            return sum == 0 || sum == 3;
+        }
 
         /// <summary>
         /// Pattern 4: Combined horizontal and vertical grid
