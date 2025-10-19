@@ -40,10 +40,36 @@ internal static class ModulePlacer
     /// Applies mask pattern to data area and selects optimal pattern.
     /// Tests all 8 mask patterns and selects one with lowest penalty score.
     /// </summary>
-    /// <returns>Selected mask pattern number (0-7).</returns>
+    /// <param name="buffer">Original QR code data without mask applied.</param>
+    /// <param name="size">QR code size in modules.</param>
+    /// <param name="version">QR code version (1-40).</param>
+    /// <param name="blockedMask">Blocked mask bytes.</param>
+    /// <param name="eccLevel">Error correction level.</param>
+    /// <returns>Index of the best mask pattern number (0-7).</returns>
     public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
     {
         var dataLength = size * size;
+
+        // Pre calculate row/col calculation to remove mod/div from mask loop.
+        Span<byte> rowMod2 = stackalloc byte[size];
+        Span<byte> rowDiv2 = stackalloc byte[size];
+        Span<byte> rowMod3 = stackalloc byte[size];
+        for (var i = 0; i < size; i++)
+        {
+            rowMod2[i] = (byte)(i & 1);
+            rowDiv2[i] = (byte)(i >> 1);
+            rowMod3[i] = (byte)(i % 3);
+        }
+        Span<byte> colMod2 = stackalloc byte[size];
+        Span<byte> colDiv3 = stackalloc byte[size];
+        Span<byte> colMod3 = stackalloc byte[size];
+        for (var i = 0; i < size; i++)
+        {
+            colMod2[i] = (byte)(i & 1);
+            colDiv3[i] = (byte)(i / 3);
+            colMod3[i] = (byte)(i % 3);
+        }
+
         var bestPatternIndex = 0;
 
         // Select stack or heap allocation based on size
@@ -52,14 +78,14 @@ internal static class ModulePlacer
         if (dataLength <= StackAlloc_threshold)
         {
             Span<byte> tempBuffer = stackalloc byte[dataLength];
-            bestPatternIndex = EvaluateMaskPatterns(buffer, tempBuffer, version, size, blockedMask, eccLevel);
+            bestPatternIndex = EvaluateMaskPatterns(buffer, tempBuffer, version, size, blockedMask, eccLevel, rowMod2, rowDiv2, rowMod3, colMod2, colDiv3, colMod3);
         }
         else
         {
             var rentBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
             try
             {
-                bestPatternIndex = EvaluateMaskPatterns(buffer, rentBuffer.AsSpan()[..dataLength], version, size, blockedMask, eccLevel);
+                bestPatternIndex = EvaluateMaskPatterns(buffer, rentBuffer.AsSpan()[..dataLength], version, size, blockedMask, eccLevel, rowMod2, rowDiv2, rowMod3, colMod2, colDiv3, colMod3);
             }
             finally
             {
@@ -68,14 +94,60 @@ internal static class ModulePlacer
         }
 
         // Apply mask to original QR code
-        ApplyMaskToDataAreaInPlace(buffer, size, bestPatternIndex, blockedMask);
+        ApplyMaskXorInPlace(buffer, bestPatternIndex, size, blockedMask, rowMod2, rowDiv2, rowMod3, colMod2, colDiv3, colMod3);
 
         return bestPatternIndex;
     }
 
+    /// <summary>
+    /// Evaluates all 8 mask patterns and selects the one with the lowest penalty score.
+    /// </summary>
+    /// <param name="buffer">Original QR code data without mask applied.</param>
+    /// <param name="tempBuffer">Temporary buffer for testing each mask pattern.</param>
+    /// <param name="version">QR code version (1-40).</param>
+    /// <param name="size">QR code size in modules.</param>
+    /// <param name="blockedMask">Blocked mask bytes.</param>
+    /// <param name="eccLevel">Error correction level.</param>
+    /// <param name="rowMod2">Pre-calculated row modulo 2.</param>
+    /// <param name="rowDiv2">Pre-calculated row division 2.</param>
+    /// <param name="rowMod3">Pre-calculated row modulo 3.</param>
+    /// <param name="colMod2">Pre-calculated column modulo 2.</param>
+    /// <param name="colDiv3">Pre-calculated column division 3.</param>
+    /// <param name="colMod3">Pre-calculated column modulo 3.</param>
+    /// <remarks>
+    /// Penalty Scoring (ISO/IEC 18004 Section 8.8.2):
+    /// <code>
+    /// - Rule 1: Consecutive modules (rows/columns)
+    /// - Rule 2: 2×2 blocks of same color
+    /// - Rule 3: Finder-like patterns
+    /// - Rule 4: Dark/light module balance
+    /// </code>
+    ///
+    /// Performance Optimization:
+    /// <code>
+    /// - Uses pre-calculated modulo/division values
+    /// - Single-pass XOR application
+    /// - Stack allocation for small QR codes
+    /// - Avoids repeated calculations
+    /// </code>
+    ///
+    /// Lower score indicates better mask pattern (easier to scan and decode).
+    /// </remarks>
+    /// <returns>Index of the best mask pattern number (0-7).</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int EvaluateMaskPatterns(ReadOnlySpan<byte> originalData, Span<byte> tempBuffer, int version, int size, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    private static int EvaluateMaskPatterns(ReadOnlySpan<byte> buffer, Span<byte> tempBuffer, int version, int size, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel,
+        ReadOnlySpan<byte> rowMod2, ReadOnlySpan<byte> rowDiv2, ReadOnlySpan<byte> rowMod3,
+        ReadOnlySpan<byte> colMod2, ReadOnlySpan<byte> colDiv3, ReadOnlySpan<byte> colMod3
+        )
     {
+        // For each of 8 patterns (0-7):
+        // 1. Copy original data to temporary buffer
+        // 2. Apply mask pattern using XOR (data area only)
+        // 3. Apply format information (ECC level + pattern index)
+        // 4. Apply version information (version 7+ only)
+        // 5. Calculate penalty score
+        // 6. Track pattern with lowest score
+
         var bestPatternIndex = 0;
         var bestScore = int.MaxValue;
 
@@ -83,10 +155,10 @@ internal static class ModulePlacer
         for (var patternIndex = 0; patternIndex < 8; patternIndex++)
         {
             // Reset to original state
-            originalData.CopyTo(tempBuffer);
+            buffer.CopyTo(tempBuffer);
 
             // Apply mask pattern to data area only
-            ApplyMaskToDataAreaInPlace(tempBuffer, size, patternIndex, blockedMask);
+            ApplyMaskXorInPlace(tempBuffer, patternIndex, size, blockedMask, rowMod2, rowDiv2, rowMod3, colMod2, colDiv3, colMod3);
 
             // Apply format and version information
             var formatBits = QRCodeConstants.GetFormatBits(eccLevel, patternIndex);
@@ -404,6 +476,7 @@ internal static class ModulePlacer
     /// Two identical 3×6 patterns placed at top-right and bottom-left corners.
     /// </summary>
     /// <param name="buffer">QR code matrix buffer</param>
+    /// <param name="size">QR code size in modules</param>
     /// <param name="versionBits">18-bit version information (LSB first)</param>
     /// <remarks>
     /// Places two identical 3×6 patterns (ISO/IEC 18004 Section 7.10):
@@ -465,20 +538,57 @@ internal static class ModulePlacer
     }
 
     /// <summary>
-    /// Apply the mask pattern to the data area only in-place, skipping blocked modules.
+    /// Apply the mask pattern to the data area only in-place
     /// </summary>
+    /// <param name="buffer">Original QR code data without mask applied.</param>
+    /// <param name="patternIndex">Pattern index to apply.</param>
+    /// <param name="size">QR code size in modules.</param>
+    /// <param name="blockedMask">Blocked mask bytes.</param>
+    /// <param name="rowMod2">Pre-calculated row modulo 2 values.</param>
+    /// <param name="rowDiv2">Pre-calculated row division 2 values.</param>
+    /// <param name="rowMod3">Pre-calculated row modulo 3 values.</param>
+    /// <param name="colMod2">Pre-calculated column modulo 2 values.</param>
+    /// <param name="colDiv3">Pre-calculated column division 3 values.</param>
+    /// <param name="colMod3">Pre-calculated column modulo 3 values.</param>
+    /// <remarks>
+    /// XOR Operation:
+    /// <code>
+    /// If MaskPattern.Apply(patternIndex, col, row) == true:
+    ///     buffer[index] ^= 1
+    /// </code>
+    /// This allows efficient reversal and testing of different patterns without copying data.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ApplyMaskToDataAreaInPlace(Span<byte> buffer, int size, int patternIndex, ReadOnlySpan<byte> blockedMask)
+    private static void ApplyMaskXorInPlace(Span<byte> buffer, int patternIndex, int size, ReadOnlySpan<byte> blockedMask,
+        ReadOnlySpan<byte> rowMod2, ReadOnlySpan<byte> rowDiv2, ReadOnlySpan<byte> rowMod3,
+        ReadOnlySpan<byte> colMod2, ReadOnlySpan<byte> colDiv3, ReadOnlySpan<byte> colMod3
+        )
     {
-        for (var row = 0; row < size; row++)
+        for (int r = 0, idx = 0; r < size; r++)
         {
-            var rowOffset = row * size;
-            for (var col = 0; col < size; col++)
+            var rm2 = rowMod2[r]; // r % 2
+            var rm3 = rowMod3[r]; // r % 3
+            var rd2 = rowDiv2[r]; // r / 2
+            for (var c = 0; c < size; c++, idx++)
             {
-                var bitIndex = rowOffset + col;
-                if (!IsModuleBlocked(blockedMask, bitIndex))
+                if (IsModuleBlocked(blockedMask, idx)) continue;
+
+                bool hit = patternIndex switch
                 {
-                    buffer[bitIndex] = (byte)(buffer[bitIndex] ^ (MaskPattern.Apply(patternIndex, col, row) ? 1 : 0));
+                    0 => MaskPattern.Pattern0(rm2, colMod2[c]),
+                    1 => MaskPattern.Pattern1(rm2),
+                    2 => MaskPattern.Pattern2(colMod3[c]),
+                    3 => MaskPattern.Pattern3(rm3, colMod3[c]),
+                    4 => MaskPattern.Pattern4(rd2, colDiv3[c]),
+                    5 => MaskPattern.Pattern5(rm2, colMod2[c], rm3, colMod3[c]),
+                    6 => MaskPattern.Pattern6(rm2, colMod2[c], rm3, colMod3[c]),
+                    7 => MaskPattern.Pattern7(rm2, colMod2[c], r, c),
+                    _ => false
+                };
+
+                if (hit)
+                {
+                    buffer[idx] ^= 1;
                 }
             }
         }
@@ -748,81 +858,497 @@ internal static class ModulePlacer
     // private class/strusts
 
     /// <summary>
-    /// Mask pattern implementations and scoring algorithm.
-    /// ISO/IEC 18004 defines 8 mask patterns and 4 penalty rules.
+    /// Mask pattern implementations and scoring algorithm using pre-calculated modulo/division values.
+    /// ISO/IEC 18004:2015 defines 8 mask patterns (0-7) to improve QR code readability.
     /// </summary>
+    /// <remarks>
+    /// Performance optimization strategy:
+    /// <code>
+    /// 1. Pre-calculate modulo and division values for rows/columns
+    /// 2. Use bitwise operations (&amp;, ^) instead of modulo where possible
+    /// 3. Avoid repeated Math.Floor calculations
+    /// </code>
+    /// 
+    /// Pre-calculated values (shared across all patterns):
+    /// <code>
+    /// - rMod2[i] = i % 2  (row modulo 2)
+    /// - rDiv2[i] = i / 2  (row integer division by 2)
+    /// - rMod3[i] = i % 3  (row modulo 3)
+    /// - cMod2[i] = i % 2  (column modulo 2)
+    /// - cDiv3[i] = i / 3  (column integer division by 3)
+    /// - cMod3[i] = i % 3  (column modulo 3)
+    /// </code>
+    /// 
+    /// For mathematical background, see:
+    /// <code>
+    /// - ISO/IEC 18004:2015 Section 7.8.2 (Data Masking)
+    /// - MaskPattern class for readable reference implementations
+    /// </code>
+    /// </remarks>
     private static class MaskPattern
     {
         /// <summary>
-        /// Applies the specified mask pattern to a module
+        /// Pattern 0: Checkerboard pattern
         /// </summary>
-        /// <param name="patternIndex">Pattern number (0-7)</param>
-        /// <param name="x">Math horizontal position = column</param>
-        /// <param name="y">Math vertical position = row</param>
-        /// <returns>True if the module is dark, false if it is light</returns>
-        /// <exception cref="ArgumentOutOfRangeException"></exception>
-        public static bool Apply(int patternIndex, int x, int y)
+        /// <param name="rowMod2">Pre-calculated row modulo 2 value.</param>
+        /// <param name="colMod2">Pre-calculated column modulo 2 value.</param>
+        /// <remarks>
+        /// <para>Formula</para>
+        /// <code>
+        /// (x + y) % 2 == 0
+        /// </code>
+        /// 
+        /// Visual Pattern (8×8 sample, ■=dark, □=light):
+        /// <code>
+        /// ■□■□■□■□
+        /// □■□■□■□■
+        /// ■□■□■□■□
+        /// □■□■□■□■
+        /// ■□■□■□■□
+        /// □■□■□■□■
+        /// ■□■□■□■□
+        /// □■□■□■□■
+        /// </code>
+        /// 
+        /// Mathematical Properties:
+        /// <code>
+        /// (a % 2) + (b % 2) ≡ (a + b) % 2
+        /// (a % 2) ⊕ (b % 2) == 0 ⟺ (a + b) % 2 == 0  (XOR equivalence)
+        /// </code>
+        /// 
+        /// Optimization:
+        /// <code>
+        /// Instead of: (row + col) % 2 == 0
+        /// Use XOR:    (row % 2) ^ (col % 2) == 0
+        /// Benefit:    XOR is faster than addition + modulo
+        /// </code>
+        ///
+        /// Example:
+        /// <code>
+        /// (0,0): (0^0)==0 → true  ■
+        /// (0,1): (0^1)==0 → false □
+        /// (1,0): (1^0)==0 → false □
+        /// (1,1): (1^1)==0 → true  ■
+        /// </code>
+        /// </remarks>
+        /// <returns></returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool Pattern0(byte rowMod2, byte colMod2) => (rowMod2 ^ colMod2) == 0;
+
+        /// <summary>
+        /// Pattern 1: Horizontal stripes
+        /// </summary>
+        /// <param name="rowMod2">Pre-calculated row modulo 2 value.</param>
+        /// <remarks>
+        /// Formula:
+        /// <code>
+        /// y % 2 == 0
+        /// </code>
+        /// 
+        /// Visual Pattern (8×8 sample, ■=dark, □=light):
+        /// <code>
+        /// ■■■■■■■■
+        /// □□□□□□□□
+        /// ■■■■■■■■
+        /// □□□□□□□□
+        /// ■■■■■■■■
+        /// □□□□□□□□
+        /// ■■■■■■■■
+        /// □□□□□□□□
+        /// </code>
+        /// 
+        /// Characteristics:
+        /// <code>
+        /// - Alternating horizontal rows
+        /// - Independent of x coordinate
+        /// - Period: 2 rows
+        /// </code>
+        /// 
+        /// Example:
+        /// <code>
+        /// Row 0: 0%2==0 → true  ■■■■
+        /// Row 1: 1%2==0 → false □□□□
+        /// Row 2: 2%2==0 → true  ■■■■
+        /// Row 3: 3%2==0 → false □□□□
+        /// </code>
+        /// </remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool Pattern1(byte rowMod2) => rowMod2 == 0;
+
+        /// <summary>
+        /// Pattern 2: Vertical stripes
+        /// </summary>
+        /// <param name="colMod3">Pre-calculated column modulo 3 value.</param>
+        /// <remarks>
+        /// Formula:
+        /// <code>
+        /// x % 3 == 0
+        /// </code>
+        /// 
+        /// Visual Pattern (9×8 sample, ■=dark, □=light):
+        /// <code>
+        /// ■□□■□□■□□
+        /// ■□□■□□■□□
+        /// ■□□■□□■□□
+        /// ■□□■□□■□□
+        /// ■□□■□□■□□
+        /// ■□□■□□■□□
+        /// ■□□■□□■□□
+        /// ■□□■□□■□□
+        /// </code>
+        /// 
+        /// Characteristics:
+        /// <code>
+        /// - Alternating vertical columns
+        /// - Independent of y coordinate
+        /// - Period: 3 columns (wider than Pattern 1)
+        /// </code>
+        /// 
+        /// Example:
+        /// <code>
+        /// Col 0: 0%3==0 → true  ■
+        /// Col 1: 1%3==0 → false □
+        /// Col 2: 2%3==0 → false □
+        /// Col 3: 3%3==0 → true  ■
+        /// </code>
+        /// </remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool Pattern2(byte colMod3) => colMod3 == 0;
+
+        // same as: public static bool Pattern3(byte rowMod3, byte colMod3) => (rowMod3 + colMod3) % 3 == 0;
+        /// <summary>
+        /// Pattern 3: Diagonal stripes
+        /// </summary>
+        /// <param name="rowMod3">Pre-calculated row modulo 3 value.</param>
+        /// <param name="colMod3">Pre-calculated column modulo 3 value.</param>
+        /// <remarks>
+        /// Formula:
+        /// <code>
+        /// (x + y) % 3 == 0
+        /// </code>
+        /// 
+        /// Visual Pattern (9×9 sample, ■=dark, □=light):
+        /// <code>
+        /// ■□□■□□■□□
+        /// □□■□□■□□■
+        /// □■□□■□□■□
+        /// ■□□■□□■□□
+        /// □□■□□■□□■
+        /// □■□□■□□■□
+        /// ■□□■□□■□□
+        /// □□■□□■□□■
+        /// □■□□■□□■□
+        /// </code>
+        /// 
+        /// Mathematical Properties:
+        /// <code>
+        /// (a % 3) + (b % 3) can exceed 3
+        /// Example: (2 % 3) + (2 % 3) = 2 + 2 = 4
+        /// Therefore: Must apply modulo to sum: (2 + 2) % 3 = 1
+        /// </code>
+        /// 
+        /// Optimization - Avoid Modulo:
+        /// <code>
+        /// rowMod3 ∈ {0, 1, 2}
+        /// colMod3 ∈ {0, 1, 2}
+        /// sum = rowMod3 + colMod3 ∈ {0, 1, 2, 3, 4}
+        /// 
+        /// sum % 3 == 0 ⟺ sum ∈ {0, 3}
+        /// 
+        /// Instead of: (rowMod3 + colMod3) % 3 == 0
+        /// Use:        sum == 0 || sum == 3
+        /// Benefit:    Eliminates modulo operation
+        /// </code>
+        /// 
+        /// Diagonal Pattern:
+        /// <code>
+        /// Slope: -1/1 (45° diagonal)
+        /// Period: 3 modules
+        /// </code>
+        /// 
+        /// Example:
+        /// <code>
+        /// (0,0): 0+0=0 → true  ■
+        /// (0,1): 0+1=1 → false □
+        /// (0,2): 0+2=2 → false □
+        /// (1,2): 1+2=3 → true  ■
+        /// (2,1): 2+1=3 → true  ■
+        /// </code>
+        /// </remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool Pattern3(byte rowMod3, byte colMod3)
         {
-            return patternIndex switch
-            {
-                0 => Pattern1(x, y),
-                1 => Pattern2(x, y),
-                2 => Pattern3(x, y),
-                3 => Pattern4(x, y),
-                4 => Pattern5(x, y),
-                5 => Pattern6(x, y),
-                6 => Pattern7(x, y),
-                7 => Pattern8(x, y),
-                _ => throw new ArgumentOutOfRangeException(nameof(patternIndex), "Mask pattern index must be between 0 and 7."),
-            };
+            var sum = rowMod3 + colMod3;
+            return sum == 0 || sum == 3;
         }
 
         /// <summary>
-        /// Creates a checkerboard pattern.
+        /// Pattern 4: Combined horizontal and vertical grid
         /// </summary>
+        /// <param name="rowDiv2">Pre-calculated row division 2 value.</param>
+        /// <param name="colDiv3">Pre-calculated column division 3 value.</param>
+        /// <remarks>
+        /// Formula:
+        /// <code>
+        /// (⌊y/2⌋ + ⌊x/3⌋) % 2 == 0
+        /// </code>
+        /// 
+        /// Visual Pattern (12×12 sample, ■=dark, □=light):
+        /// <code>
+        /// ■■■□□□■■■□□□
+        /// ■■■□□□■■■□□□
+        /// □□□■■■□□□■■■
+        /// □□□■■■□□□■■■
+        /// ■■■□□□■■■□□□
+        /// ■■■□□□■■■□□□
+        /// □□□■■■□□□■■■
+        /// □□□■■■□□□■■■
+        /// ■■■□□□■■■□□□
+        /// ■■■□□□■■■□□□
+        /// □□□■■■□□□■■■
+        /// □□□■■■□□□■■■
+        /// </code>
+        /// 
+        /// Mathematical Optimization:
+        /// <code>
+        /// ⌊y/2⌋ = y >> 1     (for non-negative integers)
+        /// ⌊x/3⌋ = x / 3      (integer division)
+        /// (a + b) % 2 ≡ (a + b) &amp; 1  (bitwise optimization)
+        /// </code>
+        /// 
+        /// Block Size:
+        /// <code>
+        /// Vertical blocks:   2 rows
+        /// Horizontal blocks: 3 columns
+        /// </code>
+        /// 
+        /// Example:
+        /// <code>
+        /// (0,0): (0/2 + 0/3)%2 = (0+0)%2 = 0 → true  ■
+        /// (3,0): (3/2 + 0/3)%2 = (1+0)%2 = 1 → false □
+        /// (0,2): (0/2 + 2/3)%2 = (0+0)%2 = 0 → true  ■
+        /// (3,2): (3/2 + 2/3)%2 = (1+0)%2 = 1 → false □
+        /// </code>
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool Pattern1(int x, int y) => (x + y) % 2 == 0;
+        public static bool Pattern4(byte rowDiv2, byte colDiv3) => ((rowDiv2 + colDiv3) & 1) == 0;
+
+        // same as: public static bool Pattern5(int row, int col) => ((row * col) % 2) + ((row * col) % 3) == 0;
+        /// <summary>
+        /// Pattern 5: Complex grid pattern
+        /// </summary>
+        /// <param name="rowMod2">Pre-calculated row modulo 2 value.</param>
+        /// <param name="rowMod3">Pre-calculated row modulo 3 value.</param>
+        /// <param name="colMod2">Pre-calculated column modulo 2 value.</param>
+        /// <param name="colMod3">Pre-calculated column modulo 3 value.</param>
+        /// <remarks>
+        /// Formula:
+        /// <code>
+        /// ((x·y) % 2) + ((x·y) % 3) == 0
+        /// </code>
+        /// 
+        /// Visual Pattern (12×12 sample, ■=dark, □=light):
+        /// <code>
+        /// ■■■■■■■■■■■■
+        /// ■□■□■□■□■□■□
+        /// ■■□□□□■■□□□□
+        /// ■□□■□■□□□■□■
+        /// ■■□□□□■■□□□□
+        /// ■□■□■□■□■□■□
+        /// ■■■■■■□□□□□□
+        /// ■□■□■□□■□■□■
+        /// ■■□□□□□□□□□□
+        /// ■□□■□■□■□■□■
+        /// ■■□□□□□□□□□□
+        /// ■□■□■□□■□■□■
+        /// </code>
+        /// 
+        /// Mathematical Properties:
+        /// <code>
+        /// ((x·y) % 2) + ((x·y) % 3) == 0
+        /// ⟺ (x·y) % 2 == 0 AND (x·y) % 3 == 0
+        /// ⟺ (x·y) % lcm(2,3) == 0
+        /// ⟺ (x·y) % 6 == 0
+        /// </code>
+        /// 
+        /// Optimization - Avoid Multiplication:
+        /// <code>
+        /// (x·y) % 2 == 0  ⟺  (x % 2 == 0) OR (y % 2 == 0)  (either is even)
+        /// (x·y) % 3 == 0  ⟺  (x % 3 == 0) OR (y % 3 == 0)  (either is divisible by 3)
+        /// 
+        /// Therefore:
+        /// ((x·y) % 2) + ((x·y) % 3) == 0
+        /// ⟺ (rowMod2 == 0 OR colMod2 == 0) AND (rowMod3 == 0 OR colMod3 == 0)
+        /// 
+        /// Benefit: Eliminates multiplication and modulo operations entirely
+        /// </code>
+        /// 
+        /// Example:
+        /// <code>
+        /// # Basic
+        /// (0,0): 0%2 + 0%3 = 0+0 = 0 → true  ■
+        /// (2,3): 6%2 + 6%3 = 0+0 = 0 → true  ■
+        /// (1,1): 1%2 + 1%3 = 1+1 = 2 → false □
+        /// (2,2): 4%2 + 4%3 = 0+1 = 1 → false □
+        /// 
+        /// # Optimized:
+        /// (0,0): (0==0 OR 0==0) AND (0==0 OR 0==0) → true  ■
+        /// (2,3): (0==0 OR 1==0) AND (2==0 OR 0==0) → true  ■
+        /// (1,1): (1==0 OR 1==0) AND (1==0 OR 1==0) → false □
+        /// (2,2): (0==0 OR 0==0) AND (2==0 OR 2==0) → false □
+        /// </code>
+        /// </remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool Pattern5(byte rowMod2, byte colMod2, byte rowMod3, byte colMod3) => (rowMod2 == 0 || colMod2 == 0) && (rowMod3 == 0 || colMod3 == 0);
+
+        // same as: public static bool Pattern6(int row, int col) => (((row * col) % 2) + ((row * col) % 3) & 1) == 0;
+        /// <summary>
+        /// Pattern 6: Alternating complex pattern
+        /// </summary>
+        /// <param name="rowMod2">Pre-calculated row modulo 2 value.</param>
+        /// <param name="rowMod3">Pre-calculated row modulo 3 value.</param>
+        /// <param name="colMod2">Pre-calculated column modulo 2 value.</param>
+        /// <param name="colMod3">Pre-calculated column modulo 3 value.</param>
+        /// <remarks>
+        /// Formula:
+        /// <code>
+        /// (((x·y) % 2) + ((x·y) % 3)) % 2 == 0
+        /// </code>
+        /// 
+        /// Visual Pattern (12×12 sample, ■=dark, □=light):
+        /// <code>
+        /// ■■■■■■■■■■■■
+        /// ■□■□■□■□■□■□
+        /// ■■■■□□■■■■□□
+        /// ■□□■□■■□□■□■
+        /// ■■□□■■■■□□■■
+        /// ■□■□■□■□■□■□
+        /// ■■■■■■■■■■■■
+        /// ■□■□■□□■□■□■
+        /// ■■■■□□□□■■□□
+        /// ■□□■□■□■□■□■
+        /// ■■□□■■□□■■■■
+        /// ■□■□■□□■□■□■
+        /// </code>
+        /// 
+        /// Mathematical Properties:
+        /// <code>
+        /// Similar to Pattern 5, but checks parity of sum
+        /// Sum can be: 0, 1, 2, or 3
+        /// Pattern is dark when sum is even (0 or 2)
+        /// </code>
+        /// 
+        /// Optimization - Avoid Multiplication and Modulo:
+        /// <code>
+        /// Break down into two components:
+        /// 
+        /// 1. (x·y) % 2 parity:
+        ///    - Product is odd only when both x and y are odd
+        ///    - rowMod2 &amp; colMod2  (bitwise AND gives 1 only if both are 1)
+        /// 
+        /// 2. (x·y) % 3 parity (using 3×3 lookup table):
+        ///    - rowMod3 ∈ {0,1,2}, colMod3 ∈ {0,1,2}
+        ///    - Product table:
+        ///      ×   0  1  2
+        ///      0   0  0  0  (all even → parity 0)
+        ///      1   0  1  2  (1 odd, 2 even)
+        ///      2   0  2  4  (all even → parity 0)
+        ///    - Parity is odd (1) only when: (1,1) or (2,2)
+        ///    - Condition: rowMod3 != 0 AND rowMod3 == colMod3
+        /// 
+        /// Final result:
+        ///    ((p2) + (p3)) % 2 == 0  ⟺  p2 ^ p3 == 0  (XOR for parity)
+        /// 
+        /// Benefit: Eliminates multiplication and modulo operations entirely
+        /// </code>
+        /// 
+        /// Example:
+        /// <code>
+        /// # Basic formula:
+        /// (0,0): (0%2 + 0%3)%2 = (0+0)%2 = 0 → true  ■
+        /// (1,1): (1%2 + 1%3)%2 = (1+1)%2 = 0 → true  ■
+        /// (2,1): (2%2 + 2%3)%2 = (0+2)%2 = 0 → true  ■
+        /// (1,2): (2%2 + 2%3)%2 = (0+2)%2 = 0 → true  ■
+        /// 
+        /// # Optimized:
+        /// (0,0): p2=0 &amp; 0=0, p3=(0!=0 &amp;&amp; 0==0)=0 → 0^0=0 → true  ■
+        /// (1,1): p2=1 &amp; 1=1, p3=(1!=0 &amp;&amp; 1==1)=1 → 1^1=0 → true  ■
+        /// (2,1): p2=0 &amp; 1=0, p3=(2!=0 &amp;&amp; 2==1)=0 → 0^0=0 → true  ■
+        /// (1,2): p2=1 &amp; 0=0, p3=(1!=0 &amp;&amp; 1==2)=0 → 0^0=0 → true  ■
+        /// </code>
+        /// </remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool Pattern6(byte rowMod2, byte colMod2, byte rowMod3, byte colMod3)
+        {
+            // (xy) % 2 parity: odd only when both x and y are odd
+            var p2 = rowMod2 & colMod2;
+
+            // (xy) % 3 parity: odd only when (1,1) or (2,2)
+            // Using truth table instead of multiplication:
+            //   0×0=0(even), 0×1=0(even), 0×2=0(even)
+            //   1×0=0(even), 1×1=1(odd),  1×2=2(even)
+            //   2×0=0(even), 2×1=2(even), 2×2=4(even → 4%3=1 odd)
+            var p3Odd = (rowMod3 != 0 && rowMod3 == colMod3) ? 1 : 0;
+
+            // Sum parity: even when p2 and p3Odd have the same parity (XOR == 0)
+            return (p2 ^ p3Odd) == 0;
+        }
 
         /// <summary>
-        /// Creates horizontal stripes.
+        /// Pattern 7: Checkerboard and grid combination
         /// </summary>
+        /// <param name="rowMod2">Pre-calculated row modulo 2 value.</param>
+        /// <param name="colMod2">Pre-calculated column modulo 2 value.</param>
+        /// <param name="row">Row index.</param>
+        /// <param name="col">Column index.</param>
+        /// <remarks>
+        /// Formula:
+        /// <code>
+        /// (((x+y) % 2) + ((x·y) % 3)) % 2 == 0
+        /// </code>
+        /// 
+        /// Visual Pattern (12×12 sample, ■=dark, □=light):
+        /// <code>
+        /// ■□■□■□■□■□■□
+        /// □■■■□■□■■■□■
+        /// ■■□■■■■□■■■■
+        /// □■■□■□□■■□■□
+        /// ■□■■□■■□■■□■
+        /// □■■■■■□■■■■■
+        /// ■□■□■□■□■□■□
+        /// □■■■□■□□■■□□
+        /// ■■□■■■■□□■■■
+        /// □■■□■□□■■□□■
+        /// ■□■■□■■□■■□■
+        /// □■■■■■□■■■■□
+        /// </code>
+        /// 
+        /// Hybrid Pattern:
+        /// <code>
+        /// Combines two components:
+        /// 1. Checkerboard: (x+y) % 2
+        /// 2. Product grid: (x·y) % 3
+        /// Result is dark when their sum is even
+        /// </code>
+        /// 
+        /// Optimization Strategy:
+        /// <code>
+        /// (x+y) % 2: Use pre-calculated rowMod2 + colMod2
+        /// (x·y) % 3: Calculate at runtime (cannot pre-calculate)
+        /// 
+        /// Mathematical property: (a%2) + (b%2) ∈ {0, 1, 2}
+        /// Final check: ((sum) + (product%3)) &amp; 1 == 0
+        /// </code>
+        /// 
+        /// Example:
+        /// <code>
+        /// (0,0): ((0+0)%2 + 0%3)%2 = (0+0)%2 = 0 → true  ■
+        /// (0,1): ((0+1)%2 + 0%3)%2 = (1+0)%2 = 1 → false □
+        /// (1,1): ((1+1)%2 + 1%3)%2 = (0+1)%2 = 1 → false □
+        /// (2,3): ((2+3)%2 + 6%3)%2 = (1+0)%2 = 1 → false □
+        /// </code>
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool Pattern2(int x, int y) => y % 2 == 0;
-
-        /// <summary>
-        /// Creates vertical stripes (wider than pattern 1).
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool Pattern3(int x, int y) => x % 3 == 0;
-
-        /// <summary>
-        /// Creates diagonal stripes (wider than pattern 0).
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool Pattern4(int x, int y) => (x + y) % 3 == 0;
-
-        /// <summary>
-        /// Creates a combination of horizontal and vertical patterns.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool Pattern5(int x, int y) => ((int)(Math.Floor(y / 2d) + Math.Floor(x / 3d)) % 2) == 0;
-
-        /// <summary>
-        /// Creates a complex grid pattern.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool Pattern6(int x, int y) => ((x * y) % 2) + ((x * y) % 3) == 0;
-
-        /// <summary>
-        /// Creates an alternating complex pattern.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool Pattern7(int x, int y) => (((x * y) % 2) + ((x * y) % 3)) % 2 == 0;
-
-        /// <summary>
-        /// Creates a combination of checkerboard and grid patterns.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool Pattern8(int x, int y) => (((x + y) % 2) + ((x * y) % 3)) % 2 == 0;
+        public static bool Pattern7(byte rowMod2, byte colMod2, int row, int col) => (((rowMod2 + colMod2) + ((row * col) % 3)) & 1) == 0;
     }
 }
