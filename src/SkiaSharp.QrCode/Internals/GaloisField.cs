@@ -110,7 +110,7 @@ internal static class GaloisField
         var expSpan = expTable.AsSpan();
         var logSpan = logTable.AsSpan();
 
-        // Seems `expSpan[(logSpan[a] + logSpan[b]) % 255];` is correct, but we already extended expTable to 512 elements to avoid modulo operation.
+        // While `expSpan[(logSpan[a] + logSpan[b]) % 255];` is mathematically correct, we already extended expTable to 512 elements to avoid the modulo operation.
         return expSpan[(logSpan[a] + logSpan[b])];
     }
 
