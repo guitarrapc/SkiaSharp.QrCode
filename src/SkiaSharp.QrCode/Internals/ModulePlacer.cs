@@ -526,7 +526,7 @@ internal static class ModulePlacer
                     3 => MaskPattern.Pattern3(rm3, colMod3[c]),
                     4 => MaskPattern.Pattern4(rd2, colDiv3[c]),
                     5 => MaskPattern.Pattern5(rm2, colMod2[c], rm3, colMod3[c]),
-                    6 => MaskPattern.Pattern6(r, c),
+                    6 => MaskPattern.Pattern6(rm2, colMod2[c], rm3, colMod3[c]),
                     7 => MaskPattern.Pattern7(rm2, colMod2[c], r, c),
                     _ => false
                 };
@@ -1134,6 +1134,7 @@ internal static class ModulePlacer
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Pattern5(byte rowMod2, byte colMod2, byte rowMod3, byte colMod3) => (rowMod2 == 0 || colMod2 == 0) && (rowMod3 == 0 || colMod3 == 0);
 
+        // same as: public static bool Pattern6(int row, int col) => (((row * col) % 2) + ((row * col) % 3) & 1) == 0;
         /// <summary>
         /// Pattern 6: Alternating complex pattern
         /// </summary>
@@ -1166,23 +1167,61 @@ internal static class ModulePlacer
         /// Pattern is dark when sum is even (0 or 2)
         /// </code>
         /// 
-        /// Optimization:
+        /// Optimization - Avoid Multiplication and Modulo:
         /// <code>
-        /// Instead of: (sum) % 2 == 0
-        /// Use AND:    (sum &amp; 1) == 0
-        /// Benefit:    Bitwise AND is faster than modulo
+        /// Break down into two components:
+        /// 
+        /// 1. (x·y) % 2 parity:
+        ///    - Product is odd only when both x and y are odd
+        ///    - rowMod2 &amp; colMod2  (bitwise AND gives 1 only if both are 1)
+        /// 
+        /// 2. (x·y) % 3 parity (using 3×3 lookup table):
+        ///    - rowMod3 ∈ {0,1,2}, colMod3 ∈ {0,1,2}
+        ///    - Product table:
+        ///      ×   0  1  2
+        ///      0   0  0  0  (all even → parity 0)
+        ///      1   0  1  2  (1 odd, 2 even)
+        ///      2   0  2  4  (all even → parity 0)
+        ///    - Parity is odd (1) only when: (1,1) or (2,2)
+        ///    - Condition: rowMod3 != 0 AND rowMod3 == colMod3
+        /// 
+        /// Final result:
+        ///    ((p2) + (p3)) % 2 == 0  ⟺  p2 ^ p3 == 0  (XOR for parity)
+        /// 
+        /// Benefit: Eliminates multiplication and modulo operations entirely
         /// </code>
         /// 
         /// Example:
         /// <code>
+        /// # Basic formula:
         /// (0,0): (0%2 + 0%3)%2 = (0+0)%2 = 0 → true  ■
         /// (1,1): (1%2 + 1%3)%2 = (1+1)%2 = 0 → true  ■
         /// (2,1): (2%2 + 2%3)%2 = (0+2)%2 = 0 → true  ■
         /// (1,2): (2%2 + 2%3)%2 = (0+2)%2 = 0 → true  ■
+        /// 
+        /// # Optimized:
+        /// (0,0): p2=0 &amp; 0=0, p3=(0!=0 &amp;&amp; 0==0)=0 → 0^0=0 → true  ■
+        /// (1,1): p2=1 &amp; 1=1, p3=(1!=0 &amp;&amp; 1==1)=1 → 1^1=0 → true  ■
+        /// (2,1): p2=0 &amp; 1=0, p3=(2!=0 &amp;&amp; 2==1)=0 → 0^0=0 → true  ■
+        /// (1,2): p2=1 &amp; 0=0, p3=(1!=0 &amp;&amp; 1==2)=0 → 0^0=0 → true  ■
         /// </code>
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool Pattern6(int row, int col) => (((row * col) % 2) + ((row * col) % 3) & 1) == 0;
+        public static bool Pattern6(byte rowMod2, byte colMod2, byte rowMod3, byte colMod3)
+        {
+            // (xy) % 2 parity: odd only when both x and y are odd
+            var p2 = rowMod2 & colMod2;
+
+            // (xy) % 3 parity: odd only when (1,1) or (2,2)
+            // Using truth table instead of multiplication:
+            //   0×0=0(even), 0×1=0(even), 0×2=0(even)
+            //   1×0=0(even), 1×1=1(odd),  1×2=2(even)
+            //   2×0=0(even), 2×1=2(even), 2×2=4(even → 4%3=1 odd)
+            var p3Odd = (rowMod3 != 0 && rowMod3 == colMod3) ? 1 : 0;
+
+            // Sum parity: even when p2 and p3Odd are the same parityu (XOR == 0)
+            return (p2 ^ p3Odd) == 0;
+        }
 
         /// <summary>
         /// Pattern 7: Checkerboard and grid combination
