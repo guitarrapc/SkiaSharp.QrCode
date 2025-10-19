@@ -44,6 +44,27 @@ internal static class ModulePlacer
     public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
     {
         var dataLength = size * size;
+
+        // Pre calculate row/col calculation to remove mod/div from loop.
+        Span<byte> rMod2 = stackalloc byte[size];
+        Span<byte> rDiv2 = stackalloc byte[size];
+        Span<byte> rMod3 = stackalloc byte[size];
+        for (var i = 0; i < size; i++)
+        {
+            rMod2[i] = (byte)(i & 1);
+            rDiv2[i] = (byte)(i >> 1);
+            rMod3[i] = (byte)(i % 3);
+        }
+        Span<byte> cMod2 = stackalloc byte[size];
+        Span<byte> cDiv3 = stackalloc byte[size];
+        Span<byte> cMod3 = stackalloc byte[size];
+        for (var i = 0; i < size; i++)
+        {
+            cMod2[i] = (byte)(i & 1);
+            cDiv3[i] = (byte)(i / 3);
+            cMod3[i] = (byte)(i % 3);
+        }
+
         var bestPatternIndex = 0;
 
         // Select stack or heap allocation based on size
@@ -52,14 +73,14 @@ internal static class ModulePlacer
         if (dataLength <= StackAlloc_threshold)
         {
             Span<byte> tempBuffer = stackalloc byte[dataLength];
-            bestPatternIndex = EvaluateMaskPatterns(buffer, tempBuffer, version, size, blockedMask, eccLevel);
+            bestPatternIndex = EvaluateMaskPatterns(buffer, tempBuffer, version, size, blockedMask, eccLevel, rMod2, rDiv2, rMod3, cMod2, cDiv3, cMod3);
         }
         else
         {
             var rentBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
             try
             {
-                bestPatternIndex = EvaluateMaskPatterns(buffer, rentBuffer.AsSpan()[..dataLength], version, size, blockedMask, eccLevel);
+                bestPatternIndex = EvaluateMaskPatterns(buffer, rentBuffer.AsSpan()[..dataLength], version, size, blockedMask, eccLevel, rMod2, rDiv2, rMod3, cMod2, cDiv3, cMod3);
             }
             finally
             {
@@ -68,13 +89,17 @@ internal static class ModulePlacer
         }
 
         // Apply mask to original QR code
-        ApplyMaskToDataAreaInPlace(buffer, size, bestPatternIndex, blockedMask);
+        //ApplyMaskToDataAreaInPlace(buffer, size, bestPatternIndex, blockedMask);
+        ApplyMaskXorInPlace(buffer, blockedMask, size, bestPatternIndex, rMod2, rDiv2, rMod3, cMod2, cDiv3, cMod3);
 
         return bestPatternIndex;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int EvaluateMaskPatterns(ReadOnlySpan<byte> originalData, Span<byte> tempBuffer, int version, int size, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    private static int EvaluateMaskPatterns(ReadOnlySpan<byte> originalData, Span<byte> tempBuffer, int version, int size, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel,
+        ReadOnlySpan<byte> rMod2, ReadOnlySpan<byte> rDiv2, ReadOnlySpan<byte> rMod3,
+        ReadOnlySpan<byte> cMod2, ReadOnlySpan<byte> cDiv3, ReadOnlySpan<byte> cMod3
+        )
     {
         var bestPatternIndex = 0;
         var bestScore = int.MaxValue;
@@ -86,7 +111,7 @@ internal static class ModulePlacer
             originalData.CopyTo(tempBuffer);
 
             // Apply mask pattern to data area only
-            ApplyMaskToDataAreaInPlace(tempBuffer, size, patternIndex, blockedMask);
+            ApplyMaskXorInPlace(tempBuffer, blockedMask, size, patternIndex, rMod2, rDiv2, rMod3, cMod2, cDiv3, cMod3);
 
             // Apply format and version information
             var formatBits = QRCodeConstants.GetFormatBits(eccLevel, patternIndex);
@@ -484,6 +509,42 @@ internal static class ModulePlacer
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    static void ApplyMaskXorInPlace(Span<byte> buf, ReadOnlySpan<byte> blocked, int size, int patternIndex,
+        ReadOnlySpan<byte> rMod2, ReadOnlySpan<byte> rDiv2, ReadOnlySpan<byte> rMod3,
+        ReadOnlySpan<byte> cMod2, ReadOnlySpan<byte> cDiv3, ReadOnlySpan<byte> cMod3
+        )
+    {
+        for (int r = 0, idx = 0; r < size; r++)
+        {
+            var rm2 = rMod2[r];
+            var rm3 = rMod3[r];
+            var rd2 = rDiv2[r];
+            for (var c = 0; c < size; c++, idx++)
+            {
+                if (IsModuleBlocked(blocked, idx)) continue;
+
+                bool hit = patternIndex switch
+                {
+                    0 => (rm2 ^ cMod2[c]) == 0,
+                    1 => rm2 == 0,
+                    2 => cMod3[c] == 0,
+                    3 => (rm3 + cMod3[c]) % 3 == 0,
+                    4 => ((rd2 + cDiv3[c]) & 1) == 0,
+                    5 => ((r * c) % 2) + ((r * c) % 3) == 0,
+                    6 => (((r * c) % 2) + ((r * c) % 3) & 1) == 0,
+                    7 => (((rm2 + cMod2[c]) + ((r * c) % 3)) & 1) == 0,
+                    _ => false
+                };
+
+                if (hit)
+                {
+                    buf[idx] ^= 1;
+                }
+            }
+        }
+    }
+
     // ---------------------------------
     // Basic penalty calculations for reference.
     // ---------------------------------
@@ -761,6 +822,7 @@ internal static class ModulePlacer
         /// <param name="y">Math vertical position = row</param>
         /// <returns>True if the module is dark, false if it is light</returns>
         /// <exception cref="ArgumentOutOfRangeException"></exception>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Apply(int patternIndex, int x, int y)
         {
             return patternIndex switch
