@@ -509,29 +509,50 @@ internal static class ModulePlacer
         }
     }
 
+    /// <summary>
+    /// Apply the mask pattern to the data area only in-place
+    /// </summary>
+    /// <param name="buffer"></param>
+    /// <param name="blocked"></param>
+    /// <param name="size"></param>
+    /// <param name="patternIndex"></param>
+    /// <param name="rMod2"></param>
+    /// <param name="rDiv2"></param>
+    /// <param name="rMod3"></param>
+    /// <param name="cMod2"></param>
+    /// <param name="cDiv3"></param>
+    /// <param name="cMod3"></param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    static void ApplyMaskXorInPlace(Span<byte> buf, ReadOnlySpan<byte> blocked, int size, int patternIndex,
+    private static void ApplyMaskXorInPlace(Span<byte> buffer, ReadOnlySpan<byte> blocked, int size, int patternIndex,
         ReadOnlySpan<byte> rMod2, ReadOnlySpan<byte> rDiv2, ReadOnlySpan<byte> rMod3,
         ReadOnlySpan<byte> cMod2, ReadOnlySpan<byte> cDiv3, ReadOnlySpan<byte> cMod3
         )
     {
         for (int r = 0, idx = 0; r < size; r++)
         {
-            var rm2 = rMod2[r];
-            var rm3 = rMod3[r];
-            var rd2 = rDiv2[r];
+            var rm2 = rMod2[r]; // r % 2 (for Pattern 1, 2, 8)
+            var rm3 = rMod3[r]; // r % 3 (for Pattern 4)
+            var rd2 = rDiv2[r]; // r / 2 (for Pattern 5)
             for (var c = 0; c < size; c++, idx++)
             {
                 if (IsModuleBlocked(blocked, idx)) continue;
 
+                // Equivalent to bool hit = MaskPattern.Apply(patternIndex, c, r);
                 bool hit = patternIndex switch
                 {
+                    // (x + y) % 2 == 0
                     0 => (rm2 ^ cMod2[c]) == 0,
+                    // y % 2 == 0
                     1 => rm2 == 0,
+                    // x % 3 == 0
                     2 => cMod3[c] == 0,
+                    // (y + x) % 3 == 0
                     3 => (rm3 + cMod3[c]) % 3 == 0,
+                    // ((y/2 + x/3) % 2) == 0
                     4 => ((rd2 + cDiv3[c]) & 1) == 0,
+                    // ((x * y) % 2) + ((x * y) % 3) == 0
                     5 => ((r * c) % 2) + ((r * c) % 3) == 0,
+                    // (((x * y) % 2) + ((x * y) % 3)) % 2 == 0
                     6 => (((r * c) % 2) + ((r * c) % 3) & 1) == 0,
                     7 => (((rm2 + cMod2[c]) + ((r * c) % 3)) & 1) == 0,
                     _ => false
@@ -539,7 +560,7 @@ internal static class ModulePlacer
 
                 if (hit)
                 {
-                    buf[idx] ^= 1;
+                    buffer[idx] ^= 1;
                 }
             }
         }
