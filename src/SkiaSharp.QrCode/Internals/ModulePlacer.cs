@@ -839,7 +839,7 @@ internal static class ModulePlacer
         /// <para>Formula</para>
         /// <code>
         /// (x + y) % 2 == 0
-        /// </code>>
+        /// </code>
         /// 
         /// Visual Pattern (8×8 sample, ■=dark, □=light):
         /// <code>
@@ -1219,7 +1219,7 @@ internal static class ModulePlacer
             //   2×0=0(even), 2×1=2(even), 2×2=4(even → 4%3=1 odd)
             var p3Odd = (rowMod3 != 0 && rowMod3 == colMod3) ? 1 : 0;
 
-            // Sum parity: even when p2 and p3Odd are the same parityu (XOR == 0)
+            // Sum parity: even when p2 and p3Odd have the same parity (XOR == 0)
             return (p2 ^ p3Odd) == 0;
         }
 
