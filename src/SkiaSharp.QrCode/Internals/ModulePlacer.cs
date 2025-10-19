@@ -622,6 +622,9 @@ internal static class ModulePlacer
     ///   - Score = (|percentage - 50| / 5) × 10
     ///   - Encourages even distribution of dark/light modules
     /// </summary>
+#if NET6_0_OR_GREATER
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+#endif
     private static int CalculateScore(ReadOnlySpan<byte> buffer, int size)
     {
         // Penalty3 pattern: 1011101 (dark-light-dark-dark-dark-light-dark)
@@ -636,7 +639,7 @@ internal static class ModulePlacer
         var sizeMinus1 = size - 1;
 
         // keep column state for Penalty 1
-        Span<int> colModCount = stackalloc int[size];
+        Span<byte> colModCount = stackalloc byte[size];
         Span<bool> colLastVal = stackalloc bool[size];
         Span<uint> colBits = stackalloc uint[size];
 
@@ -678,13 +681,9 @@ internal static class ModulePlacer
                 else if (current == rowLastVal)
                 {
                     rowModCount++;
-                    if (rowModCount == 5)
+                    if (rowModCount >= 5)
                     {
-                        score1 += 3;
-                    }
-                    else if (rowModCount > 5)
-                    {
-                        score1++;
+                        score1 += rowModCount == 5 ? 3 : 1;
                     }
                 }
                 else
@@ -717,13 +716,9 @@ internal static class ModulePlacer
                     if (current == colLastVal[x])
                     {
                         colModCount[x]++;
-                        if (colModCount[x] == 5)
+                        if (colModCount[x] >= 5)
                         {
-                            score1 += 3;
-                        }
-                        else if (colModCount[x] > 5)
-                        {
-                            score1++;
+                            score1 += colModCount[x] == 5 ? 3 : 1;
                         }
                     }
                     else
