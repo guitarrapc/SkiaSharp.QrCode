@@ -622,8 +622,14 @@ internal static class ModulePlacer
     ///   - Score = (|percentage - 50| / 5) × 10
     ///   - Encourages even distribution of dark/light modules
     /// </summary>
+#if NET6_0_OR_GREATER
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+#endif
     private static int CalculateScore(ReadOnlySpan<byte> buffer, int size)
     {
+        // Tried single pass implementation, however branch mis-prediction made it slower than two-pass approach.
+        // ref: https://github.com/guitarrapc/SkiaSharp.QrCode/pull/245
+
         // Penalty3 pattern: 1011101 (dark-light-dark-dark-dark-light-dark)
         const uint PATTERN_FORWARD = 0b_0000_1011101; // 4 light modules + pattern
         const uint PATTERN_BACKWARD = 0b_1011101_0000; // pattern + 4 light modules
@@ -638,8 +644,9 @@ internal static class ModulePlacer
         for (var y = 0; y < size; y++)
         {
             var rowOffset = y * size;
-            var modInRow = 0;
-            var lastValRow = buffer[rowOffset] != 0;
+            var nextRowOffset = rowOffset + size;
+            var rowModCount = 0;
+            var rowLastValue = buffer[rowOffset] != 0;
             // for Penalty 3
             uint rowBits = 0;
 
@@ -652,30 +659,26 @@ internal static class ModulePlacer
                 if (current) blackModules++;
 
                 // Penalty 1: row direction
-                if (current == lastValRow)
+                if (current == rowLastValue)
                 {
-                    modInRow++;
-                    if (modInRow == 5)
+                    rowModCount++;
+                    if (rowModCount >= 5)
                     {
-                        score1 += 3;
-                    }
-                    else if (modInRow > 5)
-                    {
-                        score1++;
+                        score1 += rowModCount == 5 ? 3 : 1;
                     }
                 }
                 else
                 {
-                    modInRow = 1;
-                    lastValRow = current;
+                    rowModCount = 1;
+                    rowLastValue = current;
                 }
 
                 // Penalty 2: 2x2 block patterns
                 if (x < size - 1 && y < size - 1)
                 {
                     var right = buffer[index + 1] != 0;
-                    var bottom = buffer[index + size] != 0;
-                    var diag = buffer[index + size + 1] != 0;
+                    var bottom = buffer[nextRowOffset + x] != 0;
+                    var diag = buffer[nextRowOffset + x + 1] != 0;
                     if (current == right && current == bottom && current == diag)
                     {
                         score2 += 3;
@@ -697,8 +700,8 @@ internal static class ModulePlacer
         // Penalty 1 & 3: col direction (avoid transposing in previous loop)
         for (var x = 0; x < size; x++)
         {
-            var modInColumn = 0;
-            var lastValColumn = buffer[x] != 0;
+            var colModCount = 0;
+            var colLastValue = buffer[x] != 0;
             uint colBits = 0;
 
             for (var y = 0; y < size; y++)
@@ -706,22 +709,18 @@ internal static class ModulePlacer
                 var current = buffer[y * size + x] != 0;
 
                 // Penalty 1
-                if (current == lastValColumn)
+                if (current == colLastValue)
                 {
-                    modInColumn++;
-                    if (modInColumn == 5)
+                    colModCount++;
+                    if (colModCount >= 5)
                     {
-                        score1 += 3;
-                    }
-                    else if (modInColumn > 5)
-                    {
-                        score1++;
+                        score1 += colModCount == 5 ? 3 : 1;
                     }
                 }
                 else
                 {
-                    modInColumn = 1;
-                    lastValColumn = current;
+                    colModCount = 1;
+                    colLastValue = current;
                 }
 
                 // Penalty 3: col direction (11-bit sliding window)
@@ -736,9 +735,11 @@ internal static class ModulePlacer
         }
 
         // Penalty 4: Dark/light balance
+        // Simple calculation `var score4 = (int)(Math.Abs(percent - 50.0) / 5.0) * 10;` not handle 'round to nearest multiple of 5' spec.
+        // Following fomula property handles the QR code specification which requires finding the closest multiple of 5 to the percentage, then calculating the deviation from 50%.
         var percent = (blackModules / (double)(size * size)) * 100;
         var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
-        var nextMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 45) / 5;
+        var nextMultipleOf5 = Math.Abs((int)Math.Ceiling(percent / 5) * 5 - 50) / 5;
         var score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
 
         return score1 + score2 + score3 + score4;
