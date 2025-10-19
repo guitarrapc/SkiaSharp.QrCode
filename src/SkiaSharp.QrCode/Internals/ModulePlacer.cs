@@ -94,8 +94,7 @@ internal static class ModulePlacer
         }
 
         // Apply mask to original QR code
-        //ApplyMaskToDataAreaInPlace(buffer, size, bestPatternIndex, blockedMask);
-        ApplyMaskXorInPlace(buffer, blockedMask, size, bestPatternIndex, rowMod2, rowDiv2, rowMod3, colMod2, colDiv3, colMod3);
+        ApplyMaskXorInPlace(buffer, bestPatternIndex, size, blockedMask, rowMod2, rowDiv2, rowMod3, colMod2, colDiv3, colMod3);
 
         return bestPatternIndex;
     }
@@ -109,12 +108,12 @@ internal static class ModulePlacer
     /// <param name="size">QR code size in modules.</param>
     /// <param name="blockedMask">Blocked mask bytes.</param>
     /// <param name="eccLevel">Error correction level.</param>
-    /// <param name="rMod2">Pre-calculated row modulo 2.</param>
-    /// <param name="rDiv2">Pre-calculated row division 2.</param>
-    /// <param name="rMod3">Pre-calculated row modulo 3.</param>
-    /// <param name="cMod2">Pre-calculated column modulo 2.</param>
-    /// <param name="cDiv3">Pre-calculated column division 3.</param>
-    /// <param name="cMod3">Pre-calculated column modulo 3.</param>
+    /// <param name="rowMod2">Pre-calculated row modulo 2.</param>
+    /// <param name="rowDiv2">Pre-calculated row division 2.</param>
+    /// <param name="rowMod3">Pre-calculated row modulo 3.</param>
+    /// <param name="colMod2">Pre-calculated column modulo 2.</param>
+    /// <param name="colDiv3">Pre-calculated column division 3.</param>
+    /// <param name="colMod3">Pre-calculated column modulo 3.</param>
     /// <remarks>
     /// Penalty Scoring (ISO/IEC 18004 Section 8.8.2):
     /// <code>
@@ -137,8 +136,8 @@ internal static class ModulePlacer
     /// <returns>Index of the best mask pattern number (0-7).</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int EvaluateMaskPatterns(ReadOnlySpan<byte> buffer, Span<byte> tempBuffer, int version, int size, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel,
-        ReadOnlySpan<byte> rMod2, ReadOnlySpan<byte> rDiv2, ReadOnlySpan<byte> rMod3,
-        ReadOnlySpan<byte> cMod2, ReadOnlySpan<byte> cDiv3, ReadOnlySpan<byte> cMod3
+        ReadOnlySpan<byte> rowMod2, ReadOnlySpan<byte> rowDiv2, ReadOnlySpan<byte> rowMod3,
+        ReadOnlySpan<byte> colMod2, ReadOnlySpan<byte> colDiv3, ReadOnlySpan<byte> colMod3
         )
     {
         // For each of 8 patterns (0-7):
@@ -159,7 +158,7 @@ internal static class ModulePlacer
             buffer.CopyTo(tempBuffer);
 
             // Apply mask pattern to data area only
-            ApplyMaskXorInPlace(tempBuffer, blockedMask, size, patternIndex, rMod2, rDiv2, rMod3, cMod2, cDiv3, cMod3);
+            ApplyMaskXorInPlace(tempBuffer, patternIndex, size, blockedMask, rowMod2, rowDiv2, rowMod3, colMod2, colDiv3, colMod3);
 
             // Apply format and version information
             var formatBits = QRCodeConstants.GetFormatBits(eccLevel, patternIndex);
@@ -540,18 +539,26 @@ internal static class ModulePlacer
     /// <summary>
     /// Apply the mask pattern to the data area only in-place
     /// </summary>
-    /// <param name="buffer"></param>
-    /// <param name="blocked"></param>
-    /// <param name="size"></param>
-    /// <param name="patternIndex"></param>
-    /// <param name="rowMod2"></param>
-    /// <param name="rowDiv2"></param>
-    /// <param name="rowMod3"></param>
-    /// <param name="colMod2"></param>
-    /// <param name="colDiv3"></param>
-    /// <param name="colMod3"></param>
+    /// <param name="buffer">Original QR code data without mask applied.</param>
+    /// <param name="size">QR code size in modules.</param>
+    /// <param name="blockedMask">Blocked mask bytes.</param>
+    /// <param name="patternIndex">Pattern index to apply.</param>
+    /// <param name="rowMod2">Pre-calculated row modulo 2 values.</param>
+    /// <param name="rowDiv2">Pre-calculated row division 2 values.</param>
+    /// <param name="rowMod3">Pre-calculated row modulo 3 values.</param>
+    /// <param name="colMod2">Pre-calculated column modulo 2 values.</param>
+    /// <param name="colDiv3">Pre-calculated column division 3 values.</param>
+    /// <param name="colMod3">Pre-calculated column modulo 3 values.</param>
+    /// <remarks>
+    /// XOR Operation:
+    /// <code>
+    /// If MaskPattern.Apply(patternIndex, col, row) == true:
+    ///     buffer[index] ^= 1
+    /// </code>
+    /// This allows efficient reversal and testing of different patterns without copying data.
+    /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ApplyMaskXorInPlace(Span<byte> buffer, ReadOnlySpan<byte> blocked, int size, int patternIndex,
+    private static void ApplyMaskXorInPlace(Span<byte> buffer, int patternIndex, int size, ReadOnlySpan<byte> blockedMask,
         ReadOnlySpan<byte> rowMod2, ReadOnlySpan<byte> rowDiv2, ReadOnlySpan<byte> rowMod3,
         ReadOnlySpan<byte> colMod2, ReadOnlySpan<byte> colDiv3, ReadOnlySpan<byte> colMod3
         )
@@ -563,7 +570,7 @@ internal static class ModulePlacer
             var rd2 = rowDiv2[r]; // r / 2 (for Pattern 5)
             for (var c = 0; c < size; c++, idx++)
             {
-                if (IsModuleBlocked(blocked, idx)) continue;
+                if (IsModuleBlocked(blockedMask, idx)) continue;
 
                 // Equivalent to bool hit = MaskPattern.Apply(patternIndex, c, r);
                 bool hit = patternIndex switch
@@ -852,7 +859,7 @@ internal static class ModulePlacer
 
     /// <summary>
     /// Mask pattern implementations and scoring algorithm using pre-calculated modulo/division values.
-    /// ISO/IEC 18004 defines 8 mask patterns.
+    /// ISO/IEC 18004:2015 defines 8 mask patterns (0-7) to improve QR code readability.
     /// </summary>
     /// <remarks>
     /// Performance optimization strategy:
@@ -861,7 +868,8 @@ internal static class ModulePlacer
     /// 2. Use bitwise operations (&amp;, ^) instead of modulo where possible
     /// 3. Avoid repeated Math.Floor calculations
     /// </code>
-    /// Pre-calculated values:
+    /// 
+    /// Pre-calculated values (shared across all patterns):
     /// <code>
     /// - rMod2[i] = i % 2  (row modulo 2)
     /// - rDiv2[i] = i / 2  (row integer division by 2)
@@ -870,6 +878,7 @@ internal static class ModulePlacer
     /// - cDiv3[i] = i / 3  (column integer division by 3)
     /// - cMod3[i] = i % 3  (column modulo 3)
     /// </code>
+    /// 
     /// For mathematical background, see:
     /// <code>
     /// - ISO/IEC 18004:2015 Section 7.8.2 (Data Masking)
@@ -881,8 +890,8 @@ internal static class ModulePlacer
         /// <summary>
         /// Pattern 0: Checkerboard pattern
         /// </summary>
-        /// <param name="rowMod2"></param>
-        /// <param name="colMod2"></param>
+        /// <param name="rowMod2">Pre-calculated row modulo 2 value.</param>
+        /// <param name="colMod2">Pre-calculated column modulo 2 value.</param>
         /// <remarks>
         /// <para>Formula</para>
         /// <code>
@@ -929,6 +938,7 @@ internal static class ModulePlacer
         /// <summary>
         /// Pattern 1: Horizontal stripes
         /// </summary>
+        /// <param name="rowMod2">Pre-calculated row modulo 2 value.</param>
         /// <remarks>
         /// Formula:
         /// <code>
@@ -968,6 +978,7 @@ internal static class ModulePlacer
         /// <summary>
         /// Pattern 2: Vertical stripes
         /// </summary>
+        /// <param name="colMod3">Pre-calculated column modulo 3 value.</param>
         /// <remarks>
         /// Formula:
         /// <code>
@@ -1008,6 +1019,8 @@ internal static class ModulePlacer
         /// <summary>
         /// Pattern 3: Diagonal stripes
         /// </summary>
+        /// <param name="rowMod3">Pre-calculated row modulo 3 value.</param>
+        /// <param name="colMod3">Pre-calculated column modulo 3 value.</param>
         /// <remarks>
         /// Formula:
         /// <code>
@@ -1072,6 +1085,8 @@ internal static class ModulePlacer
         /// <summary>
         /// Pattern 4: Combined horizontal and vertical grid
         /// </summary>
+        /// <param name="rowDiv2">Pre-calculated row division 2 value.</param>
+        /// <param name="colDiv3">Pre-calculated column division 3 value.</param>
         /// <remarks>
         /// Formula:
         /// <code>
@@ -1122,6 +1137,10 @@ internal static class ModulePlacer
         /// <summary>
         /// Pattern 5: Complex grid pattern
         /// </summary>
+        /// <param name="rowMod2">Pre-calculated row modulo 2 value.</param>
+        /// <param name="rowMod3">Pre-calculated row modulo 3 value.</param>
+        /// <param name="colMod2">Pre-calculated column modulo 2 value.</param>
+        /// <param name="colMod3">Pre-calculated column modulo 3 value.</param>
         /// <remarks>
         /// Formula:
         /// <code>
@@ -1186,6 +1205,10 @@ internal static class ModulePlacer
         /// <summary>
         /// Pattern 6: Alternating complex pattern
         /// </summary>
+        /// <param name="rowMod2">Pre-calculated row modulo 2 value.</param>
+        /// <param name="rowMod3">Pre-calculated row modulo 3 value.</param>
+        /// <param name="colMod2">Pre-calculated column modulo 2 value.</param>
+        /// <param name="colMod3">Pre-calculated column modulo 3 value.</param>
         /// <remarks>
         /// Formula:
         /// <code>
@@ -1274,6 +1297,10 @@ internal static class ModulePlacer
         /// <summary>
         /// Pattern 7: Checkerboard and grid combination
         /// </summary>
+        /// <param name="rowMod2">Pre-calculated row modulo 2 value.</param>
+        /// <param name="colMod2">Pre-calculated column modulo 2 value.</param>
+        /// <param name="row"="row">Row index.</param>
+        /// <param name="col"="col">Column index.</param>
         /// <remarks>
         /// Formula:
         /// <code>
