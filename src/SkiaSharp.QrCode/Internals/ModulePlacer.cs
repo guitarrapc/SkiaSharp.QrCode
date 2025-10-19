@@ -525,7 +525,7 @@ internal static class ModulePlacer
                     2 => MaskPattern.Pattern2(colMod3[c]),
                     3 => MaskPattern.Pattern3(rm3, colMod3[c]),
                     4 => MaskPattern.Pattern4(rd2, colDiv3[c]),
-                    5 => MaskPattern.Pattern5(r, c),
+                    5 => MaskPattern.Pattern5(rm2, colMod2[c], rm3, colMod3[c]),
                     6 => MaskPattern.Pattern6(r, c),
                     7 => MaskPattern.Pattern7(rm2, colMod2[c], r, c),
                     _ => false
@@ -1051,6 +1051,7 @@ internal static class ModulePlacer
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool Pattern4(byte rowDiv2, byte colDiv3) => ((rowDiv2 + colDiv3) & 1) == 0;
 
+        // same as: public static bool Pattern5(int row, int col) => ((row * col) % 2) + ((row * col) % 3) == 0;
         /// <summary>
         /// Pattern 5: Complex grid pattern
         /// </summary>
@@ -1084,25 +1085,35 @@ internal static class ModulePlacer
         /// ⟺ (x·y) % 6 == 0
         /// </code>
         /// 
-        /// Optimization Note:
+        /// Optimization - Avoid Multiplication:
         /// <code>
-        /// Cannot pre-calculate: Depends on x·y product
-        /// Direct calculation ((x·y)%2 + (x·y)%3 == 0) is faster than
-        /// single modulo (x·y)%6 == 0 for small values due to:
-        /// - Modern CPUs optimize small modulo operations
-        /// - Avoids division by 6 (slower than division by 2 or 3)
+        /// (x·y) % 2 == 0  ⟺  (x % 2 == 0) OR (y % 2 == 0)  (either is even)
+        /// (x·y) % 3 == 0  ⟺  (x % 3 == 0) OR (y % 3 == 0)  (either is divisible by 3)
+        /// 
+        /// Therefore:
+        /// ((x·y) % 2) + ((x·y) % 3) == 0
+        /// ⟺ (rowMod2 == 0 OR colMod2 == 0) AND (rowMod3 == 0 OR colMod3 == 0)
+        /// 
+        /// Benefit: Eliminates multiplication and modulo operations entirely
         /// </code>
         /// 
         /// Example:
         /// <code>
+        /// # Basic
         /// (0,0): 0%2 + 0%3 = 0+0 = 0 → true  ■
         /// (2,3): 6%2 + 6%3 = 0+0 = 0 → true  ■
         /// (1,1): 1%2 + 1%3 = 1+1 = 2 → false □
         /// (2,2): 4%2 + 4%3 = 0+1 = 1 → false □
+        /// 
+        /// # Optimized:
+        /// (0,0): (0==0 OR 0==0) AND (0==0 OR 0==0) → true  ■
+        /// (2,3): (0==0 OR 1==0) AND (2==0 OR 0==0) → true  ■
+        /// (1,1): (1==0 OR 1==0) AND (1==0 OR 1==0) → false □
+        /// (2,2): (0==0 OR 0==0) AND (2==0 OR 2==0) → false □
         /// </code>
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static bool Pattern5(int row, int col) => ((row * col) % 2) + ((row * col) % 3) == 0;
+        public static bool Pattern5(byte rowMod2, byte colMod2, byte rowMod3, byte colMod3) => (rowMod2 == 0 || colMod2 == 0) && (rowMod3 == 0 || colMod3 == 0);
 
         /// <summary>
         /// Pattern 6: Alternating complex pattern
