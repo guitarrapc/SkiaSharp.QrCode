@@ -40,12 +40,17 @@ internal static class ModulePlacer
     /// Applies mask pattern to data area and selects optimal pattern.
     /// Tests all 8 mask patterns and selects one with lowest penalty score.
     /// </summary>
-    /// <returns>Selected mask pattern number (0-7).</returns>
+    /// <param name="buffer">Original QR code data without mask applied.</param>
+    /// <param name="size">QR code size in modules.</param>
+    /// <param name="version">QR code version (1-40).</param>
+    /// <param name="blockedMask">Blocked mask bytes.</param>
+    /// <param name="eccLevel">Error correction level.</param>
+    /// <returns>Index of the best mask pattern number (0-7).</returns>
     public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
     {
         var dataLength = size * size;
 
-        // Pre calculate row/col calculation to remove mod/div from loop.
+        // Pre calculate row/col calculation to remove mod/div from mask loop.
         Span<byte> rowMod2 = stackalloc byte[size];
         Span<byte> rowDiv2 = stackalloc byte[size];
         Span<byte> rowMod3 = stackalloc byte[size];
@@ -95,12 +100,55 @@ internal static class ModulePlacer
         return bestPatternIndex;
     }
 
+    /// <summary>
+    /// Evaluates all 8 mask patterns and selects the one with the lowest penalty score.
+    /// </summary>
+    /// <param name="buffer">Original QR code data without mask applied.</param>
+    /// <param name="tempBuffer">Temporary buffer for testing each mask pattern.</param>
+    /// <param name="version">QR code version (1-40).</param>
+    /// <param name="size">QR code size in modules.</param>
+    /// <param name="blockedMask">Blocked mask bytes.</param>
+    /// <param name="eccLevel">Error correction level.</param>
+    /// <param name="rMod2">Pre-calculated row modulo 2.</param>
+    /// <param name="rDiv2">Pre-calculated row division 2.</param>
+    /// <param name="rMod3">Pre-calculated row modulo 3.</param>
+    /// <param name="cMod2">Pre-calculated column modulo 2.</param>
+    /// <param name="cDiv3">Pre-calculated column division 3.</param>
+    /// <param name="cMod3">Pre-calculated column modulo 3.</param>
+    /// <remarks>
+    /// Penalty Scoring (ISO/IEC 18004 Section 8.8.2):
+    /// <code>
+    /// - Rule 1: Consecutive modules (rows/columns)
+    /// - Rule 2: 2×2 blocks of same color
+    /// - Rule 3: Finder-like patterns
+    /// - Rule 4: Dark/light module balance
+    /// </code>
+    ///
+    /// Performance Optimization:
+    /// <code>
+    /// - Uses pre-calculated modulo/division values
+    /// - Single-pass XOR application
+    /// - Stack allocation for small QR codes
+    /// - Avoids repeated calculations
+    /// </code>
+    ///
+    /// Lower score indicates better mask pattern (easier to scan and decode).
+    /// </remarks>
+    /// <returns>Index of the best mask pattern number (0-7).</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int EvaluateMaskPatterns(ReadOnlySpan<byte> originalData, Span<byte> tempBuffer, int version, int size, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel,
+    private static int EvaluateMaskPatterns(ReadOnlySpan<byte> buffer, Span<byte> tempBuffer, int version, int size, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel,
         ReadOnlySpan<byte> rMod2, ReadOnlySpan<byte> rDiv2, ReadOnlySpan<byte> rMod3,
         ReadOnlySpan<byte> cMod2, ReadOnlySpan<byte> cDiv3, ReadOnlySpan<byte> cMod3
         )
     {
+        // For each of 8 patterns (0-7):
+        // 1. Copy original data to temporary buffer
+        // 2. Apply mask pattern using XOR (data area only)
+        // 3. Apply format information (ECC level + pattern index)
+        // 4. Apply version information (version 7+ only)
+        // 5. Calculate penalty score
+        // 6. Track pattern with lowest score
+
         var bestPatternIndex = 0;
         var bestScore = int.MaxValue;
 
@@ -108,7 +156,7 @@ internal static class ModulePlacer
         for (var patternIndex = 0; patternIndex < 8; patternIndex++)
         {
             // Reset to original state
-            originalData.CopyTo(tempBuffer);
+            buffer.CopyTo(tempBuffer);
 
             // Apply mask pattern to data area only
             ApplyMaskXorInPlace(tempBuffer, blockedMask, size, patternIndex, rMod2, rDiv2, rMod3, cMod2, cDiv3, cMod3);
