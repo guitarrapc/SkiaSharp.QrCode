@@ -735,8 +735,8 @@ internal static class ModulePlacer
         }
 
         // Penalty 4: Dark/light balance
-        // Simple calculation `var score4 = (int)(Math.Abs(percent - 50.0) / 5.0) * 10;` not handle 'round to nearest multiple of 5' spec.
-        // Following fomula property handles the QR code specification which requires finding the closest multiple of 5 to the percentage, then calculating the deviation from 50%.
+        // Simple calculation `var score4 = (int)(Math.Abs(percent - 50.0) / 5.0) * 10;` does not handle 'round to nearest multiple of 5' spec.
+        // Following formula property handles the QR code specification which requires finding the closest multiple of 5 to the percentage, then calculating the deviation from 50%.
         var percent = (blackModules / (double)(size * size)) * 100;
         var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
         var nextMultipleOf5 = Math.Abs((int)Math.Ceiling(percent / 5) * 5 - 50) / 5;
