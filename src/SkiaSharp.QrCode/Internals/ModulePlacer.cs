@@ -476,6 +476,7 @@ internal static class ModulePlacer
     /// Two identical 3×6 patterns placed at top-right and bottom-left corners.
     /// </summary>
     /// <param name="buffer">QR code matrix buffer</param>
+    /// <param name="size">QR code size in modules</param>
     /// <param name="versionBits">18-bit version information (LSB first)</param>
     /// <remarks>
     /// Places two identical 3×6 patterns (ISO/IEC 18004 Section 7.10):
@@ -540,9 +541,9 @@ internal static class ModulePlacer
     /// Apply the mask pattern to the data area only in-place
     /// </summary>
     /// <param name="buffer">Original QR code data without mask applied.</param>
+    /// <param name="patternIndex">Pattern index to apply.</param>
     /// <param name="size">QR code size in modules.</param>
     /// <param name="blockedMask">Blocked mask bytes.</param>
-    /// <param name="patternIndex">Pattern index to apply.</param>
     /// <param name="rowMod2">Pre-calculated row modulo 2 values.</param>
     /// <param name="rowDiv2">Pre-calculated row division 2 values.</param>
     /// <param name="rowMod3">Pre-calculated row modulo 3 values.</param>
@@ -565,14 +566,13 @@ internal static class ModulePlacer
     {
         for (int r = 0, idx = 0; r < size; r++)
         {
-            var rm2 = rowMod2[r]; // r % 2 (for Pattern 1, 2, 8)
-            var rm3 = rowMod3[r]; // r % 3 (for Pattern 4)
-            var rd2 = rowDiv2[r]; // r / 2 (for Pattern 5)
+            var rm2 = rowMod2[r]; // r % 2
+            var rm3 = rowMod3[r]; // r % 3
+            var rd2 = rowDiv2[r]; // r / 2
             for (var c = 0; c < size; c++, idx++)
             {
                 if (IsModuleBlocked(blockedMask, idx)) continue;
 
-                // Equivalent to bool hit = MaskPattern.Apply(patternIndex, c, r);
                 bool hit = patternIndex switch
                 {
                     0 => MaskPattern.Pattern0(rm2, colMod2[c]),
@@ -1299,8 +1299,8 @@ internal static class ModulePlacer
         /// </summary>
         /// <param name="rowMod2">Pre-calculated row modulo 2 value.</param>
         /// <param name="colMod2">Pre-calculated column modulo 2 value.</param>
-        /// <param name="row"="row">Row index.</param>
-        /// <param name="col"="col">Column index.</param>
+        /// <param name="row">Row index.</param>
+        /// <param name="col">Column index.</param>
         /// <remarks>
         /// Formula:
         /// <code>
