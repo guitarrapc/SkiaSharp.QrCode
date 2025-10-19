@@ -99,18 +99,19 @@ internal static class GaloisField
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static byte Multiply(byte a, byte b)
     {
-        if (a == 0 || b == 0) return 0;
-
-        var expSpan = expTable.AsSpan();
-        var logSpan = logTable.AsSpan();
-
         // We don't do bitwise multiplication or mod operation, but use properties of Galois field instead.
         // Galois field has following properties:
         // a = α^i
         // b = α^j
         // a * b = α^(i+j)
 
-        return expSpan[(logSpan[a] + logSpan[b]) % 255];
+        if (a == 0 || b == 0) return 0;
+
+        var expSpan = expTable.AsSpan();
+        var logSpan = logTable.AsSpan();
+
+        // While `expSpan[(logSpan[a] + logSpan[b]) % 255];` is mathematically correct, we already extended expTable to 512 elements to avoid the modulo operation.
+        return expSpan[(logSpan[a] + logSpan[b])];
     }
 
     /// <summary>
