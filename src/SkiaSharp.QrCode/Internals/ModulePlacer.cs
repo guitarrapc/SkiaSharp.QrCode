@@ -633,14 +633,22 @@ internal static class ModulePlacer
         var score2 = 0;
         var score3 = 0;
         var blackModules = 0; // dark modules count for Penalty 4
+        var sizeMinus1 = size - 1;
+
+        // keep column state for Penalty 1
+        Span<int> colModCount = stackalloc int[size];
+        Span<bool> colLastVal = stackalloc bool[size];
+        Span<uint> colBits = stackalloc uint[size];
 
         // Scan Penalty 1, 2, 3, 4 in single pass
         for (var y = 0; y < size; y++)
         {
             var rowOffset = y * size;
-            var modInRow = 0;
-            var lastValRow = buffer[rowOffset] != 0;
-            // for Penalty 3
+            var nextRowOffset = rowOffset + size;
+
+            // row state
+            var rowModCount = 0;
+            var rowLastVal = false;
             uint rowBits = 0;
 
             for (var x = 0; x < size; x++)
@@ -651,35 +659,38 @@ internal static class ModulePlacer
                 // Penalty 4: Count black modules
                 if (current) blackModules++;
 
-                // Penalty 1: row direction
-                if (current == lastValRow)
+                // Penalty 2: 2x2 block patterns
+                if (x < sizeMinus1 && y < sizeMinus1)
                 {
-                    modInRow++;
-                    if (modInRow == 5)
+                    var right = buffer[index + 1] != 0;
+                    var bottom = buffer[nextRowOffset + x] != 0;
+                    var diag = buffer[nextRowOffset + x + 1] != 0;
+                    if (current == right && current == bottom && current == diag)
+                        score2 += 3;
+                }
+
+                // Penalty 1: row direction
+                if (x == 0)
+                {
+                    rowLastVal = current;
+                    rowModCount = 1;
+                }
+                else if (current == rowLastVal)
+                {
+                    rowModCount++;
+                    if (rowModCount == 5)
                     {
                         score1 += 3;
                     }
-                    else if (modInRow > 5)
+                    else if (rowModCount > 5)
                     {
                         score1++;
                     }
                 }
                 else
                 {
-                    modInRow = 1;
-                    lastValRow = current;
-                }
-
-                // Penalty 2: 2x2 block patterns
-                if (x < size - 1 && y < size - 1)
-                {
-                    var right = buffer[index + 1] != 0;
-                    var bottom = buffer[index + size] != 0;
-                    var diag = buffer[index + size + 1] != 0;
-                    if (current == right && current == bottom && current == diag)
-                    {
-                        score2 += 3;
-                    }
+                    rowLastVal = current;
+                    rowModCount = 1;
                 }
 
                 // Penalty 3: row direction (11-bit sliding window)
@@ -691,55 +702,51 @@ internal static class ModulePlacer
                     if (rowBits == PATTERN_FORWARD || rowBits == PATTERN_BACKWARD)
                         score3 += 40;
                 }
-            }
-        }
 
-        // Penalty 1 & 3: col direction (avoid transposing in previous loop)
-        for (var x = 0; x < size; x++)
-        {
-            var modInColumn = 0;
-            var lastValColumn = buffer[x] != 0;
-            uint colBits = 0;
-
-            for (var y = 0; y < size; y++)
-            {
-                var current = buffer[y * size + x] != 0;
-
-                // Penalty 1
-                if (current == lastValColumn)
+                // col direction (Penalty 1 & 3)
+                if (y == 0)
                 {
-                    modInColumn++;
-                    if (modInColumn == 5)
-                    {
-                        score1 += 3;
-                    }
-                    else if (modInColumn > 5)
-                    {
-                        score1++;
-                    }
+                    // fast row 0 init, no addition at this point (prevent off-by-one)
+                    colLastVal[x] = current;
+                    colModCount[x] = 1;
+                    colBits[x] = current ? 1u : 0u;
                 }
                 else
                 {
-                    modInColumn = 1;
-                    lastValColumn = current;
-                }
+                    // Penalty 1
+                    if (current == colLastVal[x])
+                    {
+                        colModCount[x]++;
+                        if (colModCount[x] == 5)
+                        {
+                            score1 += 3;
+                        }
+                        else if (colModCount[x] > 5)
+                        {
+                            score1++;
+                        }
+                    }
+                    else
+                    {
+                        colLastVal[x] = current;
+                        colModCount[x] = 1;
+                    }
 
-                // Penalty 3: col direction (11-bit sliding window)
-                colBits = ((colBits << 1) | (current ? 1u : 0u)) & MASK_11BIT;
-                // 11 bits ready, check for pattern
-                if (y >= 10)
-                {
-                    if (colBits == PATTERN_FORWARD || colBits == PATTERN_BACKWARD)
-                        score3 += 40;
+                    // Penalty 3: col direction (11-bit sliding window)
+                    colBits[x] = ((colBits[x] << 1) | (current ? 1u : 0u)) & MASK_11BIT;
+                    // 11 bits ready, check for pattern
+                    if (y >= 10)
+                    {
+                        if (colBits[x] == PATTERN_FORWARD || colBits[x] == PATTERN_BACKWARD)
+                            score3 += 40;
+                    }
                 }
             }
         }
 
         // Penalty 4: Dark/light balance
-        var percent = (blackModules / (double)(size * size)) * 100;
-        var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
-        var nextMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 45) / 5;
-        var score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
+        var percent = (blackModules / (double)(size * size)) * 100.0;
+        var score4 = (int)(Math.Abs(percent - 50.0) / 5.0) * 10;
 
         return score1 + score2 + score3 + score4;
     }
