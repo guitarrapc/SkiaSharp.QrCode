@@ -57,8 +57,8 @@ public static class QRCodeGenerator
         // 11. Add format and version information
         // 12. Add quiet zone (white border)
 
-        if (requestedVersion is < -1 or > 40)
-            throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be -1 (auto) or 1-40, got {requestedVersion}");
+        if (requestedVersion != -1 && (requestedVersion < 1 || requestedVersion > 40))
+            throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be 1-40 or -1(auto), but was {requestedVersion}");
         if (quietZoneSize < 0)
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be non-negative, got {quietZoneSize}");
 
@@ -126,8 +126,8 @@ public static class QRCodeGenerator
         // 11. Add format and version information
         // 12. Add quiet zone (white border)
 
-        if (requestedVersion is < -1 or > 40)
-            throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be -1 (auto) or 1-40, got {requestedVersion}");
+        if (requestedVersion != -1 && (requestedVersion < 1 || requestedVersion > 40))
+            throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be 1-40 or -1(auto), but was {requestedVersion}");
         if (quietZoneSize < 0)
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be non-negative, got {quietZoneSize}");
 
@@ -645,7 +645,7 @@ public static class QRCodeGenerator
     /// <returns>Maximum bit string length in characters.</returns>
     internal static int CalculateMaxBitStringLength(int version, ECCLevel eccLevel, EncodingMode encoding)
     {
-        if (version < 1 || version > 40)
+        if (version is < 1 or > 40)
             throw new ArgumentOutOfRangeException(nameof(version), $"Version must be 1-40, but was {version}");
 
         // QR codes are always padded to full capacity with 0xEC/0x11 bytes

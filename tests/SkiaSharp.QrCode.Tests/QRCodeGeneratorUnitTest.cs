@@ -447,8 +447,8 @@ public class QRCodeGeneratorUnitTest
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     private static int CalculateSize(int version, int quietZoneSize = 4)
     {
-        if (version < 1 || version > 40)
-            throw new ArgumentOutOfRangeException(nameof(version), $"Version must be 1-40, but was {version}.");
+        if (version is < 1 or > 40)
+            throw new ArgumentOutOfRangeException(nameof(version), $"Version must be -1 (auto) or 1-40, got {version}");
 
         // Formula: size = 21 + (version - 1) * 4
         var sizeWithoutQuietSone = 21 + (version - 1) * 4;

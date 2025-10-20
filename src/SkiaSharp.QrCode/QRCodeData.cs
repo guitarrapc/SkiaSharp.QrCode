@@ -201,14 +201,8 @@ public class QRCodeData
 
         // Calculate version from size (without quiet zone)
         var calculatedVersion = VersionFromSize(sizeWithoutQuietZone);
-        if (calculatedVersion < 1 || calculatedVersion > 40)
-        {
-            throw new ArgumentException(
-                $"Invalid matrix size. Size without quiet zone: {sizeWithoutQuietZone}, " +
-                $"Calculated version: {calculatedVersion}. " +
-                $"Version must be 1-40.",
-                nameof(moduleData));
-        }
+        if (calculatedVersion is < 1 or > 40)
+            throw new ArgumentOutOfRangeException(nameof(calculatedVersion), $"Version must be 1-40, but was {calculatedVersion}");
 
         _size = size;
         _actualDataLength = _size * _size;
