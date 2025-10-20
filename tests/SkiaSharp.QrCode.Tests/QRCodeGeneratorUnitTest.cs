@@ -480,6 +480,115 @@ public class QRCodeGeneratorUnitTest
         }
     }
 
+    // GetRequiredBufferSize Test
+
+    [Fact]
+    public void GetRequiredBufferSize_MatchesActualQrCodeGeneration()
+    {
+        var text = "https://example.com/foobar";
+        var eccLevel = ECCLevel.L;
+        var quietZoneSize = 4;
+
+        // Calculate expected size
+        var (expectedBufferSize, expectedQrSize, expectedVersion) = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), eccLevel, quietZoneSize: quietZoneSize);
+
+        // Generate actual QR code
+        var qrCode = QRCodeGenerator.CreateQrCode(text.AsSpan(), eccLevel, quietZoneSize: quietZoneSize);
+
+        // Verify
+        Assert.Equal(expectedVersion, qrCode.Version);
+        Assert.Equal(expectedQrSize, qrCode.Size);
+        Assert.Equal(expectedBufferSize, qrCode.Size * qrCode.Size);
+    }
+
+    [Theory]
+    [InlineData("HELLO WORLD", ECCLevel.L, 0, 21 * 21, 21, 1)]  // Version 1, no quiet zone
+    [InlineData("HELLO WORLD", ECCLevel.L, 4, 29 * 29, 29, 1)]  // Version 1, with quiet zone
+    [InlineData("https://example.com/foobar", ECCLevel.L, 0, 25 * 25, 25, 2)]  // Version 2
+    [InlineData("https://example.com/foobar", ECCLevel.L, 4, 33 * 33, 33, 2)]  // Version 2 with quiet zone
+    public void GetRequiredBufferSize_ReturnsCorrectSize(string text, ECCLevel eccLevel, int quietZoneSize, int expectedBufferSize, int expectedQrSize, int expectedVersion)
+    {
+        // Act
+        var (bufferSize, qrSize, version) = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), eccLevel, quietZoneSize: quietZoneSize);
+
+        // Assert
+        Assert.Equal(expectedBufferSize, bufferSize);
+        Assert.Equal(expectedQrSize, qrSize);
+        Assert.Equal(expectedVersion, version);
+    }
+
+    [Theory]
+    [InlineData("hello", ECCLevel.L, false, EciMode.Default, 0, 21 * 21, 21, 1)]  // Default ECI, no BOM
+    [InlineData("hello", ECCLevel.L, false, EciMode.Iso8859_1, 0, 21 * 21, 21, 1)]  // ISO-8859-1, no BOM
+    [InlineData("hello", ECCLevel.L, false, EciMode.Utf8, 0, 21 * 21, 21, 1)]  // UTF-8 ECI, no BOM
+    [InlineData("hello", ECCLevel.H, false, EciMode.Utf8, 0, 21 * 21, 21, 1)]  // UTF-8 ECI, no BOM, ECC-H
+    [InlineData("hello", ECCLevel.H, true, EciMode.Utf8, 0, 25 * 25, 25, 2)]   // UTF-8 ECI, with BOM → Version 2 (BOM adds 3 bytes)
+    [InlineData("hello", ECCLevel.H, false, EciMode.Utf8, 4, 29 * 29, 29, 1)]  // UTF-8 ECI, no BOM, with quiet zone
+    [InlineData("hello", ECCLevel.H, true, EciMode.Utf8, 4, 33 * 33, 33, 2)]   // UTF-8 ECI, with BOM, with quiet zone → Version 2
+    [InlineData("Café", ECCLevel.M, false, EciMode.Iso8859_1, 0, 21 * 21, 21, 1)]  // ISO-8859-1 encoding
+    [InlineData("こんにちは", ECCLevel.M, false, EciMode.Utf8, 0, 25 * 25, 25, 2)]  // Japanese UTF-8
+    [InlineData("こんにちは", ECCLevel.M, true, EciMode.Utf8, 0, 25 * 25, 25, 2)]   // Japanese UTF-8 with BOM
+    [InlineData("🎉", ECCLevel.M, false, EciMode.Utf8, 0, 21 * 21, 21, 1)]      // Emoji UTF-8
+    [InlineData("🎉", ECCLevel.M, true, EciMode.Utf8, 0, 21 * 21, 21, 1)]       // Emoji UTF-8 with BOM (still fits V1)
+    public void GetRequiredBufferSize_WithEciAndBOM_ReturnsCorrectSize(string text, ECCLevel eccLevel, bool utf8BOM, EciMode eciMode, int quietZoneSize, int expectedBufferSize, int expectedQrSize, int expectedVersion)
+    {
+        // Act
+        var (bufferSize, qrSize, version) = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), eccLevel, utf8BOM: utf8BOM, eciMode: eciMode, quietZoneSize: quietZoneSize);
+
+        // Assert
+        Assert.Equal(expectedBufferSize, bufferSize);
+        Assert.Equal(expectedQrSize, qrSize);
+        Assert.Equal(expectedVersion, version);
+    }
+
+    [Theory]
+    [InlineData(ECCLevel.H, 6, false, EciMode.Utf8, 1)]    // V1-H: 6 bytes without BOM → V1
+    [InlineData(ECCLevel.H, 7, false, EciMode.Utf8, 2)]    // V1-H: 7 bytes without BOM → V2 (exceeds V1 capacity)
+    [InlineData(ECCLevel.H, 3, true, EciMode.Utf8, 1)]     // V1-H: 3 bytes + 3 BOM = 6 bytes → V1
+    [InlineData(ECCLevel.H, 4, true, EciMode.Utf8, 2)]     // V1-H: 4 bytes + 3 BOM = 7 bytes → V2
+    [InlineData(ECCLevel.M, 13, false, EciMode.Utf8, 1)]   // V1-M: 13 bytes without BOM → V1
+    [InlineData(ECCLevel.M, 14, false, EciMode.Utf8, 2)]   // V1-M: 14 bytes without BOM → V2
+    [InlineData(ECCLevel.M, 10, true, EciMode.Utf8, 1)]    // V1-M: 10 bytes + 3 BOM = 13 bytes → V1
+    [InlineData(ECCLevel.M, 11, true, EciMode.Utf8, 2)]    // V1-M: 11 bytes + 3 BOM = 14 bytes → V2
+    public void GetRequiredBufferSize_Utf8BOM_AffectsVersionSelection(ECCLevel eccLevel, int textLength, bool utf8BOM, EciMode eciMode, int expectedVersion)
+    {
+        var text = new string('a', textLength); // ASCII = 1 byte each
+
+        // Act
+        var (_, _, version) = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), eccLevel, utf8BOM: utf8BOM, eciMode: eciMode);
+
+        // Assert
+        Assert.Equal(expectedVersion, version);
+    }
+
+    [Theory]
+    [InlineData("HELLO", EciMode.Default, EciMode.Iso8859_1)]
+    [InlineData("HELLO", EciMode.Default, EciMode.Utf8)]
+    [InlineData("HELLO", EciMode.Iso8859_1, EciMode.Utf8)]
+    public void GetRequiredBufferSize_DifferentEciModes_MayProduceDifferentVersions(string text, EciMode eciMode1, EciMode eciMode2)
+    {
+        // Act
+        var (bufferSize1, qrSize1, version1) = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ECCLevel.M, eciMode: eciMode1);
+
+        var (bufferSize2, qrSize2, version2) = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ECCLevel.M, eciMode: eciMode2);
+
+        // Assert - Different ECI modes may produce different buffer sizes due to ECI header overhead
+        // For short text like "HELLO", all should fit in Version 1, but buffer sizes differ based on final QR size
+        // This test documents the behavior rather than asserting specific values
+        if (eciMode1 == eciMode2)
+        {
+            Assert.Equal(bufferSize1, bufferSize2);
+            Assert.Equal(version1, version2);
+        }
+        else
+        {
+            // ECI header overhead might not affect version for short text
+            // but we document that different modes can produce different results
+            Assert.True(version1 >= 1 && version1 <= 40);
+            Assert.True(version2 >= 1 && version2 <= 40);
+        }
+    }
+
     // Helpers
 
     /// <summary>

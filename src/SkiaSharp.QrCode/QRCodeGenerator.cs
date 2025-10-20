@@ -208,6 +208,38 @@ public static class QRCodeGenerator
         }
     }
 
+    /// <summary>
+    /// Calculates the required buffer size for encoding and specified text as a QR code.
+    /// </summary>
+    /// <param name="text">The text to encode in the QR code</param>
+    /// <param name="eccLevel">Error correction level</param>
+    /// <param name="utf8BOM">Include UTF-8 BOM (Byte Order Mark) in encoded data. Ignore if data is not UTF-8.</param>
+    /// <param name="eciMode">ECI mode for character encoding.</param>
+    /// <param name="quietZoneSize">Size of the quiet zone (white border) in modules.</param>
+    /// <returns>
+    /// A tuple containing:
+    /// <code>
+    /// - bufferSize: Required buffer size in bytes
+    /// - qrSize: QR code size in modules (per side, including quiet zone)
+    /// - version: QR code version (1-40)
+    /// </code>
+    /// </returns>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public static (int bufferSize, int qrSize, int version) GetRequiredBufferSize(ReadOnlySpan<char> text, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int quietZoneSize = 4)
+    {
+        var analysisResult = TextAnalyzer.Analyze(text, eciMode);
+        var version = GetVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, utf8BOM);
+
+        if (version is < -1 or > 40)
+            throw new ArgumentOutOfRangeException(nameof(version), $"Version must be 1-40, but was {version}");
+
+        var baseSize = QRCodeData.SizeFromVersion(version);
+        var totalSize = baseSize + quietZoneSize * 2; // for rendering with quiet zone
+        var bufferSize = totalSize * totalSize; // for buffer allocation
+
+        return (bufferSize, totalSize, version);
+    }
+
     // Pipelines
 
     /// <summary>
