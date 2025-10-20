@@ -233,7 +233,7 @@ public class QRCodeData
     internal void GetCoreData(Span<byte> destination)
     {
         if (destination.Length < _baseSize * _baseSize)
-            throw new ArgumentException($"Destination span is too small for core data, need {_baseSize * _baseSize}, got {destination.Length}");
+            throw new ArgumentException($"Destination span size too small: expected at least {_baseSize * _baseSize} bytes (baseSize={_baseSize}), got {destination.Length} bytes");
 
         if (_quietZoneSize == 0)
         {
@@ -260,7 +260,7 @@ public class QRCodeData
     internal void SetCoreData(ReadOnlySpan<byte> source)
     {
         if (source.Length != _baseSize * _baseSize)
-            throw new ArgumentException($"Source span is too small for core data, need {_baseSize * _baseSize}, got {source.Length}");
+            throw new ArgumentException($"Source span size mismatch: expected {_baseSize * _baseSize} bytes (baseSize={_baseSize}), got {source.Length} bytes");
 
         if (_quietZoneSize == 0)
         {
