@@ -178,7 +178,43 @@ public class QRCodeDecodabilityTest
     /// </summary>
     private void AssertQrCodeIsDecodable(string expectedContent, ECCLevel eccLevel, EciMode eciMode)
     {
+        AssertQrCodeIsDecodableBinary(expectedContent, eccLevel, eciMode);
+        AssertQrCodeIsDecodableString(expectedContent, eccLevel, eciMode);
+    }
+
+    private void AssertQrCodeIsDecodableBinary(string expectedContent, ECCLevel eccLevel, EciMode eciMode)
+    {
         var qr = QRCodeGenerator.CreateQrCode(expectedContent.AsSpan(), eccLevel, eciMode: eciMode, quietZoneSize: 4);
+
+        // Convert QRCodeData to SKBitmap
+        using var bitmap = QrCodeToSKBitmap(qr);
+
+        // Decode using ZXing
+        var result = _reader.Decode(bitmap);
+
+        // Assert decoding succeeded
+        Assert.NotNull(result);
+        Assert.Equal(BarcodeFormat.QR_CODE, result.BarcodeFormat);
+
+        // Assert content matches
+        Assert.Equal(expectedContent, result.Text);
+
+        // Additional metadata checks
+        if (result.ResultMetadata != null)
+        {
+            // Verify ECC level if available
+            if (result.ResultMetadata.ContainsKey(ZXing.ResultMetadataType.ERROR_CORRECTION_LEVEL))
+            {
+                var decodedEccLevel = result.ResultMetadata[ZXing.ResultMetadataType.ERROR_CORRECTION_LEVEL].ToString();
+                var expectedEccString = eccLevel.ToString();
+                Assert.Equal(expectedEccString, decodedEccLevel);
+            }
+        }
+    }
+
+    private void AssertQrCodeIsDecodableString(string expectedContent, ECCLevel eccLevel, EciMode eciMode)
+    {
+        var qr = QRCodeGenerator.CreateQrCode(expectedContent, eccLevel, eciMode: eciMode, quietZoneSize: 4);
 
         // Convert QRCodeData to SKBitmap
         using var bitmap = QrCodeToSKBitmap(qr);
