@@ -52,9 +52,9 @@ public class ModulePlacerBinaryUnitTest
         qrCodeBinary.SetCoreData(binaryBuffer);
         qrCodeString.SetCoreData(stringBuffer);
 
-        // Debug
-        Console.WriteLine(string.Join(",", binaryBuffer.ToArray()));
-        Console.WriteLine(string.Join(",", stringBuffer.ToArray()));
+        //// Debug
+        //Console.WriteLine(string.Join(",", binaryBuffer.ToArray()));
+        //Console.WriteLine(string.Join(",", stringBuffer.ToArray()));
 
         // Assert - Compare matrices
         for (int row = 0; row < qrCodeBinary.Size; row++)
