@@ -178,7 +178,7 @@ public class QRCodeDecodabilityTest
     /// </summary>
     private void AssertQrCodeIsDecodable(string expectedContent, ECCLevel eccLevel, EciMode eciMode)
     {
-        var qr = QRCodeGenerator.CreateQrCode(expectedContent, eccLevel, eciMode: eciMode);
+        var qr = QRCodeGenerator.CreateQrCode(expectedContent.AsSpan(), eccLevel, eciMode: eciMode, quietZoneSize: 4);
 
         // Convert QRCodeData to SKBitmap
         using var bitmap = QrCodeToSKBitmap(qr);
