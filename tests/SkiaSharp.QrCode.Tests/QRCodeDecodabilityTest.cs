@@ -143,11 +143,43 @@ public class QRCodeDecodabilityTest
     [InlineData(ECCLevel.L, 42)]  // Version 2 min
     [InlineData(ECCLevel.M, 34)]  // Version 1 max
     [InlineData(ECCLevel.M, 35)]  // Version 2 min
+    [InlineData(ECCLevel.Q, 27)]  // Version 1 max
+    [InlineData(ECCLevel.Q, 28)]  // Version 2 min
     [InlineData(ECCLevel.H, 17)]  // Version 1 max
     [InlineData(ECCLevel.H, 18)]  // Version 2 min
-    public void CreateQrCode_VersionBoundaries_IsDecodable(ECCLevel eccLevel, int charCount)
+    public void CreateQrCode_VersionBoundaries_Number_IsDecodable(ECCLevel eccLevel, int charCount)
     {
         var content = new string('1', charCount);
+        AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
+    }
+
+    [Theory]
+    [InlineData(ECCLevel.L, 25)]  // Version 1 max
+    [InlineData(ECCLevel.L, 26)]  // Version 2 min
+    [InlineData(ECCLevel.M, 20)]  // Version 1 max
+    [InlineData(ECCLevel.M, 21)]  // Version 2 min
+    [InlineData(ECCLevel.Q, 16)]  // Version 1 max
+    [InlineData(ECCLevel.Q, 17)]  // Version 2 min
+    [InlineData(ECCLevel.H, 10)]  // Version 1 max
+    [InlineData(ECCLevel.H, 11)]  // Version 2 min
+    public void CreateQrCode_VersionBoundaries_Alphanumeric_IsDecodable(ECCLevel eccLevel, int charCount)
+    {
+        var content = new string('A', charCount);
+        AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
+    }
+
+    [Theory]
+    [InlineData(ECCLevel.L, 5)]  // Version 1 max
+    [InlineData(ECCLevel.L, 6)]  // Version 2 min
+    [InlineData(ECCLevel.M, 4)]  // Version 1 max
+    [InlineData(ECCLevel.M, 5)]  // Version 2 min
+    [InlineData(ECCLevel.Q, 3)]  // Version 1 max
+    [InlineData(ECCLevel.Q, 4)]  // Version 2 min
+    [InlineData(ECCLevel.H, 2)]  // Version 1 max
+    [InlineData(ECCLevel.H, 3)]  // Version 2 min
+    public void CreateQrCode_VersionBoundaries_Byte_IsDecodable(ECCLevel eccLevel, int charCount)
+    {
+        var content = new string('あ', charCount);
         AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
     }
 
@@ -155,19 +187,10 @@ public class QRCodeDecodabilityTest
     [InlineData(ECCLevel.L, 100)]
     [InlineData(ECCLevel.M, 500)]
     [InlineData(ECCLevel.Q, 1000)]
+    [InlineData(ECCLevel.H, 200)]
     public void CreateQrCode_LargeData_IsDecodable(ECCLevel eccLevel, int charCount)
     {
         var content = new string('A', charCount);
-        AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
-    }
-
-    [Theory]
-    [InlineData("TEST", ECCLevel.L)]
-    [InlineData("TEST", ECCLevel.M)]
-    [InlineData("TEST", ECCLevel.Q)]
-    [InlineData("TEST", ECCLevel.H)]
-    public void CreateQrCode_AllEccLevels_IsDecodable(string content, ECCLevel eccLevel)
-    {
         AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
     }
 

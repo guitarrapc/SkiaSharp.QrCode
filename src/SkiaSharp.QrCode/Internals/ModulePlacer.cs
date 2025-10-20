@@ -239,53 +239,48 @@ internal static class ModulePlacer
         }
     }
 
+    // TODO: Text API, will be removed when text mode is deprecated
     /// <summary>
-    /// Places encoded data and ECC words into the QR code matrix.
-    /// Fills modules in zigzag pattern from bottom-right to top-left.
+    /// Places data words into the QR code buffer using string-based interleaved data.
     /// </summary>
-    /// <param name="qrCode">QR code data structure to populate.</param>
-    /// <param name="data">Interleaved data and ECC bytes string.</param>
-    /// <param name="blockedMask">blocked mask bytes.</param>
-    public static void PlaceDataWords(ref QRCodeData qrCode, string data, ReadOnlySpan<byte> blockedMask)
+    /// <param name="buffer">Target buffer (CoreData size, no quiet zone).</param>
+    /// <param name="size">Matrix size (CoreData size, e.g., 25 for Version 2).</param>
+    /// <param name="interleavedData">Interleaved data as binary string (e.g., "11010011...").</param>
+    /// <param name="blockedMask">Bitmask indicating blocked modules.</param>
+    public static void PlaceDataWords(Span<byte> buffer, int size, string interleavedData, ReadOnlySpan<byte> blockedMask)
     {
-        var size = qrCode.Size;
+        var bitPos = 0;
+        var totalBits = interleavedData.Length; // String length = bit count (each char is '0' or '1')
         var up = true;
-        var bitIndex = 0;
 
-        for (var x = size - 1; x >= 0; x = x - 2)
+        for (var x = size - 1; x >= 0; x -= 2)
         {
             // Skip timing pattern column
             if (x == 6)
                 x--;
 
+            // Process each row in zigzag pattern
             for (var yMod = 1; yMod <= size; yMod++)
             {
-                int y = up ? size - yMod : yMod - 1;
+                // zigzag direction
+                var y = up ? size - yMod : yMod - 1;
 
                 // Process 2 columns (x and x-1)
                 for (var xOffset = 0; xOffset < 2; xOffset++)
                 {
                     var xModule = x - xOffset;
-                    var bitPos = y * size + xModule;
+                    var bitIndex = y * size + xModule;
 
-                    // Skip blocked module (finder patterns, timing patterns, format/version info, etc.)
-                    if (IsModuleBlocked(blockedMask, bitPos))
-                        continue;
-
-                    // Place bit if available
-                    if (bitIndex < data.Length)
+                    if (!IsModuleBlocked(blockedMask, bitIndex) && bitPos < totalBits)
                     {
-                        qrCode[y, xModule] = data[bitIndex] != '0';
-                        bitIndex++;
-                    }
-                    else
-                    {
-                        qrCode[y, xModule] = false;
+                        // Text API: Direct character comparison ('1' = dark, '0' = light)
+                        buffer[bitIndex] = interleavedData[bitPos] == '1' ? (byte)1 : (byte)0;
+                        bitPos++;
                     }
                 }
             }
 
-            // alternate direction
+            // Alternate direction
             up = !up;
         }
     }
