@@ -35,7 +35,7 @@ public static class QRCodeGenerator
     /// </summary>
     /// <param name="plainText">The text to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
-    /// <param name="utf8BOM">Include UTF-8 BOM (Byte Order Mark) in encoded data.</param>
+    /// <param name="utf8BOM">Include UTF-8 BOM (Byte Order Mark) in encoded data. Ignore if data is not UTF-8.</param>
     /// <param name="eciMode">ECI mode for character encoding.</param>
     /// <param name="requestedVersion">Specific version to use (1-40), or -1 for automatic selection.</param>
     /// <param name="quietZoneSize">Size of the quiet zone (white border) in modules.</param>
@@ -104,7 +104,7 @@ public static class QRCodeGenerator
     /// </summary>
     /// <param name="textSpan">The text span to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
-    /// <param name="utf8BOM">Include UTF-8 BOM (Byte Order Mark) in encoded data.</param>
+    /// <param name="utf8BOM">Include UTF-8 BOM (Byte Order Mark) in encoded data. Ignore if data is not UTF-8.</param>
     /// <param name="eciMode">ECI mode for character encoding.</param>
     /// <param name="requestedVersion">Specific version to use (1-40), or -1 for automatic selection.</param>
     /// <param name="quietZoneSize">Size of the quiet zone (white border) in modules.</param>
@@ -220,20 +220,20 @@ public static class QRCodeGenerator
     /// <param name="requestedVersion"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static QRConfiguration PrepareConfiguration(string plainText, ECCLevel eccLevel, bool utf8Bom, EciMode eciMode, int requestedVersion)
+    private static QRConfiguration PrepareConfiguration(string plainText, ECCLevel eccLevel, bool utf8BOM, EciMode eciMode, int requestedVersion)
     {
         // Analyze text to determine optimal encoding and data length
         var analysisResult = TextAnalyzer.Analyze(plainText.AsSpan(), eciMode);
 
         // Select QR code version (auto or manual)
         var version = requestedVersion == -1
-            ? GetVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode)
+            ? GetVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, utf8BOM)
             : requestedVersion;
 
         // Create ECCInfo
         var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
 
-        return new QRConfiguration(version, eccLevel, analysisResult.EncodingMode, analysisResult.EciMode, utf8Bom, eccInfo, analysisResult.DataLength);
+        return new QRConfiguration(version, eccLevel, analysisResult.EncodingMode, analysisResult.EciMode, utf8BOM, eccInfo, analysisResult.DataLength);
     }
 
     /// <summary>
@@ -246,19 +246,19 @@ public static class QRCodeGenerator
     /// <param name="requestedVersion"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static QRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, bool utf8Bom, EciMode eciMode, int requestedVersion)
+    private static QRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, bool utf8BOM, EciMode eciMode, int requestedVersion)
     {
         var analysisResult = TextAnalyzer.Analyze(textSpan, eciMode);
 
         // Select QR code version (auto or manual)
         var version = requestedVersion == -1
-            ? GetVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode)
+            ? GetVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, utf8BOM)
             : requestedVersion;
 
         // Create ECCInfo
         var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
 
-        return new QRConfiguration(version, eccLevel, analysisResult.EncodingMode, analysisResult.EciMode, utf8Bom, eccInfo, analysisResult.DataLength);
+        return new QRConfiguration(version, eccLevel, analysisResult.EncodingMode, analysisResult.EciMode, utf8BOM, eccInfo, analysisResult.DataLength);
     }
 
     /// <summary>

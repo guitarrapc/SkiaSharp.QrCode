@@ -297,6 +297,66 @@ public class QRCodeGeneratorUnitTest
         Assert.Equal(expectedVersion, qr.Version);
     }
 
+    // UTF-8 BOM Tests
+
+    [Theory]
+    [InlineData("hello", ECCLevel.H, true, 2)]   // With BOM: 24 bits overhead → Version 2
+    [InlineData("hello", ECCLevel.H, false, 1)]  // Without BOM → Version 1
+    [InlineData("test", ECCLevel.M, true, 1)]    // With BOM but still fits in Version 1
+    [InlineData("test", ECCLevel.M, false, 1)]   // Without BOM → Version 1
+    public void CreateQrCode_Utf8BOM_VersionSelection(string text, ECCLevel eccLevel, bool utf8BOM, int expectedVersion)
+    {
+        var qr = QRCodeGenerator.CreateQrCode(text.AsSpan(), eccLevel, utf8BOM: utf8BOM, eciMode: EciMode.Utf8);
+
+        Assert.Equal(expectedVersion, qr.Version);
+    }
+
+    [Fact]
+    public void CreateQrCode_Utf8BOM_ProducesDifferentQr()
+    {
+        var qrWithBOM = QRCodeGenerator.CreateQrCode("こんにちは".AsSpan(), ECCLevel.M, utf8BOM: true, eciMode: EciMode.Utf8);
+        var qrWithoutBOM = QRCodeGenerator.CreateQrCode("こんにちは".AsSpan(), ECCLevel.M, utf8BOM: false, eciMode: EciMode.Utf8);
+
+        // UTF-8 BOM adds 24 bits → different QR codes
+        Assert.NotEqual(SerializeMatrix(qrWithBOM), SerializeMatrix(qrWithoutBOM));
+    }
+
+    [Theory]
+    [InlineData(ECCLevel.H, 6, false, 1)]    // V1-H: 6 bytes without BOM → V1
+    [InlineData(ECCLevel.H, 7, false, 2)]    // V1-H: 7 bytes without BOM → V2 (exceeds capacity)
+    [InlineData(ECCLevel.H, 3, true, 1)]    // V1-H: 3 bytes with BOM (3 + 3 BOM = 6 bytes) → V1
+    [InlineData(ECCLevel.H, 4, true, 2)]    // V1-H: 4 bytes with BOM (4 + 3 BOM = 7 bytes) → V2
+    public void CreateQrCode_Utf8BOM_MaxCapacity(ECCLevel eccLevel, int textLength, bool utf8BOM, int expectedVersion)
+    {
+        var text = new string('a', textLength);
+
+        var qr = QRCodeGenerator.CreateQrCode(text.AsSpan(), eccLevel, utf8BOM: utf8BOM, eciMode: EciMode.Utf8);
+
+        Assert.Equal(expectedVersion, qr.Version);
+    }
+
+    [Theory]
+    [InlineData("HELLO", ECCLevel.M, true)]
+    [InlineData("こんにちは", ECCLevel.Q, true)]
+    [InlineData("🎉", ECCLevel.H, true)]
+    public void CreateQrCode_Span_Utf8BOM_MatchesStringImplementation(string text, ECCLevel level, bool utf8BOM)
+    {
+        var qrString = QRCodeGenerator.CreateQrCode(text, level, utf8BOM: utf8BOM, eciMode: EciMode.Utf8);
+        var qrSpan = QRCodeGenerator.CreateQrCode(text.AsSpan(), level, utf8BOM: utf8BOM, eciMode: EciMode.Utf8);
+
+        // Compare sizes
+        Assert.Equal(qrString.Size, qrSpan.Size);
+
+        // Compare every module
+        for (int y = 0; y < qrString.Size; y++)
+        {
+            for (int x = 0; x < qrString.Size; x++)
+            {
+                Assert.Equal(qrString[y, x], qrSpan[y, x]);
+            }
+        }
+    }
+
     // Maximum Capacity Tests
 
     [Theory]
