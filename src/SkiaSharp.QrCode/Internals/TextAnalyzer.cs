@@ -8,6 +8,8 @@ using System.Text;
 
 namespace SkiaSharp.QrCode.Internals;
 
+internal readonly record struct TextAnalysisResult(EncodingMode EncodingMode, EciMode EciMode, int DataLength);
+
 /// <summary>
 /// Text analyzer for automatic encoding and ECI mode detection in single pass.
 /// </summary>
@@ -22,7 +24,7 @@ internal static class TextAnalyzer
     /// <param name="text"></param>
     /// <param name="requestedEciMode"></param>
     /// <returns></returns>
-    public static (EncodingMode encoding, EciMode eciMode, int length) Analyze(ReadOnlySpan<char> text, EciMode requestedEciMode)
+    public static TextAnalysisResult Analyze(ReadOnlySpan<char> text, EciMode requestedEciMode)
     {
         // ISO/IEC 18004 does not define behavior for empty data.
         // However from other practical libraries, when data was empty EncodingMode should use Byte mode.
@@ -35,7 +37,7 @@ internal static class TextAnalyzer
         if (text.IsEmpty)
         {
             var actualEciMode = requestedEciMode == EciMode.Default ? EciMode.Default : requestedEciMode;
-            return (EncodingMode.Byte, actualEciMode, 0);
+            return new TextAnalysisResult(EncodingMode.Byte, actualEciMode, 0);
         }
 
 #if SIMD_SUPPORTED
@@ -64,7 +66,7 @@ internal static class TextAnalyzer
     /// <param name="text"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static (EncodingMode encoding, EciMode eciMode, int length) AnalyzeAvx2(ReadOnlySpan<char> text, EciMode requestedEciMode)
+    private static TextAnalysisResult AnalyzeAvx2(ReadOnlySpan<char> text, EciMode requestedEciMode)
     {
         var hasNonNumeric = false;
         var hasNonAlphanumeric = false;
@@ -169,7 +171,7 @@ internal static class TextAnalyzer
 
         var dataLength = CalculateLength(text, encoding, actualEciMode);
 
-        return (encoding, actualEciMode, dataLength);
+        return new TextAnalysisResult(encoding, actualEciMode, dataLength);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -224,7 +226,7 @@ internal static class TextAnalyzer
     /// <param name="text"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static (EncodingMode encoding, EciMode eciMode, int length) AnalyzeSse2(ReadOnlySpan<char> text, EciMode requestedEciMode)
+    private static TextAnalysisResult AnalyzeSse2(ReadOnlySpan<char> text, EciMode requestedEciMode)
     {
         var hasNonNumeric = false;
         var hasNonAlphanumeric = false;
@@ -327,7 +329,7 @@ internal static class TextAnalyzer
 
         var dataLength = CalculateLength(text, encoding, actualEciMode);
 
-        return (encoding, actualEciMode, dataLength);
+        return new TextAnalysisResult(encoding, actualEciMode, dataLength);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -383,7 +385,7 @@ internal static class TextAnalyzer
     /// <param name="text"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static (EncodingMode encoding, EciMode eciMode, int length) AnalyzeScalar(ReadOnlySpan<char> text, EciMode requestedEciMode)
+    private static TextAnalysisResult AnalyzeScalar(ReadOnlySpan<char> text, EciMode requestedEciMode)
     {
         var hasNonNumeric = false;
         var hasNonAlphanumeric = false;
@@ -418,7 +420,7 @@ internal static class TextAnalyzer
 
         var dataLength = CalculateLength(text, encoding, actualEciMode);
 
-        return (encoding, actualEciMode, dataLength);
+        return new TextAnalysisResult(encoding, actualEciMode, dataLength);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

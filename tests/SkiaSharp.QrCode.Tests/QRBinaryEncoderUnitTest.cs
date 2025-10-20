@@ -174,12 +174,14 @@ public class QRBinaryEncoderUnitTest
         var expected = string.Concat(utf8Bytes.Select(b => Convert.ToString(b, 2).PadLeft(8, '0')));
 
         // to simulate automatic encoding mode detection, which sets EciMode
-        var (detectedEncoding, detectedEci, _) = TextAnalyzer.Analyze(input, eci);
+        var analysisResult = TextAnalyzer.Analyze(input, eci);
         // need detected as EncodingMode.Byte + EciMode.Utf8 beforehand.
         var encoder = new QRBinaryEncoder(buffer);
-        encoder.WriteData(input, EncodingMode.Byte, detectedEci, false);
+        encoder.WriteData(input, analysisResult.EncodingMode, analysisResult.EciMode, false);
 
+        // Assert
         var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
+        Assert.Equal(EncodingMode.Byte, analysisResult.EncodingMode);
         Assert.Equal(expected, actual);
     }
 
@@ -197,10 +199,15 @@ public class QRBinaryEncoderUnitTest
         var utf8Bytes = Encoding.UTF8.GetBytes(input);
         var expected = string.Concat(bom.Concat(utf8Bytes).Select(b => Convert.ToString(b, 2).PadLeft(8, '0')));
 
+        // to simulate automatic encoding mode detection, which sets EciMode
+        var analysisResult = TextAnalyzer.Analyze(input, EciMode.Utf8);
+
         var encoder = new QRBinaryEncoder(buffer);
-        encoder.WriteData(input, EncodingMode.Byte, EciMode.Utf8, true);
+        encoder.WriteData(input, analysisResult.EncodingMode, analysisResult.EciMode, true);
 
         var actual = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
+        Assert.Equal(EncodingMode.Byte, analysisResult.EncodingMode);
+        Assert.Equal(EciMode.Utf8, analysisResult.EciMode);
         Assert.Equal(expected, actual);
     }
 
