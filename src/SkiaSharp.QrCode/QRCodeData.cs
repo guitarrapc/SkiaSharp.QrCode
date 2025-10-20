@@ -214,6 +214,10 @@ public class QRCodeData
         bytes[2] = _headerSignature[2];
         bytes[3] = (byte)_baseSize; // only core size without quiet zone
 
+        // Get core data (without quiet zone)
+        Span<byte> coreData = stackalloc byte[totalBits];
+        GetCoreData(coreData);
+
         // Pack bits into bytes
         var bitIndex = 0;
         for (var byteIndex = 0; byteIndex < dataBytes; byteIndex++)
@@ -221,20 +225,9 @@ public class QRCodeData
             byte b = 0;
             for (var i = 7; i >= 0; i--)
             {
-                if (bitIndex < totalBits)
+                if (bitIndex < totalBits && coreData[bitIndex] != 0)
                 {
-                    var coreRow = bitIndex / _baseSize;
-                    var coreCol = bitIndex % _baseSize;
-
-                    // Apply quiet zone offset
-                    var actualRow = coreRow + _quietZoneSize;
-                    var actualCol = coreCol + _quietZoneSize;
-                    var actualIndex = actualRow * _size + actualCol;
-
-                    if (_moduleData[actualIndex] != 0)
-                    {
-                        b |= (byte)(1 << i);
-                    }
+                    b |= (byte)(1 << i);
                 }
                 // else padding bits are 0
                 bitIndex++;
