@@ -341,8 +341,8 @@ public class QRCodeGeneratorUnitTest
     [InlineData("🎉", ECCLevel.H, true)]
     public void CreateQrCode_Span_Utf8BOM_MatchesStringImplementation(string text, ECCLevel level, bool utf8BOM)
     {
-        var qrString = QRCodeGenerator.CreateQrCode(text, level, utf8BOM: utf8BOM, eciMode: EciMode.Utf8);
-        var qrSpan = QRCodeGenerator.CreateQrCode(text.AsSpan(), level, utf8BOM: utf8BOM, eciMode: EciMode.Utf8);
+        var qrString = QRCodeGenerator.CreateQrCode(text, level, utf8BOM: utf8BOM, eciMode: EciMode.Utf8, quietZoneSize: 4);
+        var qrSpan = QRCodeGenerator.CreateQrCode(text.AsSpan(), level, utf8BOM: utf8BOM, eciMode: EciMode.Utf8, quietZoneSize: 4);
 
         // Compare sizes
         Assert.Equal(qrString.Size, qrSpan.Size);
@@ -464,11 +464,12 @@ public class QRCodeGeneratorUnitTest
     [InlineData("0123456789", ECCLevel.H, 5)]
     public void CreateQrCodeBinary_MatchesTextImplementation(string text, ECCLevel level, int version)
     {
-        var qrText = QRCodeGenerator.CreateQrCode(text, level, requestedVersion: version);
-        var qrBinary = QRCodeGenerator.CreateQrCode(text.AsSpan(), level, requestedVersion: version);
+        var qrText = QRCodeGenerator.CreateQrCode(text, level, requestedVersion: version, quietZoneSize: 4);
+        var qrBinary = QRCodeGenerator.CreateQrCode(text.AsSpan(), level, requestedVersion: version, quietZoneSize: 4);
 
         // Compare sizes
         Assert.Equal(qrText.Size, qrBinary.Size);
+        Assert.Equal(qrText.Version, qrBinary.Version);
 
         // Compare every module
         for (int y = 0; y < qrText.Size; y++)

@@ -15,17 +15,23 @@ namespace SkiaSharp.QrCode;
 /// </remarks>
 public class QRCodeData
 {
-    // 1D byte array (row-major order) representing the QR code modules
+    // 1D byte array (row-major order) representing the QR code modules including quiet zone if present
     // Aligned to 64-byte boundary for AVX-512 optimizations
     private byte[] _moduleData;
-    private int _size;
-    private int _actualDataLength; // actual length of data used in _moduleData
+    private int _size; // module count per side (including quiet zone if present)
+    private int _baseSize; // module count without quiet zone
+    private int _quietZoneSize; // quiet zone size in modules
 
     /// <summary>
     /// Gets the size of the QR code matrix (modules per side).
     /// Includes quiet zone if added via <see cref="SetModuleMatrix"/>.
     /// </summary>
     public int Size => _size;
+
+    /// <summary>
+    /// Get the QR code version (1-40)
+    /// </summary>
+    public int Version { get; private set; }
 
     /// <summary>
     /// Gets or sets the module state at the specified position.
@@ -40,20 +46,16 @@ public class QRCodeData
     }
 
     /// <summary>
-    /// Get the QR code version (1-40)
-    /// </summary>
-    public int Version { get; private set; }
-
-    /// <summary>
     /// Initializes with the specified version.
     /// </summary>
     /// <param name="version">QR Code version number (1-40) used to determine matrix size</param>
-    public QRCodeData(int version)
+    public QRCodeData(int version, int quietZoneSize)
     {
         Version = version;
-        _size = SizeFromVersion(version);
-        _actualDataLength = _size * _size;
-        _moduleData = new byte[_actualDataLength];
+        _baseSize = SizeFromVersion(version);
+        _quietZoneSize = quietZoneSize;
+        _size = _baseSize + (quietZoneSize * 2);
+        _moduleData = new byte[_size * _size];
     }
 
     /// <summary>
@@ -83,18 +85,19 @@ public class QRCodeData
             throw new InvalidDataException("Invalid QR code data: header mismatch.");
 
         // Read and validate size
-        var sideLen = (int)bytes[3];
-        if (sideLen < 21 || sideLen > 177)
-            throw new InvalidDataException($"Invalid QR code size: {sideLen}.");
+        var baseSizeFromFile = (int)bytes[3];
+        if (baseSizeFromFile < 21 || baseSizeFromFile > 177)
+            throw new InvalidDataException($"Invalid QR code size: {baseSizeFromFile}.");
 
         // set version from size
-        Version = VersionFromSize(sideLen);
-        _size = sideLen;
-        _actualDataLength = _size * _size;
-        _moduleData = new byte[_actualDataLength];
+        Version = VersionFromSize(baseSizeFromFile);
+        _baseSize = baseSizeFromFile;
+        _quietZoneSize = 0; // assume no quiet zone in file
+        _size = _baseSize;
+        var totalBits = _size * _size;
+        _moduleData = new byte[totalBits];
 
         // unpack bits to bytes
-        var totalBits = sideLen * sideLen;
         var bitIndex = 0;
         for (var byteIndex = 4; byteIndex < bytes.Length && bitIndex < totalBits; byteIndex++)
         {
@@ -114,18 +117,72 @@ public class QRCodeData
     /// Gets the entire data as span
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal ReadOnlySpan<byte> GetData()
-    {
-        return _moduleData.AsSpan()[.._actualDataLength];
-    }
+    internal ReadOnlySpan<byte> GetData() => _moduleData.AsSpan();
 
     /// <summary>
     /// Gets the entire data as a mutable span
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal Span<byte> GetMutableData()
+    internal Span<byte> GetMutableData() => _moduleData.AsSpan();
+
+    /// <summary>
+    /// Gets the core data size (without quiet zone).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal int GetCoreSize() => _baseSize;
+
+    /// <summary>
+    /// Copies core data (without quiet zone) to the destination buffer.
+    /// </summary>
+    /// <param name="destination">Destination buffer (must be at least baseSize * baseSize bytes)</param>
+    /// <exception cref="ArgumentException"></exception>
+    internal void GetCoreData(Span<byte> destination)
     {
-        return _moduleData.AsSpan()[.._actualDataLength];
+        if (destination.Length < _baseSize * _baseSize)
+            throw new ArgumentException($"Destination span is too small for core data, need {_baseSize * _baseSize}, got {destination.Length}");
+
+        if (_quietZoneSize == 0)
+        {
+            // No quiet zone, copy directly
+            _moduleData.AsSpan(0, _baseSize * _baseSize).CopyTo(destination);
+        }
+        else
+        {
+            // Copy core data excluding quiet zone
+            for (var row = 0; row < _baseSize; row++)
+            {
+                var srcOffset = (row + _quietZoneSize) * _size + _quietZoneSize;
+                var destOffset = row * _baseSize;
+                _moduleData.AsSpan(srcOffset, _baseSize).CopyTo(destination.Slice(destOffset, _baseSize));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sets the core data (without quiet zone) from the source buffer.
+    /// </summary>
+    /// <param name="source">Source buffer (must be at least baseSize * baseSize bytes)</param>
+    /// <exception cref="ArgumentException"></exception>
+    internal void SetCoreData(ReadOnlySpan<byte> source)
+    {
+        if (source.Length != _baseSize * _baseSize)
+            throw new ArgumentException($"Source span is too small for core data, need {_baseSize * _baseSize}, got {source.Length}");
+
+        if (_quietZoneSize == 0)
+        {
+            // No quiet zone, copy directly
+            source.CopyTo(_moduleData);
+        }
+        else
+        {
+            // Copy core data excluding quiet zone
+            for (var row = 0; row < _baseSize; row++)
+            {
+                var srcOffset = row * _baseSize;
+                var destOffset = (row + _quietZoneSize) * _size + _quietZoneSize;
+                source.Slice(srcOffset, _baseSize).CopyTo(_moduleData.AsSpan(destOffset, _baseSize));
+            }
+        }
     }
 
     /// <summary>
@@ -140,13 +197,12 @@ public class QRCodeData
     internal byte[] GetRawData(Compression compressMode)
     {
         // "QRR"
-        ReadOnlySpan<byte> _headerSignature = [0x51, 0x52, 0x52];
+        ReadOnlySpan<byte> _headerSignature = [ 0x51, 0x52, 0x52 ];
 
         // size calculations
-        var totalBits = _size * _size;
+        var totalBits = _baseSize * _baseSize; // only core data without quiet zone
         var paddingBits = GetPaddingBits(totalBits);
-        var totalBitsWithPadding = totalBits + paddingBits;
-        var dataBytes = totalBitsWithPadding / 8;
+        var dataBytes = (totalBits + paddingBits) / 8;
         var headerSize = _headerSignature.Length + 1; // signature length + 1 byte for size
         var totalSize = headerSize + dataBytes;
 
@@ -156,7 +212,7 @@ public class QRCodeData
         bytes[0] = _headerSignature[0];
         bytes[1] = _headerSignature[1];
         bytes[2] = _headerSignature[2];
-        bytes[3] = (byte)_size;
+        bytes[3] = (byte)_baseSize; // only core size without quiet zone
 
         // Pack bits into bytes
         var bitIndex = 0;
@@ -167,9 +223,15 @@ public class QRCodeData
             {
                 if (bitIndex < totalBits)
                 {
-                    var row = bitIndex / _size;
-                    var col = bitIndex % _size;
-                    if (_moduleData[bitIndex] != 0)
+                    var coreRow = bitIndex / _baseSize;
+                    var coreCol = bitIndex % _baseSize;
+
+                    // Apply quiet zone offset
+                    var actualRow = coreRow + _quietZoneSize;
+                    var actualCol = coreCol + _quietZoneSize;
+                    var actualIndex = actualRow * _size + actualCol;
+
+                    if (_moduleData[actualIndex] != 0)
                     {
                         b |= (byte)(1 << i);
                     }
@@ -182,40 +244,6 @@ public class QRCodeData
 
         // Compress stream
         return CompressData(bytes, compressMode);
-    }
-
-    /// <summary>
-    /// Updates the module matrix with a new two-dimensional boolean array.
-    /// Automatically calculates and updates the version based on matrix size.
-    /// </summary>
-    /// <remarks>
-    /// The expected size of the module matrix is determined by the version of the object. Ensure
-    /// that the provided matrix has dimensions equal to the expected size before calling this method.
-    /// </remarks>
-    /// <param name="moduleData">New module data in row-major order.</param>
-    /// <param name="size">Size of the module matrix (including quiet zone if present).</param>
-    /// <param name="quietZoneSize">Quiet zone size in modules (0 if matrix doesn't include quiet zone).</param>
-    internal void SetModuleMatrix(ReadOnlySpan<byte> moduleData, int size, int quietZoneSize)
-    {
-        var sizeWithoutQuietZone = size - (quietZoneSize * 2);
-
-        // Calculate version from size (without quiet zone)
-        var calculatedVersion = VersionFromSize(sizeWithoutQuietZone);
-        if (calculatedVersion is < 1 or > 40)
-            throw new ArgumentOutOfRangeException(nameof(calculatedVersion), $"Version must be 1-40, but was {calculatedVersion}");
-
-        _size = size;
-        _actualDataLength = _size * _size;
-
-        if (_moduleData == null || _moduleData.Length < _actualDataLength)
-        {
-            _moduleData = new byte[_actualDataLength];
-        }
-
-        var copyLength = Math.Min(moduleData.Length, _actualDataLength);
-        moduleData.Slice(0, copyLength).CopyTo(_moduleData.AsSpan(0, copyLength));
-
-        Version = calculatedVersion;
     }
 
     /// <summary>

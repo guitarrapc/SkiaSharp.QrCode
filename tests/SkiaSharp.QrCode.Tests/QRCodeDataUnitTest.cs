@@ -13,7 +13,7 @@ public class QRCodeDataUnitTest
     public void GetRawData_CorrectPadding_ByVersion(int version, int expectedSize)
     {
         // Create QR code data with specific version
-        var qrCode = new QRCodeData(version);
+        var qrCode = new QRCodeData(version, quietZoneSize: 0);
 
         // Verify size matches expected
         Assert.Equal(expectedSize, qrCode.Size);
@@ -38,30 +38,7 @@ public class QRCodeDataUnitTest
     public void GetRawData_CorrectPadding_WithQuietZone(int version, int quietZone, int expectedSize)
     {
         // Create QR code
-        var qrCode = new QRCodeData(version);
-
-        // Add quiet zone if needed
-        if (quietZone > 0)
-        {
-            var oldSize = qrCode.Size;
-            var newSize = oldSize + quietZone * 2;
-            var newModuleData = new byte[newSize * newSize];
-
-            // Copy data to center
-            for (int row = 0; row < oldSize; row++)
-            {
-                for (int col = 0; col < oldSize; col++)
-                {
-                    if (qrCode[row, col])
-                    {
-                        var destIndex = (row + quietZone) * newSize + (col + quietZone);
-                        newModuleData[destIndex] = 1;
-                    }
-                }
-            }
-
-            qrCode.SetModuleMatrix(newModuleData, newSize, quietZone);
-        }
+        var qrCode = new QRCodeData(version, quietZoneSize: quietZone);
 
         // Verify size
         Assert.Equal(expectedSize, qrCode.Size);
@@ -70,7 +47,8 @@ public class QRCodeDataUnitTest
         var rawData = qrCode.GetRawData(Compression.Uncompressed);
 
         // Verify byte alignment
-        var totalBits = expectedSize * expectedSize;
+        var baseSize = QRCodeData.SizeFromVersion(version);
+        var totalBits = baseSize * baseSize;
         var expectedBytes = (totalBits + 7) / 8 + 4;
 
         Assert.Equal(expectedBytes, rawData.Length);
@@ -143,22 +121,32 @@ public class QRCodeDataUnitTest
         // 7 is not 8's multiple, it means it won't dup with byte border.
         // see remarks.
         var pattern = 7;
+        var version = (matrixSize -21) / 4 + 1;
 
-        var original = new QRCodeData(1);
-        var customModules = new byte[matrixSize * matrixSize];
+        var original = new QRCodeData(version, quietZoneSize: 0);
 
-        for (int i = 0; i < customModules.Length; i++)
+        // Verify size matched
+        Assert.Equal(matrixSize, original.Size);
+
+        // Get core buffer and fill pattern
+        var coreSize = original.GetCoreSize();
+        Span<byte> coreBuffer = stackalloc byte[coreSize * coreSize];
+
+        for (int i = 0; i < coreBuffer.Length; i++)
         {
-            customModules[i] = (byte)(i % pattern == 0 ? 1 : 0);
+            coreBuffer[i] = (byte)(i % pattern == 0 ? 1 : 0);
         }
 
-        original.SetModuleMatrix(customModules, matrixSize, quietZoneSize: 0);
+        // Set core data
+        original.SetCoreData(coreBuffer);
 
+        // Serialize and Deserialize
         var rawData = original.GetRawData(Compression.Uncompressed);
         var restored = new QRCodeData(rawData, Compression.Uncompressed);
 
         Assert.Equal(matrixSize, restored.Size);
 
+        // Verify pattern
         for (int row = 0; row < matrixSize; row++)
         {
             for (int col = 0; col < matrixSize; col++)
@@ -168,23 +156,6 @@ public class QRCodeDataUnitTest
                 Assert.Equal(expected, restored[row, col]);
             }
         }
-    }
-
-    /// <summary>
-    /// Verifies Version calculation is correct when using custom matrix sizes.
-    /// </summary>
-    [Fact]
-    public void SetModuleMatrix_UpdatesVersion_Correctly()
-    {
-        var qrCode = new QRCodeData(1);
-
-        // Test Version 5 size (37×37)
-        var matrixSize = 37;
-        var newModuleData = new byte[matrixSize * matrixSize];
-        qrCode.SetModuleMatrix(newModuleData, matrixSize, quietZoneSize: 0);
-
-        Assert.Equal(5, qrCode.Version);
-        Assert.Equal(37, qrCode.Size);
     }
 
     /// <summary>
@@ -229,7 +200,7 @@ public class QRCodeDataUnitTest
         var pattern = 3;
 
         // Arrange
-        var original = new QRCodeData(5);  // Version 5: 37×37
+        var original = new QRCodeData(5, quietZoneSize: 0);  // Version 5: 37×37
         var size = original.Size;
 
         // Set recognizable pattern
@@ -268,7 +239,7 @@ public class QRCodeDataUnitTest
     public void Compression_ReducesDataSize(int version)
     {
         // Arrange
-        var qrCode = new QRCodeData(version);
+        var qrCode = new QRCodeData(version, quietZoneSize: 0);
         var size = qrCode.Size;
 
         // Set pattern with repetition (compressible)
@@ -300,7 +271,7 @@ public class QRCodeDataUnitTest
     public void Compression_WorksWithRandomData()
     {
         // Arrange
-        var qrCode = new QRCodeData(5);
+        var qrCode = new QRCodeData(5, quietZoneSize: 0);
         var size = qrCode.Size;
         var random = new Random(42);  // Fixed seed for reproducibility
 
@@ -335,7 +306,7 @@ public class QRCodeDataUnitTest
     public void Deserialization_WrongCompressionMode_ThrowsException()
     {
         // Arrange
-        var qrCode = new QRCodeData(1);
+        var qrCode = new QRCodeData(1, quietZoneSize: 0);
         var compressedData = qrCode.GetRawData(Compression.Deflate);
 
         // Act & Assert - trying to decompress with wrong mode should fail
@@ -352,7 +323,7 @@ public class QRCodeDataUnitTest
     public void Deserialization_CorruptedData_ThrowsException(Compression compression)
     {
         // Arrange
-        var qrCode = new QRCodeData(1);
+        var qrCode = new QRCodeData(1, quietZoneSize: 0);
         var compressedData = qrCode.GetRawData(compression);
 
         // Corrupt the data (change middle bytes)
@@ -377,7 +348,7 @@ public class QRCodeDataUnitTest
     public void Compression_VariousSizesAndModes(int version, Compression compression)
     {
         // Arrange
-        var original = new QRCodeData(version);
+        var original = new QRCodeData(version, quietZoneSize: 0);
         var size = original.Size;
 
         // Set checkerboard pattern
@@ -418,7 +389,7 @@ public class QRCodeDataUnitTest
     public void Compression_UniformPatterns(bool value, Compression compression)
     {
         // Arrange
-        var qrCode = new QRCodeData(5);
+        var qrCode = new QRCodeData(5, quietZoneSize: 0);
         var size = qrCode.Size;
 
         // Fill with uniform value (highly compressible)

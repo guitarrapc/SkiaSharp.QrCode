@@ -12,11 +12,17 @@ public class ModulePlacerBinaryUnitTest
         // Arrange
         var version = 1;
         var qrCodeBinary = CreateEmptyQRCodeData(version);
-        var qrCodeBinaryBuffer = qrCodeBinary.GetMutableData();
-        var qrCodeBinarySize = qrCodeBinary.Size;
         var qrCodeString = CreateEmptyQRCodeData(version);
-        var qrCodeStringBuffer = qrCodeString.GetMutableData();
-        var qrCodeStringSize = qrCodeString.Size;
+
+        // Get core size and buffer (21 for version 1)
+        var coreSize = qrCodeBinary.GetCoreSize();
+        Assert.Equal(21, coreSize);
+
+        // Get core data buffer
+        Span<byte> binaryBuffer = stackalloc byte[coreSize * coreSize];
+        Span<byte> stringBuffer = stackalloc byte[coreSize * coreSize];
+        binaryBuffer.Clear();
+        stringBuffer.Clear();
 
         Span<Rectangle> blockedModulesBinary = stackalloc Rectangle[30];
         Span<Rectangle> blockedModulesString = stackalloc Rectangle[30];
@@ -24,8 +30,8 @@ public class ModulePlacerBinaryUnitTest
         var blockedCountString = 0;
 
         // Prepare patterns (same for both)
-        ModulePlacer.PlaceFinderPatterns(qrCodeBinaryBuffer, qrCodeBinarySize, blockedModulesBinary, ref blockedCountBinary);
-        ModulePlacer.PlaceFinderPatterns(qrCodeStringBuffer, qrCodeStringSize, blockedModulesString, ref blockedCountString);
+        ModulePlacer.PlaceFinderPatterns(binaryBuffer, coreSize, blockedModulesBinary, ref blockedCountBinary);
+        ModulePlacer.PlaceFinderPatterns(stringBuffer, coreSize, blockedModulesString, ref blockedCountString);
 
         // Binary data: 0xAB 0xCD = 10101011 11001101
         ReadOnlySpan<byte> binaryData = [0xAB, 0xCD];
@@ -34,14 +40,21 @@ public class ModulePlacerBinaryUnitTest
         var stringData = "1010101111001101";
 
         // Build blocked mask
-        var maskSize = (qrCodeBinarySize * qrCodeBinarySize + 7) / 8;
+        var maskSize = (coreSize * coreSize + 7) / 8;
         Span<byte> blockedMask = stackalloc byte[maskSize];
         blockedMask.Clear();
-        QRCodeGenerator.BuildBlockedMask(blockedMask, qrCodeBinarySize, blockedModulesBinary.Slice(0, blockedCountBinary));
+        QRCodeGenerator.BuildBlockedMask(blockedMask, coreSize, blockedModulesBinary.Slice(0, blockedCountBinary));
 
         // Act
-        ModulePlacer.PlaceDataWords(qrCodeBinaryBuffer, qrCodeBinarySize, binaryData, blockedMask);
-        ModulePlacer.PlaceDataWords(ref qrCodeString, stringData, blockedMask);
+        ModulePlacer.PlaceDataWords(binaryBuffer, coreSize, binaryData, blockedMask);
+        ModulePlacer.PlaceDataWords(stringBuffer, coreSize, stringData, blockedMask);
+
+        qrCodeBinary.SetCoreData(binaryBuffer);
+        qrCodeString.SetCoreData(stringBuffer);
+
+        // Debug
+        Console.WriteLine(string.Join(",", binaryBuffer.ToArray()));
+        Console.WriteLine(string.Join(",", stringBuffer.ToArray()));
 
         // Assert - Compare matrices
         for (int row = 0; row < qrCodeBinary.Size; row++)
@@ -100,7 +113,7 @@ public class ModulePlacerBinaryUnitTest
     private static QRCodeData CreateEmptyQRCodeData(int version)
     {
         var size = GetModuleCount(version);
-        return new QRCodeData(version);
+        return new QRCodeData(version, quietZoneSize: 0);
     }
 
     private static int GetModuleCount(int version) => 21 + (version - 1) * 4;
