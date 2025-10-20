@@ -203,7 +203,7 @@ public class QRCodeVisualCompatibilityTest
     /// </summary>
     private void AssertPixelsMatchSample(string content, ECCLevel eccLevel, EciMode eciMode)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, eciMode: eciMode);
+        var qr = QRCodeGenerator.CreateQrCode(content.AsSpan(), eccLevel, eciMode: eciMode);
 
         // Render to pixel array
         var actualPixels = RenderToPixelArray(qr);
