@@ -729,7 +729,7 @@ public static class QRCodeGenerator
 
         // UTF-8 BOM overhead ([0xEF, 0xBB, 0xBF] = 3 bytes = 24 bits) if specified
         var effectiveLength = length;
-        if (utf8BOM && encoding == EncodingMode.Byte)
+        if (utf8BOM && encoding == EncodingMode.Byte && eciMode == EciMode.Utf8)
         {
             effectiveLength += 3;
         }
