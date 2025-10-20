@@ -743,10 +743,10 @@ public static class QRCodeGenerator
             // Data bits (already in length for Byte mode as byte count)
             var dataBits = encoding switch
             {
-                EncodingMode.Numeric => CalculateNumericBits(effectiveLength),
-                EncodingMode.Alphanumeric => CalculateAlphanumericBits(effectiveLength),
+                EncodingMode.Numeric => CalculateNumericBits(length),
+                EncodingMode.Alphanumeric => CalculateAlphanumericBits(length),
                 EncodingMode.Byte => effectiveLength * 8,
-                EncodingMode.Kanji => effectiveLength * 13, // Kanji: 13 bits per character
+                EncodingMode.Kanji => length * 13, // Kanji: 13 bits per character
                 _ => throw new ArgumentOutOfRangeException(nameof(encoding), $"Unsupported encoding mode: {encoding}")
             };
 
