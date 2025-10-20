@@ -719,13 +719,20 @@ public static class QRCodeGenerator
     /// - Character count indicator (8-16 bits, version-dependent)
     /// - Data (variable)
     /// </remarks>
-    private static int GetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode)
+    private static int GetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM)
     {
         // ECI header overhead if eci specified
         var eciHeaderBits = eciMode.GetHeaderBits();
 
         // Mode indicator (4 bits)
         var modeIndicatorBits = 4;
+
+        // UTF-8 BOM overhead ([0xEF, 0xBB, 0xBF] = 3 bytes = 24 bits) if specified
+        var effectiveLength = length;
+        if (utf8BOM && encoding == EncodingMode.Byte)
+        {
+            effectiveLength += 3;
+        }
 
         // Iterate through versions to find the minimum suitable version
         // Character count indicator size changes at version 10 and 27
@@ -736,10 +743,10 @@ public static class QRCodeGenerator
             // Data bits (already in length for Byte mode as byte count)
             var dataBits = encoding switch
             {
-                EncodingMode.Numeric => CalculateNumericBits(length),
-                EncodingMode.Alphanumeric => CalculateAlphanumericBits(length),
-                EncodingMode.Byte => length * 8,
-                EncodingMode.Kanji => length * 13, // Kanji: 13 bits per character
+                EncodingMode.Numeric => CalculateNumericBits(effectiveLength),
+                EncodingMode.Alphanumeric => CalculateAlphanumericBits(effectiveLength),
+                EncodingMode.Byte => effectiveLength * 8,
+                EncodingMode.Kanji => effectiveLength * 13, // Kanji: 13 bits per character
                 _ => throw new ArgumentOutOfRangeException(nameof(encoding), $"Unsupported encoding mode: {encoding}")
             };
 

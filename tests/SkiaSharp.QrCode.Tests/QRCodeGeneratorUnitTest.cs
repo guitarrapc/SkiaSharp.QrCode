@@ -300,7 +300,7 @@ public class QRCodeGeneratorUnitTest
     // UTF-8 BOM Tests
 
     [Theory]
-    [InlineData("hello", ECCLevel.H, true, 2)]   // With BOM: 24 bits overhead → Version 2
+    [InlineData("hello", ECCLevel.H, true, 2)]   // With BOM: 24 bits (3-byte UTF-8 BOM: 0xEF, 0xBB, 0xBF) overhead → Version 2
     [InlineData("hello", ECCLevel.H, false, 1)]  // Without BOM → Version 1
     [InlineData("test", ECCLevel.M, true, 1)]    // With BOM but still fits in Version 1
     [InlineData("test", ECCLevel.M, false, 1)]   // Without BOM → Version 1
