@@ -8,13 +8,107 @@ namespace SkiaSharp.QrCode;
 /// Supports serialization/deserialization with optional compression.
 /// </summary>
 /// <remarks>
-/// QR code structure:
-/// - Version: 1-40 (determines size: 21×21 to 177×177)
-/// - Module matrix: 2D array of boolean values (dark/light)
-/// - Serialization format: "QRR" header + size + bit-packed data
+/// QR code structure:<br/>
+/// - Version: 1-40 (determines size: 21×21 to 177×177)<br/>
+/// - Module matrix: 2D array of boolean values (dark/light)<br/>
+/// - Serialization format: "QRR" header + size + bit-packed data<br/>
 /// </remarks>
 public class QRCodeData
 {
+    // =====================================================================
+    // Memory Layout
+    // =====================================================================
+    //
+    // QRCodeData manages a 1D byte array representing a 2D QR code matrix.
+    // The array may include an optional quiet zone (white border).
+    //
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ Memory Layout (with QuietZone = 4)                      │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ Version: 2                                              │
+    // │ _baseSize: 25 (core QR modules, no quiet zone)          │
+    // │ _quietZoneSize: 4 (border width)                        │
+    // │ _size: 33 (25 + 4*2, including quiet zone)              │
+    // │ _moduleData.Length: 1,089 bytes (33 × 33)               │
+    // └─────────────────────────────────────────────────────────┘
+    //
+    // Visual Representation (33×33 with QuietZone=4):
+    //
+    //     0   1   2   3   4   5 ... 28  29  30  31  32
+    //   ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+    // 0 │ Q │ Q │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │ Q │ ← QuietZone (row 0-3)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 1 │ Q │ Q │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │ Q │
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 2 │ Q │ Q │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │ Q │
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 3 │ Q │ Q │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │ Q │
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 4 │ Q │ Q │ Q │ Q │ C │ C │...│ C │ Q │ Q │ Q │ Q │ ← CoreData starts (col 4-28)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 5 │ Q │ Q │ Q │ Q │ C │ C │...│ C │ Q │ Q │ Q │ Q │
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    //   │...│...│...│...│...│...│...│...│...│...│...│...│
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 28│ Q │ Q │ Q │ Q │ C │ C │...│ C │ Q │ Q │ Q │ Q │ ← CoreData ends
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 29│ Q │ Q │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │ Q │ ← QuietZone (row 29-32)
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 30│ Q │ Q │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │ Q │
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 31│ Q │ Q │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │ Q │
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 32│ Q │ Q │ Q │ Q │ Q │ Q │...│ Q │ Q │ Q │ Q │ Q │
+    //   └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+    //     ↑               ↑                       ↑       ↑
+    //   col 0           col 4                   col 28  col 32
+    //
+    // Q = QuietZone (white border, value = 0)
+    // C = CoreData (actual QR code modules)
+    //
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ 1D Array Mapping (Row-Major Order)                      │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ Index = row × _size + col                               │
+    // │                                                         │
+    // │ Example: Access (row=5, col=6)                          │
+    // │   → Index = 5 × 33 + 6 = 171                            │
+    // │   → _moduleData[171]                                    │
+    // │                                                         │
+    // │ CoreData Offset Calculation:                            │
+    // │   coreRow = row - _quietZoneSize                        │
+    // │   coreCol = col - _quietZoneSize                        │
+    // │   coreIndex = coreRow × _baseSize + coreCol             │
+    // └─────────────────────────────────────────────────────────┘
+    //
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ Memory Layout (without QuietZone)                       │
+    // ├─────────────────────────────────────────────────────────┤
+    // │ Version: 2                                              │
+    // │ _baseSize: 25                                           │
+    // │ _quietZoneSize: 0                                       │
+    // │ _size: 25 (same as _baseSize)                           │
+    // │ _moduleData.Length: 625 bytes (25 × 25)                 │
+    // └─────────────────────────────────────────────────────────┘
+    //
+    //     0   1   2   3   4 ... 20  21  22  23  24
+    //   ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+    // 0 │ C │ C │ C │ C │ C │...│ C │ C │ C │ C │ ← CoreData only
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 1 │ C │ C │ C │ C │ C │...│ C │ C │ C │ C │
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    //   │...│...│...│...│...│...│...│...│...│...│
+    //   ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    // 24│ C │ C │ C │ C │ C │...│ C │ C │ C │ C │
+    //   └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+    //
+    // When _quietZoneSize = 0:
+    //   - _size == _baseSize
+    //   - No offset needed for CoreData access
+    //   - Direct 1:1 mapping: _moduleData[row × _size + col]
+    //
+    // =====================================================================
+
     // 1D byte array (row-major order) representing the QR code modules including quiet zone if present
     // Aligned to 64-byte boundary for AVX-512 optimizations
     private byte[] _moduleData;

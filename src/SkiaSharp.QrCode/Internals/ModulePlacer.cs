@@ -239,6 +239,7 @@ internal static class ModulePlacer
         }
     }
 
+    // TODO: Text API, will be removed when text mode is deprecated
     /// <summary>
     /// Places data words into the QR code buffer using string-based interleaved data.
     /// </summary>
@@ -249,7 +250,7 @@ internal static class ModulePlacer
     public static void PlaceDataWords(Span<byte> buffer, int size, string interleavedData, ReadOnlySpan<byte> blockedMask)
     {
         var bitPos = 0;
-        var totalBits = interleavedData.Length; // already binary
+        var totalBits = interleavedData.Length; // String length = bit count (each char is '0' or '1')
         var up = true;
 
         for (var x = size - 1; x >= 0; x -= 2)
@@ -272,6 +273,7 @@ internal static class ModulePlacer
 
                     if (!IsModuleBlocked(blockedMask, bitIndex) && bitPos < totalBits)
                     {
+                        // Text API: Direct character comparison ('1' = dark, '0' = light)
                         buffer[bitIndex] = interleavedData[bitPos] == '1' ? (byte)1 : (byte)0;
                         bitPos++;
                     }
