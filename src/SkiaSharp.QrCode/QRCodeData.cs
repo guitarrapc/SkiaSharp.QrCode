@@ -110,7 +110,7 @@ public class QRCodeData
     // =====================================================================
 
     // =====================================================================
-    // Serailization / Deserialization
+    // Serialization / Deserialization
     // =====================================================================
     //
     // Data Flow for Serialization/Deserialization

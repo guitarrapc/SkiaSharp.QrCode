@@ -1,12 +1,12 @@
 [MemoryDiagnoser]
-public class SrializeSimple
+public class SerializeSimple
 {
     private QRCodeData _qrCode = default!;
 
     public IEnumerable<object[]> ByteTextDataSource()
     {
         var compressions = new Compression[] { Compression.Uncompressed, Compression.Deflate, Compression.GZip };
-        var qrCode = QRCodeGenerator.CreateQrCode("https://exmaple.com/foobar", ECCLevel.L);
+        var qrCode = QRCodeGenerator.CreateQrCode("https://example.com/foobar", ECCLevel.L);
 
         foreach (var compression in compressions)
         {
@@ -14,9 +14,9 @@ public class SrializeSimple
         }
     }
 
-    public SrializeSimple()
+    public SerializeSimple()
     {
-        _qrCode = QRCodeGenerator.CreateQrCode("https://exmaple.com/foobar", ECCLevel.L);
+        _qrCode = QRCodeGenerator.CreateQrCode("https://example.com/foobar", ECCLevel.L);
     }
 
     [Benchmark]
@@ -30,7 +30,7 @@ public class SrializeSimple
 
     [Benchmark]
     [ArgumentsSource(nameof(ByteTextDataSource))]
-    public void Deerialize(byte[] rawData, Compression compression)
+    public void Deserialize(byte[] rawData, Compression compression)
     {
         _ = new QRCodeData(rawData, compression, quietZoneSize: 0);
     }
