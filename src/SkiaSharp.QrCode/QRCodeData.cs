@@ -153,7 +153,7 @@ public class QRCodeData
     }
 
     /// <summary>
-    /// Initializes using the specified raw data and compression
+    /// Initializes using the specified raw data and compression.
     /// mode.
     /// </summary>
     /// <remarks>
@@ -163,9 +163,10 @@ public class QRCodeData
     /// </remarks>
     /// <param name="rawData">The raw byte array representing the QR code data. This data may be compressed based on the specified <paramref name="compressMode"/>.</param>
     /// <param name="compressMode">The compression mode used to encode the <paramref name="rawData"/>. Determines how the data will be decompressed.</param>
+    /// <param name="quietZoneSize">The size of the quiet zone (white border) to be added around the QR code matrix.</param>
     /// <exception cref="InvalidDataException">Thrown if the decompressed data is invalid.</exception>
     /// <exception cref="InvalidOperationException">Thrown if the decompressed data does not contain enough bits to fully populate the QR code matrix.</exception>
-    public QRCodeData(byte[] rawData, Compression compressMode)
+    public QRCodeData(byte[] rawData, Compression compressMode, int quietZoneSize)
     {
         // Decompress
         var bytes = DecompressData(rawData, compressMode);
@@ -186,25 +187,31 @@ public class QRCodeData
         // set version from size
         Version = VersionFromSize(baseSizeFromFile);
         _baseSize = baseSizeFromFile;
-        _quietZoneSize = 0; // assume no quiet zone in file
-        _size = _baseSize;
-        var totalBits = _size * _size;
-        _moduleData = new byte[totalBits];
+        _quietZoneSize = quietZoneSize;
+        _size = _baseSize + (_quietZoneSize * 2);
+        var coreTotalBits = _baseSize * _baseSize; // core data size (without quiet zone)
+
+        // Allocate full array (include quiet zone)
+        _moduleData = new byte[_size * _size];
 
         // unpack bits to bytes
+        Span<byte> coreData = stackalloc byte[coreTotalBits];
         var bitIndex = 0;
-        for (var byteIndex = 4; byteIndex < bytes.Length && bitIndex < totalBits; byteIndex++)
+        for (var byteIndex = 4; byteIndex < bytes.Length && bitIndex < coreTotalBits; byteIndex++)
         {
             var b = bytes[byteIndex];
-            for (int i = 7; i >= 0 && bitIndex < totalBits; i--)
+            for (int i = 7; i >= 0 && bitIndex < coreTotalBits; i--)
             {
-                _moduleData[bitIndex] = (b & (1 << i)) != 0 ? (byte)1 : (byte)0;
+                coreData[bitIndex] = (b & (1 << i)) != 0 ? (byte)1 : (byte)0;
                 bitIndex++;
             }
         }
 
-        if (bitIndex < totalBits)
-            throw new InvalidOperationException($"Insufficient data: expected {totalBits} bits, got {bitIndex}.");
+        if (bitIndex < coreTotalBits)
+            throw new InvalidOperationException($"Insufficient data: expected {coreTotalBits} bits, got {bitIndex}.");
+
+        // Copy core data to _moduleData with quiet zone offset
+        SetCoreData(coreData);
     }
 
     /// <summary>
@@ -330,7 +337,9 @@ public class QRCodeData
         }
 
         // Compress stream
-        return CompressData(bytes, compressMode);
+        var result = CompressData(bytes, compressMode);
+
+        return result;
     }
 
     /// <summary>

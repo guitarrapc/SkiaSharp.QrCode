@@ -117,13 +117,14 @@ public class QRCodeDataUnitTest
     [InlineData(57)]   // Version 10
     public void Serialization_RoundTrip_PreservesData(int matrixSize)
     {
+        var quietZoneSize = 0;
         // Use (row * matrixSize + col) % 7 to create a pattern that is not too dense.
         // 7 is not 8's multiple, it means it won't dup with byte border.
         // see remarks.
         var pattern = 7;
         var version = (matrixSize -21) / 4 + 1;
 
-        var original = new QRCodeData(version, quietZoneSize: 0);
+        var original = new QRCodeData(version, quietZoneSize: quietZoneSize);
 
         // Verify size matched
         Assert.Equal(matrixSize, original.Size);
@@ -142,7 +143,7 @@ public class QRCodeDataUnitTest
 
         // Serialize and Deserialize
         var rawData = original.GetRawData(Compression.Uncompressed);
-        var restored = new QRCodeData(rawData, Compression.Uncompressed);
+        var restored = new QRCodeData(rawData, Compression.Uncompressed, quietZoneSize: quietZoneSize);
 
         Assert.Equal(matrixSize, restored.Size);
 
@@ -194,13 +195,14 @@ public class QRCodeDataUnitTest
     [InlineData(Compression.GZip)]
     public void Serialization_RoundTrip_AllCompressionModes(Compression compression)
     {
+        var quietZoneSize = 0;
         // Use (row + col) % 3 to create a pattern that is not too dense.
         // 3 is not 8's multiple, it means it won't dup with byte border.
         // see remarks.
         var pattern = 3;
 
         // Arrange
-        var original = new QRCodeData(5, quietZoneSize: 0);  // Version 5: 37×37
+        var original = new QRCodeData(5, quietZoneSize: quietZoneSize);  // Version 5: 37×37
         var size = original.Size;
 
         // Set recognizable pattern
@@ -214,7 +216,7 @@ public class QRCodeDataUnitTest
 
         // Act
         var rawData = original.GetRawData(compression);
-        var restored = new QRCodeData(rawData, compression);
+        var restored = new QRCodeData(rawData, compression, quietZoneSize: quietZoneSize);
 
         // Assert
         Assert.Equal(original.Version, restored.Version);
@@ -270,8 +272,9 @@ public class QRCodeDataUnitTest
     [Fact]
     public void Compression_WorksWithRandomData()
     {
+        var quietZoneSize = 0;
         // Arrange
-        var qrCode = new QRCodeData(5, quietZoneSize: 0);
+        var qrCode = new QRCodeData(5, quietZoneSize: quietZoneSize);
         var size = qrCode.Size;
         var random = new Random(42);  // Fixed seed for reproducibility
 
@@ -290,9 +293,9 @@ public class QRCodeDataUnitTest
         var gzip = qrCode.GetRawData(Compression.GZip);
 
         // All should deserialize correctly
-        var restored1 = new QRCodeData(uncompressed, Compression.Uncompressed);
-        var restored2 = new QRCodeData(deflate, Compression.Deflate);
-        var restored3 = new QRCodeData(gzip, Compression.GZip);
+        var restored1 = new QRCodeData(uncompressed, Compression.Uncompressed, quietZoneSize: quietZoneSize);
+        var restored2 = new QRCodeData(deflate, Compression.Deflate, quietZoneSize: quietZoneSize);
+        var restored3 = new QRCodeData(gzip, Compression.GZip, quietZoneSize: quietZoneSize);
 
         Assert.Equal(size, restored1.Size);
         Assert.Equal(size, restored2.Size);
@@ -305,13 +308,13 @@ public class QRCodeDataUnitTest
     [Fact]
     public void Deserialization_WrongCompressionMode_ThrowsException()
     {
+        var quietZoneSize = 0;
         // Arrange
-        var qrCode = new QRCodeData(1, quietZoneSize: 0);
+        var qrCode = new QRCodeData(1, quietZoneSize: quietZoneSize);
         var compressedData = qrCode.GetRawData(Compression.Deflate);
 
         // Act & Assert - trying to decompress with wrong mode should fail
-        Assert.ThrowsAny<Exception>(() =>
-            new QRCodeData(compressedData, Compression.Uncompressed));
+        Assert.ThrowsAny<Exception>(() => new QRCodeData(compressedData, Compression.Uncompressed, quietZoneSize: quietZoneSize));
     }
 
     /// <summary>
@@ -322,8 +325,9 @@ public class QRCodeDataUnitTest
     [InlineData(Compression.GZip)]
     public void Deserialization_CorruptedData_ThrowsException(Compression compression)
     {
+        var quietZoneSize = 0;
         // Arrange
-        var qrCode = new QRCodeData(1, quietZoneSize: 0);
+        var qrCode = new QRCodeData(1, quietZoneSize: quietZoneSize);
         var compressedData = qrCode.GetRawData(compression);
 
         // Corrupt the data (change middle bytes)
@@ -332,7 +336,7 @@ public class QRCodeDataUnitTest
         corrupted[compressedData.Length / 2] ^= 0xFF;  // Flip bits in the middle
 
         // Act & Assert
-        Assert.ThrowsAny<Exception>(() => new QRCodeData(corrupted, compression));
+        Assert.ThrowsAny<Exception>(() => new QRCodeData(corrupted, compression, quietZoneSize: quietZoneSize));
     }
 
     /// <summary>
@@ -347,8 +351,9 @@ public class QRCodeDataUnitTest
     [InlineData(40, Compression.GZip)]
     public void Compression_VariousSizesAndModes(int version, Compression compression)
     {
+        var quietZoneSize = 0;
         // Arrange
-        var original = new QRCodeData(version, quietZoneSize: 0);
+        var original = new QRCodeData(version, quietZoneSize: quietZoneSize);
         var size = original.Size;
 
         // Set checkerboard pattern
@@ -362,7 +367,7 @@ public class QRCodeDataUnitTest
 
         // Act
         var rawData = original.GetRawData(compression);
-        var restored = new QRCodeData(rawData, compression);
+        var restored = new QRCodeData(rawData, compression, quietZoneSize: quietZoneSize);
 
         // Assert
         Assert.Equal(original.Version, restored.Version);
@@ -388,8 +393,9 @@ public class QRCodeDataUnitTest
     [InlineData(false, Compression.GZip)]     // All white
     public void Compression_UniformPatterns(bool value, Compression compression)
     {
+        var quietZoneSize = 0;
         // Arrange
-        var qrCode = new QRCodeData(5, quietZoneSize: 0);
+        var qrCode = new QRCodeData(5, quietZoneSize: quietZoneSize);
         var size = qrCode.Size;
 
         // Fill with uniform value (highly compressible)
@@ -404,7 +410,7 @@ public class QRCodeDataUnitTest
         // Act
         var uncompressed = qrCode.GetRawData(Compression.Uncompressed);
         var compressed = qrCode.GetRawData(compression);
-        var restored = new QRCodeData(compressed, compression);
+        var restored = new QRCodeData(compressed, compression, quietZoneSize: quietZoneSize);
 
         // Assert
         // Uniform pattern should compress very well
@@ -418,5 +424,228 @@ public class QRCodeDataUnitTest
                 Assert.Equal(value, restored[row, col]);
             }
         }
+    }
+
+    // QuietZone Tests
+
+    /// <summary>
+    /// Tests serialization/deserialization with QuietZone
+    /// Verifies that QuietZone is properly excluded from serialized data and can be restored
+    /// </summary>
+    [Theory]
+    [InlineData(1, 4)]   // Version 1, QuietZone 4
+    [InlineData(2, 2)]   // Version 2, QuietZone 2
+    [InlineData(5, 4)]   // Version 5, QuietZone 4
+    [InlineData(10, 8)]  // Version 10, QuietZone 8
+    public void Serialization_WithQuietZone_PreservesOnlyCoreData(int version, int quietZoneSize)
+    {
+        var baseSize = QRCodeData.SizeFromVersion(version);
+        var fullSize = baseSize + (quietZoneSize * 2);
+
+        // Create QR code with QuietZone
+        var original = new QRCodeData(version, quietZoneSize: quietZoneSize);
+        Assert.Equal(fullSize, original.Size);
+
+        // Set pattern in core data area only
+        for (int row = quietZoneSize; row < fullSize - quietZoneSize; row++)
+        {
+            for (int col = quietZoneSize; col < fullSize - quietZoneSize; col++)
+            {
+                var coreRow = row - quietZoneSize;
+                var coreCol = col - quietZoneSize;
+                original[row, col] = (coreRow + coreCol) % 3 == 0;
+            }
+        }
+
+        // Verify QuietZone is white (false/0)
+        for (int i = 0; i < fullSize; i++)
+        {
+            // Top and bottom rows
+            for (int row = 0; row < quietZoneSize; row++)
+            {
+                Assert.False(original[row, i], $"Top QuietZone should be white at ({row}, {i})");
+                Assert.False(original[fullSize - 1 - row, i], $"Bottom QuietZone should be white at ({fullSize - 1 - row}, {i})");
+            }
+            // Left and right columns
+            for (int col = 0; col < quietZoneSize; col++)
+            {
+                Assert.False(original[i, col], $"Left QuietZone should be white at ({i}, {col})");
+                Assert.False(original[i, fullSize - 1 - col], $"Right QuietZone should be white at ({i}, {fullSize - 1 - col})");
+            }
+        }
+
+        // Serialize and deserialize with same QuietZone size
+        var rawData = original.GetRawData(Compression.Uncompressed);
+        var restored = new QRCodeData(rawData, Compression.Uncompressed, quietZoneSize: quietZoneSize);
+
+        Assert.Equal(original.Version, restored.Version);
+        Assert.Equal(original.Size, restored.Size);
+
+        // Verify core data is preserved
+        for (int row = quietZoneSize; row < fullSize - quietZoneSize; row++)
+        {
+            for (int col = quietZoneSize; col < fullSize - quietZoneSize; col++)
+            {
+                Assert.Equal(original[row, col], restored[row, col]);
+            }
+        }
+
+        // Verify QuietZone is restored as white
+        for (int i = 0; i < fullSize; i++)
+        {
+            for (int row = 0; row < quietZoneSize; row++)
+            {
+                Assert.False(restored[row, i]);
+                Assert.False(restored[fullSize - 1 - row, i]);
+            }
+            for (int col = 0; col < quietZoneSize; col++)
+            {
+                Assert.False(restored[i, col]);
+                Assert.False(restored[i, fullSize - 1 - col]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tests that different QuietZone sizes can be specified during deserialization
+    /// Serialized data contains only core data, so any QuietZone size can be applied
+    /// </summary>
+    [Theory]
+    [InlineData(2, 0, 4)]   // Serialize with no QuietZone, deserialize with QuietZone 4
+    [InlineData(2, 4, 0)]   // Serialize with QuietZone 4, deserialize with no QuietZone
+    [InlineData(2, 2, 8)]   // Serialize with QuietZone 2, deserialize with QuietZone 8
+    [InlineData(5, 4, 2)]   // Serialize with QuietZone 4, deserialize with QuietZone 2
+    public void Serialization_DifferentQuietZoneSizes_WorksCorrectly(int version, int serializeQuietZone, int deserializeQuietZone)
+    {
+        var baseSize = QRCodeData.SizeFromVersion(version);
+
+        // Create with first QuietZone size
+        var original = new QRCodeData(version, quietZoneSize: serializeQuietZone);
+        var originalFullSize = baseSize + (serializeQuietZone * 2);
+
+        // Set pattern in core area
+        for (int row = serializeQuietZone; row < originalFullSize - serializeQuietZone; row++)
+        {
+            for (int col = serializeQuietZone; col < originalFullSize - serializeQuietZone; col++)
+            {
+                var coreRow = row - serializeQuietZone;
+                var coreCol = col - serializeQuietZone;
+                original[row, col] = (coreRow * baseSize + coreCol) % 7 == 0;
+            }
+        }
+
+        // Serialize and deserialize with different QuietZone size
+        var rawData = original.GetRawData(Compression.Uncompressed);
+        var restored = new QRCodeData(rawData, Compression.Uncompressed, quietZoneSize: deserializeQuietZone);
+
+        var restoredFullSize = baseSize + (deserializeQuietZone * 2);
+
+        Assert.Equal(version, restored.Version);
+        Assert.Equal(restoredFullSize, restored.Size);
+
+        // Verify core data matches
+        for (int coreRow = 0; coreRow < baseSize; coreRow++)
+        {
+            for (int coreCol = 0; coreCol < baseSize; coreCol++)
+            {
+                var originalRow = coreRow + serializeQuietZone;
+                var originalCol = coreCol + serializeQuietZone;
+                var restoredRow = coreRow + deserializeQuietZone;
+                var restoredCol = coreCol + deserializeQuietZone;
+
+                Assert.Equal(original[originalRow, originalCol], restored[restoredRow, restoredCol]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Tests compression with QuietZone
+    /// QuietZone should not be included in serialized data
+    /// </summary>
+    [Theory]
+    [InlineData(Compression.Deflate, 4)]
+    [InlineData(Compression.GZip, 4)]
+    [InlineData(Compression.Deflate, 8)]
+    [InlineData(Compression.GZip, 8)]
+    public void Compression_WithQuietZone_CompressesCoreDataOnly(Compression compression, int quietZoneSize)
+    {
+        var version = 5;
+        var baseSize = QRCodeData.SizeFromVersion(version);
+        var fullSize = baseSize + (quietZoneSize * 2);
+
+        var qrCode = new QRCodeData(version, quietZoneSize: quietZoneSize);
+
+        // Set checkerboard pattern in core area
+        for (int row = quietZoneSize; row < fullSize - quietZoneSize; row++)
+        {
+            for (int col = quietZoneSize; col < fullSize - quietZoneSize; col++)
+            {
+                qrCode[row, col] = (row + col) % 2 == 0;
+            }
+        }
+
+        // Serialize with and without QuietZone
+        var withQuietZone = qrCode.GetRawData(compression);
+        var withoutQuietZone = new QRCodeData(version, quietZoneSize: 0);
+
+        // Copy core data
+        for (int coreRow = 0; coreRow < baseSize; coreRow++)
+        {
+            for (int coreCol = 0; coreCol < baseSize; coreCol++)
+            {
+                withoutQuietZone[coreRow, coreCol] = qrCode[coreRow + quietZoneSize, coreCol + quietZoneSize];
+            }
+        }
+        var noQuietZone = withoutQuietZone.GetRawData(compression);
+
+        // Both should produce same serialized data (QuietZone excluded)
+        Assert.Equal(noQuietZone.Length, withQuietZone.Length);
+        Assert.Equal(noQuietZone, withQuietZone);
+    }
+
+    /// <summary>
+    /// Tests that QuietZone area remains white (false) after SetCoreData
+    /// </summary>
+    [Theory]
+    [InlineData(2, 4)]
+    [InlineData(5, 2)]
+    [InlineData(10, 8)]
+    public void SetCoreData_PreservesQuietZone(int version, int quietZoneSize)
+    {
+        var baseSize = QRCodeData.SizeFromVersion(version);
+        var fullSize = baseSize + (quietZoneSize * 2);
+        var qrCode = new QRCodeData(version, quietZoneSize: quietZoneSize);
+
+        // Create core data with pattern
+        var coreData = new byte[baseSize * baseSize];
+        for (int i = 0; i < coreData.Length; i++)
+        {
+            coreData[i] = (byte)(i % 5 == 0 ? 1 : 0);
+        }
+
+        // Set core data
+        qrCode.SetCoreData(coreData);
+
+        // Verify QuietZone remains white
+        for (int i = 0; i < fullSize; i++)
+        {
+            // Top and bottom
+            for (int row = 0; row < quietZoneSize; row++)
+            {
+                Assert.False(qrCode[row, i], $"Top QuietZone corrupted at ({row}, {i})");
+                Assert.False(qrCode[fullSize - 1 - row, i], $"Bottom QuietZone corrupted at ({fullSize - 1 - row}, {i})");
+            }
+            // Left and right
+            for (int col = 0; col < quietZoneSize; col++)
+            {
+                Assert.False(qrCode[i, col], $"Left QuietZone corrupted at ({i}, {col})");
+                Assert.False(qrCode[i, fullSize - 1 - col], $"Right QuietZone corrupted at ({i}, {fullSize - 1 - col})");
+            }
+        }
+
+        // Verify core data was set correctly
+        var retrievedCoreData = new byte[baseSize * baseSize];
+        qrCode.GetCoreData(retrievedCoreData);
+        Assert.Equal(coreData, retrievedCoreData);
     }
 }
