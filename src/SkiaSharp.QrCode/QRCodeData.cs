@@ -109,6 +109,32 @@ public class QRCodeData
     //
     // =====================================================================
 
+    // =====================================================================
+    // Serailization / Deserialization
+    // =====================================================================
+    //
+    // Data Flow for Serialization/Deserialization
+    //
+    // ┌──────────────────────────────────────────────────┐
+    // │ Serialization (GetRawData)                       │
+    // ├──────────────────────────────────────────────────┤
+    // │ _moduleData (with QuietZone)                     │
+    // │   ↓ GetCoreData()                                │
+    // │ coreData (without QuietZone)                     │
+    // │   ↓ Pack bits                                    │
+    // │ rawData (header + packed core bits)              │
+    // └──────────────────────────────────────────────────┘
+    //
+    // ┌──────────────────────────────────────────────────┐
+    // │ Deserialization (Constructor)                    │
+    // ├──────────────────────────────────────────────────┤
+    // │ rawData (header + packed core bits)              │
+    // │   ↓ Unpack bits                                  │
+    // │ coreData (without QuietZone)                     │
+    // │   ↓ SetCoreData()                                │
+    // │ _moduleData (with QuietZone)                     │
+    // └──────────────────────────────────────────────────┘
+
     // 1D byte array (row-major order) representing the QR code modules including quiet zone if present
     // Aligned to 64-byte boundary for AVX-512 optimizations
     private byte[] _moduleData;
@@ -153,17 +179,27 @@ public class QRCodeData
     }
 
     /// <summary>
-    /// Initializes using the specified raw data and compression.
-    /// mode.
+    /// Initializes a new instance of the <see cref="QRCodeData"/> class from serialized raw data.
     /// </summary>
     /// <remarks>
-    /// This constructor processes the provided raw data to initialize the QR code's module matrix
-    /// and determine its version. The raw data is expected to follow the QR code format, including a valid header and
-    /// size information.
+    /// <para>
+    /// This constructor deserializes QR code data that was previously serialized using <see cref="GetRawData"/>.
+    /// The raw data contains only the core QR code modules (excluding quiet zone).
+    /// </para>
+    /// <para>
+    /// Data format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
+    /// </para>
+    /// <para>
+    /// The quiet zone (white border) can be added during deserialization by specifying the <paramref name="quietZoneSize"/> parameter. 
+    /// </para>
     /// </remarks>
-    /// <param name="rawData">The raw byte array representing the QR code data. This data may be compressed based on the specified <paramref name="compressMode"/>.</param>
-    /// <param name="compressMode">The compression mode used to encode the <paramref name="rawData"/>. Determines how the data will be decompressed.</param>
-    /// <param name="quietZoneSize">The size of the quiet zone (white border) to be added around the QR code matrix.</param>
+    /// <param name="rawData">The serialized QR code data. This data should be obtained from <see cref="GetRawData"/> and may be compressed based on the specified <paramref name="compressMode"/>.</param>
+    /// <param name="compressMode">The compression mode used when the data was serialized. Must match the compression mode used in <see cref="GetRawData"/>.</param>
+    /// <param name="quietZoneSize">
+    /// The size of the quiet zone (white border) to add around the QR code matrix, in modules.
+    /// This value is independent of the serialized data and can be different from the original quiet zone size used during serialization.
+    /// Use 0 for no quiet zone, or typically 4 for standard QR codes.
+    /// </param>
     /// <exception cref="InvalidDataException">Thrown if the decompressed data is invalid.</exception>
     /// <exception cref="InvalidOperationException">Thrown if the decompressed data does not contain enough bits to fully populate the QR code matrix.</exception>
     public QRCodeData(byte[] rawData, Compression compressMode, int quietZoneSize)
@@ -212,6 +248,75 @@ public class QRCodeData
 
         // Copy core data to _moduleData with quiet zone offset
         SetCoreData(coreData);
+    }
+
+    /// <summary>
+    /// Serializes the QR code data to a byte array with optional compression.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The serialized data contains only the core QR code modules (excluding quiet zone).
+    /// The quiet zone can be added when deserializing via the 
+    /// <see cref="QRCodeData(byte[], Compression, int)"/> constructor.
+    /// </para>
+    /// <para>
+    /// Format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
+    /// </para>
+    /// </remarks>
+    /// <param name="compressMode">
+    /// The compression mode to apply to the serialized data.
+    /// Use <see cref="Compression.Uncompressed"/> for faster serialization,
+    /// or <see cref="Compression.GZip"/> / <see cref="Compression.Deflate"/> for smaller file sizes.
+    /// </param>
+    /// <returns>
+    /// A byte array containing the serialized QR code data. This data can be stored to a file,
+    /// transmitted over a network, or cached for later use.
+    /// </returns>
+    public byte[] GetRawData(Compression compressMode)
+    {
+        // "QRR"
+        ReadOnlySpan<byte> _headerSignature = [0x51, 0x52, 0x52];
+
+        // size calculations
+        var totalBits = _baseSize * _baseSize; // only core data without quiet zone
+        var paddingBits = GetPaddingBits(totalBits);
+        var dataBytes = (totalBits + paddingBits) / 8;
+        var headerSize = _headerSignature.Length + 1; // signature length + 1 byte for size
+        var totalSize = headerSize + dataBytes;
+
+        var bytes = new byte[totalSize];
+
+        // Write header - signature ("QRR") & raw size
+        bytes[0] = _headerSignature[0];
+        bytes[1] = _headerSignature[1];
+        bytes[2] = _headerSignature[2];
+        bytes[3] = (byte)_baseSize; // only core size without quiet zone
+
+        // Get core data (without quiet zone)
+        Span<byte> coreData = stackalloc byte[totalBits];
+        GetCoreData(coreData);
+
+        // Pack bits into bytes
+        var bitIndex = 0;
+        for (var byteIndex = 0; byteIndex < dataBytes; byteIndex++)
+        {
+            byte b = 0;
+            for (var i = 7; i >= 0; i--)
+            {
+                if (bitIndex < totalBits && coreData[bitIndex] != 0)
+                {
+                    b |= (byte)(1 << i);
+                }
+                // else padding bits are 0
+                bitIndex++;
+            }
+            bytes[headerSize + byteIndex] = b;
+        }
+
+        // Compress stream
+        var result = CompressData(bytes, compressMode);
+
+        return result;
     }
 
     /// <summary>
@@ -284,62 +389,6 @@ public class QRCodeData
                 source.Slice(srcOffset, _baseSize).CopyTo(_moduleData.AsSpan(destOffset, _baseSize));
             }
         }
-    }
-
-    /// <summary>
-    /// Generates a raw byte array representation of the data, with optional compression.
-    /// </summary>
-    /// <remarks>
-    /// The raw data includes a header followed by the encoded data. The header consists of a
-    /// signature and the row size. The data is padded to ensure alignment to the nearest byte boundary. Compression, if
-    /// specified, is applied to the entire data stream after it is constructed.
-    /// </remarks>
-    /// <param name="compressMode"></param>
-    internal byte[] GetRawData(Compression compressMode)
-    {
-        // "QRR"
-        ReadOnlySpan<byte> _headerSignature = [ 0x51, 0x52, 0x52 ];
-
-        // size calculations
-        var totalBits = _baseSize * _baseSize; // only core data without quiet zone
-        var paddingBits = GetPaddingBits(totalBits);
-        var dataBytes = (totalBits + paddingBits) / 8;
-        var headerSize = _headerSignature.Length + 1; // signature length + 1 byte for size
-        var totalSize = headerSize + dataBytes;
-
-        var bytes = new byte[totalSize];
-
-        // Write header - signature ("QRR") & raw size
-        bytes[0] = _headerSignature[0];
-        bytes[1] = _headerSignature[1];
-        bytes[2] = _headerSignature[2];
-        bytes[3] = (byte)_baseSize; // only core size without quiet zone
-
-        // Get core data (without quiet zone)
-        Span<byte> coreData = stackalloc byte[totalBits];
-        GetCoreData(coreData);
-
-        // Pack bits into bytes
-        var bitIndex = 0;
-        for (var byteIndex = 0; byteIndex < dataBytes; byteIndex++)
-        {
-            byte b = 0;
-            for (var i = 7; i >= 0; i--)
-            {
-                if (bitIndex < totalBits && coreData[bitIndex] != 0)
-                {
-                    b |= (byte)(1 << i);
-                }
-                // else padding bits are 0
-                bitIndex++;
-            }
-            bytes[headerSize + byteIndex] = b;
-        }
-
-        // Compress stream
-        var result = CompressData(bytes, compressMode);
-
-        return result;
     }
 
     /// <summary>
