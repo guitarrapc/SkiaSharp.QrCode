@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
 
@@ -284,39 +285,45 @@ public class QRCodeData
         var headerSize = _headerSignature.Length + 1; // signature length + 1 byte for size
         var totalSize = headerSize + dataBytes;
 
-        var bytes = new byte[totalSize];
-
-        // Write header - signature ("QRR") & raw size
-        bytes[0] = _headerSignature[0];
-        bytes[1] = _headerSignature[1];
-        bytes[2] = _headerSignature[2];
-        bytes[3] = (byte)_baseSize; // only core size without quiet zone
-
-        // Get core data (without quiet zone)
-        Span<byte> coreData = stackalloc byte[totalBits];
-        GetCoreData(coreData);
-
-        // Pack bits into bytes
-        var bitIndex = 0;
-        for (var byteIndex = 0; byteIndex < dataBytes; byteIndex++)
+        var bytes = ArrayPool<byte>.Shared.Rent(totalSize);
+        try
         {
-            byte b = 0;
-            for (var i = 7; i >= 0; i--)
+            // Write header - signature ("QRR") & raw size
+            bytes[0] = _headerSignature[0];
+            bytes[1] = _headerSignature[1];
+            bytes[2] = _headerSignature[2];
+            bytes[3] = (byte)_baseSize; // only core size without quiet zone
+
+            // Get core data (without quiet zone)
+            Span<byte> coreData = stackalloc byte[totalBits];
+            GetCoreData(coreData);
+
+            // Pack bits into bytes
+            var bitIndex = 0;
+            for (var byteIndex = 0; byteIndex < dataBytes; byteIndex++)
             {
-                if (bitIndex < totalBits && coreData[bitIndex] != 0)
+                byte b = 0;
+                for (var i = 7; i >= 0; i--)
                 {
-                    b |= (byte)(1 << i);
+                    if (bitIndex < totalBits && coreData[bitIndex] != 0)
+                    {
+                        b |= (byte)(1 << i);
+                    }
+                    // else padding bits are 0
+                    bitIndex++;
                 }
-                // else padding bits are 0
-                bitIndex++;
+                bytes[headerSize + byteIndex] = b;
             }
-            bytes[headerSize + byteIndex] = b;
+
+            // Compress stream
+            var result = CompressData(bytes, totalSize, compressMode);
+
+            return result;
         }
-
-        // Compress stream
-        var result = CompressData(bytes, compressMode);
-
-        return result;
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(bytes);
+        }
     }
 
     /// <summary>
@@ -423,15 +430,20 @@ public class QRCodeData
     /// <summary>
     /// Compresses the given data using the specified compression mode.
     /// </summary>
-    /// <param name="data"></param>
-    /// <param name="mode"></param>
+    /// <param name="data">Source byte array (may be rented from ArrayPool).</param>
+    /// <param name="length">Actual data length to compress.</param>
+    /// <param name="mode">Compression mode.</param>
     /// <returns></returns>
-    private static byte[] CompressData(byte[] data, Compression mode)
+    private static byte[] CompressData(byte[] data, int length, Compression mode)
     {
         if (mode == Compression.Uncompressed)
-            return data;
+        {
+            var result = new byte[length];
+            Array.Copy(data, 0, result, 0, length);
+            return result;
+        }
 
-        using var output = new MemoryStream();
+        using var output = new MemoryStream(length);
 
         Stream compressor = mode switch
         {
@@ -442,7 +454,7 @@ public class QRCodeData
 
         using (compressor)
         {
-            compressor.Write(data, 0, data.Length);
+            compressor.Write(data, 0, length);
         }
 
         return output.ToArray();
