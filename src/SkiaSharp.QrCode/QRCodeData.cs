@@ -322,7 +322,7 @@ public class QRCodeData
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(bytes);
+            ArrayPool<byte>.Shared.Return(bytes, clearArray: true);
         }
     }
 

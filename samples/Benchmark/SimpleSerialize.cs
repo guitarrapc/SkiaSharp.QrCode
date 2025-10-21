@@ -1,5 +1,5 @@
 [MemoryDiagnoser]
-public class SerializeSimple
+public class SimpleSerialize
 {
     private QRCodeData _qrCode = default!;
 
@@ -14,7 +14,7 @@ public class SerializeSimple
         }
     }
 
-    public SerializeSimple()
+    public SimpleSerialize()
     {
         _qrCode = QRCodeGenerator.CreateQrCode("https://example.com/foobar", ECCLevel.L);
     }
