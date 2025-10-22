@@ -9,6 +9,7 @@
     <Project Path="samples/ManualGenerate/ManualGenerate.csproj" />
     <Project Path="samples/NanoServerGenerate80/NanoServerGenerate80.csproj" />
     <Project Path="samples/SimpleGenerate/SimpleGenerate.csproj" />
+    <Project Path="samples/SimpleSerialize/SimpleSerialize.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj" />
