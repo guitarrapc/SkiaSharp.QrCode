@@ -80,15 +80,33 @@ public class SimpleSerialize
     }
 
     [Benchmark]
+    public void Deserialize_Span_V10()
+    {
+        _ = new QRCodeData(_rawDataV10.AsSpan(), quietZoneSize: 0);
+    }
+
+    [Benchmark]
     public void Deserialize_Array_V10()
     {
         _ = new QRCodeData(_rawDataV10, quietZoneSize: 0);
     }
 
     [Benchmark]
+    public void Deserialize_Span_V30()
+    {
+        _ = new QRCodeData(_rawDataV30.AsSpan(), quietZoneSize: 0);
+    }
+
+    [Benchmark]
     public void Deserialize_Array_V30()
     {
         _ = new QRCodeData(_rawDataV30, quietZoneSize: 0);
+    }
+
+    [Benchmark]
+    public void Deserialize_Span_V60()
+    {
+        _ = new QRCodeData(_rawDataV60.AsSpan(), quietZoneSize: 0);
     }
 
     [Benchmark]

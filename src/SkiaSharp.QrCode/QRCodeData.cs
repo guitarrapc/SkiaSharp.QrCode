@@ -143,7 +143,6 @@ public class QRCodeData
 
     /// <summary>
     /// Gets the size of the QR code matrix (modules per side).
-    /// Includes quiet zone if added via <see cref="SetModuleMatrix"/>.
     /// </summary>
     public int Size => _size;
 
@@ -168,6 +167,13 @@ public class QRCodeData
     /// Initializes with the specified version.
     /// </summary>
     /// <param name="version">QR Code version number (1-40) used to determine matrix size</param>
+    /// <param name="quietZoneSize">
+    /// The size of the quiet zone (white border) around the QR code matrix, in modules.
+    /// <para>
+    /// <strong>Note:</strong> Using 0 (no quiet zone) is not recommended as QR code specifications require a quiet zone for reliable scanning.
+    /// The standard recommends a quiet zone of 4 modules for optimal readability.
+    /// </para>
+    /// </param>
     public QRCodeData(int version, int quietZoneSize)
     {
         Version = version;
@@ -200,9 +206,40 @@ public class QRCodeData
     /// </param>
     /// <exception cref="InvalidDataException">Thrown if the data is invalid.</exception>
     /// <exception cref="InvalidOperationException">Thrown if the data does not contain enough bits to fully populate the QR code matrix.</exception>
-    public QRCodeData(byte[] rawData, int quietZoneSize)
+    public QRCodeData(byte[] rawData, int quietZoneSize): this(rawData.AsSpan(), quietZoneSize)
     {
-        var rawDataSpan = rawData.AsSpan();
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="QRCodeData"/> class from serialized raw data.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This constructor deserializes QR code data that was previously serialized using <see cref="GetRawData"/>.
+    /// The raw data contains only the core QR code modules (excluding quiet zone).
+    /// </para>
+    /// <para>
+    /// Data format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
+    /// </para>
+    /// <para>
+    /// The quiet zone (white border) can be added during deserialization by specifying the <paramref name="quietZoneSize"/> parameter. 
+    /// </para>
+    /// <para>
+    /// This overload is useful for high-performance scenarios where you want to deserialize from
+    /// existing memory buffers (e.g., <see cref="Memory{T}"/>, <see cref="ArraySegment{T}"/>, or stack-allocated arrays)
+    /// without allocating a new byte array.
+    /// </para>
+    /// </remarks>
+    /// <param name="rawDataSpan">The serialized QR code data span. This data should be obtained from <see cref="GetRawData"/>.</param>
+    /// <param name="quietZoneSize">
+    /// The size of the quiet zone (white border) to add around the QR code matrix, in modules.
+    /// This value is independent of the serialized data and can be different from the original quiet zone size used during serialization.
+    /// Use 0 for no quiet zone, or typically 4 for standard QR codes.
+    /// </param>
+    /// <exception cref="InvalidDataException">Thrown if the data is invalid.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if the data does not contain enough bits to fully populate the QR code matrix.</exception>
+    public QRCodeData(ReadOnlySpan<byte> rawDataSpan, int quietZoneSize)
+    {
         // Validate minimum size
         if (rawDataSpan.Length < 4)
             throw new InvalidDataException($"Invalid QR code data: too short ({rawDataSpan.Length} bytes).");
