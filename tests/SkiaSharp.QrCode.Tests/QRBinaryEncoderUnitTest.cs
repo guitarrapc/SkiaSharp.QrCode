@@ -246,41 +246,6 @@ public class QRBinaryEncoderUnitTest
         Assert.Equal(0b_0000_0100, buffer[1]); // rest
     }
 
-    // Works as same as QRTextEncoder
-
-    [Theory]
-    [InlineData("123", EncodingMode.Numeric, 1)] // Version 1
-    [InlineData("12345678", EncodingMode.Numeric, 1)]
-    [InlineData("0123456789", EncodingMode.Numeric, 5)]
-    internal void QRBinaryEncoder_MatchesQRTextEncoder(string input, EncodingMode mode, int version)
-    {
-        // Arrange
-        var eccInfo = QRCodeConstants.CapacityECCTable
-            .First(x => x.Version == version && x.ErrorCorrectionLevel == ECCLevel.H);
-        int targetBits = eccInfo.TotalDataCodewords * 8;
-
-        // Act - Text Encoder
-        var textEncoder = new Internals.TextEncoders.QRTextEncoder(targetBits);
-        textEncoder.WriteMode(mode, EciMode.Default);
-        textEncoder.WriteCharacterCount(input.Length, mode.GetCountIndicatorLength(version));
-        textEncoder.WriteData(input, mode, EciMode.Default, false);
-        textEncoder.WritePadding(targetBits);
-        var textBits = textEncoder.ToBinaryString();
-
-        // Act - Binary Encoder
-        Span<byte> buffer = stackalloc byte[(targetBits + 7) / 8];
-        var binaryEncoder = new QRBinaryEncoder(buffer);
-        binaryEncoder.WriteMode(mode, EciMode.Default);
-        int countBitLength = mode.GetCountIndicatorLength(version);
-        binaryEncoder.WriteCharacterCount(input.Length, countBitLength);
-        binaryEncoder.WriteData(input, mode, EciMode.Default, false);
-        binaryEncoder.WritePadding(targetBits);
-        var binaryBits = ToBinaryString(binaryEncoder.GetEncodedData(), binaryEncoder.BitPosition);
-
-        // Assert
-        Assert.Equal(textBits, binaryBits);
-    }
-
     // Edge cases
 
     [Fact]

@@ -10,33 +10,6 @@ namespace SkiaSharp.QrCode.Internals;
 internal static class ModulePlacer
 {
     /// <summary>
-    /// Adds white border (quiet zone) around the QR code.
-    /// Required by ISO/IEC 18004 standard (minimum 4 modules width).
-    /// </summary>
-    /// <param name="source">QR code data to copy from.</param>
-    /// <param name="destination">Destination buffer for the new QR code with quiet zone. Must be large enough to hold (oldSize + 2 * quietZoneSize) squared elements.</param>
-    /// <param name="oldSize">Original QR code size in modules.</param>
-    /// <param name="quietZoneSize">Quiet zone width in modules (default: 4).</param>
-    public static void AddQuietZone(ReadOnlySpan<byte> source, Span<byte> destination, int oldSize, int quietZoneSize)
-    {
-        if (quietZoneSize <= 0)
-            return;
-
-        if (destination.Length < source.Length + quietZoneSize * 2)
-            throw new ArgumentException("Destination buffer is too small.");
-
-        var newSize = oldSize + quietZoneSize * 2;
-
-        // Copy existing data to center of new matrix
-        for (var row = 0; row < oldSize; row++)
-        {
-            var srcOffset = row * oldSize;
-            var destOffset = (row + quietZoneSize) * newSize + quietZoneSize;
-            source.Slice(srcOffset, oldSize).CopyTo(destination.Slice(destOffset, oldSize));
-        }
-    }
-
-    /// <summary>
     /// Applies mask pattern to data area and selects optimal pattern.
     /// Tests all 8 mask patterns and selects one with lowest penalty score.
     /// </summary>

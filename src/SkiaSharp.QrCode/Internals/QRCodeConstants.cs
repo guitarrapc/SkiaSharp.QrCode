@@ -732,57 +732,7 @@ internal static class QRCodeConstants
         return remainderBits.AsSpan()[version - 1];
     }
 
-    /// <summary>
-    /// Gets integer value from alpha exponent using Galois field lookup.
-    /// Example: α^25 → galoisField[25].IntegerValue
-    /// </summary>
-    /// <param name="alphaExponent">Alpha exponent (0-255).</param>
-    /// <returns>Integer value in GF(256).</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int GetIntValFromAlphaExp(int alphaExponent)
-    {
-        // Gets integer value from alpha exponent (O(1) array lookup).
-        // Replaces LINQ-based linear search in GetIntValFromAlphaExp.
-        return GaloisField.ExpToInt[alphaExponent];
-    }
-
-    /// <summary>
-    /// Gets alpha exponent from integer value using Galois field lookup.
-    /// Example: 57 → galoisField.Find(x => x.IntegerValue == 57).ExponentAlpha
-    /// </summary>
-    /// <param name="intValue">Integer value (0-255).</param>
-    /// <returns>Alpha exponent in GF(256).</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int GetAlphaExpFromIntVal(int intValue)
-    {
-        // Gets alpha exponent from integer value (O(1) array lookup).
-        // Replaces LINQ-based linear search in GetAlphaExpFromIntVal.
-        return GaloisField.IntToExp[intValue];
-    }
-
     // Binary and Decimal Conversion
-
-    /// <summary>
-    /// Converts binary string to decimal integer.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int BinToDec(string binStr)
-    {
-        return Convert.ToInt32(binStr, 2);
-    }
-
-    /// <summary>
-    /// Converts decimal number to binary string with optional padding.
-    /// </summary>
-    /// <param name="decNum">Decimal number.</param>
-    /// <param name="padLeftUpTo">Minimum bit length (pads with leading zeros).</param>
-    /// <returns>Binary string.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static string DecToBin(int decNum, int padLeftUpTo)
-    {
-        var binStr = Convert.ToString(decNum, 2);
-        return binStr.PadLeft(padLeftUpTo, '0');
-    }
 
     /// <summary>
     /// Retrieves ECC information for the specified version and error correction level.
