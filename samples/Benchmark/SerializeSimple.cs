@@ -2,36 +2,24 @@
 public class SerializeSimple
 {
     private QRCodeData _qrCode = default!;
-
-    public IEnumerable<object[]> ByteTextDataSource()
-    {
-        var compressions = new Compression[] { Compression.Uncompressed, Compression.Deflate, Compression.GZip };
-        var qrCode = QRCodeGenerator.CreateQrCode("https://example.com/foobar", ECCLevel.L);
-
-        foreach (var compression in compressions)
-        {
-            yield return new object[] { qrCode.GetRawData(compressMode: compression), compression };
-        }
-    }
+    private byte[] _rawData = default!;
 
     public SerializeSimple()
     {
-        _qrCode = QRCodeGenerator.CreateQrCode("https://example.com/foobar", ECCLevel.L);
+        var qr = QRCodeGenerator.CreateQrCode("https://example.com/foobar", ECCLevel.L);
+        _qrCode = qr;
+        _rawData = qr.GetRawData();
     }
 
     [Benchmark]
-    [Arguments(Compression.Uncompressed)]
-    [Arguments(Compression.Deflate)]
-    [Arguments(Compression.GZip)]
-    public void Serialize(Compression compression)
+    public void Serialize()
     {
-        _qrCode.GetRawData(compression);
+        _qrCode.GetRawData();
     }
 
     [Benchmark]
-    [ArgumentsSource(nameof(ByteTextDataSource))]
-    public void Deserialize(byte[] rawData, Compression compression)
+    public void Deserialize()
     {
-        _ = new QRCodeData(rawData, compression, quietZoneSize: 0);
+        _ = new QRCodeData(_rawData, quietZoneSize: 0);
     }
 }

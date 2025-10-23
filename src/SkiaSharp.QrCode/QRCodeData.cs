@@ -1,11 +1,10 @@
-using System.IO.Compression;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 
 namespace SkiaSharp.QrCode;
 
 /// <summary>
 /// Represents QR code data as a 2D boolean matrix.
-/// Supports serialization/deserialization with optional compression.
 /// </summary>
 /// <remarks>
 /// QR code structure:<br/>
@@ -193,30 +192,27 @@ public class QRCodeData
     /// The quiet zone (white border) can be added during deserialization by specifying the <paramref name="quietZoneSize"/> parameter. 
     /// </para>
     /// </remarks>
-    /// <param name="rawData">The serialized QR code data. This data should be obtained from <see cref="GetRawData"/> and may be compressed based on the specified <paramref name="compressMode"/>.</param>
-    /// <param name="compressMode">The compression mode used when the data was serialized. Must match the compression mode used in <see cref="GetRawData"/>.</param>
+    /// <param name="rawData">The serialized QR code data. This data should be obtained from <see cref="GetRawData"/>.</param>
     /// <param name="quietZoneSize">
     /// The size of the quiet zone (white border) to add around the QR code matrix, in modules.
     /// This value is independent of the serialized data and can be different from the original quiet zone size used during serialization.
     /// Use 0 for no quiet zone, or typically 4 for standard QR codes.
     /// </param>
-    /// <exception cref="InvalidDataException">Thrown if the decompressed data is invalid.</exception>
-    /// <exception cref="InvalidOperationException">Thrown if the decompressed data does not contain enough bits to fully populate the QR code matrix.</exception>
-    public QRCodeData(byte[] rawData, Compression compressMode, int quietZoneSize)
+    /// <exception cref="InvalidDataException">Thrown if the data is invalid.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if the data does not contain enough bits to fully populate the QR code matrix.</exception>
+    public QRCodeData(byte[] rawData, int quietZoneSize)
     {
-        // Decompress
-        var bytes = DecompressData(rawData, compressMode);
-
+        var rawDataSpan = rawData.AsSpan();
         // Validate minimum size
-        if (bytes.Length < 4)
-            throw new InvalidDataException($"Invalid QR code data: too short ({bytes.Length} bytes).");
+        if (rawDataSpan.Length < 4)
+            throw new InvalidDataException($"Invalid QR code data: too short ({rawDataSpan.Length} bytes).");
 
         // Validate header
-        if (bytes[0] != 0x51 || bytes[1] != 0x52 || bytes[2] != 0x52)
+        if (rawDataSpan[0] != 0x51 || rawDataSpan[1] != 0x52 || rawDataSpan[2] != 0x52)
             throw new InvalidDataException("Invalid QR code data: header mismatch.");
 
         // Read and validate size
-        var baseSizeFromFile = (int)bytes[3];
+        var baseSizeFromFile = (int)rawDataSpan[3];
         if (baseSizeFromFile < 21 || baseSizeFromFile > 177)
             throw new InvalidDataException($"Invalid QR code size: {baseSizeFromFile}.");
 
@@ -233,9 +229,9 @@ public class QRCodeData
         // unpack bits to bytes
         Span<byte> coreData = stackalloc byte[coreTotalBits];
         var bitIndex = 0;
-        for (var byteIndex = 4; byteIndex < bytes.Length && bitIndex < coreTotalBits; byteIndex++)
+        for (var byteIndex = 4; byteIndex < rawDataSpan.Length && bitIndex < coreTotalBits; byteIndex++)
         {
-            var b = bytes[byteIndex];
+            var b = rawDataSpan[byteIndex];
             for (int i = 7; i >= 0 && bitIndex < coreTotalBits; i--)
             {
                 coreData[bitIndex] = (b & (1 << i)) != 0 ? (byte)1 : (byte)0;
@@ -251,28 +247,23 @@ public class QRCodeData
     }
 
     /// <summary>
-    /// Serializes the QR code data to a byte array with optional compression.
+    /// Serializes the QR code data to a byte array.
     /// </summary>
     /// <remarks>
     /// <para>
     /// The serialized data contains only the core QR code modules (excluding quiet zone).
-    /// The quiet zone can be added when deserializing via the 
-    /// <see cref="QRCodeData(byte[], Compression, int)"/> constructor.
+    /// The quiet zone can be added when deserializing via the
+    /// <see cref="QRCodeData(byte[], int)"/> constructor.
     /// </para>
     /// <para>
     /// Format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
     /// </para>
     /// </remarks>
-    /// <param name="compressMode">
-    /// The compression mode to apply to the serialized data.
-    /// Use <see cref="Compression.Uncompressed"/> for faster serialization,
-    /// or <see cref="Compression.GZip"/> / <see cref="Compression.Deflate"/> for smaller file sizes.
-    /// </param>
     /// <returns>
     /// A byte array containing the serialized QR code data. This data can be stored to a file,
     /// transmitted over a network, or cached for later use.
     /// </returns>
-    public byte[] GetRawData(Compression compressMode)
+    public byte[] GetRawData()
     {
         // "QRR"
         ReadOnlySpan<byte> _headerSignature = [0x51, 0x52, 0x52];
@@ -284,39 +275,40 @@ public class QRCodeData
         var headerSize = _headerSignature.Length + 1; // signature length + 1 byte for size
         var totalSize = headerSize + dataBytes;
 
-        var bytes = new byte[totalSize];
-
-        // Write header - signature ("QRR") & raw size
-        bytes[0] = _headerSignature[0];
-        bytes[1] = _headerSignature[1];
-        bytes[2] = _headerSignature[2];
-        bytes[3] = (byte)_baseSize; // only core size without quiet zone
-
-        // Get core data (without quiet zone)
-        Span<byte> coreData = stackalloc byte[totalBits];
-        GetCoreData(coreData);
-
-        // Pack bits into bytes
-        var bitIndex = 0;
-        for (var byteIndex = 0; byteIndex < dataBytes; byteIndex++)
+        var bytes = ArrayPool<byte>.Shared.Rent(totalSize);
+        try
         {
-            byte b = 0;
-            for (var i = 7; i >= 0; i--)
+            // Write header - signature ("QRR") & raw size
+            bytes[0] = _headerSignature[0];
+            bytes[1] = _headerSignature[1];
+            bytes[2] = _headerSignature[2];
+            bytes[3] = (byte)_baseSize; // only core size without quiet zone
+
+            // Get core data (without quiet zone)
+            Span<byte> coreData = stackalloc byte[totalBits];
+            GetCoreData(coreData);
+
+            var bitIndex = 0;
+            for (var byteIndex = 0; byteIndex < dataBytes; byteIndex++)
             {
-                if (bitIndex < totalBits && coreData[bitIndex] != 0)
+                byte b = 0;
+                for (var i = 7; i >= 0; i--)
                 {
-                    b |= (byte)(1 << i);
+                    if (bitIndex < totalBits && coreData[bitIndex] != 0)
+                        b |= (byte)(1 << i);
+                    bitIndex++;
                 }
-                // else padding bits are 0
-                bitIndex++;
+                bytes[headerSize + byteIndex] = b;
             }
-            bytes[headerSize + byteIndex] = b;
+
+            var result = new byte[totalSize];
+            Array.Copy(bytes, 0, result, 0, totalSize);
+            return result;
         }
-
-        // Compress stream
-        var result = CompressData(bytes, compressMode);
-
-        return result;
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(bytes);
+        }
     }
 
     /// <summary>
@@ -389,63 +381,6 @@ public class QRCodeData
                 source.Slice(srcOffset, _baseSize).CopyTo(_moduleData.AsSpan(destOffset, _baseSize));
             }
         }
-    }
-
-    /// <summary>
-    /// Decompresses the given data using the specified compression mode.
-    /// </summary>
-    /// <param name="data"></param>
-    /// <param name="mode"></param>
-    /// <returns></returns>
-    private static byte[] DecompressData(byte[] data, Compression mode)
-    {
-        if (mode == Compression.Uncompressed)
-            return data;
-
-        using var input = new MemoryStream(data);
-        using var output = new MemoryStream();
-
-        Stream decompressor = mode switch
-        {
-            Compression.Deflate => new DeflateStream(input, CompressionMode.Decompress),
-            Compression.GZip => new GZipStream(input, CompressionMode.Decompress),
-            _ => throw new ArgumentException($"Unsupported compression mode: {mode}")
-        };
-
-        using (decompressor)
-        {
-            decompressor.CopyTo(output);
-        }
-
-        return output.ToArray();
-    }
-
-    /// <summary>
-    /// Compresses the given data using the specified compression mode.
-    /// </summary>
-    /// <param name="data"></param>
-    /// <param name="mode"></param>
-    /// <returns></returns>
-    private static byte[] CompressData(byte[] data, Compression mode)
-    {
-        if (mode == Compression.Uncompressed)
-            return data;
-
-        using var output = new MemoryStream();
-
-        Stream compressor = mode switch
-        {
-            Compression.Deflate => new DeflateStream(output, CompressionMode.Compress),
-            Compression.GZip => new GZipStream(output, CompressionMode.Compress),
-            _ => throw new ArgumentException($"Unsupported compression mode: {mode}")
-        };
-
-        using (compressor)
-        {
-            compressor.Write(data, 0, data.Length);
-        }
-
-        return output.ToArray();
     }
 
     /// <summary>
