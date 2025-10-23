@@ -342,7 +342,7 @@ public class QRCodeData
     /// <returns>The number of bytes written to the serialized data to.</returns>
     /// <remarks>
     /// <para>
-    /// This method writes on the core QR mode modules (excluding quiet zone).
+    /// This method writes only the core QR mode modules (excluding quiet zone).
     /// The quiet zone can be added when deserializing via the <see cref="QRCodeData(byte[], int)"/> constructor.
     /// </para>
     /// <para>
@@ -350,8 +350,6 @@ public class QRCodeData
     /// </para>
     /// <para>
     /// This overload is useful for high-performance scenarios where memory allocations need to be minimized, such as response writing or streaming.
-    /// </para>
-    /// Format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
     /// </para>
     /// </remarks>
     public int GetRawData(IBufferWriter<byte> writer)

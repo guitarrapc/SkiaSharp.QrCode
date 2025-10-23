@@ -18,7 +18,7 @@ public class SimpleSerialize
     private ArrayBufferWriter<byte> _writerV60 = default!;
 
     [GlobalSetup]
-    public void GlocalSetup()
+    public void GlobalSetup()
     {
         _qrDataV10 = QRCodeGenerator.CreateQrCode("1234ABCDef", ECCLevel.L);
         _qrDataV30 = QRCodeGenerator.CreateQrCode("https://example.com/foobaravcd", ECCLevel.L);
@@ -45,6 +45,7 @@ public class SimpleSerialize
     [BenchmarkCategory("BufferWriter")]
     public void Serialize_BufferWriter_V10()
     {
+        _writerV10.Clear();
         _qrDataV10.GetRawData(_writerV10);
     }
 
@@ -59,6 +60,7 @@ public class SimpleSerialize
     [BenchmarkCategory("BufferWriter")]
     public void Serialize_BufferWriter_V30()
     {
+        _writerV30.Clear();
         _qrDataV30.GetRawData(_writerV30);
     }
 
@@ -73,6 +75,7 @@ public class SimpleSerialize
     [BenchmarkCategory("BufferWriter")]
     public void Serialize_BufferWriter_V60()
     {
+        _writerV60.Clear();
         _qrDataV60.GetRawData(_writerV60);
     }
 
