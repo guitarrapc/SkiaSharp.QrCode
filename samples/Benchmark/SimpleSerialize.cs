@@ -1,10 +1,10 @@
 [MemoryDiagnoser]
-public class SerializeSimple
+public class SimpleSerialize
 {
     private QRCodeData _qrCode = default!;
     private byte[] _rawData = default!;
 
-    public SerializeSimple()
+    public SimpleSerialize()
     {
         var qr = QRCodeGenerator.CreateQrCode("https://example.com/foobar", ECCLevel.L);
         _qrCode = qr;

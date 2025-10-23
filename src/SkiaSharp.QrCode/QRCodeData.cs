@@ -227,23 +227,35 @@ public class QRCodeData
         _moduleData = new byte[_size * _size];
 
         // unpack bits to bytes
-        Span<byte> coreData = stackalloc byte[coreTotalBits];
-        var bitIndex = 0;
-        for (var byteIndex = 4; byteIndex < rawDataSpan.Length && bitIndex < coreTotalBits; byteIndex++)
+        const int StackallocThreshold = 2048;
+        byte[]? rentedBuffer = null;
+        Span<byte> coreData = coreTotalBits <= StackallocThreshold
+            ? stackalloc byte[coreTotalBits]
+            : (rentedBuffer = ArrayPool<byte>.Shared.Rent(coreTotalBits)).AsSpan(0, coreTotalBits);
+        try
         {
-            var b = rawDataSpan[byteIndex];
-            for (int i = 7; i >= 0 && bitIndex < coreTotalBits; i--)
+            var bitIndex = 0;
+            for (var byteIndex = 4; byteIndex < rawDataSpan.Length && bitIndex < coreTotalBits; byteIndex++)
             {
-                coreData[bitIndex] = (b & (1 << i)) != 0 ? (byte)1 : (byte)0;
-                bitIndex++;
+                var b = rawDataSpan[byteIndex];
+                for (int i = 7; i >= 0 && bitIndex < coreTotalBits; i--)
+                {
+                    coreData[bitIndex] = (b & (1 << i)) != 0 ? (byte)1 : (byte)0;
+                    bitIndex++;
+                }
             }
+
+            if (bitIndex < coreTotalBits)
+                throw new InvalidOperationException($"Insufficient data: expected {coreTotalBits} bits, got {bitIndex}.");
+
+            // Copy core data to _moduleData with quiet zone offset
+            SetCoreData(coreData);
         }
-
-        if (bitIndex < coreTotalBits)
-            throw new InvalidOperationException($"Insufficient data: expected {coreTotalBits} bits, got {bitIndex}.");
-
-        // Copy core data to _moduleData with quiet zone offset
-        SetCoreData(coreData);
+        finally
+        {
+            if (rentedBuffer != null)
+                ArrayPool<byte>.Shared.Return(rentedBuffer);
+        }
     }
 
     /// <summary>
@@ -275,40 +287,32 @@ public class QRCodeData
         var headerSize = _headerSignature.Length + 1; // signature length + 1 byte for size
         var totalSize = headerSize + dataBytes;
 
-        var bytes = ArrayPool<byte>.Shared.Rent(totalSize);
-        try
+        var result = new byte[totalSize];
+        var resultSpan = result.AsSpan();
+        // Write header - signature ("QRR") & raw size
+        resultSpan[0] = _headerSignature[0];
+        resultSpan[1] = _headerSignature[1];
+        resultSpan[2] = _headerSignature[2];
+        resultSpan[3] = (byte)_baseSize; // only core size without quiet zone
+
+        // Get core data (without quiet zone)
+        Span<byte> coreData = stackalloc byte[totalBits];
+        GetCoreData(coreData);
+
+        var bitIndex = 0;
+        for (var byteIndex = 0; byteIndex < dataBytes; byteIndex++)
         {
-            // Write header - signature ("QRR") & raw size
-            bytes[0] = _headerSignature[0];
-            bytes[1] = _headerSignature[1];
-            bytes[2] = _headerSignature[2];
-            bytes[3] = (byte)_baseSize; // only core size without quiet zone
-
-            // Get core data (without quiet zone)
-            Span<byte> coreData = stackalloc byte[totalBits];
-            GetCoreData(coreData);
-
-            var bitIndex = 0;
-            for (var byteIndex = 0; byteIndex < dataBytes; byteIndex++)
+            byte b = 0;
+            for (var i = 7; i >= 0; i--)
             {
-                byte b = 0;
-                for (var i = 7; i >= 0; i--)
-                {
-                    if (bitIndex < totalBits && coreData[bitIndex] != 0)
-                        b |= (byte)(1 << i);
-                    bitIndex++;
-                }
-                bytes[headerSize + byteIndex] = b;
+                if (bitIndex < totalBits && coreData[bitIndex] != 0)
+                    b |= (byte)(1 << i);
+                bitIndex++;
             }
+            resultSpan[headerSize + byteIndex] = b;
+        }
 
-            var result = new byte[totalSize];
-            Array.Copy(bytes, 0, result, 0, totalSize);
-            return result;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(bytes);
-        }
+        return result;
     }
 
     /// <summary>
