@@ -30,14 +30,14 @@ public class QrGeneratorSimple
     [ArgumentsSource(nameof(ByteTextDataSource))]
     public QRCodeData TextByte(string text, ECCLevel ecc)
     {
-        return QRCodeGenerator.CreateQrCode(text, ecc);
+        return QRCodeGenerator.CreateQrCode(text, ecc, quietZoneSize: 4);
     }
 
     [Benchmark]
     [ArgumentsSource(nameof(ByteTextDataSource))]
     public QRCodeData BinaryByte(string text, ECCLevel ecc)
     {
-        return QRCodeGenerator.CreateQrCode(text.AsSpan(), ecc);
+        return QRCodeGenerator.CreateQrCode(text.AsSpan(), ecc, quietZoneSize: 4);
     }
 
     //[Benchmark]
