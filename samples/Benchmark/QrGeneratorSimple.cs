@@ -20,35 +20,48 @@ public class QrGeneratorSimple
         }
     }
 
-    public IEnumerable<string> AlphanumericTextDataSource()
+    public IEnumerable<object[]> AlphanumericTextDataSource()
     {
-        yield return "012345678900123456789001234567890012345678900123456789001234567890";
-        yield return "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./";
+        ECCLevel[] eccLevels = [ECCLevel.L, ECCLevel.M, ECCLevel.Q];
+        string[] texts = [
+            "012345678900123456789001234567890012345678900123456789001234567890",
+            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./",
+        ];
+
+        foreach (var ecc in eccLevels)
+        {
+            foreach (var text in texts)
+            {
+                yield return new object[] { text, ecc };
+            }
+        }
     }
 
     [Benchmark(Baseline = true)]
     [ArgumentsSource(nameof(ByteTextDataSource))]
     public QRCodeData TextByte(string text, ECCLevel ecc)
     {
-        return QRCodeGenerator.CreateQrCode(text, ecc, quietZoneSize: 4);
+        return QRCodeGenerator.CreateQrCode(text, ecc, quietZoneSize: 0);
     }
 
     [Benchmark]
     [ArgumentsSource(nameof(ByteTextDataSource))]
     public QRCodeData BinaryByte(string text, ECCLevel ecc)
     {
-        return QRCodeGenerator.CreateQrCode(text.AsSpan(), ecc, quietZoneSize: 4);
+        return QRCodeGenerator.CreateQrCode(text.AsSpan(), ecc, quietZoneSize: 0);
     }
 
     //[Benchmark]
-    //public QRCodeData TextAlphanumeric()
+    //[ArgumentsSource(nameof(AlphanumericTextDataSource))]
+    //public QRCodeData TextAlphanumeric(string text, ECCLevel ecc)
     //{
-    //    return QRCodeGenerator.CreateQrCode(AlphanumericTextData, Ecc);
+    //    return QRCodeGenerator.CreateQrCode(text, Ecc, quietZoneSize: 0);
     //}
 
     //[Benchmark]
-    //public QRCodeData BinaryAlphanumeric()
+    //[ArgumentsSource(nameof(AlphanumericTextDataSource))]
+    //public QRCodeData BinaryAlphanumeric(string text, ECCLevel ecc)
     //{
-    //    return QRCodeGenerator.CreateQrCode(AlphanumericTextData.AsSpan(), Ecc);
+    //    return QRCodeGenerator.CreateQrCode(text.AsSpan(), ecc, quietZoneSize: 0);
     //}
 }
