@@ -82,6 +82,55 @@ public class QRCodeDataUnitTest
         }
     }
 
+    // SetCoreData
+
+    /// <summary>
+    /// Tests that QuietZone area remains white (false) after SetCoreData
+    /// </summary>
+    [Theory]
+    [InlineData(2, 4)]
+    [InlineData(5, 2)]
+    [InlineData(10, 8)]
+    public void SetCoreData_PreservesQuietZone(int version, int quietZoneSize)
+    {
+        var baseSize = QRCodeData.SizeFromVersion(version);
+        var fullSize = baseSize + (quietZoneSize * 2);
+        var qrCode = new QRCodeData(version, quietZoneSize: quietZoneSize);
+
+        // Create core data with pattern
+        var coreData = new byte[baseSize * baseSize];
+        for (int i = 0; i < coreData.Length; i++)
+        {
+            coreData[i] = (byte)(i % 5 == 0 ? 1 : 0);
+        }
+
+        // Set core data
+        qrCode.SetCoreData(coreData);
+
+        // Verify QuietZone remains white
+        for (int i = 0; i < fullSize; i++)
+        {
+            // Top and bottom
+            for (int row = 0; row < quietZoneSize; row++)
+            {
+                Assert.False(qrCode[row, i], $"Top QuietZone corrupted at ({row}, {i})");
+                Assert.False(qrCode[fullSize - 1 - row, i], $"Bottom QuietZone corrupted at ({fullSize - 1 - row}, {i})");
+            }
+            // Left and right
+            for (int col = 0; col < quietZoneSize; col++)
+            {
+                Assert.False(qrCode[i, col], $"Left QuietZone corrupted at ({i}, {col})");
+                Assert.False(qrCode[i, fullSize - 1 - col], $"Right QuietZone corrupted at ({i}, {fullSize - 1 - col})");
+            }
+        }
+
+        // Verify core data was set correctly
+        var retrievedCoreData = new byte[baseSize * baseSize];
+        qrCode.GetCoreData(retrievedCoreData);
+        Assert.Equal(coreData, retrievedCoreData);
+    }
+
+    // Serialization Tests
 
     /// <summary>
     /// Round-trip test with VALID QR sizes only
@@ -228,8 +277,6 @@ public class QRCodeDataUnitTest
         }
     }
 
-    // QuietZone Tests
-
     /// <summary>
     /// Tests serialization/deserialization with QuietZone
     /// Verifies that QuietZone is properly excluded from serialized data and can be restored
@@ -360,49 +407,261 @@ public class QRCodeDataUnitTest
         }
     }
 
-    /// <summary>
-    /// Tests that QuietZone area remains white (false) after SetCoreData
-    /// </summary>
+    // IBufferWriter<byte> Test
+
     [Theory]
-    [InlineData(2, 4)]
-    [InlineData(5, 2)]
-    [InlineData(10, 8)]
-    public void SetCoreData_PreservesQuietZone(int version, int quietZoneSize)
+    [InlineData(1, 0)]   // Version 1, no quiet zone
+    [InlineData(1, 4)]   // Version 1, with quiet zone
+    [InlineData(10, 0)]  // Version 10, no quiet zone
+    [InlineData(10, 4)]  // Version 10, with quiet zone
+    [InlineData(40, 0)]  // Version 40 (max), no quiet zone
+    [InlineData(40, 4)]  // Version 40 (max), with quiet zone
+    public void GetRawData_ArrayAndBufferWriter_ProduceSameResult(int version, int quietZoneSize)
+    {
+        // Arrange
+        var qrData = CreateTestQRCode(version, quietZoneSize);
+
+        // Act
+        var arrayResult = qrData.GetRawData();
+
+        var writer = new System.Buffers.ArrayBufferWriter<byte>();
+        var bytesWritten = qrData.GetRawData(writer);
+
+        // Assert
+        Assert.Equal(arrayResult.Length, bytesWritten);
+        Assert.Equal(arrayResult, writer.WrittenSpan.ToArray());
+    }
+
+    [Fact]
+    public void GetRawData_BufferWriter_AdvancesCorrectly()
+    {
+        // Arrange
+        var qrData = CreateTestQRCode(1, 0);
+        var writer = new System.Buffers.ArrayBufferWriter<byte>();
+
+        // Act
+        var bytesWritten = qrData.GetRawData(writer);
+
+        // Assert
+        Assert.Equal(bytesWritten, writer.WrittenCount);
+        Assert.True(writer.WrittenCount > 0);
+
+        // Verify header
+        var data = writer.WrittenSpan;
+        Assert.Equal(0x51, data[0]); // 'Q'
+        Assert.Equal(0x52, data[1]); // 'R'
+        Assert.Equal(0x52, data[2]); // 'R'
+    }
+
+    [Fact]
+    public void GetRawData_BufferWriter_CanBeCalledMultipleTimes()
+    {
+        // Arrange
+        var qrData = CreateTestQRCode(1, 0);
+        var writer = new System.Buffers.ArrayBufferWriter<byte>();
+
+        // Act
+        var bytesWritten1 = qrData.GetRawData(writer);
+        var data1 = writer.WrittenSpan.ToArray();
+
+        writer.Clear();
+
+        var bytesWritten2 = qrData.GetRawData(writer);
+        var data2 = writer.WrittenSpan.ToArray();
+
+        // Assert
+        Assert.Equal(bytesWritten1, bytesWritten2);
+        Assert.Equal(data1, data2);
+    }
+
+    [Fact]
+    public void GetRawDataSize_ReturnsCorrectSize()
+    {
+        // Arrange
+        var qrData = CreateTestQRCode(1, 0);
+
+        // Act
+        var expectedSize = qrData.GetRawDataSize();
+        var actualData = qrData.GetRawData();
+
+        // Assert
+        Assert.Equal(expectedSize, actualData.Length);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(5)]
+    [InlineData(10)]
+    [InlineData(20)]
+    [InlineData(40)]
+    public void Roundtrip_WithBufferWriter_PreservesData(int version)
+    {
+        // Arrange
+        var original = CreateTestQRCode(version, quietZoneSize: 4);
+
+        // Act - Serialize
+        var writer = new System.Buffers.ArrayBufferWriter<byte>();
+        original.GetRawData(writer);
+        var serialized = writer.WrittenSpan.ToArray();
+
+        // Act - Deserialize
+        var restored = new QRCodeData(serialized, quietZoneSize: 4);
+
+        // Assert
+        Assert.Equal(original.Version, restored.Version);
+        Assert.Equal(original.Size, restored.Size);
+        AssertQRCodeDataEqual(original, restored);
+    }
+
+    [Fact]
+    public void GetRawData_BufferWriter_WorksWithCustomWriter()
+    {
+        // Arrange
+        var qrData = CreateTestQRCode(1, 0);
+        var customWriter = new TestBufferWriter();
+
+        // Act
+        var bytesWritten = qrData.GetRawData(customWriter);
+
+        // Assert
+        Assert.Equal(bytesWritten, customWriter.WrittenCount);
+        Assert.True(customWriter.AdvanceCalled, "Advance() must be called");
+    }
+
+    [Theory]
+    [InlineData(1, 0, 4)]   // Serialize with no QuietZone, deserialize with QuietZone 4
+    [InlineData(2, 4, 0)]   // Serialize with QuietZone 4, deserialize with no QuietZone
+    [InlineData(5, 4, 2)]   // Different QuietZone sizes
+    public void BufferWriter_DifferentQuietZoneSizes_WorksCorrectly(int version, int serializeQuietZone, int deserializeQuietZone)
     {
         var baseSize = QRCodeData.SizeFromVersion(version);
-        var fullSize = baseSize + (quietZoneSize * 2);
-        var qrCode = new QRCodeData(version, quietZoneSize: quietZoneSize);
 
-        // Create core data with pattern
-        var coreData = new byte[baseSize * baseSize];
-        for (int i = 0; i < coreData.Length; i++)
+        // Create with first QuietZone size
+        var original = new QRCodeData(version, quietZoneSize: serializeQuietZone);
+        var originalFullSize = baseSize + (serializeQuietZone * 2);
+
+        // Set pattern in core area
+        for (int row = serializeQuietZone; row < originalFullSize - serializeQuietZone; row++)
         {
-            coreData[i] = (byte)(i % 5 == 0 ? 1 : 0);
-        }
-
-        // Set core data
-        qrCode.SetCoreData(coreData);
-
-        // Verify QuietZone remains white
-        for (int i = 0; i < fullSize; i++)
-        {
-            // Top and bottom
-            for (int row = 0; row < quietZoneSize; row++)
+            for (int col = serializeQuietZone; col < originalFullSize - serializeQuietZone; col++)
             {
-                Assert.False(qrCode[row, i], $"Top QuietZone corrupted at ({row}, {i})");
-                Assert.False(qrCode[fullSize - 1 - row, i], $"Bottom QuietZone corrupted at ({fullSize - 1 - row}, {i})");
-            }
-            // Left and right
-            for (int col = 0; col < quietZoneSize; col++)
-            {
-                Assert.False(qrCode[i, col], $"Left QuietZone corrupted at ({i}, {col})");
-                Assert.False(qrCode[i, fullSize - 1 - col], $"Right QuietZone corrupted at ({i}, {fullSize - 1 - col})");
+                var coreRow = row - serializeQuietZone;
+                var coreCol = col - serializeQuietZone;
+                original[row, col] = (coreRow * baseSize + coreCol) % 7 == 0;
             }
         }
 
-        // Verify core data was set correctly
-        var retrievedCoreData = new byte[baseSize * baseSize];
-        qrCode.GetCoreData(retrievedCoreData);
-        Assert.Equal(coreData, retrievedCoreData);
+        // Serialize with BufferWriter and deserialize
+        var writer = new System.Buffers.ArrayBufferWriter<byte>();
+        original.GetRawData(writer);
+        var rawData = writer.WrittenSpan.ToArray();
+
+        var restored = new QRCodeData(rawData, quietZoneSize: deserializeQuietZone);
+
+        var restoredFullSize = baseSize + (deserializeQuietZone * 2);
+
+        Assert.Equal(version, restored.Version);
+        Assert.Equal(restoredFullSize, restored.Size);
+
+        // Verify core data matches
+        for (int coreRow = 0; coreRow < baseSize; coreRow++)
+        {
+            for (int coreCol = 0; coreCol < baseSize; coreCol++)
+            {
+                var originalRow = coreRow + serializeQuietZone;
+                var originalCol = coreCol + serializeQuietZone;
+                var restoredRow = coreRow + deserializeQuietZone;
+                var restoredCol = coreCol + deserializeQuietZone;
+
+                Assert.Equal(original[originalRow, originalCol], restored[restoredRow, restoredCol]);
+            }
+        }
+    }
+
+    [Fact]
+    public void GetRawData_BufferWriter_ReusesBufferEfficiently()
+    {
+        // Arrange
+        var qrData1 = CreateTestQRCode(1, 0);
+        var qrData2 = CreateTestQRCode(2, 0);
+        var writer = new System.Buffers.ArrayBufferWriter<byte>();
+
+        // Act - First write
+        var bytes1 = qrData1.GetRawData(writer);
+        var data1 = writer.WrittenSpan.ToArray();
+
+        writer.Clear();
+
+        // Act - Second write (buffer reused)
+        var bytes2 = qrData2.GetRawData(writer);
+        var data2 = writer.WrittenSpan.ToArray();
+
+        // Assert
+        Assert.NotEqual(bytes1, bytes2); // Different sizes
+        Assert.NotEqual(data1, data2); // Different data
+
+        // Both should produce valid QR codes
+        var restored1 = new QRCodeData(data1, quietZoneSize: 0);
+        var restored2 = new QRCodeData(data2, quietZoneSize: 0);
+
+        Assert.Equal(1, restored1.Version);
+        Assert.Equal(2, restored2.Version);
+    }
+
+    // helpers
+
+    private static QRCodeData CreateTestQRCode(int version, int quietZoneSize)
+    {
+        var qrData = new QRCodeData(version, quietZoneSize);
+
+        // Fill with test pattern
+        var coreSize = QRCodeData.SizeFromVersion(version);
+        var fullSize = coreSize + (quietZoneSize * 2);
+
+        for (var row = quietZoneSize; row < fullSize - quietZoneSize; row++)
+        {
+            for (var col = quietZoneSize; col < fullSize - quietZoneSize; col++)
+            {
+                // Checkerboard-like pattern using prime number
+                var coreRow = row - quietZoneSize;
+                var coreCol = col - quietZoneSize;
+                var index = coreRow * coreSize + coreCol;
+                var isDark = index % 7 == 0; // Prime number to avoid alignment with byte boundaries
+                qrData[row, col] = isDark;
+            }
+        }
+
+        return qrData;
+    }
+
+    private static void AssertQRCodeDataEqual(QRCodeData expected, QRCodeData actual)
+    {
+        Assert.Equal(expected.Version, actual.Version);
+        Assert.Equal(expected.Size, actual.Size);
+
+        for (var row = 0; row < expected.Size; row++)
+        {
+            for (var col = 0; col < expected.Size; col++)
+            {
+                Assert.Equal(expected[row, col], actual[row, col]);
+            }
+        }
+    }
+
+    // Custom test writer to verify Advance() is called
+    private class TestBufferWriter : System.Buffers.IBufferWriter<byte>
+    {
+        private readonly System.Buffers.ArrayBufferWriter<byte> _inner = new();
+        public bool AdvanceCalled { get; private set; }
+        public int WrittenCount => _inner.WrittenCount;
+
+        public void Advance(int count)
+        {
+            AdvanceCalled = true;
+            _inner.Advance(count);
+        }
+
+        public Memory<byte> GetMemory(int sizeHint = 0) => _inner.GetMemory(sizeHint);
+        public Span<byte> GetSpan(int sizeHint = 0) => _inner.GetSpan(sizeHint);
     }
 }

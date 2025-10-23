@@ -259,13 +259,26 @@ public class QRCodeData
     }
 
     /// <summary>
+    /// Calculates the required buffer size for serialization.
+    /// </summary>
+    /// <returns></returns>
+    public int GetRawDataSize()
+    {
+        var totalBits = _baseSize * _baseSize; // only core data without quiet zone
+        var paddingBits = GetPaddingBits(totalBits);
+        var dataBytes = (totalBits + paddingBits) / 8;
+        var headerSize = 3 + 1; // signature length + 1 byte for size
+        var totalSize = headerSize + dataBytes;
+        return totalSize;
+    }
+
+    /// <summary>
     /// Serializes the QR code data to a byte array.
     /// </summary>
     /// <remarks>
     /// <para>
     /// The serialized data contains only the core QR code modules (excluding quiet zone).
-    /// The quiet zone can be added when deserializing via the
-    /// <see cref="QRCodeData(byte[], int)"/> constructor.
+    /// The quiet zone can be added when deserializing via the <see cref="QRCodeData(byte[], int)"/> constructor.
     /// </para>
     /// <para>
     /// Format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
@@ -277,6 +290,11 @@ public class QRCodeData
     /// </returns>
     public byte[] GetRawData()
     {
+#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
+        var writer = new ArrayBufferWriter<byte>(GetRawDataSize());
+        GetRawData(writer);
+        return writer.WrittenSpan.ToArray();
+#else
         // "QRR"
         ReadOnlySpan<byte> _headerSignature = [0x51, 0x52, 0x52];
 
@@ -299,6 +317,7 @@ public class QRCodeData
         Span<byte> coreData = stackalloc byte[totalBits];
         GetCoreData(coreData);
 
+        // Pack bits
         var bitIndex = 0;
         for (var byteIndex = 0; byteIndex < dataBytes; byteIndex++)
         {
@@ -313,6 +332,69 @@ public class QRCodeData
         }
 
         return result;
+#endif
+    }
+
+    /// <summary>
+    /// Writes the serialized QR code data to the specified buffer writer.
+    /// </summary>
+    /// <param name="writer">The buffer writer to write the serialized data to.</param>
+    /// <returns>The number of bytes written to the serialized data to.</returns>
+    /// <remarks>
+    /// <para>
+    /// This method writes on the core QR mode modules (excluding quiet zone).
+    /// The quiet zone can be added when deserializing via the <see cref="QRCodeData(byte[], int)"/> constructor.
+    /// </para>
+    /// <para>
+    /// Format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
+    /// </para>
+    /// <para>
+    /// This overload is useful for high-performance scenarios where memory allocations need to be minimized, such as response writing or streaming.
+    /// </para>
+    /// Format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
+    /// </para>
+    /// </remarks>
+    public int GetRawData(IBufferWriter<byte> writer)
+    {
+        // "QRR"
+        ReadOnlySpan<byte> _headerSignature = [0x51, 0x52, 0x52];
+
+        // size calculations
+        var totalBits = _baseSize * _baseSize; // only core data without quiet zone
+        var paddingBits = GetPaddingBits(totalBits);
+        var dataBytes = (totalBits + paddingBits) / 8;
+        var headerSize = _headerSignature.Length + 1; // signature length + 1 byte for size
+        var totalSize = headerSize + dataBytes;
+
+        var buffer = writer.GetSpan(totalSize);
+
+        // Write header - signature ("QRR") & raw size
+        buffer[0] = _headerSignature[0];
+        buffer[1] = _headerSignature[1];
+        buffer[2] = _headerSignature[2];
+        buffer[3] = (byte)_baseSize; // only core size without quiet zone
+
+        // Get core data (without quiet zone)
+        Span<byte> coreData = stackalloc byte[totalBits];
+        GetCoreData(coreData);
+
+        // Pack bits
+        var bitIndex = 0;
+        for (var byteIndex = 0; byteIndex < dataBytes; byteIndex++)
+        {
+            byte b = 0;
+            for (var i = 7; i >= 0; i--)
+            {
+                if (bitIndex < totalBits && coreData[bitIndex] != 0)
+                    b |= (byte)(1 << i);
+                bitIndex++;
+            }
+            buffer[headerSize + byteIndex] = b;
+        }
+
+        writer.Advance(totalSize);
+
+        return totalSize;
     }
 
     /// <summary>
