@@ -192,7 +192,7 @@ public class QRCodeData
     /// The quiet zone (white border) can be added during deserialization by specifying the <paramref name="quietZoneSize"/> parameter. 
     /// </para>
     /// </remarks>
-    /// <param name="rawData">The serialized QR code data. This data should be obtained from <see cref="GetRawData"/> and may be compressed based on the specified <paramref name="compressMode"/>.</param>
+    /// <param name="rawData">The serialized QR code data. This data should be obtained from <see cref="GetRawData"/>.</param>
     /// <param name="quietZoneSize">
     /// The size of the quiet zone (white border) to add around the QR code matrix, in modules.
     /// This value is independent of the serialized data and can be different from the original quiet zone size used during serialization.
@@ -301,7 +301,6 @@ public class QRCodeData
                 bytes[headerSize + byteIndex] = b;
             }
 
-            // Pack bits into bytes
             var result = new byte[totalSize];
             Array.Copy(bytes, 0, result, 0, totalSize);
             return result;
