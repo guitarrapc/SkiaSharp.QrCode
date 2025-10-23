@@ -10,17 +10,17 @@ public static class QRCodeRenderer
     /// <param name="canvas">The canvas to render the QR code on.</param>
     /// <param name="area">The rectangular area where the QR code will be rendered.</param>
     /// <param name="data">The QR code data to render.</param>
-    /// <param name="qrColor">The color of the QR code modules. If null, black is used.</param>
+    /// <param name="codeColor">The color of the QR code modules. If null, black is used.</param>
     /// <param name="backgroundColor">The background color. If null, white is used.</param>
     /// <param name="iconData">Optional icon data to overlay on the center of the QR code.</param>
     /// <exception cref="ArgumentNullException"></exception>
-    public static void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? qrColor, SKColor? backgroundColor, IconData? iconData = null)
+    public static void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? codeColor, SKColor? backgroundColor, IconData? iconData = null)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
 
         var bgColor = backgroundColor ?? SKColors.White;
-        var fgColor = qrColor ?? SKColors.Black;
+        var fgColor = codeColor ?? SKColors.Black;
 
         // Draw the background at once
         using (var lightPaint = new SKPaint() { Color = bgColor, Style = SKPaintStyle.Fill })
