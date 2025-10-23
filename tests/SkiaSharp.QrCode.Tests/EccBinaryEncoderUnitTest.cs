@@ -1,6 +1,4 @@
-using SkiaSharp.QrCode.Internals;
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
-using SkiaSharp.QrCode.Internals.TextEncoders;
 using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
@@ -227,53 +225,5 @@ public class EccBinaryEncoderUnitTest
 
         // Assert
         Assert.False(ecc1.SequenceEqual(ecc2)); // Different inputs → different ECC
-    }
-
-    // Comparison with EccTextEncoder
-
-    [Theory]
-    [InlineData(new byte[] { 64, 86, 134, 86 }, 10)]
-    [InlineData(new byte[] { 0x40, 0x0C, 0x56, 0x61, 0x80, 0xEC, 0x11, 0xEC }, 10)]
-    [InlineData(new byte[] { 16, 32, 48, 64 }, 7)]
-    public void CalculateECC_MatchesEccTextEncoder(byte[] data, int eccCount)
-    {
-        // Arrange
-        var dataBits = string.Join("", data.Select(x => Convert.ToString(x, 2).PadLeft(8, '0')));
-
-        // Text Encoder
-        var textEccString = EccTextEncoder.CalculateECC(dataBits, eccCount);
-        var textEcc = textEccString.Select(x => Convert.ToByte(x, 2)).ToArray();
-
-        // Binary Encoder
-        Span<byte> binaryEcc = stackalloc byte[eccCount];
-        EccBinaryEncoder.CalculateECC(data, binaryEcc, eccCount);
-
-        // Assert
-        Assert.Equal(textEcc.Length, binaryEcc.Length);
-        for (int i = 0; i < eccCount; i++)
-        {
-            Assert.Equal(textEcc[i], binaryEcc[i]);
-        }
-    }
-
-    [Fact]
-    public void CalculateECC_AllQRVersions_Functional()
-    {
-        // Max ECC size across all versions. Version 40-H requires 30 ECC codewords per block.
-        const int macEccsize = 30;
-        Span<byte> ecc = stackalloc byte[macEccsize];
-
-        // Test all QR code versions and ECC levels
-        foreach (var eccInfo in QRCodeConstants.CapacityECCTable)
-        {
-            var data = new byte[eccInfo.TotalDataCodewords];
-            Random.Shared.NextBytes(data);
-
-            // result buffer slice for current ECC size
-            var eccSlice = ecc[..eccInfo.ECCPerBlock];
-            EccBinaryEncoder.CalculateECC(data, eccSlice, eccInfo.ECCPerBlock);
-
-            Assert.Equal(eccInfo.ECCPerBlock, eccSlice.Length);
-        }
     }
 }
