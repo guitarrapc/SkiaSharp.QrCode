@@ -48,8 +48,8 @@ public static class QRCodeRenderer
         if (iconData?.Icon != null)
         {
             var iconSize = iconData.IconSizePercent / 100f;
-            var iconWidth = (area.Width) * iconSize;
-            var iconHeight = (area.Height) * iconSize;
+            var iconWidth = area.Width * iconSize;
+            var iconHeight = area.Height * iconSize;
 
             var x = area.Left + (area.Width - iconWidth) / 2;
             var y = area.Top + (area.Height - iconHeight) / 2;
