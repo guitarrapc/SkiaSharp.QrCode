@@ -4,138 +4,348 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![NuGet](https://img.shields.io/nuget/v/SkiaSharp.QrCode.svg?label=SkiaSharp%2EQrCode%20nuget)](https://www.nuget.org/packages/SkiaSharp.QrCode)
 
-## SkiaSharp.QrCode
+# SkiaSharp.QrCode
 
-Qr Code generator with [Skia.Sharp](https://github.com/mono/SkiaSharp).
+SkiaSharp.QrCode provides high-performance QR code generation with [SkiaSharp](https://github.com/mono/SkiaSharp) integration.
 
-## Install
+![Performance Benchmark](samples/Benchmark/image.png)
 
-.NET CLI
+> Benchmark results comparing SkiaSharp.QrCode with other libraries. See [samples/Benchmark](samples/Benchmark) for details.
 
+Many existing QR code libraries rely on System.Drawing, which has well-known GDI+ limitations and cross-platform issues. SkiaSharp.QrCode was created to provide high performance, minimum memory allocation, a simpler and more intuitive API while leveraging SkiaSharp's cross-platform capabilities. Generate a QR code in a single line, or customize every detail - the choice is yours.
+
+## Overview
+
+SkiaSharp.QrCode is a modern, high-performance QR code generation library built on SkiaSharp.
+
+- **Simple API**: One-liner QR code generation with sensible defaults
+- **High Performance**: Optimal speed and minimum memory allocation
+- **Highly Customizable**: Gradients, icons, custom shapes, colors, and more
+- **Cross-Platform**: Windows, Linux, macOS, iOS, Android, WebAssembly
+- **Zero Dependencies**: QR generation without external libraries (SkiaSharp for rendering only)
+- **No System.Drawing**: Avoids GDI+ issues and Windows dependencies
+- **NativeAOT Ready**: Full support for .NET Native AOT compilation
+- **Modern .NET**: .NET Standard 2.0, 2.1, .NET 8+
+
+## Installation
+
+Visit [SkiaSharp.QrCode on NuGet.org](https://www.nuget.org/packages/SkiaSharp.QrCode)
+
+```bash
+dotnet add package SkiaSharp.QrCode
 ```
-$ dotnet add package SkiaSharp.QrCode
-```
 
-Package Manager
+## Quick Start
 
-```
-PM> Install-Package SkiaSharp.QrCode
-```
+### Simplest Example
 
-## Motivation
-
-There are many System.Drawing samples to generate QRCode, and there are a lot of cases I want avoid System.Drawing for GDI+ issue. However, you may require many conding to generate QRCode using [ZXing.Net](https://github.com/micjahn/ZXing.Net) or [ImageSharp](https://github.com/SixLabors/ImageSharp) or [Core.Compat.System.Drawing](https://github.com/CoreCompat/System.Drawing).
-
-I just want to create QR in much simpler way.
-
-## Why Skia?
-
-Performance and size and .NET Core support status.
-
-> [.NET Core Image Processing](https://blogs.msdn.microsoft.com/dotnet/2017/01/19/net-core-image-processing/)
-
-## Sample Code
-
-Here's minimum sample to generate specific qrcode via args.
+Single line QR code generation:
 
 ```csharp
-using SkiaSharp;
 using SkiaSharp.QrCode.Image;
-using System;
-using System.IO;
 
-var content = "testtesttest";
-using var output = new FileStream(@"output/hoge.png", FileMode.OpenOrCreate);
+// one-liner save to file
+QRCodeImageBuilder.SavePng("Hello", "qrcode.png");
 
-// generate QRCode
-var qrCode = new QrCode(content, new Vector2Slim(256, 256), SKEncodedImageFormat.Png);
-// output to file
-qrCode.GenerateImage(output);
+// Or get bytes
+var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
 ```
 
-If you want specify detail, you can generate manually.
+### Save Directly to Stream
 
 ```csharp
-using SkiaQrCode;
-using SkiaSharp;
-using System;
-using System.IO;
+using SkiaSharp.QrCode.Image;
 
-namespace SkiaQrCodeSampleConsole;
-
-var content = "testtesttest";
-using var generator = new QRCodeGenerator();
-
-// Generate QrCode
-var qr = generator.CreateQrCode(content, ECCLevel.L);
-
-// Render to canvas
-var info = new SKImageInfo(512, 512);
-using var surface = SKSurface.Create(info);
-var canvas = surface.Canvas;
-canvas.Render(qr, info.Width, info.Height);
-
-// Output to Stream -> File
-using var image = surface.Snapshot();
-using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-using var stream = File.OpenWrite(@"output/hoge.png");
-data.SaveTo(stream);
+using var stream = File.OpenWrite("qrcode.png");
+QRCodeImageBuilder.SavePng("Your content here", stream, ECCLevel.M, size: 512);
 ```
 
-## TIPS
+## Migration from 0.8.0 to 0.9.0
 
-### Linux support
+[TBD]
 
-You have 2 choice to run on Linux. If you don't need font operation, use `SkiaSharp.NativeAssets.Linux.NoDependencies`.
+## API Overview
 
-1. Use `SkiaSharp.NativeAssets.Linux` package. In this case, you need to install `libfontconfig1` via apt or others.
-1. Use `SkiaSharp.NativeAssets.Linux.NoDependencies` 2.80.2 or above. In this case, you don't need `libfontconfig1`.
+SkiaSharp.QrCode provides three main APIs for different use cases.
 
-SkiaSharp.NativeAssets.Linux.NoDependencies still can draw text, however can't search font cased on character or other fonts.
+**Recommendation**: Start with `QRCodeImageBuilder` for most scenarios. Use `QRCodeRenderer` when you need canvas control. Use `QRCodeGenerator` only for custom rendering implementations.
 
-> Detail: https://github.com/mono/SkiaSharp/issues/964#issuecomment-549385484
+| Feature | QRCodeImageBuilder | QRCodeRenderer | QRCodeGenerator |
+| --- | --- | --- | --- |
+| Ease of use | High | Medium | Low |
+| Flexibility | Medium | High | Highest |
+| Built-in rendering | Yes | Yes | No |
+| Custom canvas control | No | Yes | N/A |
+| Recommended for beginners | Yes | No | No |
 
-**SkiaSharp.NativeAssets.Linux sample**
+### QRCodeImageBuilder (Recommended)
 
-```shell
+Best for Most use cases - simple to advanced QR code generation. The high-level, fluent API for generating QR codes with minimal code. Provides a builder pattern with sensible defaults and extensive customization options.
+
+**Key Features**:
+- One-liner generation with `GetPngBytes()`, `SavePng()`
+- Fluent API with `WithXxx()` methods
+- Built-in support for colors, gradients, icons, shapes
+- Multiple output formats (PNG, JPEG, WebP)
+- Stream and byte array output
+
+**When to use**:
+- Quick QR code generation
+- Standard customization needs
+- File or stream output
+
+**Example**:
+```csharp
+var pngBytes = QRCodeImageBuilder.GetPngBytes("content");
+```
+
+### QRCodeRenderer (Advanced)
+
+Best for Custom rendering with full control over the canvas. The mid-level API that renders QR data onto an existing SkiaSharp canvas. Useful when you need to integrate QR codes into existing graphics or add custom post-processing.
+
+**Key Features**:
+- Render to existing `SKCanvas`
+- Full control over rendering area (`SKRect`)
+- Combine with other SkiaSharp drawing operations
+- Custom effects and post-processing
+
+**When to use**:
+- Integrating QR codes into existing graphics
+- Adding custom decorations or effects
+- Multiple elements on the same canvas
+
+**Example**:
+```csharp
+var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
+var canvas = surface.Canvas;
+QRCodeRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
+```
+
+### QRCodeGenerator (Low-Level)
+
+Best for QR data generation without rendering. The low-level API that generates raw QR code data (`QRCodeData`). Use this when you need the QR data structure itself, not the image.
+
+**Key Features**:
+- Generates `QRCodeData` (2D boolean array)
+- Specify ECC level, ECI mode, quiet zone size
+- No rendering logic included
+- Smallest API surface
+
+**When to use**:
+- Custom rendering implementations
+- Non-image output (e.g., ASCII art, LED displays)
+- Maximum control over the rendering process
+
+**Example**:
+```csharp
+var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, quietZoneSize: 4);
+// Use qrData for custom rendering
+```
+
+## Platform-Specific Considerations
+
+### Linux Support
+
+SkiaSharp requires native dependencies on Linux. You have two options:
+
+#### Option 1: With Font Support (Recommended for text rendering)
+
+Requires `libfontconfig1`:
+
+```bash
 sudo apt update && apt install -y libfontconfig1
 ```
 
-```csproj
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="SkiaSharp.QrCode" Version="0.8.0" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.1" />
-  </ItemGroup>
-</Project>
+```xml
+<PackageReference Include="SkiaSharp.QrCode" Version="0.9.0" />
+<PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.1" />
 ```
 
-**SkiaSharp.NativeAssets.Linux.NoDependencies sample**
+#### Option 2: No Dependencies (QR code only)
 
-```csproj
-<Project Sdk="Microsoft.NET.Sdk">
+If you don't need advanced font operations:
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="SkiaSharp.QrCode" Version="0.8.0" />
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
-  </ItemGroup>
-</Project>
+```xml
+<PackageReference Include="SkiaSharp.QrCode" Version="0.9.0" />
+<PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
 ```
 
-# Actual QR Code Capacities (including overhead)
+> **Note**: `NoDependencies` can still draw text but cannot search fonts based on characters or use system fonts.
+>
+> See: [SkiaSharp Issue #964](https://github.com/mono/SkiaSharp/issues/964#issuecomment-549385484)
 
-Get this data by running QRCodeGeneratorVersionBoundaryTest > `DiagnoseActualCapacities_AllModes`.
+### NativeAOT Support
+
+SkiaSharp.QrCode fully supports .NET NativeAOT. You need to include platform-specific native assets:
+
+```xml
+<PropertyGroup>
+  <PublishAot>true</PublishAot>
+  <PublishTrimmed>true</PublishTrimmed>
+  <InvariantGlobalization>true</InvariantGlobalization>
+</PropertyGroup>
+```
+
+> [!WARNING]
+>  When using `PublishTrimmed`, ensure that your QR code content and rendering logic doesn't rely on reflection or dynamic code that might be trimmed.
+
+#### Windows
+
+```xml
+<PackageReference Include="SkiaSharp.QrCode" Version="0.9.0" />
+<PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="3.119.1" />
+```
+
+#### Linux
+
+```xml
+<PackageReference Include="SkiaSharp.QrCode" Version="0.9.0" />
+<PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
+```
+
+#### macOS
+
+```xml
+<PackageReference Include="SkiaSharp.QrCode" Version="0.9.0" />
+<PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="3.119.1" />
+```
+
+## Performance
+
+SkiaSharp.QrCode is designed with performance as a top priority. The library minimizes memory allocations and maximizes throughput for QR code generation.
+
+### Key Performance Characteristics
+
+- **Minimal Memory Allocation**: Memory is only allocated for the final QR code data structure. The generation algorithm avoids intermediate allocations, resulting in minimal GC pressure.
+- **Zero-Copy Rendering**: Direct rendering to SkiaSharp canvas without unnecessary buffer copies.
+- **Optimized Encoding**: Efficient encoding mode selection and bit packing minimize QR code size and generation time.
+- **Native Performance**: Leverages SkiaSharp's native rendering engine for maximum speed.
+
+### Benchmark Results
+
+Benchmark results show SkiaSharp.QrCode outperforming other popular .NET QR code libraries in both speed and memory usage.
+
+- **Fastest Generation**: Outperforms other .NET QR code libraries in most scenarios
+- **Lowest Memory Usage**: Minimal allocations reduce GC overhead
+- **Consistent Performance**: Predictable performance across different QR code sizes and complexity
+
+For detailed benchmark code and results, see the [samples/Benchmark](samples/Benchmark) directory.
+
+## FAQ
+
+### Why choose SkiaSharp.QrCode?
+
+SkiaSharp offers several advantages for QR code generation:
+
+- **Performance**: Native-level performance with hardware acceleration support
+- **Cross-Platform**: Runs on Windows, Linux, macOS, iOS, Android, and WebAssembly
+- **Modern .NET Support**: First-class support for .NET 6+ and .NET Core
+- **No GDI+ Dependencies**: Avoids System.Drawing's Windows-specific issues
+- **Rich Graphics API**: Advanced rendering capabilities (gradients, shapes, effects)
+- **Active Development**: Well-maintained with regular updates
+
+### Can I use this in ASP.NET Core?
+
+Yes, SkiaSharp.QrCode works great in ASP.NET Core. SkiaSharp.QrCode also supports `IBufferWriter` for efficient memory usage.
+
+```csharp
+app.MapGet("/qr", (string url) =>
+{
+    var pngBytes = QRCodeImageBuilder.GetPngBytes(url);
+    return Results.File(pngBytes, "image/png");
+});
+```
+
+### Does it support Blazor WebAssembly?
+
+Yes, SkiaSharp works in Blazor WebAssembly. See the `samples/BlazorWasm` folder for a complete example.
+
+### What about NativeAOT and trimming?
+
+Yes, fully supported. See the [Platform-Specific Considerations](#platform-specific-considerations) section for details on required native assets.
+
+### ISO-8859-2 and other encodings supports
+
+Currently, SkiaSharp.QrCode supports ISO-8859-1 and UTF-8. Other encodings (e.g., ISO-8859-2, Shift JIS) are not supported at this time. This is mainly due to almost all QR code use cases being UTF-8 compatible nowadays. ISO-8859-2 and other legacy encodings are rarely used in practice.
+
+| Supported | Encoding Mode | Encoding |
+| --- | --- | --- |
+| Supported | Numeric | ISO-8859-1 |
+| Supported | Alphanumeric | ISO-8859-1 |
+| Supported | Byte | UTF-8 |
+| Not Supported | Kanji | Shift-JIS |
+
+### Any plan to support QR code scanning?
+
+Currently, SkiaSharp.QrCode focuses on QR code generation. QR code scanning is not planned at this time, but contributions are welcome.
+
+### How can I display QR codes in LINQPad?
+
+Following shows how to display a QRCode inside a LINQPad Results pane.
+
+```csharp
+Bitmap.FromStream(new MemoryStream(QRCodeImageBuilder.GetPngBytes("WIFI:T:WPA;S:mynetwork;P:mypass;;"));
+```
+
+## QR code Specifications
+
+### ECC Level (Error Correction Levels)
+
+QR codes support four levels of error correction, which allow the code to remain readable even when partially damaged or obscured:
+
+| ECC Level | Error Correction Capability | Use Case |
+|-----------|----------------------------|----------|
+| **L (Low)** | ~7% recovery | Clean environments, maximum data capacity |
+| **M (Medium)** | ~15% recovery | General purpose (default recommended) |
+| **Q (Quartile)** | ~25% recovery | Outdoor use, moderate damage expected |
+| **H (High)** | ~30% recovery | Required when adding logos/icons, harsh environments |
+
+> **Tip**: Use ECC Level H when embedding icons in QR codes to ensure readability even when the center is obscured.
+
+### Encoding Modes
+
+QR codes support different encoding modes optimized for specific character types:
+
+| Mode | Character Set | Bits per Character | Example |
+|------|--------------|-------------------|---------|
+| **Numeric** | 0-9 | ~3.3 bits | Phone numbers, postal codes |
+| **Alphanumeric** | 0-9, A-Z, space, $ % * + - . / : | ~5.5 bits | URLs (uppercase), product codes |
+| **Byte** | ISO-8859-1, UTF-8 | 8 bits | Text, URLs (mixed case), binary data |
+| **Kanji** | Shift JIS characters | 13 bits | Japanese text |
+
+> **Note**: The library automatically selects the most efficient encoding mode for your content.
+
+### Version and Size
+
+QR codes come in 40 versions (sizes), from Version 1 (21×21 modules) to Version 40 (177×177 modules). Each version adds 4 modules per side.
+
+- **Version 1**: 21×21 modules
+- **Version 2**: 25×25 modules
+- ...
+- **Version 40**: 177×177 modules
+
+The library automatically selects the minimum version that can fit your content based on the selected ECC level.
+
+### Data Capacity Reference
+
+The actual capacity depends on the encoding mode, ECC level, and version. Below are **practical capacities** including overhead (based on test data using 'あ' for UTF-8 multi-byte characters):
+
+#### Quick Reference (Version 10, Common Use Cases)
+
+| ECC Level | Numeric | Alphanumeric | Byte (ASCII) | Byte (UTF-8 Multi-byte*) |
+|-----------|---------|--------------|--------------|--------------------------|
+| L | 652 | 395 | ~270 | 90 |
+| M | 513 | 311 | ~210 | 70 |
+| Q | 364 | 221 | ~150 | 50 |
+| H | 288 | 174 | ~117 | 39 |
+
+> UTF-8 multi-byte: Japanese hiragana 'あ' (3 bytes/char). For ASCII text (1 byte/char), the capacity is approximately 3× the values shown.
+
+**Full capacity tables** for all versions (1-40) and ECC levels are available in the [Data Capacity Tables](#data-capacity-tables) section below.
+
+### Data Capacity Tables
+
+Full capacity tables for all QR code versions and ECC Levels.
 
 **Test Characters:**
 - Numeric: `'1'` (digit)
@@ -150,7 +360,9 @@ Get this data by running QRCodeGeneratorVersionBoundaryTest > `DiagnoseActualCap
   - For ASCII characters (1 byte each), multiply the byte value by ~3
   - For theoretical byte capacity, refer to ISO/IEC 18004 Table 7
 
-## ECC Level: L
+#### ECC Level: L
+
+<details><summary>Click to expand full capacity tables</summary>
 
 | Version | Numeric | Alphanumeric | Byte (UTF-8 Multi-byte*) |
 |---------|---------|--------------|------|
@@ -195,7 +407,12 @@ Get this data by running QRCodeGeneratorVersionBoundaryTest > `DiagnoseActualCap
 | 39 |    6743 |         4087 |  936 |
 | 40 |    7089 |         4296 |  984 |
 
-## ECC Level: M
+</details>
+
+#### ECC Level: M
+
+<details>
+<summary>Click to expand full capacity tables</summary>
 
 | Version | Numeric | Alphanumeric | Byte (UTF-8 Multi-byte*) |
 |---------|---------|--------------|------|
@@ -240,7 +457,12 @@ Get this data by running QRCodeGeneratorVersionBoundaryTest > `DiagnoseActualCap
 | 39 |    5313 |         3220 |  737 |
 | 40 |    5596 |         3391 |  776 |
 
-## ECC Level: Q
+</details>
+
+#### ECC Level: Q
+
+<details>
+<summary>Click to expand full capacity tables</summary>
 
 | Version | Numeric | Alphanumeric | Byte (UTF-8 Multi-byte*) |
 |---------|---------|--------------|------|
@@ -285,7 +507,12 @@ Get this data by running QRCodeGeneratorVersionBoundaryTest > `DiagnoseActualCap
 | 39 |    3791 |         2298 |  526 |
 | 40 |    3993 |         2420 |  554 |
 
-## ECC Level: H
+</details>
+
+#### ECC Level: H
+
+<details>
+<summary>Click to expand full capacity tables</summary>
 
 | Version | Numeric | Alphanumeric | Byte (UTF-8 Multi-byte*) |
 |---------|---------|--------------|------|
@@ -330,11 +557,143 @@ Get this data by running QRCodeGeneratorVersionBoundaryTest > `DiagnoseActualCap
 | 39 |    2927 |         1774 |  406 |
 | 40 |    3057 |         1852 |  424 |
 
+</details>
+
+## Usage Examples
+
+### Basic Usage
+
+#### Using Builder Pattern
+
+```csharp
+using SkiaSharp.QrCode.Image;
+
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithSize(800, 800)
+    .WithErrorCorrection(ECCLevel.H)
+    .WithQuietZone(4);
+
+var pngBytes = qrCode.ToByteArray();
+File.WriteAllBytes("qrcode.png", pngBytes);
+```
+
+#### Direct File Output
+
+```csharp
+using SkiaSharp.QrCode.Image;
+using var stream = File.OpenWrite("qrcode.png");
+
+new QRCodeImageBuilder("https://example.com")
+    .WithSize(1024, 1024)
+    .WithErrorCorrection(ECCLevel.H)
+    .SaveTo(stream);
+```
+
+### Advanced Usage
+
+#### Custom Colors
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode.Image;
+
+new QRCodeImageBuilder("https://example.com")
+    .WithSize(800, 800)
+    .WithColors(
+        codeColor: SKColor.Parse("#000080"),      // Navy
+        backgroundColor: SKColor.Parse("#FFE4B5"), // Moccasin
+        clearColor: SKColors.Transparent)
+    .ToByteArray();
+```
+
+#### Gradient QR code
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode.Image;
+
+var gradient = new GradientOptions(
+    [SKColors.Blue, SKColors.Purple, SKColors.Pink],
+    GradientDirection.TopLeftToBottomRight,
+    [0f, 0.5f, 1f]);
+
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithSize(800, 800)
+    .WithErrorCorrection(ECCLevel.H)
+    .WithGradient(gradient)
+    .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f);
+
+var pngBytes = qrCode.ToByteArray();
+```
+
+#### QR code with Logo/Icon
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode.Image;
+
+using var logo = SKBitmap.Decode("logo.png");
+var icon = new IconData
+{
+    Icon = logo,
+    IconSizePercent = 15,
+    IconBorderWidth = 10,
+};
+
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithSize(800, 800)
+    .WithErrorCorrection(ECCLevel.H) // High ECC recommended for icons
+    .WithIcon(icon);
+
+var pngBytes = qrCode.ToByteArray();
+```
+
+#### Custom Module Shapes
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode.Image;
+
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithSize(800, 800)
+    .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
+    .WithColors(codeColor: SKColors.DarkBlue);
+
+var pngBytes = qrCode.ToByteArray();
+```
+
+#### Low-Level Canvas Rendering
+
+For maximum control over rendering:
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode;
+
+// Generate QR data
+var qrData = QRCodeGenerator.CreateQrCode("https://example.com", ECCLevel.M, quietZoneSize: 4);
+
+// Create canvas
+var info = new SKImageInfo(800, 800);
+using var surface = SKSurface.Create(info);
+var canvas = surface.Canvas;
+
+// Render QR code
+canvas.Render(qrData, info.Width, info.Height);
+
+// Save
+using var image = surface.Snapshot();
+using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+using var stream = File.OpenWrite("qrcode.png");
+data.SaveTo(stream);
+```
+
+
 ## License
 
 MIT
 
-## Thanks
+## Acknowledgments
 
-> [aloisdeniel/Xam.Forms.QRCode](https://github.com/aloisdeniel/Xam.Forms.QRCode) : Qr Sample with Skia
-> [codebude/QRCoder](https://github.com/codebude/QRCoder) : all QRCode generation algorithms
+> - [aloisdeniel/Xam.Forms.QRCode](https://github.com/aloisdeniel/Xam.Forms.QRCode) : Qr Sample with Skia
+> - [codebude/QRCoder](https://github.com/codebude/QRCoder) : QRCode generation algorithms
