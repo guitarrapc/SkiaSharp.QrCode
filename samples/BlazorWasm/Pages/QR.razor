@@ -1,4 +1,4 @@
-@page "/qr"
+﻿@page "/qr"
 @using SkiaSharp
 @using SkiaSharp.QrCode
 @using SkiaSharp.QrCode.Image
@@ -63,7 +63,7 @@
 
             <div style="margin:0.5rem">
                 <label style="width: 140px;">ModuleShape</label>
-                <InputSelect style="width: 200px;" @bind-Value="@Model.ModuleShapeType">
+                <InputSelect style="width: 200px;" @bind-Value="@Model.ModuleShape">
                     @foreach (var shape in Enum.GetValues(typeof(ModuleShapeType)))
                     {
                         <option value="@shape">@shape</option>
@@ -71,7 +71,7 @@
                 </InputSelect>
             </div>
 
-            @if (Model.ModuleShapeType == ModuleShapeType.RoundedRectangle)
+            @if (Model.ModuleShape == ModuleShapeType.RoundedRectangle)
             {
                 <div class="d-flex flex-row" style="margin:0.5rem">
                     <label style="width: 140px;">Corner Radius</label>
@@ -153,6 +153,37 @@
             }
         </FluentCard>
     </div>
+
+    <FluentCard>
+        <h3>Gradient Settings</h3>
+        <div style="margin:0.5rem">
+            <label style="width: 140px;">Start Color</label>
+            <SKColorInputSelect style="width: 200px;" @bind-Value="Model.GradientStartColor">
+                @foreach (var color in Colors)
+                {
+                    <option value="@color.Value">@color.Name</option>
+                }
+            </SKColorInputSelect>
+        </div>
+        <div style="margin:0.5rem">
+            <label style="width: 140px;">End Color</label>
+            <SKColorInputSelect style="width: 200px;" @bind-Value="Model.GradientEndColor">
+                @foreach (var color in Colors)
+                {
+                    <option value="@color.Value">@color.Name</option>
+                }
+            </SKColorInputSelect>
+        </div>
+        <div style="margin:0.5rem">
+            <label style="width: 140px;">Direction</label>
+            <InputSelect style="width: 200px;" @bind-Value="Model.GradientDirection">
+                @foreach (var dir in Enum.GetValues(typeof(GradientDirection)))
+                {
+                    <option value="@dir">@dir</option>
+                }
+            </InputSelect>
+        </div>
+    </FluentCard>
 
     <div style="margin-bottom: 1rem">
         <button type="submit" class="btn btn-primary">Refresh</button>
@@ -250,7 +281,7 @@
         var qr = QRCodeGenerator.CreateQrCode(content.AsSpan(), Model.EccLevel, eciMode: Model.EciMode, quietZoneSize: Model.QuietZoneSize);
 
         // Create shape
-        var moduleShape = ModuleShapeFactory.Create(Model.ModuleShapeType, Model.CornerRadiusPercent);
+        var moduleShape = ModuleShapeFactory.Create(Model.ModuleShape, Model.CornerRadiusPercent);
 
         // Create icon data if icon is loaded
         IconData? iconData = null;
@@ -264,10 +295,21 @@
             };
         }
 
+        // Create Gradient
+        GradientOptions? gradientOptions = null;
+        if (Model.GradientDirection != GradientDirection.None)
+        {
+            gradientOptions = new GradientOptions
+            {
+                Colors = [Model.GradientStartColor, Model.GradientEndColor],
+                Direction = Model.GradientDirection
+            };
+        }
+
         // Render to canvas
         var info = new SKImageInfo(Model.Size, Model.Size); // Make sure match with SKCanvasView width & height.
         using var surface = SKSurface.Create(info);
-        canvas.Render(qr, info.Width, info.Height, Model.ClearColor, Model.CodeColor, Model.BackgroundColor, iconData, moduleShape: moduleShape, moduleSizePercent: Model.ModuleSizePercent);
+        canvas.Render(qr, info.Width, info.Height, Model.ClearColor, Model.CodeColor, Model.BackgroundColor, iconData, moduleShape: moduleShape, moduleSizePercent: Model.ModuleSizePercent, gradientOptions: gradientOptions);
     }
 
     public void Dispose()
@@ -286,7 +328,7 @@
         public int QuietZoneSize { get; set; } = 4;
         public ECCLevel EccLevel { get; set; } = ECCLevel.M;
         public EciMode EciMode { get; set; } = EciMode.Default;
-        public ModuleShapeType ModuleShapeType { get; set; } = ModuleShapeType.Rectangle;
+        public ModuleShapeType ModuleShape { get; set; } = ModuleShapeType.Rectangle;
         [Range(0.0, 1.0)]
         public float CornerRadiusPercent { get; set; } = 0.3f;
         public float ModuleSizePercent { get; set; } = 1.0f;
@@ -297,6 +339,10 @@
         public SKColor ClearColor { get; set; } = SKColors.Transparent;
         public SKColor CodeColor { get; set; } = SKColors.Black;
         public SKColor BackgroundColor { get; set; } = SKColors.White;
+        // gradient support
+        public SKColor GradientStartColor { get; set; } = SKColors.Black;
+        public SKColor GradientEndColor { get; set; } = SKColors.Black;
+        public GradientDirection GradientDirection { get; set; } = GradientDirection.None;
     }
 
     /// <summary>
