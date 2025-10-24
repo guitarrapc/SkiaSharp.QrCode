@@ -28,9 +28,18 @@ jobs:
 
   run:
     needs: [build]
+    strategy:
+      matrix:
+        include:
+          - runs-on: ubuntu-24.04
+            ext: ""
+          - runs-on: windows-2025
+            ext: .exe
+          - runs-on: macos-26
+            ext: ""
     permissions:
       contents: read
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -48,13 +57,14 @@ jobs:
         run: dotnet run -c Release
         working-directory: ./samples/SimpleGenerate
       # NativeAOT
-      - name: Run ConsoleAppNativeAOT (Windows)
+      - name: Run ConsoleAppNativeAOT
         run: |
-          dotnet publish ./samples/ConsoleAppNativeAOT/ConsoleAppNativeAOT.csproj -c Release -r linux-x64
-          cd ./samples/ConsoleAppNativeAOT/bin/Release/net9.0/linux-x64/publish/
+          dotnet publish ./samples/ConsoleAppNativeAOT/ConsoleAppNativeAOT.csproj -c Release -o ./publish/
+          cd ./publish/
           ls -l
-          chmod +x ConsoleAppNativeAOT
-          ./ConsoleAppNativeAOT
+          chmod +x ConsoleAppNativeAOT${{ matrix.ext }}
+          ./ConsoleAppNativeAOT${{ matrix.ext }}
       # LinuxRunSamples
       - name: Run Linux Compose
+        if: ${{ matrix.runs-on == 'ubuntu-24.04' }}
         run: docker compose -f ./samples/LinuxCompose/compose.override.8.0.yaml up
