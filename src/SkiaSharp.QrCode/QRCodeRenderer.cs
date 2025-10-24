@@ -49,8 +49,8 @@ public static class QRCodeRenderer
         // Apply gradient if specified
         if (gradientOptions is not null && gradientOptions.Direction != GradientDirection.None)
         {
-            var (start, end) = GetGradientPoints(area, gradientOptions.Direction);
-            var colors = gradientOptions.Colors ?? new[] { gradientOptions.StartColor, gradientOptions.EndColor };
+            var colors = gradientOptions.Colors ?? [ gradientOptions.StartColor, gradientOptions.EndColor ];
+            var (start, end) = GeLineartGradientPoints(area, gradientOptions.Direction);
             darkPaint.Shader = SKShader.CreateLinearGradient(
                 start,
                 end,
@@ -124,7 +124,7 @@ public static class QRCodeRenderer
         }
     }
 
-    private static (SKPoint start, SKPoint end) GetGradientPoints(SKRect area, GradientDirection direction)
+    private static (SKPoint start, SKPoint end) GeLineartGradientPoints(SKRect area, GradientDirection direction)
     {
         return direction switch
         {
@@ -136,9 +136,7 @@ public static class QRCodeRenderer
             GradientDirection.TopRightToBottomLeft => (new SKPoint(area.Right, area.Top), new SKPoint(area.Left, area.Bottom)),
             GradientDirection.BottomLeftToTopRight => (new SKPoint(area.Left, area.Bottom), new SKPoint(area.Right, area.Top)),
             GradientDirection.BottomRightToTopLeft => (new SKPoint(area.Right, area.Bottom), new SKPoint(area.Left, area.Top)),
-            GradientDirection.CenterToEdges => (new SKPoint(area.MidX, area.MidY), new SKPoint(area.Right, area.Bottom)),
-            GradientDirection.EdgesToCenter => (new SKPoint(area.Right, area.Bottom), new SKPoint(area.MidX, area.MidY)),
-            _ => throw new ArgumentOutOfRangeException(nameof(direction), "Invalid gradient direction."),
+            _ => throw new ArgumentOutOfRangeException(nameof(direction), $"Direction {direction} is not a valid linear gradient direction."),
         };
     }
 }

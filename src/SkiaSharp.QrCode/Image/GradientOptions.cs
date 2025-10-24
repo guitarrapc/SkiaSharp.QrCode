@@ -1,4 +1,4 @@
-namespace SkiaSharp.QrCode.Image;
+﻿namespace SkiaSharp.QrCode.Image;
 
 public class GradientOptions
 {
@@ -7,7 +7,7 @@ public class GradientOptions
     /// </summary>
     public SKColor StartColor { get; set; } = SKColors.Black;
     /// <summary>
-    /// the end color of the gradient.
+    /// The end color of the gradient.
     /// </summary>
     public SKColor EndColor { get; set; } = SKColors.Black;
     /// <summary>
@@ -29,46 +29,38 @@ public enum GradientDirection
     /// <summary>
     /// No gradient (solid color).
     /// </summary>
-    None,
+    None = 0,
     /// <summary>
-    /// Left to Right gradient.
+    /// Left to Right linear gradient.
     /// </summary>
     LeftToRight,
     /// <summary>
-    /// Right to Left gradient. 
+    /// Right to Left linear gradient. 
     /// </summary>
     RightToLeft,
     /// <summary>
-    /// Top to Bottom gradient. 
+    /// Top to Bottom linear gradient. 
     /// </summary>
     TopToBottom,
     /// <summary>
-    /// Bottom to Top gradient.
+    /// Bottom to Top linear gradient.
     /// </summary>
     BottomToTop,
     /// <summary>
-    /// Top-Left to Bottom-Right gradient.
+    /// Top-Left to Bottom-Right linear gradient.
     /// </summary>
     TopLeftToBottomRight,
     /// <summary>
-    /// Top-Right to Bottom-Left gradient. 
+    /// Top-Right to Bottom-Left linear gradient. 
     /// </summary>
     TopRightToBottomLeft,
     /// <summary>
-    /// Bottom-Left to Top-Right gradient. 
+    /// Bottom-Left to Top-Right linear gradient. 
     /// </summary>
     BottomLeftToTopRight,
     /// <summary>
-    /// Bottom-Right to Top-Left gradient.
+    /// Bottom-Right to Top-Left linear gradient.
     /// </summary>
     BottomRightToTopLeft,
-    /// <summary>
-    /// Center to Edges gradient.
-    /// </summary>
-    CenterToEdges,
-    /// <summary>
-    /// Edges to Center gradient.
-    /// </summary>
-    EdgesToCenter,
 }
 
