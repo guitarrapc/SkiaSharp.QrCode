@@ -51,3 +51,11 @@ jobs:
       # LinuxRunSamples
       - name: Run Linux Docker Compose (${{ matrix.dotnet-version}})
         run: docker compose -f ./samples/LinuxCompose/compose.override.${{ matrix.dotnet-version }}.yaml up
+      # NativeAOT
+      - name: Run ConsoleAppNativeAOT (Windows)
+        run: |
+          dotnet publish ./samples/ConsoleAppNativeAOT/ConsoleAppNativeAOT.csproj -c Release -r linux-x64
+          cd ./samples/ConsoleAppNativeAOT/bin/Release/net9.0/linux-x64/publish/
+          ls -l
+          chmod +x ConsoleAppNativeAOT
+          ./ConsoleAppNativeAOT
