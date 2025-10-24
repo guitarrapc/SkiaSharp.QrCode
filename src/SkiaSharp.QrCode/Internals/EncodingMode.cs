@@ -38,10 +38,6 @@ internal enum EncodingMode
     /// Always followed by another mode (typically Byte).
     /// </summary>
     ECI = 7,
-    /// <summary>
-    /// Shift JIS Kanji (13 bits per character)
-    /// </summary>
-    Kanji = 8,
 }
 
 internal static class EncodingModeExtensions
@@ -67,7 +63,6 @@ internal static class EncodingModeExtensions
                 EncodingMode.Numeric => 10,
                 EncodingMode.Alphanumeric => 9,
                 EncodingMode.Byte => 8,
-                EncodingMode.Kanji => 8,
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), "Invalid encoding mode"),
             };
         }
@@ -78,7 +73,6 @@ internal static class EncodingModeExtensions
                 EncodingMode.Numeric => 12,
                 EncodingMode.Alphanumeric => 11,
                 EncodingMode.Byte => 16,
-                EncodingMode.Kanji => 10,
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), "Invalid encoding mode"),
             };
         }
@@ -89,7 +83,6 @@ internal static class EncodingModeExtensions
                 EncodingMode.Numeric => 14,
                 EncodingMode.Alphanumeric => 13,
                 EncodingMode.Byte => 16,
-                EncodingMode.Kanji => 12,
                 _ => throw new ArgumentOutOfRangeException(nameof(mode), "Invalid encoding mode"),
             };
         }

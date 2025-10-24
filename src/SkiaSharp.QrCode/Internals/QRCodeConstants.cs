@@ -987,7 +987,6 @@ internal static class QRCodeConstants
                                 { EncodingMode.Numeric, CapacityBaseValues[i] },
                                 { EncodingMode.Alphanumeric, CapacityBaseValues[i+1] },
                                 { EncodingMode.Byte, CapacityBaseValues[i+2] },
-                                { EncodingMode.Kanji, CapacityBaseValues[i+3] },
                         }
                     ),
                     new VersionInfoDetails(
@@ -996,7 +995,6 @@ internal static class QRCodeConstants
                                 { EncodingMode.Numeric, CapacityBaseValues[i+4] },
                                 { EncodingMode.Alphanumeric, CapacityBaseValues[i+5] },
                                 { EncodingMode.Byte, CapacityBaseValues[i+6] },
-                                { EncodingMode.Kanji, CapacityBaseValues[i+7] },
                             }
                     ),
                     new VersionInfoDetails(
@@ -1005,7 +1003,6 @@ internal static class QRCodeConstants
                                 { EncodingMode.Numeric, CapacityBaseValues[i+8] },
                                 { EncodingMode.Alphanumeric, CapacityBaseValues[i+9] },
                                 { EncodingMode.Byte, CapacityBaseValues[i+10] },
-                                { EncodingMode.Kanji, CapacityBaseValues[i+11] },
                             }
                     ),
                     new VersionInfoDetails(
@@ -1014,7 +1011,6 @@ internal static class QRCodeConstants
                                 { EncodingMode.Numeric, CapacityBaseValues[i+12] },
                                 { EncodingMode.Alphanumeric, CapacityBaseValues[i+13] },
                                 { EncodingMode.Byte, CapacityBaseValues[i+14] },
-                                { EncodingMode.Kanji, CapacityBaseValues[i+15] },
                             }
                     )
                 ]
