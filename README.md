@@ -24,7 +24,7 @@ You can create professional-looking QR codes like this with just a few lines of 
 
 ## Overview
 
-SkiaSharp.QrCode is a modern, high-performance QR code generation library built on SkiaSharp.
+SkiaSharp.QrCode is a modern, high-performance QR code generation library built on SkiaSharp. SkiaSharp.QrCode allocates memory only for the actual QR code data, with zero additional allocations during processing.
 
 - **Simple API**: One-liner QR code generation with sensible defaults
 - **High Performance**: Optimal speed and minimum memory allocation
