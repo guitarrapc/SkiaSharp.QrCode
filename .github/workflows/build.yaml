@@ -30,10 +30,16 @@ jobs:
     needs: [build]
     strategy:
       matrix:
-        dotnet-version: ["8.0"]
+        include:
+          - runs-on: ubuntu-24.04
+            ext: ""
+          - runs-on: windows-2025
+            ext: .exe
+          - runs-on: macos-15
+            ext: ""
     permissions:
       contents: read
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runs-on }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -43,11 +49,23 @@ jobs:
         with:
           restore-wasm-workload: true
       # ConsoleApp
-      - name: Run ConsoleApp (${{ matrix.dotnet-version}})
-        run: dotnet run --project ./samples/ConsoleApp/ConsoleApp.csproj -c Release -f net${{ matrix.dotnet-version }}
+      - name: Run ConsoleApp
+        run: dotnet run --c Release
+        working-directory: ./samples/ConsoleApp
       # SimpleGenerate
-      - name: Run SimpleGenerate (${{ matrix.dotnet-version}})
-        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Release -f net${{ matrix.dotnet-version }}
+      - name: Run SimpleGenerate
+        run: dotnet run -c Release
+        working-directory: ./samples/SimpleGenerate
+      # NativeAOT
+      - name: Run ConsoleAppNativeAOT
+        shell: bash
+        run: |
+          dotnet publish ./samples/ConsoleAppNativeAOT/ConsoleAppNativeAOT.csproj -c Release -o ./publish/
+          cd ./publish/
+          ls -l
+          chmod +x ConsoleAppNativeAOT${{ matrix.ext }}
+          ./ConsoleAppNativeAOT${{ matrix.ext }}
       # LinuxRunSamples
-      - name: Run Linux Docker Compose (${{ matrix.dotnet-version}})
-        run: docker compose -f ./samples/LinuxCompose/compose.override.${{ matrix.dotnet-version }}.yaml up
+      - name: Run Linux Compose
+        if: ${{ matrix.runs-on == 'ubuntu-24.04' }}
+        run: docker compose -f ./samples/LinuxCompose/compose.override.8.0.yaml up
