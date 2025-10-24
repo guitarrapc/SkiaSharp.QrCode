@@ -1,4 +1,4 @@
-﻿@page "/qr"
+@page "/qr"
 @using SkiaSharp
 @using SkiaSharp.QrCode
 @using SkiaSharp.QrCode.Image
@@ -299,11 +299,7 @@
         GradientOptions? gradientOptions = null;
         if (Model.GradientDirection != GradientDirection.None)
         {
-            gradientOptions = new GradientOptions
-            {
-                Colors = [Model.GradientStartColor, Model.GradientEndColor],
-                Direction = Model.GradientDirection
-            };
+            gradientOptions = new GradientOptions([Model.GradientStartColor, Model.GradientEndColor], Model.GradientDirection);
         }
 
         // Render to canvas

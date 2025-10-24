@@ -1,4 +1,4 @@
-namespace SkiaSharp.QrCode.Image;
+﻿namespace SkiaSharp.QrCode.Image;
 
 /// <summary>
 /// Defines the shape of QR code modules
