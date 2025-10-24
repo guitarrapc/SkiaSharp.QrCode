@@ -2,6 +2,10 @@
 
 namespace SkiaSharp.QrCode;
 
+/// <summary>
+/// Provides low-level rendering capabilities for QR codes to SkiaSharp canvases.
+/// Offers fine-grained control over appearance, including colors, shapes, gradients, and icon overlays.
+/// </summary>
 public static class QRCodeRenderer
 {
     /// <summary>
