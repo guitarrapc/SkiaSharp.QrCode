@@ -14,6 +14,14 @@ SkiaSharp.QrCode provides high-performance QR code generation with [SkiaSharp](h
 
 Many existing QR code libraries rely on System.Drawing, which has well-known GDI+ limitations and cross-platform issues. SkiaSharp.QrCode was created to provide high performance, minimum memory allocation, a simpler and more intuitive API while leveraging SkiaSharp's cross-platform capabilities. Generate a QR code in a single line, or customize every detail - the choice is yours.
 
+You can create professional-looking QR codes like this with just a few lines of code:
+
+<p float="left">
+  <img src="samples/ConsoleApp/samples/pattern14_instagram_frame.png" width="300" alt="Instagram-style"/>
+  <img src="samples/ConsoleApp/samples/pattern6_builder_gradient.png" width="300" alt="Gradient QR"/>
+  <img src="samples/ConsoleApp/samples/pattern7_builder_icon.png" width="300" alt="Icon QR"/>
+</p>
+
 ## Overview
 
 SkiaSharp.QrCode is a modern, high-performance QR code generation library built on SkiaSharp.
