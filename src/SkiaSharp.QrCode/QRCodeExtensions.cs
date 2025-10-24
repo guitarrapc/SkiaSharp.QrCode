@@ -23,10 +23,11 @@ public static class QRCodeExtensions
         SKColor? clearColor = null,
         SKColor? codeColor = null,
         SKColor? backgroundColor = null,
-        IconData? iconData = null)
+        IconData? iconData = null,
+        ModuleShape? moduleShape = null)
     {
         var area = SKRect.Create(0, 0, width, height);
-        canvas.Render(data, area, clearColor, codeColor, backgroundColor, iconData);
+        canvas.Render(data, area, clearColor, codeColor, backgroundColor, iconData, moduleShape);
     }
 
     /// <summary>
@@ -46,9 +47,10 @@ public static class QRCodeExtensions
         SKColor? clearColor = null,
         SKColor? codeColor = null,
         SKColor? backgroundColor = null,
-        IconData? iconData = null)
+        IconData? iconData = null,
+        ModuleShape? moduleShape = null)
     {
         canvas.Clear(clearColor ?? SKColors.Transparent);
-        QRCodeRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData);
+        QRCodeRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData, moduleShape);
     }
 }

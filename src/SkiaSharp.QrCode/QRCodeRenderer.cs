@@ -14,13 +14,14 @@ public static class QRCodeRenderer
     /// <param name="backgroundColor">The background color. If null, white is used.</param>
     /// <param name="iconData">Optional icon data to overlay on the center of the QR code.</param>
     /// <exception cref="ArgumentNullException"></exception>
-    public static void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? codeColor, SKColor? backgroundColor, IconData? iconData = null)
+    public static void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? codeColor, SKColor? backgroundColor, IconData? iconData = null, ModuleShape? moduleShape = null)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
 
         var bgColor = backgroundColor ?? SKColors.White;
         var fgColor = codeColor ?? SKColors.Black;
+        var shape = moduleShape ?? RectangleModuleShape.Default;
 
         // Draw the background at once
         using (var lightPaint = new SKPaint() { Color = bgColor, Style = SKPaintStyle.Fill })
@@ -40,7 +41,7 @@ public static class QRCodeRenderer
                 if (data[row, col])
                 {
                     var rect = SKRect.Create(area.Left + col * cellWidth, area.Top + row * cellHeight, cellWidth, cellHeight);
-                    canvas.DrawRect(rect, darkPaint);
+                    shape.Draw(canvas, rect, darkPaint);
                 }
             }
         }
