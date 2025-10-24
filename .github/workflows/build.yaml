@@ -58,6 +58,7 @@ jobs:
         working-directory: ./samples/SimpleGenerate
       # NativeAOT
       - name: Run ConsoleAppNativeAOT
+        shell: bash
         run: |
           dotnet publish ./samples/ConsoleAppNativeAOT/ConsoleAppNativeAOT.csproj -c Release -o ./publish/
           cd ./publish/
