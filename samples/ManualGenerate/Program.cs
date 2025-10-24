@@ -33,7 +33,7 @@ var icon = new IconData
     Icon = logo,
     IconSizePercent = 10,
 };
-canvas.Render(qr, info.Width, info.Height, SKColor.Empty, SKColor.Parse("000000"), icon);
+canvas.Render(qr, info.Width, info.Height, SKColor.Empty, SKColor.Parse("000000"), iconData: icon);
 
 // Output to Stream -> File
 using var image = surface.Snapshot();
