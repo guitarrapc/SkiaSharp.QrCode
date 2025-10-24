@@ -287,6 +287,37 @@ Currently, SkiaSharp.QrCode supports ISO-8859-1 and UTF-8. Other encodings (e.g.
 
 Currently, SkiaSharp.QrCode focuses on QR code generation. QR code scanning is not planned at this time, but contributions are welcome.
 
+### What QR code style provides the best scan reliability?
+
+For optimal scan reliability, we recommend:
+
+- **Use rectangular modules (default)**: Rectangle-shaped modules (`RectangleModuleShape`) provide the lowest error rate when scanning QR codes.
+- **Avoid gaps between modules**: Using smaller module sizes or shapes like `Circle` or `RoundRect` creates gaps between modules, which increases scan error rates.
+- **Use `ECCLevel.H` for non-standard styles**: If you need to use `Circle`, `RoundRect`, or other custom module shapes, we strongly recommend setting the error correction level to `ECCLevel.H` (High - 30% recovery capacity) to compensate for the reduced readability.
+- **Always use `ECCLevel.H` with icons/logos**: When embedding icons or logos using `IconData`, `ECCLevel.H` is required to ensure the QR code remains scannable even when the center is partially obscured.
+
+**Example:**
+
+```csharp
+// Best reliability - default settings with rectangular modules
+var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
+
+// If using Circle or RoundRect - use High error correction
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithSize(800, 800)
+    .WithErrorCorrection(ECCLevel.H) // Required for custom shapes
+    .WithModuleShape(CircleModuleShape.Default);
+
+// When using icons/logos - always use High error correction
+using var logo = SKBitmap.Decode("logo.png");
+var icon = new IconData { Icon = logo, IconSizePercent = 15 };
+
+var qrCodeWithIcon = new QRCodeImageBuilder("https://example.com")
+    .WithSize(800, 800)
+    .WithErrorCorrection(ECCLevel.H) // Required for icons
+    .WithIcon(icon);
+```
+
 ### How can I display QR codes in LINQPad?
 
 Following shows how to display a QRCode inside a LINQPad Results pane.
