@@ -35,7 +35,7 @@ jobs:
             ext: ""
           - runs-on: windows-2025
             ext: .exe
-          - runs-on: macos-26
+          - runs-on: macos-15
             ext: ""
     permissions:
       contents: read
