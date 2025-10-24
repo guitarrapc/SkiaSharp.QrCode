@@ -42,10 +42,9 @@ jobs:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
         with:
           restore-wasm-workload: true
-      # ManualGenerate
-      - name: Run ManualGenerate (${{ matrix.dotnet-version}})
-        run: dotnet run --project ./ManualGenerate.csproj -c Release -f net${{ matrix.dotnet-version }}
-        working-directory: ./samples/ManualGenerate
+      # ConsoleApp
+      - name: Run ConsoleApp (${{ matrix.dotnet-version}})
+        run: dotnet run --project ./samples/ConsoleApp/ConsoleApp.csproj -c Release -f net${{ matrix.dotnet-version }}
       # SimpleGenerate
       - name: Run SimpleGenerate (${{ matrix.dotnet-version}})
         run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Release -f net${{ matrix.dotnet-version }}

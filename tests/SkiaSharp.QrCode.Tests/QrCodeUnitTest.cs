@@ -3,6 +3,7 @@ using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
+[Obsolete("QrCode is obsolete. Use QRCodeBuilder for more flexible and feature-rich QR code generation.", false)]
 public class QrCodeUnitTest
 {
     [Fact]

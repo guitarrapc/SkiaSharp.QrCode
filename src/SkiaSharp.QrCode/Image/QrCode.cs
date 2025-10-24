@@ -2,6 +2,10 @@ using System.Runtime.CompilerServices;
 
 namespace SkiaSharp.QrCode.Image;
 
+/// <summary>
+/// QR code generator (Obsolete - use <see cref="QRCodeImageBuilder"/> instead).
+/// </summary>
+[Obsolete("This class is obsolete. Use QRCodeImageBuilder for more flexible and feature-rich QR code generation.", false)]
 public class QrCode
 {
     private readonly string _content;
