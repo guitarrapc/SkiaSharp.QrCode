@@ -49,12 +49,11 @@ public static class QRCodeRenderer
         // Apply gradient if specified
         if (gradientOptions is not null && gradientOptions.Direction != GradientDirection.None)
         {
-            var colors = gradientOptions.Colors ?? [ gradientOptions.StartColor, gradientOptions.EndColor ];
             var (start, end) = GeLineartGradientPoints(area, gradientOptions.Direction);
             darkPaint.Shader = SKShader.CreateLinearGradient(
                 start,
                 end,
-                colors,
+                gradientOptions.Colors,
                 gradientOptions.ColorPositions,
                 SKShaderTileMode.Clamp);
         }

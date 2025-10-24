@@ -3,13 +3,9 @@
 public class GradientOptions
 {
     /// <summary>
-    /// The start color of the gradient.
+    /// Gradient colors for multi-color gradients.
     /// </summary>
-    public SKColor StartColor { get; set; } = SKColors.Black;
-    /// <summary>
-    /// The end color of the gradient.
-    /// </summary>
-    public SKColor EndColor { get; set; } = SKColors.Black;
+    public SKColor[] Colors { get; set; } = [SKColors.Black, SKColors.Black];
     /// <summary>
     /// The gradient direction.
     /// </summary>
@@ -18,10 +14,6 @@ public class GradientOptions
     /// Optional color stops (0.0 to 1.0) for the gradient.
     /// </summary>
     public float[]? ColorPositions { get; set; }
-    /// <summary>
-    /// Additional gradient colors for multi-color gradients.
-    /// </summary>
-    public SKColor[]? Colors { get; set; }
 }
 
 public enum GradientDirection
