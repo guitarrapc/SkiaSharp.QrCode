@@ -65,10 +65,33 @@ public static class QRCodeRenderer
             var iconWidth = area.Width * iconSize;
             var iconHeight = area.Height * iconSize;
 
-            var x = area.Left + (area.Width - iconWidth) / 2;
-            var y = area.Top + (area.Height - iconHeight) / 2;
+            var centerX = area.Left + area.Width / 2;
+            var centerY = area.Top + area.Height / 2;
 
-            canvas.DrawBitmap(iconData.Icon, SKRect.Create(x, y, iconWidth, iconHeight));
+            // Draw border background color padding if specified
+            if (iconData.IconBorderWidth > 0)
+            {
+                var borderWidth = iconData.IconBorderWidth;
+                var borderRect = SKRect.Create(
+                    centerX - iconWidth / 2 - borderWidth,
+                    centerY - iconHeight / 2 - borderWidth,
+                    iconWidth + borderWidth * 2,
+                    iconHeight + borderWidth * 2);
+
+                using var borderPaint = new SKPaint()
+                {
+                    Color = bgColor,
+                    Style = SKPaintStyle.Fill,
+                };
+                canvas.DrawRect(borderRect, borderPaint);
+            }
+
+            var iconRect = SKRect.Create(
+                centerX - iconWidth / 2,
+                centerY - iconHeight / 2,
+                iconWidth,
+                iconHeight);
+            canvas.DrawBitmap(iconData.Icon, iconRect);
         }
     }
 }
