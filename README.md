@@ -134,7 +134,7 @@ QRCodeRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
 Best for QR data generation without rendering. The low-level API that generates raw QR code data (`QRCodeData`). Use this when you need the QR data structure itself, not the image.
 
 **Key Features**:
-- Generates `QRCodeData` (2D boolean array)
+- Generates `QRCodeData` (boolean module matrix stored as 1D byte array)
 - Specify ECC level, ECI mode, quiet zone size
 - No rendering logic included
 - Smallest API surface
@@ -148,6 +148,7 @@ Best for QR data generation without rendering. The low-level API that generates 
 ```csharp
 var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, quietZoneSize: 4);
 // Use qrData for custom rendering
+// Access individual modules: bool isDark = qrData[row, col];
 ```
 
 ## Platform-Specific Considerations
