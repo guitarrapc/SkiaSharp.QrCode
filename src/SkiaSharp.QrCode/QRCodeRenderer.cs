@@ -21,7 +21,7 @@ public static class QRCodeRenderer
         if (data is null)
             throw new ArgumentNullException(nameof(data));
         if (moduleSizePercent is < 0f or > 1.0f)
-            throw new ArgumentOutOfRangeException(nameof(moduleSizePercent), "Module size percent must be between 0.5 and 1.0.");
+            throw new ArgumentOutOfRangeException(nameof(moduleSizePercent), "Module size percent must be between 0.0 and 1.0.");
 
         var bgColor = backgroundColor ?? SKColors.White;
         var fgColor = codeColor ?? SKColors.Black;
