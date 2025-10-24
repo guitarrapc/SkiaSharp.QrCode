@@ -41,10 +41,12 @@ jobs:
           restore-wasm-workload: true
       # ConsoleApp
       - name: Run ConsoleApp
-        run: dotnet run --project ./samples/ConsoleApp/ConsoleApp.csproj -c Release
+        run: dotnet run --c Release
+        working-directory: ./samples/ConsoleApp
       # SimpleGenerate
       - name: Run SimpleGenerate
-        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Release
+        run: dotnet run -c Release
+        working-directory: ./samples/SimpleGenerate
       # NativeAOT
       - name: Run ConsoleAppNativeAOT (Windows)
         run: |
