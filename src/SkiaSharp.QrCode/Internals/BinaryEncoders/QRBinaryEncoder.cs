@@ -114,8 +114,6 @@ internal ref struct QRBinaryEncoder
             case EncodingMode.Byte:
                 EncodeByte(textSpan, eci, utf8Bom);
                 break;
-            case EncodingMode.Kanji:
-                throw new NotImplementedException("Kanji encoding not yet implemented, use Byte mode with UTF-8 encoding for Japanese text.");
             default:
                 throw new ArgumentOutOfRangeException(nameof(encoding), "Invalid encoding mode");
         }
