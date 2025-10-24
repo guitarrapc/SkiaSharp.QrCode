@@ -15,6 +15,8 @@ public static class QRCodeExtensions
     /// <param name="codeColor">The color of the QR code modules. Defaults to Black.</param>
     /// <param name="backgroundColor">The background color of the QR Code. Defaults to White.</param>
     /// <param name="iconData">Optional icon data to overlay on the center of the QR code.</param>
+    /// <param name="moduleShape">The shape to use for drawing modules. If null, rectangles are used.</param>
+    /// <param name="moduleSizePercent">The size of each module as a percentage of the cell size (0.0 to 1.0). Default is 1.0 (no gap).</param>
     public static void Render(
         this SKCanvas canvas,
         QRCodeData data,
@@ -23,10 +25,12 @@ public static class QRCodeExtensions
         SKColor? clearColor = null,
         SKColor? codeColor = null,
         SKColor? backgroundColor = null,
-        IconData? iconData = null)
+        IconData? iconData = null,
+        ModuleShape? moduleShape = null,
+        float moduleSizePercent = 1.0f)
     {
         var area = SKRect.Create(0, 0, width, height);
-        canvas.Render(data, area, clearColor, codeColor, backgroundColor, iconData);
+        canvas.Render(data, area, clearColor, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent);
     }
 
     /// <summary>
@@ -39,6 +43,8 @@ public static class QRCodeExtensions
     /// <param name="codeColor">The color of the QR code modules. Defaults to Black.</param>
     /// <param name="backgroundColor">The background color of the QR Code. Defaults to White.</param>
     /// <param name="iconData">Optional icon data to overlay on the center of the QR code.</param>
+    /// <param name="moduleShape">The shape to use for drawing modules. If null, rectangles are used.</param>
+    /// <param name="moduleSizePercent">The size of each module as a percentage of the cell size (0.0 to 1.0). Default is 1.0 (no gap).</param>
     public static void Render(
         this SKCanvas canvas,
         QRCodeData data,
@@ -46,9 +52,11 @@ public static class QRCodeExtensions
         SKColor? clearColor = null,
         SKColor? codeColor = null,
         SKColor? backgroundColor = null,
-        IconData? iconData = null)
+        IconData? iconData = null,
+        ModuleShape? moduleShape = null,
+        float moduleSizePercent = 1.0f)
     {
         canvas.Clear(clearColor ?? SKColors.Transparent);
-        QRCodeRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData);
+        QRCodeRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent);
     }
 }

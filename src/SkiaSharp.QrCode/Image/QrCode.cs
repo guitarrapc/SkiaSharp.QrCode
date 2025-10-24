@@ -5,7 +5,7 @@ namespace SkiaSharp.QrCode.Image;
 public class QrCode
 {
     private readonly string _content;
-    private readonly SKImageInfo _qrInfo;
+    private readonly SKImageInfo _qrSize;
     private readonly SKEncodedImageFormat _outputFormat = SKEncodedImageFormat.Png;
     private readonly int _quality = 100;
 
@@ -16,7 +16,8 @@ public class QrCode
         if (qrSize.X <= 0 || qrSize.Y <= 0)
             throw new ArgumentException("QR size must be positive", nameof(qrSize));
 
-        (_content, _qrInfo) = (content, new SKImageInfo(qrSize.X, qrSize.Y));
+        _content = content;
+        _qrSize = new SKImageInfo(qrSize.X, qrSize.Y);
     }
 
     public QrCode(string content, Vector2Slim qrSize, SKEncodedImageFormat outputFormat) : this(content, qrSize)
@@ -79,9 +80,17 @@ public class QrCode
     /// <param name="qrPosition"></param>
     public void GenerateImage(Stream outputImage, byte[] baseImage, Vector2Slim baseQrSize, Vector2Slim qrPosition, bool resetStreamPosition = true, ECCLevel eccLevel = ECCLevel.L)
     {
+        if (baseImage is null)
+            throw new ArgumentNullException(nameof(baseImage));
+
+        GenerateImage(outputImage, baseImage.AsSpan(), baseQrSize, qrPosition, resetStreamPosition, eccLevel);
+    }
+
+    public void GenerateImage(Stream outputImage, ReadOnlySpan<byte> baseImage, Vector2Slim baseQrSize, Vector2Slim qrPosition, bool resetStreamPosition = true, ECCLevel eccLevel = ECCLevel.L)
+    {
         if (outputImage is null)
             throw new ArgumentNullException(nameof(outputImage));
-        if (baseImage is null || baseImage.Length == 0)
+        if (baseImage.Length == 0)
             throw new ArgumentNullException(nameof(baseImage));
         if (!outputImage.CanWrite)
             throw new ArgumentException("Output stream must be writable", nameof(outputImage));
@@ -102,9 +111,9 @@ public class QrCode
     {
         var qrCodeData = QRCodeGenerator.CreateQrCode(_content, eccLevel);
 
-        using var qrSurface = SKSurface.Create(_qrInfo);
+        using var qrSurface = SKSurface.Create(_qrSize);
         var qrCanvas = qrSurface.Canvas;
-        qrCanvas.Render(qrCodeData, _qrInfo.Width, _qrInfo.Height);
+        qrCanvas.Render(qrCodeData, _qrSize.Width, _qrSize.Height);
 
         // Do not use 'using' - caller must dispose the returned image
         var qrImage = qrSurface.Snapshot();
