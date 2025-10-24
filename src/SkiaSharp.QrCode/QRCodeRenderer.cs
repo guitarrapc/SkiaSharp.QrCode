@@ -1,4 +1,4 @@
-using SkiaSharp.QrCode.Image;
+﻿using SkiaSharp.QrCode.Image;
 
 namespace SkiaSharp.QrCode;
 
@@ -15,8 +15,18 @@ public static class QRCodeRenderer
     /// <param name="iconData">Optional icon data to overlay on the center of the QR code.</param>
     /// <param name="moduleShape">The shape to use for drawing modules. If null, rectangles are used.</param>
     /// <param name="moduleSizePercent">The size of each module as a percentage of the cell size (0.0 to 1.0). Default is 1.0 (no gap).</param>
+    /// <param name="gradientOptions">Optional gradient options for the QR code modules.</param>
     /// <exception cref="ArgumentNullException"></exception>
-    public static void Render(SKCanvas canvas, SKRect area, QRCodeData data, SKColor? codeColor, SKColor? backgroundColor, IconData? iconData = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1.0f)
+    public static void Render(
+        SKCanvas canvas,
+        SKRect area,
+        QRCodeData data,
+        SKColor? codeColor,
+        SKColor? backgroundColor,
+        IconData? iconData = null,
+        ModuleShape? moduleShape = null,
+        float moduleSizePercent = 1.0f,
+        GradientOptions? gradientOptions = null)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
@@ -33,8 +43,27 @@ public static class QRCodeRenderer
             canvas.DrawRect(area, lightPaint);
         }
 
+        // Create paint with gradient or solid color
+        using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = true };
+
+        // Apply gradient if specified
+        if (gradientOptions is not null && gradientOptions.Direction != GradientDirection.None)
+        {
+            var (start, end) = GetGradientPoints(area, gradientOptions.Direction);
+            var colors = gradientOptions.Colors ?? new[] { gradientOptions.StartColor, gradientOptions.EndColor };
+            darkPaint.Shader = SKShader.CreateLinearGradient(
+                start,
+                end,
+                colors,
+                gradientOptions.ColorPositions,
+                SKShaderTileMode.Clamp);
+        }
+        else
+        {
+            darkPaint.Color = codeColor ?? SKColors.Black;
+        }
+
         // Draw the modules
-        using var darkPaint = new SKPaint() { Color = fgColor, Style = SKPaintStyle.Fill, IsAntialias = true };
         var size = data.Size;
         var cellHeight = area.Height / size;
         var cellWidth = area.Width / size;
@@ -93,5 +122,23 @@ public static class QRCodeRenderer
                 iconHeight);
             canvas.DrawBitmap(iconData.Icon, iconRect);
         }
+    }
+
+    private static (SKPoint start, SKPoint end) GetGradientPoints(SKRect area, GradientDirection direction)
+    {
+        return direction switch
+        {
+            GradientDirection.LeftToRight => (new SKPoint(area.Left, area.MidY), new SKPoint(area.Right, area.MidY)),
+            GradientDirection.RightToLeft => (new SKPoint(area.Right, area.MidY), new SKPoint(area.Left, area.MidY)),
+            GradientDirection.TopToBottom => (new SKPoint(area.MidX, area.Top), new SKPoint(area.MidX, area.Bottom)),
+            GradientDirection.BottomToTop => (new SKPoint(area.MidX, area.Bottom), new SKPoint(area.MidX, area.Top)),
+            GradientDirection.TopLeftToBottomRight => (new SKPoint(area.Left, area.Top), new SKPoint(area.Right, area.Bottom)),
+            GradientDirection.TopRightToBottomLeft => (new SKPoint(area.Right, area.Top), new SKPoint(area.Left, area.Bottom)),
+            GradientDirection.BottomLeftToTopRight => (new SKPoint(area.Left, area.Bottom), new SKPoint(area.Right, area.Top)),
+            GradientDirection.BottomRightToTopLeft => (new SKPoint(area.Right, area.Bottom), new SKPoint(area.Left, area.Top)),
+            GradientDirection.CenterToEdges => (new SKPoint(area.MidX, area.MidY), new SKPoint(area.Right, area.Bottom)),
+            GradientDirection.EdgesToCenter => (new SKPoint(area.Right, area.Bottom), new SKPoint(area.MidX, area.MidY)),
+            _ => throw new ArgumentOutOfRangeException(nameof(direction), "Invalid gradient direction."),
+        };
     }
 }

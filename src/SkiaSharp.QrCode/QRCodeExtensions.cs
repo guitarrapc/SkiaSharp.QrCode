@@ -1,4 +1,4 @@
-using SkiaSharp.QrCode.Image;
+﻿using SkiaSharp.QrCode.Image;
 
 namespace SkiaSharp.QrCode;
 
@@ -17,6 +17,7 @@ public static class QRCodeExtensions
     /// <param name="iconData">Optional icon data to overlay on the center of the QR code.</param>
     /// <param name="moduleShape">The shape to use for drawing modules. If null, rectangles are used.</param>
     /// <param name="moduleSizePercent">The size of each module as a percentage of the cell size (0.0 to 1.0). Default is 1.0 (no gap).</param>
+    /// <param name="gradientOptions">Optional gradient options for the QR code modules.</param>
     public static void Render(
         this SKCanvas canvas,
         QRCodeData data,
@@ -27,10 +28,11 @@ public static class QRCodeExtensions
         SKColor? backgroundColor = null,
         IconData? iconData = null,
         ModuleShape? moduleShape = null,
-        float moduleSizePercent = 1.0f)
+        float moduleSizePercent = 1.0f,
+        GradientOptions? gradientOptions = null)
     {
         var area = SKRect.Create(0, 0, width, height);
-        canvas.Render(data, area, clearColor, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent);
+        canvas.Render(data, area, clearColor, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent, gradientOptions);
     }
 
     /// <summary>
@@ -45,6 +47,7 @@ public static class QRCodeExtensions
     /// <param name="iconData">Optional icon data to overlay on the center of the QR code.</param>
     /// <param name="moduleShape">The shape to use for drawing modules. If null, rectangles are used.</param>
     /// <param name="moduleSizePercent">The size of each module as a percentage of the cell size (0.0 to 1.0). Default is 1.0 (no gap).</param>
+    /// <param name="gradientOptions">Optional gradient options for the QR code modules.</param>
     public static void Render(
         this SKCanvas canvas,
         QRCodeData data,
@@ -54,9 +57,10 @@ public static class QRCodeExtensions
         SKColor? backgroundColor = null,
         IconData? iconData = null,
         ModuleShape? moduleShape = null,
-        float moduleSizePercent = 1.0f)
+        float moduleSizePercent = 1.0f,
+        GradientOptions? gradientOptions = null)
     {
         canvas.Clear(clearColor ?? SKColors.Transparent);
-        QRCodeRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent);
+        QRCodeRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent, gradientOptions);
     }
 }
