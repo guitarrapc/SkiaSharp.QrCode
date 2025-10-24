@@ -36,9 +36,9 @@
         <FluentCard>
 
             <div class="d-flex flex-row" style="margin:0.5rem">
-                <label style="width: 120px;">QuietZoneSize</label>
-                <label style="width: 20px;">@Model.QuietZoneSize</label>
-                <input style="width: 200px;" class="mx-1" type="range" min="0" max="10" step="1" @bind-value="@Model.QuietZoneSize" />
+                <label style="width: 140px;">QuietZoneSize</label>
+                <label style="width: 40px;">@Model.QuietZoneSize</label>
+                <input style="width: 160px;" class="mx-1" type="range" min="0" max="10" step="1" @bind-value="@Model.QuietZoneSize" />
             </div>
 
             <div style="margin:0.5rem">
@@ -59,6 +59,31 @@
                         <option value="@level">@level</option>
                     }
                 </InputSelect>
+            </div>
+
+            <div style="margin:0.5rem">
+                <label style="width: 140px;">ModuleShape</label>
+                <InputSelect style="width: 200px;" @bind-Value="@Model.ModuleShapeType">
+                    @foreach (var shape in Enum.GetValues(typeof(ModuleShapeType)))
+                    {
+                        <option value="@shape">@shape</option>
+                    }
+                </InputSelect>
+            </div>
+
+            @if (Model.ModuleShapeType == ModuleShapeType.RoundedRectangle)
+            {
+                <div class="d-flex flex-row" style="margin:0.5rem">
+                    <label style="width: 140px;">Corner Radius</label>
+                    <label style="width: 40px;">@Model.CornerRadiusPercent.ToString("F2")</label>
+                    <input style="width: 160px;" class="mx-1" type="range" min="0" max="1" step="0.05" @bind-value="@Model.CornerRadiusPercent" />
+                </div>
+            }
+
+            <div class="d-flex flex-row" style="margin:0.5rem">
+                <label style="width: 140px;">ModuleSize</label>
+                <label style="width: 40px;">@Model.ModuleSizePercent.ToString("F2")</label>
+                <input style="width: 160px;" class="mx-1" type="range" min="0" max="1" step="0.05" @bind-value="@Model.ModuleSizePercent" />
             </div>
 
             <div style="margin:0.5rem">
@@ -107,7 +132,7 @@
 
 @code {
     private EditContext EditContext { get; set; } = default!; // Autoupdate
-    private QrCodeModel Model { get; set; } = new QrCodeModel();
+    private QRModel Model { get; set; } = new QRModel();
     private SKCanvasView? CanvasView { get; set; }
     private (string Name, SKColor Value)[] Colors { get; set; } = default!;
 
@@ -142,10 +167,13 @@
         // Generate QrCode
         var qr = QRCodeGenerator.CreateQrCode(content.AsSpan(), Model.EccLevel, eciMode: Model.EciMode, quietZoneSize: Model.QuietZoneSize);
 
+        // Create shape
+        var moduleShape = ModuleShapeFactory.Create(Model.ModuleShapeType, Model.CornerRadiusPercent);
+
         // Render to canvas
         var info = new SKImageInfo(Model.Size, Model.Size); // Make sure match with SKCanvasView width & height.
         using var surface = SKSurface.Create(info);
-        canvas.Render(qr, info.Width, info.Height, Model.ClearColor, Model.CodeColor, Model.BackgroundColor);
+        canvas.Render(qr, info.Width, info.Height, Model.ClearColor, Model.CodeColor, Model.BackgroundColor, moduleShape: moduleShape, moduleSizePercent: Model.ModuleSizePercent);
     }
 
     public void Dispose()
@@ -153,7 +181,7 @@
         CanvasView?.Dispose();
     }
 
-    public class QrCodeModel
+    public class QRModel
     {
         [Required]
         public string Content { get; set; } = "https://github.com/guitarrapc/SkiaSharp.QrCode";
@@ -164,9 +192,42 @@
         public int QuietZoneSize { get; set; } = 4;
         public ECCLevel EccLevel { get; set; } = ECCLevel.M;
         public EciMode EciMode { get; set; } = EciMode.Default;
+        public ModuleShapeType ModuleShapeType { get; set; } = ModuleShapeType.Rectangle;
+        [Range(0.0, 1.0)]
+        public float CornerRadiusPercent { get; set; } = 0.3f;
+        public float ModuleSizePercent { get; set; } = 1.0f;
         public SKColor ClearColor { get; set; } = SKColors.Transparent;
         public SKColor CodeColor { get; set; } = SKColors.Black;
         public SKColor BackgroundColor { get; set; } = SKColors.White;
     }
-}
 
+    /// <summary>
+    /// Predefined module shape types.
+    /// </summary>
+    public enum ModuleShapeType
+    {
+        Rectangle,
+        Circle,
+        RoundedRectangle
+    }
+
+    /// <summary>
+    /// Factory for creating module shapes.
+    /// </summary>
+    public static class ModuleShapeFactory
+    {
+        /// <summary>
+        /// Creates a module shape from the specified type.
+        /// </summary>
+        public static ModuleShape Create(ModuleShapeType type, float cornerRadiusPercent = 0.3f)
+        {
+            return type switch
+            {
+                ModuleShapeType.Rectangle => RectangleModuleShape.Default,
+                ModuleShapeType.Circle => CircleModuleShape.Default,
+                ModuleShapeType.RoundedRectangle => new RoundedRectangleModuleShape(cornerRadiusPercent),
+                _ => throw new ArgumentOutOfRangeException(nameof(type))
+            };
+        }
+    }
+}

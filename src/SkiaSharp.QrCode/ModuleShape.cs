@@ -57,6 +57,9 @@ public sealed class CircleModuleShape : ModuleShape
     }
 }
 
+/// <summary>
+/// Draws modules as rounded rectangles.
+/// </summary>
 public sealed class RoundedRectangleModuleShape : ModuleShape
 {
     /// <summary>
@@ -85,28 +88,5 @@ public sealed class RoundedRectangleModuleShape : ModuleShape
     {
         var radius = Math.Min(rect.Width, rect.Height) * _cornerRadiusPercent;
         canvas.DrawRoundRect(rect, radius, radius, paint);
-    }
-}
-
-public sealed class DiamondModuleShape : ModuleShape
-{
-    /// <summary>
-    /// Gets the default instance.
-    /// </summary>
-    public static readonly DiamondModuleShape Default = new();
-
-    // Enforce singleton pattern
-    private DiamondModuleShape() { }
-
-    /// <inheritdoc/>
-    public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
-    {
-        var path = new SKPath();
-        path.MoveTo(rect.MidX, rect.Top);
-        path.LineTo(rect.Right, rect.MidY);
-        path.LineTo(rect.MidX, rect.Bottom);
-        path.LineTo(rect.Left, rect.MidY);
-        path.Close();
-        canvas.DrawPath(path, paint);
     }
 }
