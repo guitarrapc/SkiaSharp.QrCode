@@ -1,4 +1,3 @@
-using SkiaSharp;
 using SkiaSharp.QrCode.Image;
 
 var today = DateTime.Now.ToString("yyyyMMdd_HHmmss");
@@ -11,10 +10,7 @@ var dir = Path.GetDirectoryName(fullPath) ?? throw new ArgumentException($"Inval
 Directory.CreateDirectory(dir);
 
 // generate qr code
-var qrCode = new QrCode(content, new Vector2Slim(512, 512), SKEncodedImageFormat.Png);
-using (var output = new FileStream(fullPath, FileMode.OpenOrCreate))
-{
-    qrCode.GenerateImage(output);
-}
+var qrCodeData = QRCodeImageBuilder.GetPngBytes(content);
+File.WriteAllBytes(path, qrCodeData);
 
 Console.WriteLine($"Successfully output QRCode in {fullPath}");
