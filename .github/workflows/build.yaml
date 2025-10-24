@@ -28,9 +28,6 @@ jobs:
 
   run:
     needs: [build]
-    strategy:
-      matrix:
-        dotnet-version: ["8.0"]
     permissions:
       contents: read
     runs-on: ubuntu-24.04
@@ -43,14 +40,11 @@ jobs:
         with:
           restore-wasm-workload: true
       # ConsoleApp
-      - name: Run ConsoleApp (${{ matrix.dotnet-version}})
-        run: dotnet run --project ./samples/ConsoleApp/ConsoleApp.csproj -c Release -f net${{ matrix.dotnet-version }}
+      - name: Run ConsoleApp
+        run: dotnet run --project ./samples/ConsoleApp/ConsoleApp.csproj -c Release
       # SimpleGenerate
-      - name: Run SimpleGenerate (${{ matrix.dotnet-version}})
-        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Release -f net${{ matrix.dotnet-version }}
-      # LinuxRunSamples
-      - name: Run Linux Docker Compose (${{ matrix.dotnet-version}})
-        run: docker compose -f ./samples/LinuxCompose/compose.override.${{ matrix.dotnet-version }}.yaml up
+      - name: Run SimpleGenerate
+        run: dotnet run --project ./samples/SimpleGenerate/SimpleGenerate.csproj -c Release
       # NativeAOT
       - name: Run ConsoleAppNativeAOT (Windows)
         run: |
@@ -59,3 +53,6 @@ jobs:
           ls -l
           chmod +x ConsoleAppNativeAOT
           ./ConsoleAppNativeAOT
+      # LinuxRunSamples
+      - name: Run Linux Compose
+        run: docker compose -f ./samples/LinuxCompose/compose.override.8.0.yaml up
