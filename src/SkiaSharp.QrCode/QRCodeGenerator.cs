@@ -12,7 +12,7 @@ namespace SkiaSharp.QrCode;
 public static class QRCodeGenerator
 {
     // -----------------------------------------------------
-    // QR Code Structure
+    // QR Code Data Structure
     // -----------------------------------------------------
     //
     // 1. Header
@@ -58,18 +58,27 @@ public static class QRCodeGenerator
     {
         // QR code generation process:
         // ------------------------------------------------
-        // 1. Determine optimal encoding mode (Numeric/Alphanumeric/Byte)
-        // 2. Encode data to binary string
-        // 3. Select QR code version (based on data length and ECC level)
-        // 4. Add mode indicator and character count indicator
-        // 5. Pad data to fill code word capacity
-        // 6. Calculate error correction codewords using Reed-Solomon
-        // 7. Interleave data and ECC codewords
-        // 8. Place finder patterns, alignment patterns, timing patterns
-        // 9. Place data modules in zigzag pattern
-        // 10. Apply optimal mask pattern (test all 8 patterns)
-        // 11. Add format and version information
-        // 12. Add quiet zone (white border)
+        // 1. Validate input parameters (version range, quiet zone size)
+        // 2. Prepare configuration:
+        //    - Analyze text to determine optimal encoding mode (Numeric/Alphanumeric/Byte)
+        //    - Select QR code version based on data length and ECC level
+        //    - Get error correction info for the selected version
+        // 3. Calculate buffer sizes (data capacity, ECC capacity, interleaved size)
+        // 4. Encode data:
+        //    - Write mode indicator (4 bits) and character count indicator
+        //    - Write actual data content
+        //    - Add padding to fill code word capacity (terminator + alignment + 0xEC/0x11 pattern)
+        // 5. Calculate error correction codewords using Reed-Solomon (per block)
+        // 6. Interleave data and ECC codewords (according to QR code specification)
+        // 7. Write QR matrix:
+        //    - Place fixed patterns (finder, separators, alignment, timing, dark module)
+        //    - Reserve areas for format and version information
+        //    - Build blocked module bitmask for efficient lookup
+        //    - Place data modules in zigzag pattern
+        //    - Apply optimal mask pattern (test all 8 patterns, select best)
+        //    - Place format information (ECC level + mask pattern)
+        //    - Place version information (version 7+ only)
+        // 8. Return QRCodeData (quiet zone handled by QRCodeData class)
 
         if (requestedVersion != -1 && (requestedVersion < 1 || requestedVersion > 40))
             throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be 1-40 or -1(auto), but was {requestedVersion}");
