@@ -11,8 +11,6 @@ var path = args[1];
 
 // generate qr code
 var qrCodeData = QRCodeImageBuilder.GetPngBytes(content);
-
-new QRCodeImageBuilder(content);
 File.WriteAllBytes(path, qrCodeData);
 
 Console.WriteLine($"Successfully output QRCode in {path}");

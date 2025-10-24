@@ -69,7 +69,7 @@ Console.WriteLine();
 // Builder Pattern (Advanced - Custom Colors)
 Console.WriteLine("""
     Pattern 4: Builder Pattern (Advanced - Custom Colors
-      - Best for: Custom colors and styling");
+      - Best for: Custom colors and styling
       - API: new QRCodeImageBuilder().WithColors()
     """);
 {
@@ -89,7 +89,7 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
-// Builder Pattern (Advaned - Module Shape)
+// Builder Pattern (Advanced - Module Shape)
 Console.WriteLine("""
     Pattern 5: Builder Pattern (Advanced - Module Shape)
       - Best for: Custom module shapes (circles, rounded rectangles)
@@ -350,9 +350,9 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
-// Instragram-style Profile QR Code
+// Instagram-style Profile QR Code
 Console.WriteLine("""
-    Pattern 13: Instragram-style Profile QR Code
+    Pattern 13: Instagram-style Profile QR Code
       - Best for: Demonstrating complex styling
       - API: QRCodeImageBuilder with gradient + icon + custom styling
     """);

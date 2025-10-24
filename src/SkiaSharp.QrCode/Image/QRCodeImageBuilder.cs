@@ -135,7 +135,7 @@ public class QRCodeImageBuilder
     /// <param name="width">Width in pixels (must be positive).</param>
     /// <param name="height">Height in pixels (must be positive).</param>
     /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="ArgumentException"></exception>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
     public QRCodeImageBuilder WithSize(int width, int height)
     {
         if (width <= 0)
