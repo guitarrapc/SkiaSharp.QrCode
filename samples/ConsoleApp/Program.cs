@@ -537,5 +537,23 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
+// Console Output of QR Code
+Console.WriteLine("""
+    Pattern 15: Console Output of QR Code
+      - Best for: Quick visual verification in console
+      - API: QRCodeGenerator.CreateQrCode() + Console.Write()
+    """);
+{
+    var qrCodeData = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, quietZoneSize: 4);
+    for (var row = 0; row < qrCodeData.Size; row++)
+    {
+        for (var col = 0; col < qrCodeData.Size; col++)
+        {
+            Console.Write(qrCodeData[row, col] ? "🔵" : "  ");
+        }
+        Console.Write("\n");
+    }
+}
+
 Console.WriteLine("=== All patterns completed! ===");
 Console.WriteLine($"Output directory: {Path.GetFullPath(outputDir)}");
