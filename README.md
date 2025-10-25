@@ -70,7 +70,80 @@ QRCodeImageBuilder.SavePng("Your content here", stream, ECCLevel.M, size: 512);
 
 ## Migration from 0.8.0 to 0.9.0
 
-[TBD]
+v0.9.0 introduces significant performance improvements and API changes. Here's what you need to know to upgrade:
+
+### 🔄 Primary API Change: `QrCode` → `QRCodeImageBuilder`
+
+The `QrCode` class is now **obsolete**. Replace it with `QRCodeImageBuilder`:
+
+**Before (0.8.0):**
+```csharp
+var qrCode = new QrCode(content, new Vector2Slim(512, 512), SKEncodedImageFormat.Png);
+using (var output = new FileStream(path, FileMode.OpenOrCreate))
+{
+    qrCode.GenerateImage(output);
+}
+```
+
+**After (0.9.0) - Simple approach:**
+```csharp
+var pngBytes = QRCodeImageBuilder.GetPngBytes(content);
+File.WriteAllBytes(path, pngBytes);
+```
+
+**After (0.9.0) - Builder pattern:**
+```csharp
+using var stream = File.OpenWrite(path);
+new QRCodeImageBuilder(content)
+    .WithSize(512, 512)
+    .WithErrorCorrection(ECCLevel.H)
+    .SaveTo(stream);
+```
+
+### 🗑️ Remove `using` Statements
+
+`QRCodeData` and `QRCodeRenderer` are no longer `IDisposable`:
+
+**Before (0.8.0):**
+```csharp
+using var qrCodeData = QRCodeGenerator.CreateQrCode("Hello", ECCLevel.L);
+using var renderer = new QRCodeRenderer();
+renderer.Render(...);
+```
+
+**After (0.9.0):**
+```csharp
+var qrCodeData = QRCodeGenerator.CreateQrCode("Hello", ECCLevel.L);
+QRCodeRenderer.Render(...);  // Now a static method
+```
+
+### 📦 Update Namespace for IconData
+
+If using icons in QR codes:
+
+```csharp
+// Add this namespace
+using SkiaSharp.QrCode.Image;
+```
+
+### 🚫 Removed Features
+
+The following features have been removed:
+- `forceUtf8` parameter
+- ISO-8859-2 encoding support
+- Compression feature
+- Kanji encoding mode
+
+If you were using these features, you'll need to adjust your code accordingly.
+
+### ✨ New Features to Explore
+
+Take advantage of new capabilities:
+- **Gradient colors** - Create eye-catching QR codes with color gradients
+- **Enhanced customization** - More control over module shapes and colors
+- **Better performance** - Dramatically faster generation with lower memory usage
+
+For complete migration details and examples, see [Release 0.9.0](https://github.com/guitarrapc/SkiaSharp.QrCode/releases/tag/0.9.0).
 
 ## API Overview
 
