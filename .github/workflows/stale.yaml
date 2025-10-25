@@ -1,0 +1,29 @@
+name: "stale"
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+
+jobs:
+  stale:
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/stale@5f858e3efba33a5ca4407a664cc011ad407f2008 # v10.1.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          # enable issue
+          stale-issue-message: "This issue is stale because it has been open 180 days with no activity. Remove stale label or comment or this will be closed in 30 days."
+          stale-issue-label: "stale"
+          # enable pr
+          stale-pr-message: "This PR is stale because it has been open 180 days with no activity. Remove stale label or comment or this will be closed in 30 days."
+          stale-pr-label: "stale"
+          days-before-stale: 180
+          days-before-close: 30
+          exempt-issue-labels: "wip"
+          exempt-pr-labels: "wip"
+          remove-stale-when-updated: true
