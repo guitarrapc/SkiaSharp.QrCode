@@ -424,7 +424,7 @@ var qrCodeWithIcon = new QRCodeImageBuilder("https://example.com")
 Following shows how to display a QRCode inside a LINQPad Results pane.
 
 ```csharp
-Bitmap.FromStream(new MemoryStream(QRCodeImageBuilder.GetPngBytes("WIFI:T:WPA;S:mynetwork;P:mypass;;"));
+Bitmap.FromStream(new MemoryStream(QRCodeImageBuilder.GetPngBytes("WIFI:T:WPA;S:mynetwork;P:mypass;;")));
 ```
 
 ## QR code Specifications
