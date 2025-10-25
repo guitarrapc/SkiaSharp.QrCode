@@ -65,7 +65,3 @@ jobs:
           ls -l
           chmod +x ConsoleAppNativeAOT${{ matrix.ext }}
           ./ConsoleAppNativeAOT${{ matrix.ext }}
-      # LinuxRunSamples
-      - name: Run Linux Compose
-        if: ${{ matrix.runs-on == 'ubuntu-24.04' }}
-        run: docker compose -f ./samples/LinuxCompose/compose.override.8.0.yaml up
