@@ -22,6 +22,8 @@ You can create professional-looking QR codes like this with just a few lines of 
   <img src="samples/ConsoleApp/samples/pattern7_builder_icon.png" width="250" alt="Icon QR"/>
 </p>
 
+See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these styles.
+
 ## Overview
 
 SkiaSharp.QrCode is a modern, high-performance QR code generation library built on SkiaSharp. SkiaSharp.QrCode allocates memory only for the actual QR code data, with zero additional allocations during processing.
@@ -59,7 +61,32 @@ QRCodeImageBuilder.SavePng("Hello", "qrcode.png");
 var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
 ```
 
-### Save Directly to Stream
+### Common Use Cases
+
+Generate QR Code for URL
+
+```csharp
+var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
+File.WriteAllBytes("qrcode.png", pngBytes);
+```
+
+WiFi QR Code
+
+```csharp
+var wifiString = "WIFI:T:WPA;S:MyNetwork;P:MyPassword;;";
+QRCodeImageBuilder.SavePng(wifiString, "wifi-qr.png");
+```
+
+Generate with Custom Settings
+
+```csharp
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithSize(512, 512)
+    .WithErrorCorrection(ECCLevel.H)
+    .ToByteArray();
+```
+
+Save Directly to Stream
 
 ```csharp
 using SkiaSharp.QrCode.Image;
