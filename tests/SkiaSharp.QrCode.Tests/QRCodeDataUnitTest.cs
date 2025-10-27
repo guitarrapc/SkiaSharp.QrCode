@@ -171,7 +171,7 @@ public class QRCodeDataUnitTest
         // 7 is not 8's multiple, it means it won't dup with byte border.
         // see remarks.
         var pattern = 7;
-        var version = (matrixSize -21) / 4 + 1;
+        var version = (matrixSize - 21) / 4 + 1;
 
         var original = new QRCodeData(version, quietZoneSize: quietZoneSize);
 

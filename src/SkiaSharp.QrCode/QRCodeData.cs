@@ -206,7 +206,7 @@ public class QRCodeData
     /// </param>
     /// <exception cref="InvalidDataException">Thrown if the data is invalid.</exception>
     /// <exception cref="InvalidOperationException">Thrown if the data does not contain enough bits to fully populate the QR code matrix.</exception>
-    public QRCodeData(byte[] rawData, int quietZoneSize): this(rawData.AsSpan(), quietZoneSize)
+    public QRCodeData(byte[] rawData, int quietZoneSize) : this(rawData.AsSpan(), quietZoneSize)
     {
     }
 

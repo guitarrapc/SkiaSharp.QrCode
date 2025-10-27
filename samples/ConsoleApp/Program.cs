@@ -465,7 +465,7 @@ Console.WriteLine("""
                 SKColor.Parse("833AB4")
             ],
             GradientDirection.BottomLeftToTopRight,
-            [ 0f, 0.25f, 0.5f, 0.75f, 1f ]);
+            [0f, 0.25f, 0.5f, 0.75f, 1f]);
 
         // Render QR code
         using var logo = SKBitmap.Decode(File.ReadAllBytes(iconInstaPath));
