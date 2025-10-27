@@ -1,4 +1,4 @@
-﻿namespace SkiaSharp.QrCode.Image;
+namespace SkiaSharp.QrCode.Image;
 
 /// <summary>
 /// Defines gradient configuration for QR code rendering.
@@ -15,7 +15,7 @@
 /// </remarks>
 public record class GradientOptions
 {
-    public static readonly GradientOptions Default = new([ SKColors.DarkOrange, SKColors.Firebrick ], GradientDirection.TopLeftToBottomRight);
+    public static readonly GradientOptions Default = new([SKColors.DarkOrange, SKColors.Firebrick], GradientDirection.TopLeftToBottomRight);
 
     /// <summary>
     /// Initializes a new instance of the GradientOptions record.

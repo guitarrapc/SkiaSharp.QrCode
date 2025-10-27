@@ -158,7 +158,7 @@ public class QRCodeImageBuilder
     {
         if (quality is < 0 or > 100)
             throw new ArgumentOutOfRangeException(nameof(quality), "Quality must be between 0 and 100");
-        
+
         _format = format;
         _quality = quality;
         return this;
