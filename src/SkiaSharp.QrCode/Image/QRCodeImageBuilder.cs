@@ -39,6 +39,7 @@ public class QRCodeImageBuilder
     private SKColor? _clearColor;
     private ModuleShape? _moduleShape;
     private float _moduleSizePercent = 1.0f;
+    private FinderPatternShape? _finderPatternShape;
     private GradientOptions? _gradientOptions;
     private IconData? _iconData;
 
@@ -218,6 +219,9 @@ public class QRCodeImageBuilder
     /// <summary>
     /// Configure the shape of the QR code modules.
     /// </summary>
+    /// <remarks>
+    /// Note: Custom module shapes do not affect finder patterns unless <see cref="WithFinderPatternShape"/> is explicitly set to null.
+    /// </remarks>
     /// <param name="moduleShape">Shape to use for modules. If null, uses rectangles.</param>
     /// <param name="sizePercent">Module size as a percentage of cell size (0.5-1.0). Values below 0.8 may affect readability. Default is 1.0 (no gaps).</param>
     /// <returns>This builder instance for method chaining.</returns>
@@ -251,6 +255,17 @@ public class QRCodeImageBuilder
     public QRCodeImageBuilder WithIcon(IconData? iconData)
     {
         _iconData = iconData;
+        return this;
+    }
+
+    /// <summary>
+    /// Configure the shape of the finder patterns.
+    /// </summary>
+    /// <param name="finderPatternShape">Shape to use for finder patterns. If null, uses standard pattern or same as module shape.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    public QRCodeImageBuilder WithFinderPatternShape(FinderPatternShape? finderPatternShape)
+    {
+        _finderPatternShape = finderPatternShape;
         return this;
     }
 
@@ -338,7 +353,7 @@ public class QRCodeImageBuilder
         using var surface = SKSurface.Create(info);
         var canvas = surface.Canvas;
 
-        canvas.Render(qrCodeData, info.Width, info.Height, _clearColor, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions);
+        canvas.Render(qrCodeData, info.Width, info.Height, _clearColor, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
 
         // Encode and save
         return surface.Snapshot();

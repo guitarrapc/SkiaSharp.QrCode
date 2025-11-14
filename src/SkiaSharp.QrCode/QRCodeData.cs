@@ -433,6 +433,56 @@ public class QRCodeData
     }
 
     /// <summary>
+    /// Checks if the specified module position (excluding quiet zone) is part of a finder pattern.
+    /// </summary>
+    /// <param name="row">Row index in core data (0-based, excluding quiet zone)</param>
+    /// <param name="col">Column index in core data (0-based, excluding quiet zone)</param>
+    /// <returns>True if the module is part of any finder pattern, false otherwise.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsFinderPattern(int row, int col)
+    {
+        var coreSize = GetCoreSize();
+
+        // Early exit for most common case (middle area)
+        if (row >= 7 && row < coreSize - 7 && col >= 7 && col < coreSize - 7)
+            return false;
+
+        // Top-left (0,0 to 6,6)
+        if (row < 7 && col < 7) return true;
+
+        // Top-right (0, coreSize-7 to coreSize-1, coreSize-1)
+        if (row < 7 && col >= coreSize - 7) return true;
+
+        // Bottom-left (coreSize-7, 0 to coreSize-1,6)
+        if (row >= coreSize - 7 && col < 7) return true;
+
+        return false;
+    }
+
+    /// <summary>
+    /// Gets the finder pattern index for the specified module position (excluding quiet zone).
+    /// </summary>
+    /// <param name="row">Row index in core data (0-based, excluding quiet zone)</param>
+    /// <param name="col">Column index in core data (0-based, excluding quiet zone)</param>
+    /// <returns>Finder pattern index (0=Top-left, 1=Top-right, 2=Bottom-left), or -1 if not part of any finder pattern.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public int GetFinderPatternIndex(int row, int col)
+    {
+        var coreSize = GetCoreSize();
+
+        // Top-left (0,0 to 6,6)
+        if (row < 7 && col < 7) return 0;
+
+        // Top-right (0, coreSize-7 to coreSize-1, coreSize-1)
+        if (row < 7 && col >= coreSize - 7) return 1;
+
+        // Bottom-left (coreSize-7, 0 to coreSize-1,6)
+        if (row >= coreSize - 7 && col < 7) return 2;
+
+        return -1;
+    }
+
+    /// <summary>
     /// Gets the entire data as span
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
