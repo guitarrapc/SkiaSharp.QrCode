@@ -87,7 +87,7 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
 
 /// <summary>
 /// Rounded rectangle outer with circular center finder pattern.
-/// Three nested shapes: outer rounded rectangle (7×7), middle rounded rectangle (5×5), inner circle (3×3).
+/// Three nested shapes: outer rounded rectangle (7×7), middle rounded rectangle (5×5), inner rounded rectangle (3×3).
 /// </summary>
 public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
 {
@@ -139,7 +139,8 @@ public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
 }
 
 /// <summary>
-/// Rounded rectangle outer with circular center finder pattern. (outer rounded rectangle 7x7, middle rounded rectangle 5x5, inner circle 3x3)
+/// Rounded rectangle outer with circular center finder pattern.
+/// Three nested shapes: outer rounded rectangle (7×7), middle rounded rectangle (5×5), inner circle (3×3).
 /// </summary>
 public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShape
 {

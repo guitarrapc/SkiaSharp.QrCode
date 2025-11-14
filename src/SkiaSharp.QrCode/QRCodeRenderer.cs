@@ -56,7 +56,7 @@ public static class QRCodeRenderer
         // Apply gradient if specified
         if (gradientOptions is not null && gradientOptions.Direction != GradientDirection.None)
         {
-            var (start, end) = GeLineartGradientPoints(area, gradientOptions.Direction);
+            var (start, end) = GetLinearGradientPoints(area, gradientOptions.Direction);
             darkPaint.Shader = SKShader.CreateLinearGradient(start, end, gradientOptions.Colors, gradientOptions.ColorPositions, SKShaderTileMode.Clamp);
         }
         else
@@ -202,7 +202,7 @@ public static class QRCodeRenderer
         };
     }
 
-    private static (SKPoint start, SKPoint end) GeLineartGradientPoints(SKRect area, GradientDirection direction)
+    private static (SKPoint start, SKPoint end) GetLinearGradientPoints(SKRect area, GradientDirection direction)
     {
         return direction switch
         {
