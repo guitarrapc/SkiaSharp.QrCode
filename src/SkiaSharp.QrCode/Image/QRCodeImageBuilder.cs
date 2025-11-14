@@ -220,7 +220,7 @@ public class QRCodeImageBuilder
     /// Configure the shape of the QR code modules.
     /// </summary>
     /// <remarks>
-    /// Note: Custom module shapes do not affect finder patterns unless <see cref="WithFinderPatternShape"/> is explicitly set to null.
+    /// Note: Custom module shapes affect finder patterns unless a custom finder pattern shape is explicitly set via <see cref="WithFinderPatternShape"/>.
     /// </remarks>
     /// <param name="moduleShape">Shape to use for modules. If null, uses rectangles.</param>
     /// <param name="sizePercent">Module size as a percentage of cell size (0.5-1.0). Values below 0.8 may affect readability. Default is 1.0 (no gaps).</param>

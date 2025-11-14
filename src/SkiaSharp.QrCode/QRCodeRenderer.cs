@@ -152,7 +152,7 @@ public static class QRCodeRenderer
     }
 
     /// <summary>
-    /// CalculatesGets the rectangle area for a specified finder pattern in the rendered QR code area.
+    /// Gets the rectangle area for a specified finder pattern in the rendered QR code area.
     /// </summary>
     /// <remarks>
     /// The finder patterns are the large squares typically located at three corners of a QR code.
@@ -184,18 +184,18 @@ public static class QRCodeRenderer
         return patternIndex switch
         {
             0 => SKRect.Create(
-                renderArea.Left + (quietZoneOffset / 2) * cellWidth,
-                renderArea.Top + (quietZoneOffset / 2) * cellHeight,
+                renderArea.Left + ((float)quietZoneOffset / 2) * cellWidth,
+                renderArea.Top + ((float)quietZoneOffset / 2) * cellHeight,
                 finderWidth,
                 finderHeight),
             1 => SKRect.Create(
-                renderArea.Left + (coreSize - 7 + quietZoneOffset / 2) * cellWidth,
-                renderArea.Top + (quietZoneOffset / 2) * cellHeight,
+                renderArea.Left + (coreSize - 7 + (float)quietZoneOffset / 2) * cellWidth,
+                renderArea.Top + ((float)quietZoneOffset / 2) * cellHeight,
                 finderWidth,
                 finderHeight),
             2 => SKRect.Create(
-                renderArea.Left + (quietZoneOffset / 2) * cellWidth,
-                renderArea.Top + (coreSize - 7 + quietZoneOffset / 2) * cellHeight,
+                renderArea.Left + ((float)quietZoneOffset / 2) * cellWidth,
+                renderArea.Top + (coreSize - 7 + (float)quietZoneOffset / 2) * cellHeight,
                 finderWidth,
                 finderHeight),
             _ => throw new ArgumentOutOfRangeException(nameof(patternIndex), "Pattern index must be 0 (top-left), 1 (top-right), or 2 (bottom-left)."),

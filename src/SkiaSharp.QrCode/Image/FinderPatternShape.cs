@@ -91,6 +91,9 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
 /// </summary>
 public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
 {
+    /// <summary>
+    /// Gets the default instance.
+    /// </summary>
     public static readonly RoundedRectangleFinderPatternShape Default = new();
 
     private readonly float _cornerRadiusPercent;
@@ -140,6 +143,9 @@ public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
 /// </summary>
 public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShape
 {
+    /// <summary>
+    /// Gets the default instance.
+    /// </summary>
     public static readonly RoundedRectangleCircleFinderPatternShape Default = new();
 
     private readonly float _cornerRadiusPercent;
