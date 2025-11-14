@@ -1,8 +1,8 @@
 using BenchmarkDotNet.Configs;
 using SkiaSharp;
 
-[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [MemoryDiagnoser]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 public class SimpleEncode
 {
     private string _textNumber = default!;

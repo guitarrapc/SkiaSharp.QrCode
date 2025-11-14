@@ -1,7 +1,7 @@
 using BenchmarkDotNet.Configs;
 
-[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [MemoryDiagnoser]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 public class QRGeneratorSimple
 {
     [Benchmark]

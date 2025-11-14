@@ -88,7 +88,7 @@
 
             <div style="margin:0.5rem">
                 <label style="width: 140px;">ClearColor</label>
-                <SKColorInputSelect style="width: 200px;" @bind-Value="@Model.ClearColor">
+                <SKColorInputSelect style="width: 200px;" @bind-value="@Model.ClearColor">
                     @foreach (var color in Colors)
                     {
                         <option value="@color.Value">@color.Name</option>
@@ -98,7 +98,7 @@
 
             <div style="margin:0.5rem">
                 <label style="width: 140px;">CodeColor</label>
-                <SKColorInputSelect style="width: 200px;" @bind-Value="@Model.CodeColor">
+                <SKColorInputSelect style="width: 200px;" @bind-value="@Model.CodeColor">
                     @foreach (var color in Colors)
                     {
                         <option value="@color.Value">@color.Name</option>
@@ -108,7 +108,7 @@
 
             <div style="margin:0.5rem">
                 <label style="width: 140px;">BackgroundColor</label>
-                <SKColorInputSelect style="width: 200px;" @bind-Value="@Model.BackgroundColor">
+                <SKColorInputSelect style="width: 200px;" @bind-value="@Model.BackgroundColor">
                     @foreach (var color in Colors)
                     {
                         <option value="@color.Value">@color.Name</option>
@@ -154,36 +154,38 @@
         </FluentCard>
     </div>
 
-    <FluentCard>
-        <h3>Gradient Settings</h3>
-        <div style="margin:0.5rem">
-            <label style="width: 140px;">Start Color</label>
-            <SKColorInputSelect style="width: 200px;" @bind-Value="Model.GradientStartColor">
-                @foreach (var color in Colors)
-                {
-                    <option value="@color.Value">@color.Name</option>
-                }
-            </SKColorInputSelect>
-        </div>
-        <div style="margin:0.5rem">
-            <label style="width: 140px;">End Color</label>
-            <SKColorInputSelect style="width: 200px;" @bind-Value="Model.GradientEndColor">
-                @foreach (var color in Colors)
-                {
-                    <option value="@color.Value">@color.Name</option>
-                }
-            </SKColorInputSelect>
-        </div>
-        <div style="margin:0.5rem">
-            <label style="width: 140px;">Direction</label>
-            <InputSelect style="width: 200px;" @bind-Value="Model.GradientDirection">
-                @foreach (var dir in Enum.GetValues(typeof(GradientDirection)))
-                {
-                    <option value="@dir">@dir</option>
-                }
-            </InputSelect>
-        </div>
-    </FluentCard>
+    <div style="margin-bottom: 1rem">
+      <FluentCard>
+          <h3>Gradient Settings</h3>
+          <div style="margin:0.5rem">
+              <label style="width: 140px;">Start Color</label>
+              <SKColorInputSelect style="width: 200px;" @bind-Value="Model.GradientStartColor">
+                  @foreach (var color in Colors)
+                  {
+                      <option value="@color.Value">@color.Name</option>
+                  }
+              </SKColorInputSelect>
+          </div>
+          <div style="margin:0.5rem">
+              <label style="width: 140px;">End Color</label>
+              <SKColorInputSelect style="width: 200px;" @bind-Value="Model.GradientEndColor">
+                  @foreach (var color in Colors)
+                  {
+                      <option value="@color.Value">@color.Name</option>
+                  }
+              </SKColorInputSelect>
+          </div>
+          <div style="margin:0.5rem">
+              <label style="width: 140px;">Direction</label>
+              <InputSelect style="width: 200px;" @bind-Value="Model.GradientDirection">
+                  @foreach (var dir in Enum.GetValues(typeof(GradientDirection)))
+                  {
+                      <option value="@dir">@dir</option>
+                  }
+              </InputSelect>
+          </div>
+      </FluentCard>
+    </div>
 
     <div style="margin-bottom: 1rem">
         <button type="submit" class="btn btn-primary">Refresh</button>
@@ -310,7 +312,15 @@
 
     public void Dispose()
     {
-        CanvasView?.Dispose();
+        // SKCanvasView in Blazor WASM should not be explicitly disposed.
+        // Calling Dispose() on SKCanvasView causes a ResizeObserver error because
+        // the DOM element is removed before the JavaScript cleanup is executed.
+        // The managed resources will be cleaned up by the garbage collector,
+        // and the JavaScript interop lifetime is managed by the Blazor runtime.
+        // See: https://github.com/mono/SkiaSharp/issues (Blazor SKCanvasView dispose issues)
+
+        // Only dispose resources we directly manage (like IconBitmap)
+        IconBitmap?.Dispose();
     }
 
     public class QRModel

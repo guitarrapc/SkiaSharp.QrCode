@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0;net10.0</TargetFrameworks>
 
     <!-- NuGet -->
     <IsPackable>true</IsPackable>
@@ -12,7 +12,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="SkiaSharp.QrCode.Tests, PublicKey=00240000048000009400000006020000002400005253413100040000010001007de4a83ad446c6d7c9e85de8a1c654096808b127b9cfc0db4931e3062bffea0daa74fa7c584ee37c9d0dee5c86f42e3b88be303692712c9198ab19665680d2bca6d91f48a3c76980c8d0a90248c3b535a935612525b79b9bbc152e7e297a004bd17e2b24767fadde2a5174f9a50e297e724637f498777d14a62223f4db932dbc" />
   </ItemGroup>
-  
+
   <ItemGroup>
     <PackageReference Include="PolySharp">
       <PrivateAssets>all</PrivateAssets>
