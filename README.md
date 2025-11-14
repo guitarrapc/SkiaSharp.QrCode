@@ -17,7 +17,7 @@ Many existing QR code libraries rely on System.Drawing, which has well-known GDI
 You can create professional-looking QR codes like this with just a few lines of code:
 
 <p float="left">
-  <img src="samples/ConsoleApp/samples/pattern14_instagram_frame.png" width="250" alt="Instagram-style"/>
+  <img src="samples/ConsoleApp/samples/pattern15_instagram_frame.png" width="250" alt="Instagram-style"/>
   <img src="samples/ConsoleApp/samples/pattern6_builder_gradient.png" width="250" alt="Gradient QR"/>
   <img src="samples/ConsoleApp/samples/pattern7_builder_icon.png" width="250" alt="Icon QR"/>
 </p>

@@ -20,7 +20,9 @@ public static class QRCodeRenderer
     /// <param name="moduleShape">The shape to use for drawing modules. If null, rectangles are used.</param>
     /// <param name="moduleSizePercent">The size of each module as a percentage of the cell size (0.0 to 1.0). Default is 1.0 (no gap).</param>
     /// <param name="gradientOptions">Optional gradient options for the QR code modules.</param>
+    /// <param name="finderPatternShape">The shape to use for drawing finder patterns. If null, finder patterns are drawn using the same shape as regular modules. Set to a custom shape to differentiate finder patterns from data modules.</param>
     /// <exception cref="ArgumentNullException"></exception>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
     public static void Render(
         SKCanvas canvas,
         SKRect area,
@@ -30,7 +32,8 @@ public static class QRCodeRenderer
         IconData? iconData = null,
         ModuleShape? moduleShape = null,
         float moduleSizePercent = 1.0f,
-        GradientOptions? gradientOptions = null)
+        GradientOptions? gradientOptions = null,
+        FinderPatternShape? finderPatternShape = null)
     {
         if (data is null)
             throw new ArgumentNullException(nameof(data));
@@ -53,13 +56,8 @@ public static class QRCodeRenderer
         // Apply gradient if specified
         if (gradientOptions is not null && gradientOptions.Direction != GradientDirection.None)
         {
-            var (start, end) = GeLineartGradientPoints(area, gradientOptions.Direction);
-            darkPaint.Shader = SKShader.CreateLinearGradient(
-                start,
-                end,
-                gradientOptions.Colors,
-                gradientOptions.ColorPositions,
-                SKShaderTileMode.Clamp);
+            var (start, end) = GetLinearGradientPoints(area, gradientOptions.Direction);
+            darkPaint.Shader = SKShader.CreateLinearGradient(start, end, gradientOptions.Colors, gradientOptions.ColorPositions, SKShaderTileMode.Clamp);
         }
         else
         {
@@ -68,8 +66,10 @@ public static class QRCodeRenderer
 
         // Draw the modules
         var size = data.Size;
+        var coreSize = data.GetCoreSize();
         var cellHeight = area.Height / size;
         var cellWidth = area.Width / size;
+        var quietZoneOffset = size - coreSize;
 
         // Calculate module size with gaps
         var moduleWidth = cellWidth * moduleSizePercent;
@@ -77,10 +77,23 @@ public static class QRCodeRenderer
         var xOffset = (cellWidth - moduleWidth) / 2;
         var yOffset = (cellHeight - moduleHeight) / 2;
 
+        // Draw regular modules (exclude finder patterns)
         for (int row = 0; row < size; row++)
         {
             for (int col = 0; col < size; col++)
             {
+                // Convert to core coordinates
+                var coreRow = row - quietZoneOffset / 2;
+                var coreCol = col - quietZoneOffset / 2;
+
+                // Skip if outside core area
+                if (coreRow < 0 || coreRow >= coreSize || coreCol < 0 || coreCol >= coreSize)
+                    continue;
+
+                // Skip finder pattern if custom shape is used
+                if (finderPatternShape is not null && data.IsFinderPattern(coreRow, coreCol))
+                    continue;
+
                 if (data[row, col])
                 {
                     var x = area.Left + col * cellWidth + xOffset;
@@ -88,6 +101,17 @@ public static class QRCodeRenderer
                     var rect = SKRect.Create(x, y, moduleWidth, moduleHeight);
                     shape.Draw(canvas, rect, darkPaint);
                 }
+            }
+        }
+
+        // Draw finder patterns
+        if (finderPatternShape is not null)
+        {
+            // total 3 finder patterns
+            for (var i = 0; i < 3; i++)
+            {
+                var finderRect = GetFinderPatternRect(data, i, area);
+                finderPatternShape.Draw(canvas, finderRect, darkPaint);
             }
         }
 
@@ -127,7 +151,58 @@ public static class QRCodeRenderer
         }
     }
 
-    private static (SKPoint start, SKPoint end) GeLineartGradientPoints(SKRect area, GradientDirection direction)
+    /// <summary>
+    /// Gets the rectangle area for a specified finder pattern in the rendered QR code area.
+    /// </summary>
+    /// <remarks>
+    /// The finder patterns are the large squares typically located at three corners of a QR code.
+    /// This method calculates their positions based on the QR code's size and quiet zone, ensuring accurate placement
+    /// within the specified rendering area.
+    /// </remarks>
+    /// <param name="data">The QR code data containing module and layout information. Cannot be null.</param>
+    /// <param name="patternIndex">Finder pattern index (0=top-left, 1=top-right, 2=bottom-left).</param>
+    /// <param name="renderArea">The area within which the QR code is rendered. The finder pattern rectangle is calculated relative to this area.</param>
+    /// <returns>An SKRect representing the position and size of the specified finder pattern within the rendering area.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="data"/> is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown if <paramref name="patternIndex"/> is less than 0 or greater than 2.</exception>
+    public static SKRect GetFinderPatternRect(QRCodeData data, int patternIndex, SKRect renderArea)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        if (patternIndex is < 0 or > 2)
+            throw new ArgumentOutOfRangeException(nameof(patternIndex), "Pattern index must be 0 (top-left), 1 (top-right), or 2 (bottom-left).");
+
+        var size = data.Size;
+        var coreSize = data.GetCoreSize();
+        var cellWidth = renderArea.Width / size;
+        var cellHeight = renderArea.Height / size;
+        var finderWidth = cellWidth * 7;
+        var finderHeight = cellHeight * 7;
+
+        var quietZoneOffset = size - coreSize;
+
+        return patternIndex switch
+        {
+            0 => SKRect.Create(
+                renderArea.Left + ((float)quietZoneOffset / 2) * cellWidth,
+                renderArea.Top + ((float)quietZoneOffset / 2) * cellHeight,
+                finderWidth,
+                finderHeight),
+            1 => SKRect.Create(
+                renderArea.Left + (coreSize - 7 + (float)quietZoneOffset / 2) * cellWidth,
+                renderArea.Top + ((float)quietZoneOffset / 2) * cellHeight,
+                finderWidth,
+                finderHeight),
+            2 => SKRect.Create(
+                renderArea.Left + ((float)quietZoneOffset / 2) * cellWidth,
+                renderArea.Top + (coreSize - 7 + (float)quietZoneOffset / 2) * cellHeight,
+                finderWidth,
+                finderHeight),
+            _ => throw new ArgumentOutOfRangeException(nameof(patternIndex), "Pattern index must be 0 (top-left), 1 (top-right), or 2 (bottom-left)."),
+        };
+    }
+
+    private static (SKPoint start, SKPoint end) GetLinearGradientPoints(SKRect area, GradientDirection direction)
     {
         return direction switch
         {
