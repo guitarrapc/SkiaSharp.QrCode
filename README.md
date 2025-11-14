@@ -86,15 +86,6 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
     .ToByteArray();
 ```
 
-Finder Pattern Customization. You can customize the finder pattern shapes.
-
-```csharp
-var qrCode = new QRCodeImageBuilder("https://example.com")
-    .WithSize(512, 512)
-    .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
-    .ToByteArray();
-```
-
 Save Directly to Stream
 
 ```csharp
@@ -810,6 +801,41 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 
 var pngBytes = qrCode.ToByteArray();
 ```
+
+### Custom Finder Pattern
+
+```csharp
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithSize(512, 512)
+    .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
+    .WithColors(codeColor: SKColors.DarkBlue);
+
+var pngBytes = qrCode.ToByteArray();
+```
+
+### Gradient QR Code
+
+```csharp
+var instagramGradient = new GradientOptions([
+        SKColor.Parse("FCAF45"),  // Orange
+        SKColor.Parse("F77737"),  // Orange-Red
+        SKColor.Parse("E1306C"),  // Pink
+        SKColor.Parse("C13584"),  // Purple
+        SKColor.Parse("833AB4")   // Deep Purple
+    ],
+    GradientDirection.TopLeftToBottomRight,
+    [0f, 0.25f, 0.5f, 0.75f, 1f]);
+
+var qrCode = new QRCodeImageBuilder(content)
+    .WithSize(512, 512)
+    .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.White)
+    .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
+    .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
+    .WithGradient(instagramGradient);
+
+var pngBytes = qrCode.ToByteArray();
+```
+
 
 #### Low-Level Canvas Rendering
 
