@@ -71,6 +71,16 @@
                 </InputSelect>
             </div>
 
+            <div style="margin:0.5rem">
+                <label style="width: 140px;">FinderPattern</label>
+                <InputSelect style="width: 200px;" @bind-Value="@Model.FinderPatternShape">
+                    @foreach (var shape in Enum.GetValues(typeof(FinderPatternShapeType)))
+                    {
+                        <option value="@shape">@shape</option>
+                    }
+                </InputSelect>
+            </div>
+
             @if (Model.ModuleShape == ModuleShapeType.RoundedRectangle)
             {
                 <div class="d-flex flex-row" style="margin:0.5rem">
@@ -284,6 +294,7 @@
 
         // Create shape
         var moduleShape = ModuleShapeFactory.Create(Model.ModuleShape, Model.CornerRadiusPercent);
+        var finderPatternShape = FinderPatternFactory.Create(Model.FinderPatternShape, Model.CornerRadiusPercent);
 
         // Create icon data if icon is loaded
         IconData? iconData = null;
@@ -307,7 +318,7 @@
         // Render to canvas
         var info = new SKImageInfo(Model.Size, Model.Size); // Make sure match with SKCanvasView width & height.
         using var surface = SKSurface.Create(info);
-        canvas.Render(qr, info.Width, info.Height, Model.ClearColor, Model.CodeColor, Model.BackgroundColor, iconData, moduleShape: moduleShape, moduleSizePercent: Model.ModuleSizePercent, gradientOptions: gradientOptions);
+        canvas.Render(qr, info.Width, info.Height, Model.ClearColor, Model.CodeColor, Model.BackgroundColor, iconData, moduleShape: moduleShape, moduleSizePercent: Model.ModuleSizePercent, gradientOptions: gradientOptions, finderPatternShape: finderPatternShape);
     }
 
     public void Dispose()
@@ -326,18 +337,19 @@
     public class QRModel
     {
         [Required]
-        public string Content { get; set; } = "https://github.com/guitarrapc/SkiaSharp.QrCode";
+        public string Content { get; set; } = "https://github.com/guitarrapc/SkiaSharp.QrCode?foobar=piyopiyo&number=1234567&name=foobar";
         [Required]
         [Range(100, 4096)]
         public int Size { get; set; } = 512;
         [Range(0, 10)]
         public int QuietZoneSize { get; set; } = 4;
-        public ECCLevel EccLevel { get; set; } = ECCLevel.M;
+        public ECCLevel EccLevel { get; set; } = ECCLevel.H;
         public EciMode EciMode { get; set; } = EciMode.Default;
-        public ModuleShapeType ModuleShape { get; set; } = ModuleShapeType.Rectangle;
+        public ModuleShapeType ModuleShape { get; set; } = ModuleShapeType.Circle;
+        public FinderPatternShapeType FinderPatternShape { get; set; } = FinderPatternShapeType.RoundedRectangleCircle;
         [Range(0.0, 1.0)]
         public float CornerRadiusPercent { get; set; } = 0.3f;
-        public float ModuleSizePercent { get; set; } = 1.0f;
+        public float ModuleSizePercent { get; set; } = 0.95f;
         [Range(5, 30)]
         public int IconSizePercent { get; set; } = 15;
         [Range(0, 10)]
@@ -346,9 +358,9 @@
         public SKColor CodeColor { get; set; } = SKColors.Black;
         public SKColor BackgroundColor { get; set; } = SKColors.White;
         // gradient support
-        public SKColor GradientStartColor { get; set; } = SKColors.Black;
-        public SKColor GradientEndColor { get; set; } = SKColors.Black;
-        public GradientDirection GradientDirection { get; set; } = GradientDirection.None;
+        public SKColor GradientStartColor { get; set; } = SKColors.Coral;
+        public SKColor GradientEndColor { get; set; } = SKColors.DarkOrchid;
+        public GradientDirection GradientDirection { get; set; } = GradientDirection.TopLeftToBottomRight;
     }
 
     /// <summary>
@@ -358,7 +370,19 @@
     {
         Rectangle,
         Circle,
-        RoundedRectangle
+        RoundedRectangle,
+    }
+
+    /// <summary>
+    /// Predefined finder pattern shape types.
+    /// </summary>
+    public enum FinderPatternShapeType
+    {
+        None,
+        Rectangle,
+        Circle,
+        RoundedRectangle,
+        RoundedRectangleCircle,
     }
 
     /// <summary>
@@ -376,6 +400,22 @@
                 ModuleShapeType.Rectangle => RectangleModuleShape.Default,
                 ModuleShapeType.Circle => CircleModuleShape.Default,
                 ModuleShapeType.RoundedRectangle => new RoundedRectangleModuleShape(cornerRadiusPercent),
+                _ => throw new ArgumentOutOfRangeException(nameof(type))
+            };
+        }
+    }
+
+    public static class FinderPatternFactory
+    {
+        public static FinderPatternShape? Create(FinderPatternShapeType type, float cornerRadiusPercent = 0.3f)
+        {
+            return type switch
+            {
+                FinderPatternShapeType.None => null,
+                FinderPatternShapeType.Rectangle => RectangleFinderPatternShape.Default,
+                FinderPatternShapeType.Circle => CircleFinderPatternShape.Default,
+                FinderPatternShapeType.RoundedRectangle => RoundedRectangleFinderPatternShape.Default,
+                FinderPatternShapeType.RoundedRectangleCircle => RoundedRectangleCircleFinderPatternShape.Default,
                 _ => throw new ArgumentOutOfRangeException(nameof(type))
             };
         }
