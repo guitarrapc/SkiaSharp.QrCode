@@ -77,9 +77,6 @@ public static class QRCodeRenderer
         var xOffset = (cellWidth - moduleWidth) / 2;
         var yOffset = (cellHeight - moduleHeight) / 2;
 
-        // Draw regular modules (exclude finder patterns if custom shape is used)
-        var useCustomFinderPattern = finderPatternShape is not null;
-
         // Draw regular modules (exclude finder patterns)
         for (int row = 0; row < size; row++)
         {
@@ -94,7 +91,7 @@ public static class QRCodeRenderer
                     continue;
 
                 // Skip finder pattern if custom shape is used
-                if (useCustomFinderPattern && data.IsFinderPattern(coreRow, coreCol))
+                if (finderPatternShape is not null && data.IsFinderPattern(coreRow, coreCol))
                     continue;
 
                 if (data[row, col])
@@ -108,7 +105,7 @@ public static class QRCodeRenderer
         }
 
         // Draw finder patterns
-        if (useCustomFinderPattern)
+        if (finderPatternShape is not null)
         {
             // total 3 finder patterns
             for (var i = 0; i < 3; i++)
