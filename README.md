@@ -63,26 +63,35 @@ var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
 
 ### Common Use Cases
 
-Generate QR Code for URL
+Generate QR Code for URL.
 
 ```csharp
 var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
 File.WriteAllBytes("qrcode.png", pngBytes);
 ```
 
-WiFi QR Code
+WiFi QR Code.
 
 ```csharp
 var wifiString = "WIFI:T:WPA;S:MyNetwork;P:MyPassword;;";
 QRCodeImageBuilder.SavePng(wifiString, "wifi-qr.png");
 ```
 
-Generate with Custom Settings
+Generate with Custom Settings.
 
 ```csharp
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(512, 512)
     .WithErrorCorrection(ECCLevel.H)
+    .ToByteArray();
+```
+
+Finder Pattern Customization. You can customize the finder pattern shapes.
+
+```csharp
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithSize(512, 512)
+    .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
     .ToByteArray();
 ```
 
