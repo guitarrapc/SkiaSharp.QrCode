@@ -312,7 +312,15 @@
 
     public void Dispose()
     {
-        CanvasView?.Dispose();
+        // SKCanvasView in Blazor WASM should not be explicitly disposed.
+        // Calling Dispose() on SKCanvasView causes a ResizeObserver error because
+        // the DOM element is removed before the JavaScript cleanup is executed.
+        // The managed resources will be cleaned up by the garbage collector,
+        // and the JavaScript interop lifetime is managed by the Blazor runtime.
+        // See: https://github.com/mono/SkiaSharp/issues (Blazor SKCanvasView dispose issues)
+
+        // Only dispose resources we directly manage (like IconBitmap)
+        IconBitmap?.Dispose();
     }
 
     public class QRModel
