@@ -8,7 +8,7 @@
 
 SkiaSharp.QrCode provides high-performance QR code generation with [SkiaSharp](https://github.com/mono/SkiaSharp) integration.
 
-![Performance Benchmark](samples/Benchmark/image.png)
+![Performance Benchmark](samples/Benchmark/image_net10.0.png)
 
 > Benchmark results comparing SkiaSharp.QrCode with other libraries. See [samples/Benchmark](samples/Benchmark) for details.
 
