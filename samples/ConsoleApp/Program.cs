@@ -4,7 +4,7 @@ using SkiaSharp.QrCode.Image;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-var content = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md?foo=sample&bar=dummy";
+var content = "https://github.com/guitarrapc/SkiaSharp.QrCode/releases/tag/0.10.0?a=5119e6a88a83ae5db1469b66692890775c90b479&b=5119e6a88a83ae5db1469b66692890775c90b479";
 var outputDir = "bin/output";
 var iconPath = "samples/test.png";
 var iconInstaPath = "samples/insta.png";
@@ -350,18 +350,40 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
+// Use Rounded Rectangle for finder patterns
+Console.WriteLine("""
+    Pattern 13: Rounded Rectangle for Finder Patterns
+      - Best for: Stylish finder patterns with rounded corners
+      - API: QRCodeImageBuilder().WithFinderPatternShape()
+    """);
+{
+    var path = Path.Combine(outputDir, "pattern13_finderpattern_rounded_rectangle.png");
+
+    var pngBytes = new QRCodeImageBuilder(content)
+        .WithSize(512, 512)
+        .WithFinderPatternShape(RectangleFinderPatternShape.Default)
+        //.WithFinderPatternShape(CircleFinderPatternShape.Default)
+        //.WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
+        //.WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
+        .ToByteArray();
+
+    File.WriteAllBytes(path, pngBytes);
+
+    Console.WriteLine($"  ✓ Saved to: {path}");
+}
+Console.WriteLine();
+
 // Instagram-style Profile QR Code
 Console.WriteLine("""
-    Pattern 13: Instagram-style Profile QR Code
+    Pattern 14: Instagram-style Profile QR Code
       - Best for: Demonstrating complex styling
       - API: QRCodeImageBuilder with gradient + icon + custom styling
     """);
 {
-    var path = Path.Combine(outputDir, "pattern13_instagram_style.png");
+    var path = Path.Combine(outputDir, "pattern14_instagram_style.png");
 
     // Instagram gradient colors (orange -> pink -> purple)
-    var instagramGradient = new GradientOptions(
-        [
+    var instagramGradient = new GradientOptions([
             SKColor.Parse("FCAF45"),  // Orange
             SKColor.Parse("F77737"),  // Orange-Red
             SKColor.Parse("E1306C"),  // Pink
@@ -377,8 +399,8 @@ Console.WriteLine("""
     var icon = new IconData
     {
         Icon = logo,
-        IconSizePercent = 15,
-        IconBorderWidth = 20,
+        IconSizePercent = 14,
+        IconBorderWidth = 5,
     };
 
     var qrBuilder = new QRCodeImageBuilder(content)
@@ -389,6 +411,7 @@ Console.WriteLine("""
             backgroundColor: SKColors.White,
             clearColor: SKColors.White)
         .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
+        .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
         .WithGradient(instagramGradient)
         .WithIcon(icon);
 
@@ -401,12 +424,12 @@ Console.WriteLine();
 
 // Instagram-style with custom frame and text
 Console.WriteLine("""
-    Pattern 14: Instagram-style with Custom Frame
+    Pattern 15: Instagram-style with Custom Frame
       - Best for: Branded QR codes with text overlay
       - API: QRCodeRenderer + Custom canvas drawing
     """);
 {
-    var path = Path.Combine(outputDir, "pattern14_instagram_frame.png");
+    var path = Path.Combine(outputDir, "pattern15_instagram_frame.png");
 
     // Create larger canvas for frame
     var canvasSize = 1200;
@@ -456,15 +479,14 @@ Console.WriteLine("""
         var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, quietZoneSize: 2);
 
         // Instagram gradient
-        var instagramGradient = new GradientOptions(
-            [
-                SKColor.Parse("FCAF45"),
-                SKColor.Parse("F77737"),
-                SKColor.Parse("E1306C"),
-                SKColor.Parse("C13584"),
-                SKColor.Parse("833AB4")
+        var instagramGradient = new GradientOptions([
+                SKColor.Parse("FCAF45"),  // Orange
+                SKColor.Parse("F77737"),  // Orange-Red
+                SKColor.Parse("E1306C"),  // Pink
+                SKColor.Parse("C13584"),  // Purple
+                SKColor.Parse("833AB4")   // Deep Purple
             ],
-            GradientDirection.BottomLeftToTopRight,
+            GradientDirection.TopLeftToBottomRight,
             [0f, 0.25f, 0.5f, 0.75f, 1f]);
 
         // Render QR code
@@ -473,7 +495,7 @@ Console.WriteLine("""
         {
             Icon = logo,
             IconSizePercent = 15,
-            IconBorderWidth = 20,
+            IconBorderWidth = 4,
         };
 
         var qrRect = SKRect.Create(sidePadding, topPadding, qrSize, qrSize);
@@ -486,7 +508,8 @@ Console.WriteLine("""
             iconData: icon,
             moduleShape: CircleModuleShape.Default,
             moduleSizePercent: 0.95f,
-            gradientOptions: instagramGradient);
+            gradientOptions: instagramGradient,
+            finderPatternShape: RoundedRectangleCircleFinderPatternShape.Default);
     }
 
     // Draw bottom text
@@ -503,7 +526,7 @@ Console.WriteLine("""
         })
         using (var paint = new SKPaint
         {
-            Color = SKColors.DarkOrange,
+            Color = SKColors.OrangeRed,
             IsAntialias = true
         })
         {
@@ -516,7 +539,7 @@ Console.WriteLine("""
                 titleFont,
                 paint);
 
-            var usernameText = "BY SKIASHARP.QRCODE";
+            var usernameText = "@SKIASHARP.QRCODE";
             var usernameWidth = appFont.MeasureText(usernameText);
             canvas.DrawText(usernameText,
                 (canvasSize - usernameWidth) / 2,
@@ -539,7 +562,7 @@ Console.WriteLine();
 
 // Console Output of QR Code
 Console.WriteLine("""
-    Pattern 15: Console Output of QR Code
+    Pattern 16: Console Output of QR Code
       - Best for: Quick visual verification in console
       - API: QRCodeGenerator.CreateQrCode() + Console.Write()
     """);
@@ -554,6 +577,7 @@ Console.WriteLine("""
         Console.Write("\n");
     }
 }
+Console.WriteLine();
 
 Console.WriteLine("=== All patterns completed! ===");
 Console.WriteLine($"Output directory: {Path.GetFullPath(outputDir)}");
