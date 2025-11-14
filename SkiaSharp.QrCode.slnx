@@ -8,7 +8,7 @@
     <Project Path="samples/BlazorWasm/BlazorWasm.csproj" />
     <Project Path="samples/ConsoleApp/ConsoleApp.csproj" />
     <Project Path="samples/ConsoleAppNativeAOT/ConsoleAppNativeAOT.csproj" />
-    <Project Path="samples/NanoServerGenerate80/NanoServerGenerate80.csproj" />
+    <Project Path="samples/NanoServerGenerate/NanoServerGenerate.csproj" />
     <Project Path="samples/SimpleGenerate/SimpleGenerate.csproj" />
     <Project Path="samples/SimpleSerialize/SimpleSerialize.csproj" />
   </Folder>
