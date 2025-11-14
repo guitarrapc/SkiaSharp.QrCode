@@ -262,6 +262,9 @@ internal static class ModulePlacer
     /// Reserves separator areas (white borders) around finder patterns.
     /// 1-module wide white border separates finder patterns from data area.
     /// </summary>
+    /// <param name="size"></param>
+    /// <param name="blockedModules"></param>
+    /// <param name="blockedCount"></param>
     public static void ReserveSeparatorAreas(int size, Span<Rectangle> blockedModules, ref int blockedCount)
     {
         blockedModules[blockedCount++] = new Rectangle(7, 0, 1, 8);
@@ -276,6 +279,10 @@ internal static class ModulePlacer
     /// Reserves areas for format and version information.
     /// These areas are filled later with actual format/version data.
     /// </summary>
+    /// <param name="size"></param>
+    /// <param name="version"></param>
+    /// <param name="blockedModules"></param>
+    /// <param name="blockedCount"></param>
     public static void ReserveVersionAreas(int size, int version, Span<Rectangle> blockedModules, ref int blockedCount)
     {
         blockedModules[blockedCount++] = new Rectangle(8, 0, 1, 6);
@@ -296,6 +303,10 @@ internal static class ModulePlacer
     /// Places three finder patterns (position detection patterns).
     /// 7×7 patterns located at top-left, top-right, and bottom-left corners.
     /// </summary>
+    /// <param name="buffer"></param>
+    /// <param name="size"></param>
+    /// <param name="blockedModules"></param>
+    /// <param name="blockedCount"></param>
     public static void PlaceFinderPatterns(Span<byte> buffer, int size, Span<Rectangle> blockedModules, ref int blockedCount)
     {
         ReadOnlySpan<Point> locations = stackalloc Point[3]
@@ -328,6 +339,11 @@ internal static class ModulePlacer
     /// Number and positions vary by version (version 2+).
     /// 5×5 patterns help with image recognition and distortion correction.
     /// </summary>
+    /// <param name="buffer"></param>
+    /// <param name="size"></param>
+    /// <param name="alignmentPatternLocations"></param>
+    /// <param name="blockedModules"></param>
+    /// <param name="blockedCount"></param>
     public static void PlaceAlignmentPatterns(Span<byte> buffer, int size, List<Point> alignmentPatternLocations, Span<Rectangle> blockedModules, ref int blockedCount)
     {
         foreach (var loc in alignmentPatternLocations)
@@ -368,6 +384,10 @@ internal static class ModulePlacer
     /// Horizontal and vertical lines at row 6 and column 6.
     /// Used for module coordinate mapping during decoding.
     /// </summary>
+    /// <param name="buffer"></param>
+    /// <param name="size"></param>
+    /// <param name="blockedModules"></param>
+    /// <param name="blockedCount"></param>
     public static void PlaceTimingPatterns(Span<byte> buffer, int size, Span<Rectangle> blockedModules, ref int blockedCount)
     {
         for (var i = 8; i < size - 8; i++)
@@ -387,6 +407,11 @@ internal static class ModulePlacer
     /// Located at position (8, 4*version + 9).
     /// Required by QR code specification for all versions.
     /// </summary>
+    /// <param name="buffer"></param>
+    /// <param name="size"></param>
+    /// <param name="version"></param>
+    /// <param name="blockedModules"></param>
+    /// <param name="blockedCount"></param>
     public static void PlaceDarkModule(Span<byte> buffer, int size, int version, Span<Rectangle> blockedModules, ref int blockedCount)
     {
         buffer[(4 * version + 9) * size + 8] = 1;
