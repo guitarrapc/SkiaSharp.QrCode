@@ -343,13 +343,13 @@
         public int Size { get; set; } = 512;
         [Range(0, 10)]
         public int QuietZoneSize { get; set; } = 4;
-        public ECCLevel EccLevel { get; set; } = ECCLevel.M;
+        public ECCLevel EccLevel { get; set; } = ECCLevel.H;
         public EciMode EciMode { get; set; } = EciMode.Default;
-        public ModuleShapeType ModuleShape { get; set; } = ModuleShapeType.Rectangle;
+        public ModuleShapeType ModuleShape { get; set; } = ModuleShapeType.Circle;
         public FinderPatternShapeType FinderPatternShape { get; set; } = FinderPatternShapeType.RoundedRectangleCircle;
         [Range(0.0, 1.0)]
         public float CornerRadiusPercent { get; set; } = 0.3f;
-        public float ModuleSizePercent { get; set; } = 1.0f;
+        public float ModuleSizePercent { get; set; } = 0.95f;
         [Range(5, 30)]
         public int IconSizePercent { get; set; } = 15;
         [Range(0, 10)]
@@ -358,9 +358,9 @@
         public SKColor CodeColor { get; set; } = SKColors.Black;
         public SKColor BackgroundColor { get; set; } = SKColors.White;
         // gradient support
-        public SKColor GradientStartColor { get; set; } = SKColors.Black;
-        public SKColor GradientEndColor { get; set; } = SKColors.Black;
-        public GradientDirection GradientDirection { get; set; } = GradientDirection.None;
+        public SKColor GradientStartColor { get; set; } = SKColors.Coral;
+        public SKColor GradientEndColor { get; set; } = SKColors.DarkOrchid;
+        public GradientDirection GradientDirection { get; set; } = GradientDirection.TopLeftToBottomRight;
     }
 
     /// <summary>
