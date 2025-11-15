@@ -168,8 +168,10 @@ If you were using these features, you'll need to adjust your code accordingly.
 - ISO-8859-2 and Kanji: Currently not supported; UTF-8 is recommended for most use cases.
 - Compression: Removed to simplify the API and improve performance. Please handle compression externally if needed.
 
+Here's an example of how to handle compression externally using [NativeCompressions](https://github.com/Cysharp/NativeCompressions):
+
 ```csharp
-// compression example (if needed)
+// compression to zstandard ...
 var qrCodeData = QRCodeGenerator.CreateQrCode("Hello", ECCLevel.L);
 var src = qrCodeData.GetRawData();
 var size = qrCodeData.GetRawDataSize();
@@ -178,7 +180,7 @@ var maxSize = NativeCompressions.Zstandard.GetMaxCompressedLength(size);
 var dest = new byte[maxSize];
 NativeCompressions.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default);
 
-// decompression example
+// decompression from zstandard ...
 var decompressed = NativeCompressions.Zstandard.Decompress(dest);
 var qr = new QRCodeData(decompressed, 4);
 
