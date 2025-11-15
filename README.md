@@ -187,7 +187,7 @@ var qr = new QRCodeData(decompressed, 4);
 // render decompressed QR Code
 using var qrSurface = SKSurface.Create(new SKImageInfo(512, 512));
 var qrCanvas = qrSurface.Canvas;
-qrCanvas.Render(qrCodeData, 512, 512);
+qrCanvas.Render(qr, 512, 512);
 var qrImage = qrSurface.Snapshot();
 var pngArray = qrImage.Encode(SKEncodedImageFormat.Png, 100);
 Bitmap.FromStream(new MemoryStream(pngArray.ToArray())).Dump();
