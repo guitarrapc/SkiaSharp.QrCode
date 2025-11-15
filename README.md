@@ -156,12 +156,40 @@ using SkiaSharp.QrCode.Image;
 ### 🚫 Removed Features
 
 The following features have been removed:
+
 - `forceUtf8` parameter
 - ISO-8859-2 encoding support
 - Compression feature
 - Kanji encoding mode
 
 If you were using these features, you'll need to adjust your code accordingly.
+
+- `forceUtf8`: SkiaSharp.QrCode now automatically selects UTF-8 when needed.
+- ISO-8859-2 and Kanji: Currently not supported; UTF-8 is recommended for most use cases.
+- Compression: Removed to simplify the API and improve performance. Please handle compression externally if needed.
+
+```csharp
+// compression example (if needed)
+var qrCodeData = QRCodeGenerator.CreateQrCode("Hello", ECCLevel.L);
+var src = qrCodeData.GetRawData();
+var size = qrCodeData.GetRawDataSize();
+
+var maxSize = NativeCompressions.Zstandard.GetMaxCompressedLength(size);
+var dest = new byte[maxSize];
+NativeCompressions.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default);
+
+// decompression example
+var decompressed = NativeCompressions.Zstandard.Decompress(dest);
+var qr = new QRCodeData(decompressed, 4);
+
+// render decompressed QR Code
+using var qrSurface = SKSurface.Create(new SKImageInfo(512, 512));
+var qrCanvas = qrSurface.Canvas;
+qrCanvas.Render(qrCodeData, 512, 512);
+var qrImage = qrSurface.Snapshot();
+var pngArray = qrImage.Encode(SKEncodedImageFormat.Png, 100);
+Bitmap.FromStream(new MemoryStream(pngArray.ToArray())).Dump();
+```
 
 ### ✨ New Features to Explore
 
