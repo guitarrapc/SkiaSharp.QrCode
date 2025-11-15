@@ -95,7 +95,7 @@ using var stream = File.OpenWrite("qrcode.png");
 QRCodeImageBuilder.SavePng("Your content here", stream, ECCLevel.M, size: 512);
 ```
 
-## Migration from 0.8.0 to 0.9.0
+## Migration from 0.8.0 to 0.9.0 and higher
 
 v0.9.0 introduces significant performance improvements and API changes. Here's what you need to know to upgrade:
 
