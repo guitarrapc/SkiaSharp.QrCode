@@ -560,9 +560,39 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
+// Compress & Decompress QR Code Data
+Console.WriteLine("""
+    Pattern 16: Compress & Decompress QR Code Data
+      - Best for: Reducing size of QR code data storage/transmission
+    """);
+{
+    var path = Path.Combine(outputDir, "pattern16_compress_decompress.png");
+
+    // compression to zstandard ...
+    var qrCodeData = QRCodeGenerator.CreateQrCode(content, ECCLevel.L);
+    var src = qrCodeData.GetRawData();
+    var size = qrCodeData.GetRawDataSize();
+
+    var maxSize = NativeCompressions.Zstandard.GetMaxCompressedLength(size);
+    var compressed = new byte[maxSize];
+    NativeCompressions.Zstandard.Compress(src, compressed, NativeCompressions.ZstandardCompressionOptions.Default);
+
+    // decompression from zstandard ...
+    var decompressed = NativeCompressions.Zstandard.Decompress(compressed);
+
+    var qr = new QRCodeData(decompressed, 4);
+    var pngBytes = new QRCodeImageBuilder(qr)
+        .WithSize(512, 512)
+        .ToByteArray();
+    File.WriteAllBytes(path, pngBytes);
+
+    Console.WriteLine($"  ✓ Saved to: {path}");
+}
+Console.WriteLine();
+
 // Console Output of QR Code
 Console.WriteLine("""
-    Pattern 16: Console Output of QR Code
+    Pattern 17: Console Output of QR Code
       - Best for: Quick visual verification in console
       - API: QRCodeGenerator.CreateQrCode() + Console.Write()
     """);
