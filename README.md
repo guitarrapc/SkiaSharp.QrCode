@@ -177,20 +177,16 @@ var src = qrCodeData.GetRawData();
 var size = qrCodeData.GetRawDataSize();
 
 var maxSize = NativeCompressions.Zstandard.GetMaxCompressedLength(size);
-var dest = new byte[maxSize];
-NativeCompressions.Zstandard.Compress(src, dest, ZstandardCompressionOptions.Default);
+var compressed = new byte[maxSize];
+NativeCompressions.Zstandard.Compress(src, compressed, NativeCompressions.ZstandardCompressionOptions.Default);
 
 // decompression from zstandard ...
-var decompressed = NativeCompressions.Zstandard.Decompress(dest);
-var qr = new QRCodeData(decompressed, 4);
+var decompressed = NativeCompressions.Zstandard.Decompress(compressed);
 
-// render decompressed QR Code
-using var qrSurface = SKSurface.Create(new SKImageInfo(512, 512));
-var qrCanvas = qrSurface.Canvas;
-qrCanvas.Render(qr, 512, 512);
-var qrImage = qrSurface.Snapshot();
-var pngArray = qrImage.Encode(SKEncodedImageFormat.Png, 100);
-Bitmap.FromStream(new MemoryStream(pngArray.ToArray())).Dump();
+// render QR code
+var qr = new QRCodeData(decompressed, 4);
+var pngBytes = QRCodeImageBuilder.GetPngBytes(qr, 512);
+File.WriteAllBytes(path, pngBytes);
 ```
 
 ### ✨ New Features to Explore
