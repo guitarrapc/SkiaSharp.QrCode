@@ -300,12 +300,7 @@
         IconData? iconData = null;
         if (IconBitmap != null)
         {
-            iconData = new IconData
-            {
-                Icon = IconBitmap,
-                IconSizePercent = Model.IconSizePercent,
-                IconBorderWidth = Model.IconBorderWidth
-            };
+            iconData = IconData.FromImage(IconBitmap, Model.IconSizePercent, Model.IconBorderWidth);
         }
 
         // Create Gradient

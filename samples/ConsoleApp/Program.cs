@@ -4,7 +4,7 @@ using SkiaSharp.QrCode.Image;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-var content = "https://github.com/guitarrapc/SkiaSharp.QrCode/releases/tag/0.10.0?a=5119e6a88a83ae5db1469b66692890775c90b479&b=5119e6a88a83ae5db1469b66692890775c90b479";
+var content = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md";
 var outputDir = "bin/output";
 var iconPath = "samples/test.png";
 var iconInstaPath = "samples/insta.png";
@@ -155,12 +155,7 @@ Console.WriteLine("""
     var path = Path.Combine(outputDir, "pattern7_builder_icon.png");
 
     using var logo = SKBitmap.Decode(File.ReadAllBytes(iconPath));
-    var icon = new IconData
-    {
-        Icon = logo,
-        IconSizePercent = 15,
-        IconBorderWidth = 10,
-    };
+    var icon = IconData.FromImage(logo, 15, 18);
 
     var qrBuilder = new QRCodeImageBuilder(content)
         .WithSize(800, 800)
@@ -185,11 +180,16 @@ Console.WriteLine("""
     var path = Path.Combine(outputDir, "pattern8_builder_full.png");
 
     using var logo = SKBitmap.Decode(File.ReadAllBytes(iconPath));
+    using var font = new SKFont
+    {
+        Size = 18,
+        Typeface = SKTypeface.FromFamilyName("sans-serif", SKFontStyle.Bold)
+    };
     var icon = new IconData
     {
-        Icon = logo,
-        IconSizePercent = 12,
-        IconBorderWidth = 8,
+        Icon = new ImageTextIconShape(logo, "FooBar", SKColors.Black, font, horizontalAlign: SKTextAlign.Center, verticalAlign: TextVerticalAlignment.Bottom, textPadding: 2),
+        IconSizePercent = 13,
+        IconBorderWidth = 18,
     };
 
     var gradient = new GradientOptions(
@@ -205,6 +205,7 @@ Console.WriteLine("""
         .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.Transparent)
         .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.92f)
         .WithGradient(gradient)
+        .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
         .WithIcon(icon);
 
     using var stream = File.OpenWrite(path);
@@ -233,7 +234,7 @@ Console.WriteLine("""
 
     // Render with custom options
     using var logo = SKBitmap.Decode(File.ReadAllBytes(iconPath));
-    var icon = new IconData { Icon = logo, IconSizePercent = 10, IconBorderWidth = 5 };
+    var icon = IconData.FromImage(logo, iconBorderWidth: 9);
     var gradient = new GradientOptions([SKColors.DarkViolet, SKColors.DeepPink], GradientDirection.TopLeftToBottomRight);
 
     QRCodeRenderer.Render(
@@ -396,20 +397,13 @@ Console.WriteLine("""
     // Load Instagram logo (if you have one)
     // For this example, we'll use the test icon
     using var logo = SKBitmap.Decode(File.ReadAllBytes(iconInstaPath));
-    var icon = new IconData
-    {
-        Icon = logo,
-        IconSizePercent = 14,
-        IconBorderWidth = 5,
-    };
+    var icon = IconData.FromImage(logo, 14, 9);
 
     var qrBuilder = new QRCodeImageBuilder(content)
         .WithSize(1024, 1024)
         .WithErrorCorrection(ECCLevel.H)
         .WithQuietZone(4)
-        .WithColors(
-            backgroundColor: SKColors.White,
-            clearColor: SKColors.White)
+        .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.White)
         .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
         .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
         .WithGradient(instagramGradient)
@@ -491,12 +485,7 @@ Console.WriteLine("""
 
         // Render QR code
         using var logo = SKBitmap.Decode(File.ReadAllBytes(iconInstaPath));
-        var icon = new IconData
-        {
-            Icon = logo,
-            IconSizePercent = 15,
-            IconBorderWidth = 4,
-        };
+        var icon = IconData.FromImage(logo, 15, 9);
 
         var qrRect = SKRect.Create(sidePadding, topPadding, qrSize, qrSize);
         QRCodeRenderer.Render(
