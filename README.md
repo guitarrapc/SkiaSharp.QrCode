@@ -436,8 +436,8 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithModuleShape(CircleModuleShape.Default);
 
 // When using icons/logos - always use High error correction
-using var logo = SKBitmap.Decode("logo.png");
-var icon = new IconData { Icon = logo, IconSizePercent = 15 };
+using var logo = SKBitmap.Decode(File.ReadAllBytes("logo.png"));
+var icon = IconData.FromImage(logo, iconSizePercent: 15);
 
 var qrCodeWithIcon = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
@@ -792,20 +792,41 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 var pngBytes = qrCode.ToByteArray();
 ```
 
-#### QR code with Logo/Icon
+#### QR code with Logo (icon only)
 
 ```csharp
 using SkiaSharp;
 using SkiaSharp.QrCode.Image;
 
-using var logo = SKBitmap.Decode("logo.png");
+using var logo = SKBitmap.Decode(File.ReadAllBytes("logo.png"));
+var icon = IconData.FromImage(logo, iconSizePercent: 15, iconBorderWidth: 10);
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithSize(800, 800)
+    .WithErrorCorrection(ECCLevel.H) // High ECC recommended for icons
+    .WithIcon(icon);
+
+var pngBytes = qrCode.ToByteArray();
+```
+
+#### QR code with Logo (icon and text)
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode.Image;
+
+using var logo = SKBitmap.Decode(File.ReadAllBytes("logo.png"));
+using var font = new SKFont
+{
+    Size = 18,
+    Typeface = SKTypeface.FromFamilyName("sans-serif", SKFontStyle.Bold)
+};
 var icon = new IconData
 {
-    Icon = logo,
-    IconSizePercent = 15,
-    IconBorderWidth = 10,
+    // Default text is placed below the icon image, centered
+    Icon = new ImageTextIconShape(logo, "FooBar", SKColors.Black, font, textPadding: 2),
+    IconSizePercent = 13,
+    IconBorderWidth = 18,
 };
-
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
     .WithErrorCorrection(ECCLevel.H) // High ECC recommended for icons
