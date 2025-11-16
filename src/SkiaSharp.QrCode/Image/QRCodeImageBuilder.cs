@@ -25,7 +25,8 @@ namespace SkiaSharp.QrCode.Image;
 /// <seealso cref="QRCodeRenderer"/>
 public class QRCodeImageBuilder
 {
-    private readonly string _content;
+    private readonly string? _content;
+    private readonly QRCodeData? _qrCodeData;
     private Vector2Slim _size = new(512, 512);
     private SKEncodedImageFormat _format = SKEncodedImageFormat.Png;
     private int _quality = 100;
@@ -51,6 +52,14 @@ public class QRCodeImageBuilder
         _content = content;
     }
 
+    public QRCodeImageBuilder(QRCodeData qrCodeData)
+    {
+        if (qrCodeData is null)
+            throw new ArgumentNullException(nameof(qrCodeData));
+
+        _qrCodeData = qrCodeData;
+    }
+
     // static methods for quick generation
 
     /// <summary>
@@ -63,6 +72,17 @@ public class QRCodeImageBuilder
     public static byte[] GetPngBytes(string content, ECCLevel eccLevel = ECCLevel.M, int size = 512)
     {
         return GetImageBytes(content, SKEncodedImageFormat.Png, eccLevel, size, 100);
+    }
+
+    /// <summary>
+    /// Generate a QR code as PNG byte array with default settings.
+    /// </summary>
+    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="size">Image size in pixels. Default is 512x512.</param>
+    /// <returns>PNG encoded byte array.</returns>
+    public static byte[] GetPngBytes(QRCodeData qrCodeData, int size = 512)
+    {
+        return GetImageBytes(qrCodeData, SKEncodedImageFormat.Png, size, 100);
     }
 
     /// <summary>
@@ -84,6 +104,22 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
+    /// Generate a QR code as image byte array with specified format.
+    /// </summary>
+    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
+    /// <param name="size">Image size in pixels. Default is 512x512.</param>
+    /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
+    /// <returns>Encoded byte array.</returns>
+    public static byte[] GetImageBytes(QRCodeData qrCodeData, SKEncodedImageFormat format, int size = 512, int quality = 100)
+    {
+        return new QRCodeImageBuilder(qrCodeData)
+            .WithSize(size, size)
+            .WithFormat(format, quality)
+            .ToByteArray();
+    }
+
+    /// <summary>
     /// Generate a QR code and save to stream with default PNG settings.
     /// </summary>
     /// <param name="content">The content to encode.</param>
@@ -95,6 +131,19 @@ public class QRCodeImageBuilder
         new QRCodeImageBuilder(content)
             .WithSize(size, size)
             .WithErrorCorrection(eccLevel)
+            .SaveTo(output);
+    }
+
+    /// <summary>
+    /// Generate a QR code and save to stream with default PNG settings.
+    /// </summary>
+    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="output">The output stream.</param>
+    /// <param name="size">Image size in pixels. Default is 512x512.</param>
+    public static void SavePng(QRCodeData qrCodeData, Stream output, int size = 512)
+    {
+        new QRCodeImageBuilder(qrCodeData)
+            .WithSize(size, size)
             .SaveTo(output);
     }
 
@@ -111,6 +160,17 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
+    /// Generate a QR code and write to an IBufferWriter with default PNG settings.
+    /// </summary>
+    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="writer">The buffer writer to write to.</param>
+    /// <param name="size">Image size in pixels. Default is 512x512.</param>
+    public static void WritePng(QRCodeData qrCodeData, IBufferWriter<byte> writer, int size = 512)
+    {
+        WriteImage(qrCodeData, writer, SKEncodedImageFormat.Png, size, quality: 100);
+    }
+
+    /// <summary>
     /// Generate a QR code and write to an IBufferWriter with specified format.
     /// </summary>
     /// <param name="content">The content to encode.</param>
@@ -124,6 +184,22 @@ public class QRCodeImageBuilder
         new QRCodeImageBuilder(content)
             .WithSize(size, size)
             .WithErrorCorrection(eccLevel)
+            .WithFormat(format, quality)
+            .SaveTo(writer);
+    }
+
+    /// <summary>
+    /// Generate a QR code and write to an IBufferWriter with specified format.
+    /// </summary>
+    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="writer">The buffer writer to write to.</param>
+    /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
+    /// <param name="size">Image size in pixels. Default is 512x512.</param>
+    /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
+    public static void WriteImage(QRCodeData qrCodeData, IBufferWriter<byte> writer, SKEncodedImageFormat format, int size = 512, int quality = 100)
+    {
+        new QRCodeImageBuilder(qrCodeData)
+            .WithSize(size, size)
             .WithFormat(format, quality)
             .SaveTo(writer);
     }
@@ -346,7 +422,7 @@ public class QRCodeImageBuilder
     private SKImage GenerateImage()
     {
         // Generate QR Data
-        var qrCodeData = QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, quietZoneSize: _quietZoneSize);
+        var qrCodeData = _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, quietZoneSize: _quietZoneSize);
 
         // Create surface and render
         var info = new SKImageInfo(_size.X, _size.Y);
