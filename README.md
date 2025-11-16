@@ -130,7 +130,7 @@ var icon = new IconData
 using var bitmap = SKBitmap.Decode(File.ReadAllBytes(iconPath));
 
 // New code Image only (Short hand)
-var icon = IconData.FromImage(bitmap, iconSizePercent: 15, iconBorderWidth: 18);
+var icon = IconData.FromImage(bitmap, iconSizePercent: 15, iconBorderWidth: 10);
 
 // New code Image only
 var icon = new IconData
