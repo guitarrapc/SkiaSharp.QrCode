@@ -22,7 +22,7 @@ public enum TextVerticalAlignment
 }
 
 /// <summary>
-/// Defines the shape of QR code icon (position detection patterns).
+/// Defines the shape and rendering behavior of a QR code center icon/logo.
 /// </summary>
 public abstract class IconShape
 {

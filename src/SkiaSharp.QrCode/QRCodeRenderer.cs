@@ -135,8 +135,8 @@ public static class QRCodeRenderer
             var borderRect = iconData.IconBorderWidth > 0 ? SKRect.Create(
                     centerX - iconWidth / 2 - borderWidth,
                     centerY - iconHeight / 2 - borderWidth,
-                    iconWidth + borderWidth * 2,
-                    iconHeight + borderWidth * 2) : iconRect;
+                    iconWidth + ((float)borderWidth * 2),
+                    iconHeight + ((float)borderWidth * 2)) : iconRect;
 
             iconData.Icon.Draw(canvas, iconRect, borderRect, bgColor);
         }

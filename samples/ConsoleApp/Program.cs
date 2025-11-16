@@ -155,7 +155,7 @@ Console.WriteLine("""
     var path = Path.Combine(outputDir, "pattern7_builder_icon.png");
 
     using var logo = SKBitmap.Decode(File.ReadAllBytes(iconPath));
-    var icon = IconData.FromImage(logo, 15, 18);
+    var icon = IconData.FromImage(logo, iconSizePercent: 15, iconBorderWidth: 18);
 
     var qrBuilder = new QRCodeImageBuilder(content)
         .WithSize(800, 800)
