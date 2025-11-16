@@ -95,11 +95,71 @@ using var stream = File.OpenWrite("qrcode.png");
 QRCodeImageBuilder.SavePng("Your content here", stream, ECCLevel.M, size: 512);
 ```
 
-## Migration from 0.8.0 to 0.9.0 and higher
+## Migration
 
-v0.9.0 introduces significant performance improvements and API changes. Here's what you need to know to upgrade:
+- v0.11.0 introduces further improvements to Icon handling. See the IconData section below.
+- v0.9.0 introduces significant performance improvements and API changes. Here's what you need to know to upgrade:
 
-### 🔄 Primary API Change: `QrCode` → `QRCodeImageBuilder`
+### from 0.10.0 to 0.11.0 and higher
+
+Take advantage of new capabilities:
+
+- **Logo customization** - Now you can customize center placed logos. Library offers icons with both images and text.
+
+For complete migration details and examples, see [Release 0.11.0](https://github.com/guitarrapc/SkiaSharp.QrCode/releases/tag/0.11.0).
+
+#### ⚠️ IconData.Data changed Icon from SKBitmap to IconShape
+
+**Before (0.10.0):**
+
+```csharp
+using var bitmap = SKBitmap.Decode(File.ReadAllBytes(iconPath));
+
+// Old code
+var icon = new IconData
+{
+    Icon = bitmap;
+    IconSizePercent = 15,
+    IconBorderWidth = 10
+};
+```
+
+**After (0.11.0):**
+
+```csharp
+using var bitmap = SKBitmap.Decode(File.ReadAllBytes(iconPath));
+
+// New code Image only (Short hand)
+var icon = IconData.FromImage(bitmap, iconSizePercent: 15, iconBorderWidth: 18);
+
+// New code Image only
+var icon = new IconData
+{
+    Icon = new ImageIconShape(bitmap),
+    IconSizePercent = 15,
+    IconBorderWidth = 10
+};
+
+// New approach with text
+var icon = new IconData
+{
+    Icon = new ImageTextIconShape(bitmap, "Text", SKColors.Black, font),
+    IconSizePercent = 15,
+    IconBorderWidth = 10
+};
+```
+
+### from 0.8.0 to 0.9.0 and higher
+
+Take advantage of new capabilities:
+
+- **Gradient colors** - Create eye-catching QR codes with color gradients
+- **Enhanced customization** - More control over module shapes and colors
+- **Better performance** - Dramatically faster generation with lower memory usage
+
+For complete migration details and examples, see [Release 0.9.0](https://github.com/guitarrapc/SkiaSharp.QrCode/releases/tag/0.9.0).
+
+#### 🔄 Primary API Change: `QrCode` → `QRCodeImageBuilder`
 
 The `QrCode` class is now **obsolete**. Replace it with `QRCodeImageBuilder`:
 
@@ -127,7 +187,7 @@ new QRCodeImageBuilder(content)
     .SaveTo(stream);
 ```
 
-### 🗑️ Remove `using` Statements
+#### 🗑️ Remove `using` Statements
 
 `QRCodeData` and `QRCodeRenderer` are no longer `IDisposable`:
 
@@ -153,7 +213,7 @@ If using icons in QR codes:
 using SkiaSharp.QrCode.Image;
 ```
 
-### 🚫 Removed Features
+#### 🚫 Removed Features
 
 The following features have been removed:
 
@@ -188,15 +248,6 @@ var qr = new QRCodeData(decompressed, 4);
 var pngBytes = QRCodeImageBuilder.GetPngBytes(qr, 512);
 File.WriteAllBytes(path, pngBytes);
 ```
-
-### ✨ New Features to Explore
-
-Take advantage of new capabilities:
-- **Gradient colors** - Create eye-catching QR codes with color gradients
-- **Enhanced customization** - More control over module shapes and colors
-- **Better performance** - Dramatically faster generation with lower memory usage
-
-For complete migration details and examples, see [Release 0.9.0](https://github.com/guitarrapc/SkiaSharp.QrCode/releases/tag/0.9.0).
 
 ## API Overview
 
