@@ -75,7 +75,7 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
 
         // Draw outer ring (7x7)
         canvas.DrawCircle(center, radius, paint);
-        
+
         // Draw white ring (5x5)
         using var whitePaint = new SKPaint() { Color = SKColors.White, Style = SKPaintStyle.Fill };
         canvas.DrawCircle(center, radius * (5f / 7f), whitePaint);

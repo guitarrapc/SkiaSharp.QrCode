@@ -485,7 +485,7 @@ Console.WriteLine("""
 
         // Render QR code
         using var logo = SKBitmap.Decode(File.ReadAllBytes(iconInstaPath));
-        var icon = IconData.FromImage(logo, iconSizePercent:15, iconBorderWidth: 9);
+        var icon = IconData.FromImage(logo, iconSizePercent: 15, iconBorderWidth: 9);
 
         var qrRect = SKRect.Create(sidePadding, topPadding, qrSize, qrSize);
         QRCodeRenderer.Render(
