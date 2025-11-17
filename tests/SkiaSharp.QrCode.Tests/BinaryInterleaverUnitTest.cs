@@ -4,6 +4,7 @@ using SkiaSharp.QrCode.Internals;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
 namespace SkiaSharp.QrCode.Tests;
+
 public class BinaryInterleaverUnitTest
 {
     // Basic Interleaving
