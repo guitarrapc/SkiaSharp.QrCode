@@ -33,7 +33,7 @@ var canvas = surface.Canvas;
         Color = SKColor.Parse("E0E0E0"), // Light gray border
         Style = SKPaintStyle.Stroke,
         StrokeWidth = 3,
-        IsAntialias = true
+        IsAntialias = false
     })
     {
         var borderRect = new SKRoundRect(SKRect.Create(30, 30, canvasSize - 60, canvasSize - 60), r, r);
@@ -45,7 +45,7 @@ var canvas = surface.Canvas;
     {
         Color = SKColors.White,
         Style = SKPaintStyle.Fill,
-        IsAntialias = true
+        IsAntialias = false
     })
     {
         var bgRect = new SKRoundRect(SKRect.Create(30, 30, canvasSize - 60, canvasSize - 60), r, r);
@@ -97,7 +97,7 @@ var canvas = surface.Canvas;
     using (var paint = new SKPaint
     {
         Color = SKColors.DarkOrange,
-        IsAntialias = true
+        IsAntialias = false
     })
     {
         var bottomText = "POST SHARED ON " + DateTime.Now.ToString("MMM dd").ToUpper();

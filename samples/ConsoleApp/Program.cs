@@ -287,11 +287,10 @@ Console.WriteLine("""
         Size = 24,
         Typeface = SKTypeface.FromFamilyName("Arial", SKFontStyle.Bold)
     };
-
     using var paint = new SKPaint
     {
         Color = SKColors.Black,
-        IsAntialias = true
+        IsAntialias = true, // enable antialiasing for text
     };
 
     var text = "Scan Me!";
@@ -448,7 +447,7 @@ Console.WriteLine("""
             Color = SKColor.Parse("E0E0E0"), // Light gray border
             Style = SKPaintStyle.Stroke,
             StrokeWidth = 3,
-            IsAntialias = true
+            IsAntialias = true, // enable antialiasing for smooth corners
         })
         {
             var borderRect = new SKRoundRect(SKRect.Create(30, 30, canvasSize - 60, canvasSize - 60), r, r);
@@ -460,7 +459,7 @@ Console.WriteLine("""
         {
             Color = SKColors.White,
             Style = SKPaintStyle.Fill,
-            IsAntialias = true
+            IsAntialias = true, // enable antialiasing for smooth corners
         })
         {
             var bgRect = new SKRoundRect(SKRect.Create(30, 30, canvasSize - 60, canvasSize - 60), r, r);
@@ -516,7 +515,7 @@ Console.WriteLine("""
         using (var paint = new SKPaint
         {
             Color = SKColors.OrangeRed,
-            IsAntialias = true
+            IsAntialias = true, // enable antialiasing for text
         })
         {
             var bottomText = "POST SHARED ON " + DateTime.Now.ToString("MMM dd").ToUpper();

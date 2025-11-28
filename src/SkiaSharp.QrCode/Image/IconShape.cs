@@ -121,6 +121,7 @@ public sealed class ImageTextIconShape : IconShape
         // Draw text below the image
         if (!string.IsNullOrEmpty(_text))
         {
+            // enable antialias for better text quality
             using var textPaint = new SKPaint
             {
                 Color = _textColor,
