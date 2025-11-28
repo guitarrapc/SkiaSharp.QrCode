@@ -6,6 +6,11 @@ namespace SkiaSharp.QrCode.Image;
 public abstract class ModuleShape
 {
     /// <summary>
+    /// Gets whether this shape requires antialiasing for smooth rendering.
+    /// </summary>
+    public abstract bool RequiresAntialiasing { get; }
+
+    /// <summary>
     /// Draw a module at the specified location.
     /// </summary>
     /// <param name="canvas">The canvas to render on.</param>
@@ -23,6 +28,11 @@ public sealed class RectangleModuleShape : ModuleShape
     /// Gets the default instance.
     /// </summary>
     public static readonly RectangleModuleShape Default = new();
+
+    /// <summary>
+    /// Antialiasing disabled to prevent gray borders between modules.
+    /// </summary>
+    public override bool RequiresAntialiasing => false;
 
     // Enforce singleton pattern
     private RectangleModuleShape() { }
@@ -43,6 +53,11 @@ public sealed class CircleModuleShape : ModuleShape
     /// Gets the default instance.
     /// </summary>
     public static readonly CircleModuleShape Default = new();
+
+    /// <summary>
+    /// Requires antialiasing to prevent jagged edges on curves.
+    /// </summary>
+    public override bool RequiresAntialiasing => true;
 
     // Enforce singleton pattern
     private CircleModuleShape() { }
@@ -69,6 +84,11 @@ public sealed class RoundedRectangleModuleShape : ModuleShape
 
     // Gets the corner radius as a percentage of the smaller dimension (width or height).
     private readonly float _cornerRadiusPercent;
+
+    /// <summary>
+    /// Requires antialiasing to prevent jagged edges on curves.
+    /// </summary>
+    public override bool RequiresAntialiasing => true;
 
     /// <summary>
     /// Initializes a new instance with the specified corner radius.
