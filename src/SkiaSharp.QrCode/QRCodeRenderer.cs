@@ -51,7 +51,7 @@ public static class QRCodeRenderer
         }
 
         // Create paint with gradient or solid color
-        // disable antialiasing as it cause gray border around each module.
+        // disable antialiasing as it causes gray border around each module.
         using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
 
         // Apply gradient if specified

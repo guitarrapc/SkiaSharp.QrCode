@@ -30,7 +30,7 @@ public sealed class RectangleModuleShape : ModuleShape
     public static readonly RectangleModuleShape Default = new();
 
     /// <summary>
-    /// Disable antialiasing for rectangles.
+    /// Antialiasing disabled to prevent gray borders between modules.
     /// </summary>
     public override bool RequiresAntialiasing => false;
 
@@ -55,7 +55,7 @@ public sealed class CircleModuleShape : ModuleShape
     public static readonly CircleModuleShape Default = new();
 
     /// <summary>
-    /// Enable antialiasing for circles. It require smooth edges.
+    /// Requires antialiasing to prevent jagged edges on curves.
     /// </summary>
     public override bool RequiresAntialiasing => true;
 
@@ -86,10 +86,9 @@ public sealed class RoundedRectangleModuleShape : ModuleShape
     private readonly float _cornerRadiusPercent;
 
     /// <summary>
-    /// Enable antialiasing for circles. It require smooth edges.
+    /// Requires antialiasing to prevent jagged edges on curves.
     /// </summary>
     public override bool RequiresAntialiasing => true;
-
 
     /// <summary>
     /// Initializes a new instance with the specified corner radius.
