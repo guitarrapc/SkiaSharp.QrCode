@@ -25,6 +25,8 @@
     <PackageVersion Include="SkiaSharp.NativeAssets.NanoServer" Version="3.119.1" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Win32" Version="3.119.1" />
     <PackageVersion Include="SkiaSharp.Views.Blazor" Version="3.119.1" />
+    <!-- Supply chain-->
+    <PackageVersion Include="Microsoft.Sbom.Targets" Version="4.1.5" />
     <!-- Tests -->
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
     <PackageVersion Include="GitHubActionsTestLogger" Version="2.4.1" />
