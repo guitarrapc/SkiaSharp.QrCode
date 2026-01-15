@@ -6,31 +6,31 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Core -->
-    <PackageVersion Include="Net.Codecrete.QrCodeGenerator" Version="2.1.0" />
     <PackageVersion Include="PolySharp" Version="1.15.0" />
     <PackageVersion Include="SkiaSharp" Version="3.119.1" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
-    <!-- Sandbox -->
+    <!-- Benchmark -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.6" />
+    <PackageVersion Include="Net.Codecrete.QrCodeGenerator" Version="2.1.0" />
+    <PackageVersion Include="QRCoder" Version="1.7.0" />
+    <PackageVersion Include="ZXing.Net" Version="0.16.11" />
+    <PackageVersion Include="ZXing.Net.Bindings.SkiaSharp.V2" Version="0.16.17" />
+    <!-- Sandbox -->
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Fast.Components.FluentUI" Version="3.8.0" />
     <PackageVersion Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.22.1" />
     <PackageVersion Include="NativeCompressions" Version="0.6.0" />
-    <PackageVersion Include="QRCoder" Version="1.7.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.macOS" Version="3.119.1" />
     <PackageVersion Include="SkiaSharp.NativeAssets.NanoServer" Version="3.119.1" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Win32" Version="3.119.1" />
     <PackageVersion Include="SkiaSharp.Views.Blazor" Version="3.119.1" />
     <!-- Tests -->
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
-    <PackageVersion Include="DogStatsD-CSharp-Client" Version="8.0.0" />
     <PackageVersion Include="GitHubActionsTestLogger" Version="2.4.1" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
     <PackageVersion Include="xunit.v3" Version="3.2.0" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
-    <PackageVersion Include="ZXing.Net" Version="0.16.11" />
-    <PackageVersion Include="ZXing.Net.Bindings.SkiaSharp.V2" Version="0.16.17" />
   </ItemGroup>
 </Project>
