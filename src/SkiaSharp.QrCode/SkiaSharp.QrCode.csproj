@@ -7,6 +7,12 @@
     <IsPackable>true</IsPackable>
     <PackageId>SkiaSharp.QrCode</PackageId>
     <Description>QrCode for .NET Standard with Skia.Sharp. No GDI, no System.Drawing.</Description>
+
+    <!-- SBOM -->
+    <GenerateSBOM>true</GenerateSBOM>
+    <SbomGenerationFetchLicenseInformation>true</SbomGenerationFetchLicenseInformation>
+    <SbomGenerationEnablePackageMetadataParsing>true</SbomGenerationEnablePackageMetadataParsing>
+    <SbomGenerationManifestInfo>SPDX:2.2</SbomGenerationManifestInfo>
   </PropertyGroup>
 
   <ItemGroup>
