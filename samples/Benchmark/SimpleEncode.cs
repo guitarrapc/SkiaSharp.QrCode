@@ -62,6 +62,13 @@ public class SimpleEncode
         return _zxingWriter_ascii.Encode(_textNumber);
     }
 
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("Net.Codecrete.QrCodeGenerator")]
+    public Net.Codecrete.QrCodeGenerator.QrCode NetCodecreteQrCodeGenerator_Number_Encode()
+    {
+        return Net.Codecrete.QrCodeGenerator.QrCode.EncodeText(_textNumber, Net.Codecrete.QrCodeGenerator.QrCode.Ecc.Low);
+    }
+
     [Benchmark]
     [BenchmarkCategory("SkiaSharp.QrCode")]
     public QRCodeData SkiaSharpQRCode_Alphanumeric_Encode()
@@ -81,6 +88,13 @@ public class SimpleEncode
     public ZXing.Common.BitMatrix ZXing_Alphanumeric_Encode()
     {
         return _zxingWriter_ascii.Encode(_textAlphanumeric);
+    }
+
+    [Benchmark]
+    [BenchmarkCategory("Net.Codecrete.QrCodeGenerator")]
+    public Net.Codecrete.QrCodeGenerator.QrCode NetCodecreteQrCodeGenerator_Alphanumeric_Encode()
+    {
+        return Net.Codecrete.QrCodeGenerator.QrCode.EncodeText(_textAlphanumeric, Net.Codecrete.QrCodeGenerator.QrCode.Ecc.Low);
     }
 
     [Benchmark]
@@ -105,6 +119,13 @@ public class SimpleEncode
     }
 
     [Benchmark]
+    [BenchmarkCategory("Net.Codecrete.QrCodeGenerator")]
+    public Net.Codecrete.QrCodeGenerator.QrCode NetCodecreteQrCodeGenerator_Url_Encode()
+    {
+        return Net.Codecrete.QrCodeGenerator.QrCode.EncodeText(_textUrl, Net.Codecrete.QrCodeGenerator.QrCode.Ecc.Low);
+    }
+
+    [Benchmark]
     [BenchmarkCategory("SkiaSharp.QrCode")]
     public QRCodeData SkiaSharpQRCode_Unicode_Encode()
     {
@@ -126,6 +147,13 @@ public class SimpleEncode
     }
 
     [Benchmark]
+    [BenchmarkCategory("Net.Codecrete.QrCodeGenerator")]
+    public Net.Codecrete.QrCodeGenerator.QrCode NetCodecreteQrCodeGenerator_Unicode_Encode()
+    {
+        return Net.Codecrete.QrCodeGenerator.QrCode.EncodeText(_textUnicode, Net.Codecrete.QrCodeGenerator.QrCode.Ecc.Low);
+    }
+
+    [Benchmark]
     [BenchmarkCategory("SkiaSharp.QrCode")]
     public QRCodeData SkiaSharpQRCode_Wifi_Encode()
     {
@@ -144,5 +172,12 @@ public class SimpleEncode
     public ZXing.Common.BitMatrix ZXing_Wifi_Encode()
     {
         return _zxingWriter_utf8.Encode(_textWifi);
+    }
+
+    [Benchmark]
+    [BenchmarkCategory("Net.Codecrete.QrCodeGenerator")]
+    public Net.Codecrete.QrCodeGenerator.QrCode NetCodecreteQrCodeGenerator_Wifi_Encode()
+    {
+        return Net.Codecrete.QrCodeGenerator.QrCode.EncodeText(_textWifi, Net.Codecrete.QrCodeGenerator.QrCode.Ecc.Low);
     }
 }
