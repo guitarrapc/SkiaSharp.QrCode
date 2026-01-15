@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Net.Codecrete.QrCodeGenerator" />
     <PackageReference Include="QRCoder" />
     <PackageReference Include="ZXing.Net" />
     <PackageReference Include="ZXing.Net.Bindings.SkiaSharp.V2" />

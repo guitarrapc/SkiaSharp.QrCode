@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Core -->
+    <PackageVersion Include="Net.Codecrete.QrCodeGenerator" Version="2.1.0" />
     <PackageVersion Include="PolySharp" Version="1.15.0" />
     <PackageVersion Include="SkiaSharp" Version="3.119.1" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
