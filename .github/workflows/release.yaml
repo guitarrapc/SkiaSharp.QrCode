@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "[0-9]+.[0-9]+.[0-9]+*" # only tag
+  workflow_dispatch:
 
 jobs:
   build-dotnet:
@@ -44,6 +45,7 @@ jobs:
           if-no-files-found: error
 
   create-release:
+    if: ${{ github.event_name == 'push' }}
     needs: [build-dotnet]
     permissions:
       contents: write
