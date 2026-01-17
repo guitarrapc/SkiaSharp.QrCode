@@ -5,6 +5,11 @@ on:
     tags:
       - "[0-9]+.[0-9]+.[0-9]+*" # only tag
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release"
+        required: false
+        default: "0.0.0-dev"
 
 jobs:
   build-dotnet:
@@ -27,11 +32,11 @@ jobs:
       # build
       - run: dotnet build -c Release -p:Version="${GIT_TAG}"
         env:
-          GIT_TAG: ${{ github.ref_name }}
+          GIT_TAG: ${{ inputs.version || github.ref_name }}
       # pack
       - run: dotnet pack -c Release -p:Version="${GIT_TAG}" -o ./publish
         env:
-          GIT_TAG: ${{ github.ref_name }}
+          GIT_TAG: ${{ inputs.version || github.ref_name }}
       # attestations
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
