@@ -5,6 +5,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly" # Check for updates to GitHub Actions every week
+    groups:
+      dependencies:
+        patterns:
+          - "*"
     cooldown:
       default-days: 14
     ignore:
@@ -16,6 +20,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      dependencies:
+        patterns:
+          - "*"
     cooldown:
       default-days: 14
     ignore:
