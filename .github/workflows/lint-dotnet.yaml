@@ -10,6 +10,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: guitarrapc/actions/.github/workflows/reusable-dotnet-lint.yaml@main
+    uses: guitarrapc/actions/.github/workflows/reusable-dotnet-lint.yaml@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
     with:
       sln-file: "SkiaSharp.QrCode.slnx"

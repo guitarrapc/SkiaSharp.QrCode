@@ -20,10 +20,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
         with:
           restore-wasm-workload: true
           dotnet-version: |
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: guitarrapc/actions/.github/actions/setup-dotnet@main
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
       # nuget
       - name: NuGet login (OIDC → temp API key)
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
@@ -73,7 +73,7 @@ jobs:
         run: ls -al ./nuget
       # release
       - name: Create Release
-        uses: guitarrapc/actions/.github/actions/create-release@main
+        uses: guitarrapc/actions/.github/actions/create-release@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
         with:
           tag: ${{ github.ref_name }}
           title: ${{ github.ref_name }}
