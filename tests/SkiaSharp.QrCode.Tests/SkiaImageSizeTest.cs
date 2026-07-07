@@ -72,6 +72,8 @@ public class SkiaImageSizeTest
             // Red: 8 bits, Total: 8 bits = 1byte
             // 100 * 100 * 1 = 10000
             SKColorType.R8Unorm => 10000,
+            SKColorType.RF16 => 20000,
+            SKColorType.R16Unorm => 20000,
             SKColorType.Rgb565 => 20000,
             SKColorType.Argb4444 => 20000,
             SKColorType.Rgba8888 => 40000,
@@ -102,6 +104,7 @@ public class SkiaImageSizeTest
             // Red: 16 bits, Green: 16 bits, Blue: 16 bits, Alpha: 16 bits, Total: 64 bits = 8bytes
             // 100 * 100 * 8 = 80000
             SKColorType.Rgba16161616 => 80000,
+            SKColorType.RgbF16F16F16x => 80000,
             // RGBA Formats with each channel is 10 bits (padded to 16 bits), Total: 64 bits = 8bytes
             // Red: 10 bits (16 bits), Green: 10 bits (16 bits), Blue: 10 bits (16 bits), Alpha: 10 bits (16 bits), Total: 64 bits = 8bytes
             // 100 * 100 * 8 = 80000
@@ -110,6 +113,7 @@ public class SkiaImageSizeTest
             // Blue: 10 bits, Green: 10 bits, Red: 10 bits, Alpha: 2 bits, Total: 32 bits = 4bytes
             // 100 * 100 * 4 = 40000
             SKColorType.Bgra1010102 => 40000,
+            SKColorType.Bgra10101010XR => 80000,
             // BGR Formats with each channel is 10 bits, Unused: 2 bits, Total: 32 bits = 4bytes
             // Blue: 10 bits, Green: 10 bits, Red: 10 bits, Unused: 2 bits, Total: 32 bits = 4bytes
             // 100 * 100 * 4 = 40000
