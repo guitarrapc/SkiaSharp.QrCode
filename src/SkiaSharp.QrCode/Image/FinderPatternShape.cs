@@ -12,6 +12,18 @@ public abstract class FinderPatternShape
     /// <param name="rect">The rectangular area for the finder pattern (7x7 modules).</param>
     /// <param name="paint">The paint to use for drawing.</param>
     public abstract void Draw(SKCanvas canvas, SKRect rect, SKPaint paint);
+
+    /// <summary>
+    /// Draw a finder pattern at the specified location with background color support.
+    /// </summary>
+    /// <param name="canvas">The canvas to render on.</param>
+    /// <param name="rect">The rectangular area for the finder pattern (7x7 modules).</param>
+    /// <param name="paint">The paint to use for drawing dark modules.</param>
+    /// <param name="backgroundColor">The color used for light modules in the finder pattern.</param>
+    public virtual void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor)
+    {
+        Draw(canvas, rect, paint);
+    }
 }
 
 /// <summary>
@@ -30,13 +42,19 @@ public sealed class RectangleFinderPatternShape : FinderPatternShape
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
     {
+        Draw(canvas, rect, paint, SKColors.White);
+    }
+
+    /// <inheritdoc/>
+    public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor)
+    {
         var moduleSize = rect.Width / 7f;
 
         // Draw outer ring (7×7)
         canvas.DrawRect(rect, paint);
 
         // Draw white ring (5×5)
-        using var whitePaint = new SKPaint { Color = SKColors.White, Style = SKPaintStyle.Fill };
+        using var whitePaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
         var innerRect = SKRect.Create(
             rect.Left + moduleSize,
             rect.Top + moduleSize,
@@ -70,6 +88,12 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
     {
+        Draw(canvas, rect, paint, SKColors.White);
+    }
+
+    /// <inheritdoc/>
+    public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor)
+    {
         var center = new SKPoint(rect.MidX, rect.MidY);
         var radius = Math.Min(rect.Width, rect.Height) / 2f;
 
@@ -77,7 +101,7 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
         canvas.DrawCircle(center, radius, paint);
 
         // Draw white ring (5x5)
-        using var whitePaint = new SKPaint() { Color = SKColors.White, Style = SKPaintStyle.Fill };
+        using var whitePaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
         canvas.DrawCircle(center, radius * (5f / 7f), whitePaint);
 
         // Draw black center (3x3)
@@ -113,6 +137,12 @@ public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
     {
+        Draw(canvas, rect, paint, SKColors.White);
+    }
+
+    /// <inheritdoc/>
+    public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor)
+    {
         var moduleSize = rect.Width / 7f;
         var radius = Math.Min(rect.Width, rect.Height) * _cornerRadiusPercent;
 
@@ -120,7 +150,7 @@ public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
         canvas.DrawRoundRect(rect, radius, radius, paint);
 
         // Draw white ring (5×5)
-        using var whitePaint = new SKPaint { Color = SKColors.White, Style = SKPaintStyle.Fill };
+        using var whitePaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
         var innerRect = SKRect.Create(
             rect.Left + moduleSize,
             rect.Top + moduleSize,
@@ -166,6 +196,12 @@ public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShap
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
     {
+        Draw(canvas, rect, paint, SKColors.White);
+    }
+
+    /// <inheritdoc/>
+    public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint, SKColor backgroundColor)
+    {
         var center = new SKPoint(rect.MidX, rect.MidY);
         var moduleSize = rect.Width / 7f;
 
@@ -179,7 +215,7 @@ public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShap
         canvas.DrawRoundRect(rect, cornerRadius, cornerRadius, paint);
 
         // Draw white ring (5×5)
-        using var whitePaint = new SKPaint { Color = SKColors.White, Style = SKPaintStyle.Fill };
+        using var whitePaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
         var innerRect = SKRect.Create(
             rect.Left + moduleSize,
             rect.Top + moduleSize,
