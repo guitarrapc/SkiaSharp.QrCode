@@ -112,7 +112,7 @@ public static class QRCodeRenderer
             for (var i = 0; i < 3; i++)
             {
                 var finderRect = GetFinderPatternRect(data, i, area);
-                finderPatternShape.Draw(canvas, finderRect, darkPaint);
+                finderPatternShape.Draw(canvas, finderRect, darkPaint, bgColor);
             }
         }
 
