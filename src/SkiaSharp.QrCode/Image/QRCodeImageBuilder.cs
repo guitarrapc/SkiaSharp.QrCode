@@ -7,7 +7,7 @@ namespace SkiaSharp.QrCode.Image;
 /// </summary>
 /// <remarks>
 /// <para>
-/// This builder provides both simple static methods for quick QR code generation 
+/// This builder provides both simple static methods for quick QR code generation
 /// and a fluent API for advanced customization.
 /// </para>
 /// <para>
@@ -16,8 +16,8 @@ namespace SkiaSharp.QrCode.Image;
 /// </para>
 /// <para>
 /// <b>Advanced Configuration (Fluent API):</b><br/>
-/// Chain methods like <see cref="WithSize(int, int)"/>, <see cref="WithColors(SKColor?, SKColor?, SKColor?)"/>, 
-/// <see cref="WithModuleShape(ModuleShape?, float)"/>, <see cref="WithGradient(GradientOptions?)"/>, 
+/// Chain methods like <see cref="WithSize(int, int)"/>, <see cref="WithColors(SKColor?, SKColor?, SKColor?)"/>,
+/// <see cref="WithModuleShape(ModuleShape?, float)"/>, <see cref="WithGradient(GradientOptions?)"/>,
 /// and <see cref="WithIcon(IconData?)"/> to customize QR code appearance.
 /// </para>
 /// </remarks>
@@ -273,10 +273,10 @@ public class QRCodeImageBuilder
     /// <exception cref="InvalidOperationException"></exception>
     public QRCodeImageBuilder WithVersion(int version)
     {
-        if (version is not -1 and (< 1 or > 40))
-            throw new ArgumentOutOfRangeException(nameof(version), "Version must be between 1 and 40, or -1 for automatic selection.");
         if (_qrCodeData is not null)
             throw new InvalidOperationException("WithVersion cannot be used when QRCodeData is provided directly.");
+        if (version is not -1 and (< 1 or > 40))
+            throw new ArgumentOutOfRangeException(nameof(version), "Version must be between 1 and 40, or -1 for automatic selection.");
 
         _requestedVersion = version;
         return this;
