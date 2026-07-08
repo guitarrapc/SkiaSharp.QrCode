@@ -53,14 +53,14 @@ public sealed class RectangleFinderPatternShape : FinderPatternShape
         // Draw outer ring (7×7)
         canvas.DrawRect(rect, paint);
 
-        // Draw white ring (5×5)
-        using var whitePaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
+        // Draw ring (5×5)
+        using var ringPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
         var innerRect = SKRect.Create(
             rect.Left + moduleSize,
             rect.Top + moduleSize,
             moduleSize * 5,
             moduleSize * 5);
-        canvas.DrawRect(innerRect, whitePaint);
+        canvas.DrawRect(innerRect, ringPaint);
 
         // Draw black center (3×3)
         var centerRect = SKRect.Create(
@@ -100,9 +100,9 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
         // Draw outer ring (7x7)
         canvas.DrawCircle(center, radius, paint);
 
-        // Draw white ring (5x5)
-        using var whitePaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
-        canvas.DrawCircle(center, radius * (5f / 7f), whitePaint);
+        // Draw ring (5x5)
+        using var ringPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
+        canvas.DrawCircle(center, radius * (5f / 7f), ringPaint);
 
         // Draw black center (3x3)
         canvas.DrawCircle(center, radius * (3f / 7f), paint);
@@ -149,14 +149,14 @@ public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
         // Draw outer rounded rectangle (7×7)
         canvas.DrawRoundRect(rect, radius, radius, paint);
 
-        // Draw white ring (5×5)
-        using var whitePaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
+        // Draw ring (5×5)
+        using var ringPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
         var innerRect = SKRect.Create(
             rect.Left + moduleSize,
             rect.Top + moduleSize,
             moduleSize * 5,
             moduleSize * 5);
-        canvas.DrawRoundRect(innerRect, radius * 0.8f, radius * 0.8f, whitePaint);
+        canvas.DrawRoundRect(innerRect, radius * 0.8f, radius * 0.8f, ringPaint);
 
         // Draw black center (3×3)
         var centerRect = SKRect.Create(
@@ -214,14 +214,14 @@ public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShap
         // Draw outer rounded rectangle (7×7)
         canvas.DrawRoundRect(rect, cornerRadius, cornerRadius, paint);
 
-        // Draw white ring (5×5)
-        using var whitePaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
+        // Draw ring (5×5)
+        using var ringPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
         var innerRect = SKRect.Create(
             rect.Left + moduleSize,
             rect.Top + moduleSize,
             moduleSize * 5,
             moduleSize * 5);
-        canvas.DrawRoundRect(innerRect, cornerRadius * 0.7f, cornerRadius * 0.7f, whitePaint);
+        canvas.DrawRoundRect(innerRect, cornerRadius * 0.7f, cornerRadius * 0.7f, ringPaint);
 
         // Draw black center (3×3) - 3/7 of the base radius
         canvas.DrawCircle(center, baseRadius * (3f / 7f), paint);
