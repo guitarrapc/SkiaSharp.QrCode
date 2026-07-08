@@ -806,6 +806,19 @@ new QRCodeImageBuilder("https://example.com")
     .SaveTo(stream);
 ```
 
+#### Fixed Module Pixel Size
+
+```csharp
+using SkiaSharp.QrCode.Image;
+
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithModulePixelSize(10) // image side = qrCodeData.Size * 10
+    .WithErrorCorrection(ECCLevel.H)
+    .WithQuietZone(4);
+
+var pngBytes = qrCode.ToByteArray();
+```
+
 ### Advanced Usage
 
 #### Custom Colors

@@ -16,7 +16,7 @@ namespace SkiaSharp.QrCode.Image;
 /// </para>
 /// <para>
 /// <b>Advanced Configuration (Fluent API):</b><br/>
-/// Chain methods like <see cref="WithSize(int, int)"/>, <see cref="WithColors(SKColor?, SKColor?, SKColor?)"/>,
+/// Chain methods like <see cref="WithSize(int, int)"/>, <see cref="WithModulePixelSize(int)"/>, <see cref="WithColors(SKColor?, SKColor?, SKColor?)"/>,
 /// <see cref="WithModuleShape(ModuleShape?, float)"/>, <see cref="WithGradient(GradientOptions?)"/>,
 /// and <see cref="WithIcon(IconData?)"/> to customize QR code appearance.
 /// </para>
@@ -34,6 +34,7 @@ public class QRCodeImageBuilder
     private EciMode _eciMode = EciMode.Default;
     private int _requestedVersion = -1;
     private int _quietZoneSize = 4;
+    private int? _modulePixelSize;
 
     // rendering
     private SKColor? _codeColor;
@@ -222,6 +223,26 @@ public class QRCodeImageBuilder
             throw new ArgumentOutOfRangeException(nameof(height), "Height must be positive");
 
         _size = new Vector2Slim(width, height);
+        _modulePixelSize = null;
+        return this;
+    }
+
+    /// <summary>
+    /// Configure output image size using QR module pixel size.
+    /// </summary>
+    /// <remarks>
+    /// The final image size is calculated as <c>QRCodeData.Size * modulePixelSize</c> for both width and height.
+    /// This keeps module boundaries aligned even when QR version changes.
+    /// </remarks>
+    /// <param name="modulePixelSize">Pixel size per QR module (must be positive).</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public QRCodeImageBuilder WithModulePixelSize(int modulePixelSize)
+    {
+        if (modulePixelSize <= 0)
+            throw new ArgumentOutOfRangeException(nameof(modulePixelSize), "Module pixel size must be positive");
+
+        _modulePixelSize = modulePixelSize;
         return this;
     }
 
@@ -444,7 +465,7 @@ public class QRCodeImageBuilder
         var qrCodeData = _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, requestedVersion: _requestedVersion, quietZoneSize: _quietZoneSize);
 
         // Create surface and render
-        var info = new SKImageInfo(_size.X, _size.Y);
+        var info = CreateImageInfo(qrCodeData);
         using var surface = SKSurface.Create(info);
         var canvas = surface.Canvas;
 
@@ -452,5 +473,21 @@ public class QRCodeImageBuilder
 
         // Encode and save
         return surface.Snapshot();
+    }
+
+    private SKImageInfo CreateImageInfo(QRCodeData qrCodeData)
+    {
+        if (_modulePixelSize is null)
+            return new SKImageInfo(_size.X, _size.Y);
+
+        try
+        {
+            var imageSide = checked(qrCodeData.Size * _modulePixelSize.Value);
+            return new SKImageInfo(imageSide, imageSide);
+        }
+        catch (OverflowException ex)
+        {
+            throw new InvalidOperationException("Calculated image size overflowed. Reduce module pixel size or QR version.", ex);
+        }
     }
 }
