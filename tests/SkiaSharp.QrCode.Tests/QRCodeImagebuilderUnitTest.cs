@@ -244,6 +244,60 @@ public class QRCodeImageBuilderTest
 
     #endregion
 
+    #region Fluent API Tests - WithVersion
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(1)]
+    [InlineData(10)]
+    [InlineData(40)]
+    public void WithVersion_ValidVersions_ReturnsBuilder(int version)
+    {
+        var builder = new QRCodeImageBuilder(TestContent);
+        var result = builder.WithVersion(version);
+
+        Assert.Same(builder, result);
+    }
+
+    [Theory]
+    [InlineData(-2)]
+    [InlineData(0)]
+    [InlineData(41)]
+    public void WithVersion_InvalidVersion_ThrowsArgumentOutOfRangeException(int version)
+    {
+        var builder = new QRCodeImageBuilder(TestContent);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => builder.WithVersion(version));
+    }
+
+    [Fact]
+    public void WithVersion_QRCodeDataBuilder_ThrowsInvalidOperationException()
+    {
+        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H);
+        var builder = new QRCodeImageBuilder(qrCodeData);
+
+        Assert.Throws<InvalidOperationException>(() => builder.WithVersion(10));
+    }
+
+    [Fact]
+    public void WithVersion_FixedVersion_MatchesQRCodeDataRendering()
+    {
+        const int fixedVersion = 10;
+        using var expectedBitmap = new QRCodeImageBuilder(QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: fixedVersion))
+            .WithSize(256, 256)
+            .ToBitmap();
+
+        using var actualBitmap = new QRCodeImageBuilder(TestContent)
+            .WithErrorCorrection(ECCLevel.H)
+            .WithVersion(fixedVersion)
+            .WithSize(256, 256)
+            .ToBitmap();
+
+        Assert.True(BitmapsAreEqual(expectedBitmap, actualBitmap));
+    }
+
+    #endregion
+
     #region Fluent API Tests - WithQuietZone
 
     [Theory]
@@ -489,4 +543,21 @@ public class QRCodeImageBuilderTest
     }
 
     #endregion
+
+    private static bool BitmapsAreEqual(SKBitmap left, SKBitmap right)
+    {
+        if (left.Width != right.Width || left.Height != right.Height)
+            return false;
+
+        for (var y = 0; y < left.Height; y++)
+        {
+            for (var x = 0; x < left.Width; x++)
+            {
+                if (left.GetPixel(x, y) != right.GetPixel(x, y))
+                    return false;
+            }
+        }
+
+        return true;
+    }
 }
