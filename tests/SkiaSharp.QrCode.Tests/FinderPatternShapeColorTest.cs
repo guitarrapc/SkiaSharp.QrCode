@@ -1,4 +1,3 @@
-using SkiaSharp;
 using SkiaSharp.QrCode.Image;
 using Xunit;
 
