@@ -32,6 +32,7 @@ public class QRCodeImageBuilder
     private int _quality = 100;
     private ECCLevel _eccLevel = ECCLevel.M;
     private EciMode _eciMode = EciMode.Default;
+    private int _requestedVersion = -1;
     private int _quietZoneSize = 4;
 
     // rendering
@@ -264,6 +265,24 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
+    /// Configure the QR code version to generate.
+    /// </summary>
+    /// <param name="version">Version to use (1-40), or -1 for automatic selection based on content length.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <exception cref="InvalidOperationException"></exception>
+    public QRCodeImageBuilder WithVersion(int version)
+    {
+        if (version is not -1 and (< 1 or > 40))
+            throw new ArgumentOutOfRangeException(nameof(version), "Version must be between 1 and 40, or -1 for automatic selection.");
+        if (_qrCodeData is not null)
+            throw new InvalidOperationException("WithVersion cannot be used when QRCodeData is provided directly.");
+
+        _requestedVersion = version;
+        return this;
+    }
+
+    /// <summary>
     /// Configure the quiet zone size (white border) around the QR code.
     /// </summary>
     /// <param name="size">Quiet zone size in modules (0-10). Recommended is 4.</param>
@@ -422,7 +441,7 @@ public class QRCodeImageBuilder
     private SKImage GenerateImage()
     {
         // Generate QR Data
-        var qrCodeData = _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, quietZoneSize: _quietZoneSize);
+        var qrCodeData = _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, requestedVersion: _requestedVersion, quietZoneSize: _quietZoneSize);
 
         // Create surface and render
         var info = new SKImageInfo(_size.X, _size.Y);
