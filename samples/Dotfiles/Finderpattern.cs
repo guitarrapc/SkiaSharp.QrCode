@@ -5,13 +5,15 @@ using SkiaSharp;
 using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
+// fix confirmation for: https://github.com/guitarrapc/SkiaSharp.QrCode/issues/299
+
 var backgroundColor = new SKColor(0xEA, 0xFB, 0x00, 0xFF);
 var codeColor = SKColors.Green;
 var qr = QRCodeGenerator.CreateQrCode("finder-shape-background-test", ECCLevel.M);
 
 var imageSize = qr.Size * 10;
 var area = SKRect.Create(0, 0, imageSize, imageSize);
-var outputDirectory = Path.Combine(Environment.CurrentDirectory, "samples", "Dotfiles", "finder-shapes");
+var outputDirectory = Path.Combine(Environment.CurrentDirectory, "samples", "Dotfiles", "output", "finder-shapes");
 Directory.CreateDirectory(outputDirectory);
 
 var finderPatternShapes = new FinderPatternShape[]
