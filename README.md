@@ -808,6 +808,20 @@ new QRCodeImageBuilder("https://example.com")
 
 ### Advanced Usage
 
+#### Request Veresion
+
+"abc" can fit in Version 1, but we request Version 10 to show more dots. This can be useful for adding logo with short content.
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode.Image;
+
+new QRCodeImageBuilder("abc")
+    .WithSize(512, 512)
+    .WithVersion(10)
+    .ToByteArray();
+```
+
 #### Custom Colors
 
 ```csharp
