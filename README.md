@@ -806,15 +806,50 @@ new QRCodeImageBuilder("https://example.com")
     .SaveTo(stream);
 ```
 
-#### Fixed Module Pixel Size
+#### Choosing Image Size
+
+| Goal | API | Notes |
+|---|---|---|
+| Keep module edges sharp / logo aligned | `WithModulePixelSize(n)` | Output side = `QR matrix size * n`. Best default when using logos. |
+| Also fit a fixed UI frame | `WithModulePixelSize(n)` + `WithSize(w, h)` | Canvas must be `>=` content size. Extra space is centered padding (`clearColor`). Too-small canvas throws. |
+| Only need a fixed pixel box | `WithSize(w, h)` | Simple, but module size may become fractional when QR version changes. |
+
+**Recommended (module-aligned):**
 
 ```csharp
 using SkiaSharp.QrCode.Image;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
-    .WithModulePixelSize(10) // image side = (QR matrix size in modules) * 10
+    .WithModulePixelSize(10) // content = (QR matrix size in modules) * 10
     .WithErrorCorrection(ECCLevel.H)
     .WithQuietZone(4);
+
+var pngBytes = qrCode.ToByteArray();
+```
+
+**Recommended (module-aligned + fixed canvas):**
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode.Image;
+
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithModulePixelSize(10)
+    .WithSize(512, 512) // must be >= content size
+    .WithColors(clearColor: SKColors.Transparent)
+    .WithErrorCorrection(ECCLevel.H);
+
+var pngBytes = qrCode.ToByteArray();
+```
+
+**Fixed box only (may use fractional module pixels):**
+
+```csharp
+using SkiaSharp.QrCode.Image;
+
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithSize(512, 512)
+    .WithErrorCorrection(ECCLevel.H);
 
 var pngBytes = qrCode.ToByteArray();
 ```
@@ -872,6 +907,8 @@ var pngBytes = qrCode.ToByteArray();
 
 #### QR code with Logo (icon only)
 
+Prefer module-based sizing so the logo sits on the QR grid. See [Choosing Image Size](#choosing-image-size).
+
 ```csharp
 using SkiaSharp;
 using SkiaSharp.QrCode.Image;
@@ -886,6 +923,7 @@ var iconByModules = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBo
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithModulePixelSize(12)
+    // .WithSize(512, 512) // optional: larger canvas with centered padding
     .WithErrorCorrection(ECCLevel.H) // High ECC recommended for icons
     .WithIcon(iconByModules);
 

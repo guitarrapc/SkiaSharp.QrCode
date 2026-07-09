@@ -27,7 +27,7 @@ public class QRCodeImageBuilder
 {
     private readonly string? _content;
     private readonly QRCodeData? _qrCodeData;
-    private Vector2Slim _size = new(512, 512);
+    private Vector2Slim? _explicitSize;
     private SKEncodedImageFormat _format = SKEncodedImageFormat.Png;
     private int _quality = 100;
     private ECCLevel _eccLevel = ECCLevel.M;
@@ -213,13 +213,14 @@ public class QRCodeImageBuilder
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Use this when the final image dimensions are fixed (for example UI layout constraints).
-    /// Module pixel size then becomes <c>imageSize / QRCodeData.Size</c>, which may be fractional
-    /// and can change when QR version changes.
+    /// Used alone, this sets an exact canvas size. Module pixel size then becomes
+    /// <c>imageSize / QRCodeData.Size</c>, which may be fractional and can change when QR version changes.
     /// </para>
     /// <para>
-    /// Mutually exclusive with <see cref="WithModulePixelSize(int)"/>. If both are called,
-    /// the last call wins.
+    /// Used with <see cref="WithModulePixelSize(int)"/>, this sets the canvas size while module pixels
+    /// define the QR content size (<c>QRCodeData.Size * modulePixelSize</c>).
+    /// The canvas must be at least as large as the content on both sides; extra space is padded and
+    /// the QR content is centered. Padding uses <c>clearColor</c> from <see cref="WithColors"/>.
     /// </para>
     /// </remarks>
     /// <param name="width">Width in pixels (must be positive).</param>
@@ -233,23 +234,22 @@ public class QRCodeImageBuilder
         if (height <= 0)
             throw new ArgumentOutOfRangeException(nameof(height), "Height must be positive");
 
-        _size = new Vector2Slim(width, height);
-        _modulePixelSize = null;
+        _explicitSize = new Vector2Slim(width, height);
         return this;
     }
 
     /// <summary>
-    /// Configure the output image size from pixels-per-module.
+    /// Configure QR content size from pixels-per-module.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Use this when module alignment matters (for example logos/icons that should sit cleanly on module boundaries).
-    /// The final image size is <c>QRCodeData.Size * modulePixelSize</c> for both width and height,
-    /// so each module stays an exact integer pixel size even when QR version changes.
+    /// Sets each QR module to an exact integer pixel size. Content side length is
+    /// <c>QRCodeData.Size * modulePixelSize</c>.
     /// </para>
     /// <para>
-    /// Mutually exclusive with <see cref="WithSize(int, int)"/>. If both are called,
-    /// the last call wins.
+    /// Used alone, the output image matches the content size.
+    /// Used with <see cref="WithSize(int, int)"/>, the content is centered on the larger canvas
+    /// and padded with <c>clearColor</c>. If the canvas is smaller than the content, rendering throws.
     /// </para>
     /// </remarks>
     /// <param name="modulePixelSize">Pixel size per QR module (must be positive).</param>
@@ -482,30 +482,52 @@ public class QRCodeImageBuilder
         // Generate QR Data
         var qrCodeData = _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, requestedVersion: _requestedVersion, quietZoneSize: _quietZoneSize);
 
-        // Create surface and render
-        var info = CreateImageInfo(qrCodeData);
+        var (info, contentRect) = CreateLayout(qrCodeData);
         using var surface = SKSurface.Create(info);
         var canvas = surface.Canvas;
 
-        canvas.Render(qrCodeData, info.Width, info.Height, _clearColor, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
+        // Extension clears the full canvas with clearColor, then draws QR into contentRect.
+        // Extra canvas area (pad) therefore keeps clearColor.
+        canvas.Render(qrCodeData, contentRect, _clearColor, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
 
-        // Encode and save
         return surface.Snapshot();
     }
 
-    private SKImageInfo CreateImageInfo(QRCodeData qrCodeData)
+    private (SKImageInfo info, SKRect contentRect) CreateLayout(QRCodeData qrCodeData)
     {
         if (_modulePixelSize is null)
-            return new SKImageInfo(_size.X, _size.Y);
+        {
+            var size = _explicitSize ?? new Vector2Slim(512, 512);
+            return (new SKImageInfo(size.X, size.Y), SKRect.Create(0, 0, size.X, size.Y));
+        }
 
+        int contentSide;
         try
         {
-            var imageSide = checked(qrCodeData.Size * _modulePixelSize.Value);
-            return new SKImageInfo(imageSide, imageSide);
+            contentSide = checked(qrCodeData.Size * _modulePixelSize.Value);
         }
         catch (OverflowException ex)
         {
             throw new InvalidOperationException("Calculated image size overflowed. Reduce module pixel size or QR version.", ex);
         }
+
+        if (_explicitSize is null)
+            return (new SKImageInfo(contentSide, contentSide), SKRect.Create(0, 0, contentSide, contentSide));
+
+        var canvasWidth = _explicitSize.Value.X;
+        var canvasHeight = _explicitSize.Value.Y;
+        if (canvasWidth < contentSide || canvasHeight < contentSide)
+        {
+            throw new InvalidOperationException(
+                $"Canvas size {canvasWidth}x{canvasHeight} is smaller than QR content size {contentSide}x{contentSide} " +
+                $"(QR matrix size {qrCodeData.Size} * module pixel size {_modulePixelSize.Value}).");
+        }
+
+        // Use integer offsets so content stays on whole pixels (odd padding may be 1px asymmetric).
+        var left = (canvasWidth - contentSide) / 2;
+        var top = (canvasHeight - contentSide) / 2;
+        return (
+            new SKImageInfo(canvasWidth, canvasHeight),
+            SKRect.Create(left, top, contentSide, contentSide));
     }
 }
