@@ -402,3 +402,4 @@ FodyWeavers.xsd
 
 # custom
 output/
+.references/
