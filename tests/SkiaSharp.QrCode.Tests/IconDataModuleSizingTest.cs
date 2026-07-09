@@ -56,6 +56,61 @@ public class IconDataModuleSizingTest
         Assert.Equal((iconSizeModules + iconBorderModules * 2) * modulePixelSize, borderRect.Height);
         Assert.Equal(area.MidX, iconRect.MidX, 0.001f);
         Assert.Equal(area.MidY, iconRect.MidY, 0.001f);
+        Assert.Equal(0, iconRect.Left % modulePixelSize, 0.001f);
+        Assert.Equal(0, iconRect.Top % modulePixelSize, 0.001f);
+        Assert.Equal(0, borderRect.Left % modulePixelSize, 0.001f);
+        Assert.Equal(0, borderRect.Top % modulePixelSize, 0.001f);
+    }
+
+    [Fact]
+    public void GetIconRects_ModuleSizing_EvenIconSize_SnapsToModuleGrid()
+    {
+        const int modulePixelSize = 10;
+        const int iconSizeModules = 6; // even: cannot be geometrically centered on odd matrix
+        const int iconBorderModules = 1;
+
+        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 5, quietZoneSize: 4);
+        var imageSide = qrData.Size * modulePixelSize;
+        var area = SKRect.Create(0, 0, imageSide, imageSide);
+
+        using var logo = CreateLogo(32);
+        var icon = IconData.FromImageByModules(logo, iconSizeModules, iconBorderModules, maxCoreOccupancyPercent: 40);
+
+        var (iconRect, borderRect) = QRCodeRenderer.GetIconRects(qrData, area, icon);
+
+        var expectedOrigin = ((qrData.Size - iconSizeModules) / 2) * modulePixelSize;
+        Assert.Equal(expectedOrigin, iconRect.Left);
+        Assert.Equal(expectedOrigin, iconRect.Top);
+        Assert.Equal(iconSizeModules * modulePixelSize, iconRect.Width);
+        Assert.Equal((iconSizeModules + iconBorderModules * 2) * modulePixelSize, borderRect.Width);
+        Assert.Equal(0, iconRect.Left % modulePixelSize, 0.001f);
+        Assert.Equal(0, borderRect.Left % modulePixelSize, 0.001f);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(101)]
+    public void GetIconRects_PercentSizing_InvalidPercent_ThrowsArgumentOutOfRangeException(int iconSizePercent)
+    {
+        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M, requestedVersion: 1, quietZoneSize: 4);
+        var area = SKRect.Create(0, 0, 500, 500);
+        using var logo = CreateLogo(16);
+        var icon = IconData.FromImage(logo, iconSizePercent: 10, iconBorderWidth: 2);
+        icon.IconSizePercent = iconSizePercent;
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeRenderer.GetIconRects(qrData, area, icon));
+    }
+
+    [Fact]
+    public void GetIconRects_PercentSizing_NegativeBorder_ThrowsArgumentOutOfRangeException()
+    {
+        var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M, requestedVersion: 1, quietZoneSize: 4);
+        var area = SKRect.Create(0, 0, 500, 500);
+        using var logo = CreateLogo(16);
+        var icon = IconData.FromImage(logo, iconSizePercent: 10, iconBorderWidth: 2);
+        icon.IconBorderWidth = -1;
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeRenderer.GetIconRects(qrData, area, icon));
     }
 
     [Fact]

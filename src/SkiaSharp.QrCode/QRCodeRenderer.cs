@@ -130,6 +130,7 @@ public static class QRCodeRenderer
     /// <remarks>
     /// When <see cref="IconData.IconSizeModules"/> is set, sizing is module-based and percent/pixel values are ignored.
     /// Module-based icons are validated against QR size and core occupancy at render time.
+    /// Icon rectangles are snapped to the module grid; even module sizes cannot be geometrically centered on an odd QR matrix.
     /// </remarks>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <exception cref="InvalidOperationException"></exception>
@@ -181,16 +182,17 @@ public static class QRCodeRenderer
             var borderWidth = iconBorderModules * cellWidth;
             var borderHeight = iconBorderModules * cellHeight;
 
-            var iconRect = SKRect.Create(
-                centerX - iconWidth / 2,
-                centerY - iconHeight / 2,
-                iconWidth,
-                iconHeight);
+            // Snap to module grid. QR matrix size is always odd, so an even icon size
+            // cannot be geometrically centered without cutting modules; prefer module edges.
+            var iconOriginModule = (size - iconSizeModules) / 2;
+            var iconLeft = area.Left + iconOriginModule * cellWidth;
+            var iconTop = area.Top + iconOriginModule * cellHeight;
+            var iconRect = SKRect.Create(iconLeft, iconTop, iconWidth, iconHeight);
 
             var borderRect = iconBorderModules > 0
                 ? SKRect.Create(
-                    centerX - iconWidth / 2 - borderWidth,
-                    centerY - iconHeight / 2 - borderHeight,
+                    iconLeft - borderWidth,
+                    iconTop - borderHeight,
                     iconWidth + borderWidth * 2,
                     iconHeight + borderHeight * 2)
                 : iconRect;
@@ -199,6 +201,11 @@ public static class QRCodeRenderer
         }
         else
         {
+            if (iconData.IconSizePercent is < 1 or > 100)
+                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon size percent must be between 1 and 100.");
+            if (iconData.IconBorderWidth < 0)
+                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon border width must be 0 or greater.");
+
             var iconSize = iconData.IconSizePercent / 100f;
             var iconWidth = area.Width * iconSize;
             var iconHeight = area.Height * iconSize;

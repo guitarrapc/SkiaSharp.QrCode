@@ -812,7 +812,7 @@ new QRCodeImageBuilder("https://example.com")
 using SkiaSharp.QrCode.Image;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
-    .WithModulePixelSize(10) // image side = qrCodeData.Size * 10
+    .WithModulePixelSize(10) // image side = (QR matrix size in modules) * 10
     .WithErrorCorrection(ECCLevel.H)
     .WithQuietZone(4);
 
