@@ -863,11 +863,17 @@ using SkiaSharp;
 using SkiaSharp.QrCode.Image;
 
 using var logo = SKBitmap.Decode(File.ReadAllBytes("logo.png"));
-var icon = IconData.FromImage(logo, iconSizePercent: 15, iconBorderWidth: 10);
+
+// Percent/pixel sizing (existing)
+var iconByPercent = IconData.FromImage(logo, iconSizePercent: 15, iconBorderWidth: 10);
+
+// Module-based sizing (recommended with WithModulePixelSize)
+var iconByModules = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 1);
+
 var qrCode = new QRCodeImageBuilder("https://example.com")
-    .WithSize(800, 800)
+    .WithModulePixelSize(12)
     .WithErrorCorrection(ECCLevel.H) // High ECC recommended for icons
-    .WithIcon(icon);
+    .WithIcon(iconByModules);
 
 var pngBytes = qrCode.ToByteArray();
 ```
