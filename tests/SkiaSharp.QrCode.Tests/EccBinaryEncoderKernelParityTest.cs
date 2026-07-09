@@ -1,0 +1,177 @@
+using SkiaSharp.QrCode.Internals;
+using SkiaSharp.QrCode.Internals.BinaryEncoders;
+using Xunit;
+
+namespace SkiaSharp.QrCode.Tests;
+
+/// <summary>
+/// Verifies that every ECC kernel (scalar, SSSE3, GFNI) produces byte-identical
+/// output to a naive reference implementation of ISO/IEC 18004 Section 8.5
+/// polynomial division. CalculateECC dispatches by hardware capability, so these
+/// tests exercise each kernel directly in addition to the public entry point.
+/// </summary>
+public class EccBinaryEncoderKernelParityTest
+{
+    // (dataLength, eccCount) pairs covering QR extremes and boundary conditions:
+    // smallest/largest real blocks, the 16/17 register-width split, eccCount 1,
+    // data shorter than one 4-byte quad, and data not a multiple of 4.
+    public static TheoryData<int, int> Combos => new()
+    {
+        { 1, 1 },
+        { 1, 7 },
+        { 3, 10 },
+        { 16, 10 },   // version 1-M block
+        { 19, 16 },   // eccCount at the 128-bit register boundary
+        { 20, 17 },   // eccCount just above the boundary
+        { 34, 28 },
+        { 119, 30 },  // version 40-L block
+        { 2956, 30 }, // far beyond any single QR block (large-data safety)
+    };
+
+    [Theory]
+    [MemberData(nameof(Combos))]
+    public void CalculateECC_MatchesNaiveReference(int dataLength, int eccCount)
+    {
+        foreach (var data in EnumerateInputs(dataLength))
+        {
+            var expected = new byte[eccCount];
+            NaiveReferenceECC(data, expected, eccCount);
+
+            var actual = new byte[eccCount];
+            EccBinaryEncoder.CalculateECC(data, actual, eccCount);
+
+            Assert.Equal(expected, actual);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Combos))]
+    public void ScalarKernel_MatchesNaiveReference(int dataLength, int eccCount)
+    {
+        foreach (var data in EnumerateInputs(dataLength))
+        {
+            var expected = new byte[eccCount];
+            NaiveReferenceECC(data, expected, eccCount);
+
+            var actual = new byte[eccCount];
+            EccBinaryEncoder.CalculateEccScalar(data, actual, eccCount);
+
+            Assert.Equal(expected, actual);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Combos))]
+    public void Ssse3Kernel_MatchesNaiveReference(int dataLength, int eccCount)
+    {
+        Assert.SkipUnless(System.Runtime.Intrinsics.X86.Ssse3.IsSupported, "SSSE3 not supported on this machine");
+
+        foreach (var data in EnumerateInputs(dataLength))
+        {
+            var expected = new byte[eccCount];
+            NaiveReferenceECC(data, expected, eccCount);
+
+            var actual = new byte[eccCount];
+            EccBinaryEncoder.CalculateEccSsse3(data, actual, eccCount);
+
+            Assert.Equal(expected, actual);
+        }
+    }
+
+#if NET10_0_OR_GREATER
+    [Theory]
+    [MemberData(nameof(Combos))]
+    public void GfniKernel_MatchesNaiveReference(int dataLength, int eccCount)
+    {
+        Assert.SkipUnless(System.Runtime.Intrinsics.X86.Gfni.IsSupported, "GFNI not supported on this machine");
+
+        foreach (var data in EnumerateInputs(dataLength))
+        {
+            var expected = new byte[eccCount];
+            NaiveReferenceECC(data, expected, eccCount);
+
+            var actual = new byte[eccCount];
+            EccBinaryEncoder.CalculateEccGfni(data, actual, eccCount);
+
+            Assert.Equal(expected, actual);
+        }
+    }
+#endif
+
+    [Fact]
+    public void CalculateECC_EccCountAboveVectorLimit_UsesScalarPath()
+    {
+        // eccCount > 32 bypasses the vector kernels; verify the dispatch stays correct.
+        var data = new byte[50];
+        new Random(7).NextBytes(data);
+        var eccCount = 40;
+
+        var expected = new byte[eccCount];
+        NaiveReferenceECC(data, expected, eccCount);
+
+        var actual = new byte[eccCount];
+        EccBinaryEncoder.CalculateECC(data, actual, eccCount);
+
+        Assert.Equal(expected, actual);
+    }
+
+    /// <summary>
+    /// Input variations per size: seeded random (several seeds), all-zero
+    /// (exercises every zero-skip path), and all-0xFF.
+    /// </summary>
+    private static IEnumerable<byte[]> EnumerateInputs(int dataLength)
+    {
+        for (var seed = 0; seed < 3; seed++)
+        {
+            var data = new byte[dataLength];
+            new Random(seed).NextBytes(data);
+            yield return data;
+        }
+
+        yield return new byte[dataLength]; // all zeros
+
+        var ones = new byte[dataLength];
+        ones.AsSpan().Fill(0xFF);
+        yield return ones;
+    }
+
+    /// <summary>
+    /// Naive ISO/IEC 18004 Section 8.5 polynomial division, kept deliberately
+    /// simple and independent from the production kernels: builds the generator
+    /// polynomial per call and multiplies element-wise via GaloisField.Multiply.
+    /// </summary>
+    private static void NaiveReferenceECC(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
+    {
+        // Generator polynomial (x - α^0)(x - α^1)...(x - α^(eccCount-1))
+        var generator = new byte[eccCount + 1];
+        generator[0] = 1;
+        var temp = new byte[generator.Length];
+        for (var i = 0; i < eccCount; i++)
+        {
+            Array.Clear(temp);
+            for (var j = 0; j <= i; j++)
+            {
+                var coefficient = generator[j];
+                if (coefficient == 0) continue;
+                temp[j] ^= coefficient;
+                temp[j + 1] ^= GaloisField.Multiply(coefficient, GaloisField.Exp[i]);
+            }
+            temp.CopyTo(generator.AsSpan());
+        }
+
+        // Polynomial division
+        var message = new byte[data.Length + eccCount];
+        data.CopyTo(message);
+        for (var i = 0; i < data.Length; i++)
+        {
+            var coefficient = message[i];
+            if (coefficient == 0) continue;
+            for (var j = 0; j < eccCount; j++)
+            {
+                message[i + j + 1] ^= GaloisField.Multiply(generator[j + 1], coefficient);
+            }
+        }
+
+        message.AsSpan(data.Length, eccCount).CopyTo(ecc);
+    }
+}
