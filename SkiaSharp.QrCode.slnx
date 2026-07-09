@@ -12,7 +12,7 @@
     <Project Path="samples/SimpleSerialize/SimpleSerialize.csproj" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/SkiaSharp.Benchmark/SkiaSharp.Benchmark.csproj" />
+    <Project Path="src/SkiaSharp.QrCode.Benchmark/SkiaSharp.QrCode.Benchmark.csproj" />
     <Project Path="src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj" />
   </Folder>
   <Folder Name="/tests/">
