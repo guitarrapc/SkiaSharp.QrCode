@@ -811,10 +811,28 @@ new QRCodeImageBuilder("https://example.com")
 ```csharp
 using SkiaSharp.QrCode.Image;
 
+// Content size = (QR matrix size in modules) * 10
 var qrCode = new QRCodeImageBuilder("https://example.com")
-    .WithModulePixelSize(10) // image side = (QR matrix size in modules) * 10
+    .WithModulePixelSize(10)
     .WithErrorCorrection(ECCLevel.H)
     .WithQuietZone(4);
+
+var pngBytes = qrCode.ToByteArray();
+```
+
+#### Module Pixel Size with Canvas Padding
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode.Image;
+
+// Module size defines QR content; WithSize defines a larger canvas.
+// Content is centered and padded with clearColor. Canvas must be >= content size.
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithModulePixelSize(10)
+    .WithSize(512, 512)
+    .WithColors(clearColor: SKColors.Transparent)
+    .WithErrorCorrection(ECCLevel.H);
 
 var pngBytes = qrCode.ToByteArray();
 ```

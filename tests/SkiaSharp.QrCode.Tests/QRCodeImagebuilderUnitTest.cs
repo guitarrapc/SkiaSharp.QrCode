@@ -240,31 +240,67 @@ public class QRCodeImageBuilderTest
     }
 
     [Fact]
-    public void WithModulePixelSize_AfterWithSize_ModulePixelSizeTakesPrecedence()
+    public void WithModulePixelSize_AndLargerCanvas_PadsAndCentersContent()
     {
         const int modulePixelSize = 6;
         var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
-        var expectedSide = qrCodeData.Size * modulePixelSize;
+        var contentSide = qrCodeData.Size * modulePixelSize;
+        const int canvasWidth = 400;
+        const int canvasHeight = 500;
+        Assert.True(canvasWidth >= contentSide);
+        Assert.True(canvasHeight >= contentSide);
 
         using var bitmap = new QRCodeImageBuilder(TestContent)
-            .WithSize(123, 456)
             .WithModulePixelSize(modulePixelSize)
+            .WithSize(canvasWidth, canvasHeight)
+            .WithColors(codeColor: SKColors.Black, backgroundColor: SKColors.White, clearColor: SKColors.Transparent)
             .ToBitmap();
 
-        Assert.Equal(expectedSide, bitmap.Width);
-        Assert.Equal(expectedSide, bitmap.Height);
+        Assert.Equal(canvasWidth, bitmap.Width);
+        Assert.Equal(canvasHeight, bitmap.Height);
+
+        var expectedLeft = (canvasWidth - contentSide) / 2;
+        var expectedTop = (canvasHeight - contentSide) / 2;
+
+        // Padding outside content should keep clearColor (transparent).
+        Assert.Equal(0, bitmap.GetPixel(0, 0).Alpha);
+        Assert.Equal(0, bitmap.GetPixel(canvasWidth - 1, canvasHeight - 1).Alpha);
+
+        // Content area corners should be QR background (quiet zone).
+        Assert.Equal(SKColors.White, bitmap.GetPixel(expectedLeft, expectedTop));
+        Assert.Equal(SKColors.White, bitmap.GetPixel(expectedLeft + contentSide - 1, expectedTop + contentSide - 1));
     }
 
     [Fact]
-    public void WithSize_AfterWithModulePixelSize_ExplicitSizeTakesPrecedence()
+    public void WithModulePixelSize_AndTooSmallCanvas_ThrowsInvalidOperationException()
     {
+        const int modulePixelSize = 10;
+        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var contentSide = qrCodeData.Size * modulePixelSize;
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            new QRCodeImageBuilder(TestContent)
+                .WithModulePixelSize(modulePixelSize)
+                .WithSize(contentSide - 1, contentSide)
+                .ToBitmap());
+
+        Assert.Contains("smaller than QR content size", ex.Message);
+    }
+
+    [Fact]
+    public void WithModulePixelSize_AndExactCanvas_MatchesContentSize()
+    {
+        const int modulePixelSize = 8;
+        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var contentSide = qrCodeData.Size * modulePixelSize;
+
         using var bitmap = new QRCodeImageBuilder(TestContent)
-            .WithModulePixelSize(9)
-            .WithSize(321, 654)
+            .WithModulePixelSize(modulePixelSize)
+            .WithSize(contentSide, contentSide)
             .ToBitmap();
 
-        Assert.Equal(321, bitmap.Width);
-        Assert.Equal(654, bitmap.Height);
+        Assert.Equal(contentSide, bitmap.Width);
+        Assert.Equal(contentSide, bitmap.Height);
     }
 
     #endregion

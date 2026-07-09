@@ -60,7 +60,7 @@ public class IconData
     /// <remarks>
     /// <para>
     /// Prefer combining this with <c>WithModulePixelSize</c> so each module maps to an integer pixel size.
-    /// Using <c>WithSize</c> is allowed, but module boundaries may become fractional.
+    /// Optional <c>WithSize</c> can then set a larger canvas; content is centered and padded.
     /// </para>
     /// <para>
     /// Validation against QR size/core occupancy happens at render time.
