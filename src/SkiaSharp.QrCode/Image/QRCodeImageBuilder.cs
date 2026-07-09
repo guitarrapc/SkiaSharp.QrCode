@@ -209,8 +209,19 @@ public class QRCodeImageBuilder
     // builder methods
 
     /// <summary>
-    /// Configure the size of the generated QR code image.
+    /// Configure the output image size in absolute pixels.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Use this when the final image dimensions are fixed (for example UI layout constraints).
+    /// Module pixel size then becomes <c>imageSize / QRCodeData.Size</c>, which may be fractional
+    /// and can change when QR version changes.
+    /// </para>
+    /// <para>
+    /// Mutually exclusive with <see cref="WithModulePixelSize(int)"/>. If both are called,
+    /// the last call wins.
+    /// </para>
+    /// </remarks>
     /// <param name="width">Width in pixels (must be positive).</param>
     /// <param name="height">Height in pixels (must be positive).</param>
     /// <returns>This builder instance for method chaining.</returns>
@@ -228,11 +239,18 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Configure output image size using QR module pixel size.
+    /// Configure the output image size from pixels-per-module.
     /// </summary>
     /// <remarks>
-    /// The final image size is calculated as <c>QRCodeData.Size * modulePixelSize</c> for both width and height.
-    /// This keeps module boundaries aligned even when QR version changes.
+    /// <para>
+    /// Use this when module alignment matters (for example logos/icons that should sit cleanly on module boundaries).
+    /// The final image size is <c>QRCodeData.Size * modulePixelSize</c> for both width and height,
+    /// so each module stays an exact integer pixel size even when QR version changes.
+    /// </para>
+    /// <para>
+    /// Mutually exclusive with <see cref="WithSize(int, int)"/>. If both are called,
+    /// the last call wins.
+    /// </para>
     /// </remarks>
     /// <param name="modulePixelSize">Pixel size per QR module (must be positive).</param>
     /// <returns>This builder instance for method chaining.</returns>
