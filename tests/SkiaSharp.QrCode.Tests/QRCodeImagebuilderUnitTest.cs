@@ -303,6 +303,32 @@ public class QRCodeImageBuilderTest
         Assert.Equal(contentSide, bitmap.Height);
     }
 
+    [Fact]
+    public void WithModulePixelSize_AndOddPadding_UsesIntegerOrigin()
+    {
+        const int modulePixelSize = 6;
+        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var contentSide = qrCodeData.Size * modulePixelSize;
+        var canvasSide = contentSide + 1; // odd padding: 0 left/top, 1 right/bottom with integer division
+
+        using var bitmap = new QRCodeImageBuilder(TestContent)
+            .WithModulePixelSize(modulePixelSize)
+            .WithSize(canvasSide, canvasSide)
+            .WithColors(codeColor: SKColors.Black, backgroundColor: SKColors.White, clearColor: SKColors.Transparent)
+            .ToBitmap();
+
+        var expectedLeft = (canvasSide - contentSide) / 2;
+        var expectedTop = (canvasSide - contentSide) / 2;
+        Assert.Equal(0, expectedLeft);
+        Assert.Equal(0, expectedTop);
+
+        // Content starts on an integer pixel and keeps QR background in quiet zone.
+        Assert.Equal(SKColors.White, bitmap.GetPixel(expectedLeft, expectedTop));
+        // The extra 1px pad is on the far edges.
+        Assert.Equal(0, bitmap.GetPixel(canvasSide - 1, 0).Alpha);
+        Assert.Equal(0, bitmap.GetPixel(0, canvasSide - 1).Alpha);
+    }
+
     #endregion
 
     #region Fluent API Tests - WithFormat

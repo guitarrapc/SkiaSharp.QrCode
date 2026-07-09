@@ -523,8 +523,9 @@ public class QRCodeImageBuilder
                 $"(QR matrix size {qrCodeData.Size} * module pixel size {_modulePixelSize.Value}).");
         }
 
-        var left = (canvasWidth - contentSide) / 2f;
-        var top = (canvasHeight - contentSide) / 2f;
+        // Use integer offsets so content stays on whole pixels (odd padding may be 1px asymmetric).
+        var left = (canvasWidth - contentSide) / 2;
+        var top = (canvasHeight - contentSide) / 2;
         return (
             new SKImageInfo(canvasWidth, canvasHeight),
             SKRect.Create(left, top, contentSide, contentSide));
