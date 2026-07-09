@@ -72,7 +72,7 @@ internal static partial class EccBinaryEncoder
     {
         var nib = GetNibbleTables(eccCount);
         ref var nibRef = ref MemoryMarshal.GetArrayDataReference(nib);
-        ref var mulBase = ref MemoryMarshal.GetArrayDataReference(s_nibbleMulTable);
+        ref var mulBase = ref MemoryMarshal.GetArrayDataReference(_nibbleMulTable);
         ref var qf = ref MemoryMarshal.GetArrayDataReference(GetQuadFactorTables(eccCount));
         ref var tu = ref MemoryMarshal.GetArrayDataReference(GetComposedTUTables(eccCount));
         ref var dataRef = ref MemoryMarshal.GetReference(data);
@@ -152,7 +152,7 @@ internal static partial class EccBinaryEncoder
     {
         var nib = GetNibbleTables(eccCount);
         ref var nibRef = ref MemoryMarshal.GetArrayDataReference(nib);
-        ref var mulBase = ref MemoryMarshal.GetArrayDataReference(s_nibbleMulTable);
+        ref var mulBase = ref MemoryMarshal.GetArrayDataReference(_nibbleMulTable);
         ref var qf = ref MemoryMarshal.GetArrayDataReference(GetQuadFactorTables(eccCount));
         ref var tu = ref MemoryMarshal.GetArrayDataReference(GetComposedTUTables(eccCount));
         ref var dataRef = ref MemoryMarshal.GetReference(data);
@@ -298,7 +298,7 @@ internal static partial class EccBinaryEncoder
     private static void GfniCore128(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
     {
         ref var blob = ref MemoryMarshal.GetArrayDataReference(GetBlob(eccCount));
-        ref var gm = ref MemoryMarshal.GetArrayDataReference(s_gfniMatrix);
+        ref var gm = ref MemoryMarshal.GetArrayDataReference(_gfniMatrix);
         ref var dataRef = ref MemoryMarshal.GetReference(data);
 
         // Raw shifted generator vectors: (gen >> s)[j] = gen[j + s]
@@ -365,7 +365,7 @@ internal static partial class EccBinaryEncoder
     private static void GfniCore256(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
     {
         ref var blob = ref MemoryMarshal.GetArrayDataReference(GetBlob(eccCount));
-        ref var gm = ref MemoryMarshal.GetArrayDataReference(s_gfniMatrix);
+        ref var gm = ref MemoryMarshal.GetArrayDataReference(_gfniMatrix);
         ref var dataRef = ref MemoryMarshal.GetReference(data);
 
         var gen0v = Vector256.LoadUnsafe(ref blob, BlobGen);
@@ -473,11 +473,11 @@ internal static partial class EccBinaryEncoder
     // Normal-domain generator coefficients (generator[1..eccCount], leading 1
     // dropped), zero-padded to 32 bytes. GF-multiplying zero padding contributes 0,
     // so padded lanes are no-ops in the vector kernels.
-    private static readonly byte[]?[] s_paddedGenCache = new byte[]?[33];
+    private static readonly byte[]?[] _paddedGenCache = new byte[]?[33];
 
     private static byte[] GetPaddedGenerator(int eccCount)
     {
-        var cached = s_paddedGenCache[eccCount];
+        var cached = _paddedGenCache[eccCount];
         if (cached is not null) return cached;
 
         Span<byte> generator = stackalloc byte[eccCount + 1];
@@ -486,14 +486,14 @@ internal static partial class EccBinaryEncoder
         var padded = new byte[32];
         generator.Slice(1, eccCount).CopyTo(padded);
 
-        Volatile.Write(ref s_paddedGenCache[eccCount], padded);
+        Volatile.Write(ref _paddedGenCache[eccCount], padded);
         return padded;
     }
 
     // PSHUFB nibble-split GF(256) multiplication tables: for each factor c,
     // 32 bytes = TLo (c·n for low nibble n) followed by THi (c·(n<<4) for high
     // nibble n), so c·x = TLo[x & 0xF] ^ THi[x >> 4]. 256 factors × 32 B = 8 KB.
-    private static readonly byte[] s_nibbleMulTable = BuildNibbleMulTable();
+    private static readonly byte[] _nibbleMulTable = BuildNibbleMulTable();
 
     private static byte[] BuildNibbleMulTable()
     {
@@ -529,11 +529,11 @@ internal static partial class EccBinaryEncoder
     private const nuint NibGenS3LoB = 224;
     private const nuint NibGenS3HiB = 240;
 
-    private static readonly byte[]?[] s_nibbleCache = new byte[]?[33];
+    private static readonly byte[]?[] _nibbleCache = new byte[]?[33];
 
     private static byte[] GetNibbleTables(int eccCount)
     {
-        var cached = s_nibbleCache[eccCount];
+        var cached = _nibbleCache[eccCount];
         if (cached is not null) return cached;
 
         var padded = GetPaddedGenerator(eccCount);
@@ -552,18 +552,18 @@ internal static partial class EccBinaryEncoder
             }
         }
 
-        Volatile.Write(ref s_nibbleCache[eccCount], t);
+        Volatile.Write(ref _nibbleCache[eccCount], t);
         return t;
     }
 
     // Quad factor tables T: T_k[b] = packed division factors (f0..f3) produced by
     // input byte b at position k with all other bytes zero. Factors for a quad are
     // the XOR of the four entries (GF(2)-linearity). 4 KB per eccCount.
-    private static readonly uint[]?[] s_quadFactorCache = new uint[]?[33];
+    private static readonly uint[]?[] _quadFactorCache = new uint[]?[33];
 
     private static uint[] GetQuadFactorTables(int eccCount)
     {
-        var cached = s_quadFactorCache[eccCount];
+        var cached = _quadFactorCache[eccCount];
         if (cached is not null) return cached;
 
         var padded = GetPaddedGenerator(eccCount);
@@ -592,17 +592,17 @@ internal static partial class EccBinaryEncoder
             }
         }
 
-        Volatile.Write(ref s_quadFactorCache[eccCount], t);
+        Volatile.Write(ref _quadFactorCache[eccCount], t);
         return t;
     }
 
     // Quad update tables U: U_k[b] = bytes 0..3 of factor f_k = b's contribution to
     // the updated remainder register (padded[j + 3 - k]·b packed for j = 0..3).
-    private static readonly uint[]?[] s_quadUpdateCache = new uint[]?[33];
+    private static readonly uint[]?[] _quadUpdateCache = new uint[]?[33];
 
     private static uint[] GetQuadUpdateTables(int eccCount)
     {
-        var cached = s_quadUpdateCache[eccCount];
+        var cached = _quadUpdateCache[eccCount];
         if (cached is not null) return cached;
 
         var padded = GetPaddedGenerator(eccCount);
@@ -620,18 +620,18 @@ internal static partial class EccBinaryEncoder
             }
         }
 
-        Volatile.Write(ref s_quadUpdateCache[eccCount], t);
+        Volatile.Write(ref _quadUpdateCache[eccCount], t);
         return t;
     }
 
     // Composed T∘U tables: TU_k[b] = T(U_k[b]) — the next quad's factor contribution
     // of current factor f_k = b, folding two dependent lookup rounds into one.
     // Valid because T and U are GF(2)-linear maps.
-    private static readonly uint[]?[] s_composedTUCache = new uint[]?[33];
+    private static readonly uint[]?[] _composedTUCache = new uint[]?[33];
 
     private static uint[] GetComposedTUTables(int eccCount)
     {
-        var cached = s_composedTUCache[eccCount];
+        var cached = _composedTUCache[eccCount];
         if (cached is not null) return cached;
 
         var qf = GetQuadFactorTables(eccCount);
@@ -650,7 +650,7 @@ internal static partial class EccBinaryEncoder
             }
         }
 
-        Volatile.Write(ref s_composedTUCache[eccCount], t);
+        Volatile.Write(ref _composedTUCache[eccCount], t);
         return t;
     }
 
@@ -662,11 +662,11 @@ internal static partial class EccBinaryEncoder
     private const nint BlobTu = 4096;   // 4 × 256 uints (4096 bytes)
     private const nuint BlobGen = 8192; // 40 bytes: padded generator + shift headroom
 
-    private static readonly byte[]?[] s_blobCache = new byte[]?[33];
+    private static readonly byte[]?[] _blobCache = new byte[]?[33];
 
     private static byte[] GetBlob(int eccCount)
     {
-        var cached = s_blobCache[eccCount];
+        var cached = _blobCache[eccCount];
         if (cached is not null) return cached;
 
         var blob = new byte[8192 + 40];
@@ -674,14 +674,14 @@ internal static partial class EccBinaryEncoder
         MemoryMarshal.AsBytes(GetComposedTUTables(eccCount).AsSpan()).CopyTo(blob.AsSpan((int)BlobTu, 4096));
         GetPaddedGenerator(eccCount).CopyTo(blob.AsSpan((int)BlobGen, 32)); // last 8 bytes stay 0
 
-        Volatile.Write(ref s_blobCache[eccCount], blob);
+        Volatile.Write(ref _blobCache[eccCount], blob);
         return blob;
     }
 
     // GFNI multiply-by-f bit matrices (universal, 2 KB). gf2p8affineqb convention:
     // qword byte (7-i) = matrix row for result bit i, row bit k = bit i of f·2^k
     // (identity matrix = 0x0102040810204080).
-    private static readonly ulong[] s_gfniMatrix = BuildGfniMatrices();
+    private static readonly ulong[] _gfniMatrix = BuildGfniMatrices();
 
     private static ulong[] BuildGfniMatrices()
     {
