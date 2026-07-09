@@ -189,6 +189,86 @@ public class QRCodeImageBuilderTest
 
     #endregion
 
+    #region Fluent API Tests - WithModulePixelSize
+
+    [Fact]
+    public void WithModulePixelSize_ValidSize_ReturnsBuilder()
+    {
+        var builder = new QRCodeImageBuilder(TestContent);
+        var result = builder.WithModulePixelSize(10);
+
+        Assert.Same(builder, result);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void WithModulePixelSize_InvalidSize_ThrowsArgumentOutOfRangeException(int modulePixelSize)
+    {
+        var builder = new QRCodeImageBuilder(TestContent);
+        Assert.Throws<ArgumentOutOfRangeException>(() => builder.WithModulePixelSize(modulePixelSize));
+    }
+
+    [Fact]
+    public void WithModulePixelSize_CustomSize_GeneratesCorrectSize()
+    {
+        const int modulePixelSize = 10;
+        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var expectedSide = qrCodeData.Size * modulePixelSize;
+
+        using var bitmap = new QRCodeImageBuilder(TestContent)
+            .WithModulePixelSize(modulePixelSize)
+            .ToBitmap();
+
+        Assert.Equal(expectedSide, bitmap.Width);
+        Assert.Equal(expectedSide, bitmap.Height);
+    }
+
+    [Fact]
+    public void WithModulePixelSize_QRCodeDataBuilder_GeneratesCorrectSize()
+    {
+        const int modulePixelSize = 8;
+        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 10);
+        var expectedSide = qrCodeData.Size * modulePixelSize;
+
+        using var bitmap = new QRCodeImageBuilder(qrCodeData)
+            .WithModulePixelSize(modulePixelSize)
+            .ToBitmap();
+
+        Assert.Equal(expectedSide, bitmap.Width);
+        Assert.Equal(expectedSide, bitmap.Height);
+    }
+
+    [Fact]
+    public void WithModulePixelSize_AfterWithSize_ModulePixelSizeTakesPrecedence()
+    {
+        const int modulePixelSize = 6;
+        var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
+        var expectedSide = qrCodeData.Size * modulePixelSize;
+
+        using var bitmap = new QRCodeImageBuilder(TestContent)
+            .WithSize(123, 456)
+            .WithModulePixelSize(modulePixelSize)
+            .ToBitmap();
+
+        Assert.Equal(expectedSide, bitmap.Width);
+        Assert.Equal(expectedSide, bitmap.Height);
+    }
+
+    [Fact]
+    public void WithSize_AfterWithModulePixelSize_ExplicitSizeTakesPrecedence()
+    {
+        using var bitmap = new QRCodeImageBuilder(TestContent)
+            .WithModulePixelSize(9)
+            .WithSize(321, 654)
+            .ToBitmap();
+
+        Assert.Equal(321, bitmap.Width);
+        Assert.Equal(654, bitmap.Height);
+    }
+
+    #endregion
+
     #region Fluent API Tests - WithFormat
 
     [Fact]

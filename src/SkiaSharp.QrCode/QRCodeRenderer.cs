@@ -119,12 +119,96 @@ public static class QRCodeRenderer
         // Draw the icon if provided
         if (iconData?.Icon is not null)
         {
+            var (iconRect, borderRect) = GetIconRects(data, area, iconData);
+            iconData.Icon.Draw(canvas, iconRect, borderRect, bgColor);
+        }
+    }
+
+    /// <summary>
+    /// Calculates icon and border rectangles for the given QR code area.
+    /// </summary>
+    /// <remarks>
+    /// When <see cref="IconData.IconSizeModules"/> is set, sizing is module-based and percent/pixel values are ignored.
+    /// Module-based icons are validated against QR size and core occupancy at render time.
+    /// Icon rectangles are snapped to the module grid; even module sizes cannot be geometrically centered on an odd QR matrix.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <exception cref="InvalidOperationException"></exception>
+    public static (SKRect iconRect, SKRect borderRect) GetIconRects(QRCodeData data, SKRect area, IconData iconData)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        if (iconData is null)
+            throw new ArgumentNullException(nameof(iconData));
+
+        var centerX = area.Left + area.Width / 2;
+        var centerY = area.Top + area.Height / 2;
+
+        if (iconData.IconSizeModules is not null)
+        {
+            var iconSizeModules = iconData.IconSizeModules.Value;
+            var iconBorderModules = iconData.IconBorderModules ?? 1;
+            var maxCoreOccupancyPercent = iconData.MaxCoreOccupancyPercent;
+
+            if (iconSizeModules < 1)
+                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon size modules must be at least 1.");
+            if (iconBorderModules < 0)
+                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon border modules must be 0 or greater.");
+            if (maxCoreOccupancyPercent is < 1 or > 100)
+                throw new ArgumentOutOfRangeException(nameof(iconData), "Max core occupancy percent must be between 1 and 100.");
+
+            var totalModules = iconSizeModules + (iconBorderModules * 2);
+            var size = data.Size;
+            var coreSize = data.GetCoreSize();
+            var maxByCore = coreSize * maxCoreOccupancyPercent / 100;
+
+            if (totalModules > size)
+            {
+                throw new InvalidOperationException(
+                    $"Icon occupies {totalModules} modules, which exceeds QR matrix size {size}.");
+            }
+
+            if (totalModules > maxByCore)
+            {
+                throw new InvalidOperationException(
+                    $"Icon occupies {totalModules} modules, but max allowed is {maxByCore} " +
+                    $"(coreSize={coreSize}, maxCoreOccupancyPercent={maxCoreOccupancyPercent}).");
+            }
+
+            var cellWidth = area.Width / size;
+            var cellHeight = area.Height / size;
+            var iconWidth = iconSizeModules * cellWidth;
+            var iconHeight = iconSizeModules * cellHeight;
+            var borderWidth = iconBorderModules * cellWidth;
+            var borderHeight = iconBorderModules * cellHeight;
+
+            // Snap to module grid. QR matrix size is always odd, so an even icon size
+            // cannot be geometrically centered without cutting modules; prefer module edges.
+            var iconOriginModule = (size - iconSizeModules) / 2;
+            var iconLeft = area.Left + iconOriginModule * cellWidth;
+            var iconTop = area.Top + iconOriginModule * cellHeight;
+            var iconRect = SKRect.Create(iconLeft, iconTop, iconWidth, iconHeight);
+
+            var borderRect = iconBorderModules > 0
+                ? SKRect.Create(
+                    iconLeft - borderWidth,
+                    iconTop - borderHeight,
+                    iconWidth + borderWidth * 2,
+                    iconHeight + borderHeight * 2)
+                : iconRect;
+
+            return (iconRect, borderRect);
+        }
+        else
+        {
+            if (iconData.IconSizePercent is < 1 or > 100)
+                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon size percent must be between 1 and 100.");
+            if (iconData.IconBorderWidth < 0)
+                throw new ArgumentOutOfRangeException(nameof(iconData), "Icon border width must be 0 or greater.");
+
             var iconSize = iconData.IconSizePercent / 100f;
             var iconWidth = area.Width * iconSize;
             var iconHeight = area.Height * iconSize;
-
-            var centerX = area.Left + area.Width / 2;
-            var centerY = area.Top + area.Height / 2;
 
             var iconRect = SKRect.Create(
                 centerX - iconWidth / 2,
@@ -133,13 +217,15 @@ public static class QRCodeRenderer
                 iconHeight);
 
             var borderWidth = iconData.IconBorderWidth;
-            var borderRect = iconData.IconBorderWidth > 0 ? SKRect.Create(
+            var borderRect = borderWidth > 0
+                ? SKRect.Create(
                     centerX - iconWidth / 2 - borderWidth,
                     centerY - iconHeight / 2 - borderWidth,
-                    iconWidth + ((float)borderWidth * 2),
-                    iconHeight + ((float)borderWidth * 2)) : iconRect;
+                    iconWidth + (borderWidth * 2f),
+                    iconHeight + (borderWidth * 2f))
+                : iconRect;
 
-            iconData.Icon.Draw(canvas, iconRect, borderRect, bgColor);
+            return (iconRect, borderRect);
         }
     }
 
