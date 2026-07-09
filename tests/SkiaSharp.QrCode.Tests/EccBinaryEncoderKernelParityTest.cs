@@ -115,6 +115,29 @@ public class EccBinaryEncoderKernelParityTest
         Assert.Equal(expected, actual);
     }
 
+    [Theory]
+    [InlineData(254)] // largest eccCount whose generator is log-domain representable
+    [InlineData(255)] // generator degenerates to x^255 + 1 (zero coefficients) — naive fallback
+    public void CalculateECC_MaxEccCounts_MatchesNaiveReference(int eccCount)
+    {
+        // eccCount == 255 is the only count whose generator polynomial has zero
+        // coefficients (all others are all-nonzero by the MDS property), so it cannot
+        // use the log-domain fast path. Both counts must still produce correct ECC.
+        foreach (var data in EnumerateInputs(64))
+        {
+            var expected = new byte[eccCount];
+            NaiveReferenceECC(data, expected, eccCount);
+
+            var viaPublicApi = new byte[eccCount];
+            EccBinaryEncoder.CalculateECC(data, viaPublicApi, eccCount);
+            Assert.Equal(expected, viaPublicApi);
+
+            var viaScalarKernel = new byte[eccCount];
+            EccBinaryEncoder.CalculateEccScalar(data, viaScalarKernel, eccCount);
+            Assert.Equal(expected, viaScalarKernel);
+        }
+    }
+
     /// <summary>
     /// Input variations per size: seeded random (several seeds), all-zero
     /// (exercises every zero-skip path), and all-0xFF.

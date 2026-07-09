@@ -73,6 +73,14 @@ internal static partial class EccBinaryEncoder
     internal static void CalculateEccScalar(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
     {
         var logGen = GetLogGenerator(eccCount);
+        if (logGen is null)
+        {
+            // eccCount == 255 degenerates to G(x) = x^255 + 1, which has zero coefficients
+            // and therefore no log-domain representation. Never produced by QR; handled by
+            // the naive kernel so every documented eccCount stays correct.
+            CalculateEccNaive(data, ecc, eccCount);
+            return;
+        }
 
         // Message polynomial: data followed by eccCount zero bytes; the division
         // remainder accumulates in the zero tail.
@@ -102,16 +110,58 @@ internal static partial class EccBinaryEncoder
         message.Slice(data.Length, eccCount).CopyTo(ecc);
     }
 
+    /// <summary>
+    /// Naive polynomial division (the pre-optimization implementation). Used only when
+    /// the generator polynomial has no log-domain representation (eccCount == 255).
+    /// </summary>
+    private static void CalculateEccNaive(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
+    {
+        Span<byte> generator = stackalloc byte[eccCount + 1];
+        GenerateGeneratorPolynomial(generator, eccCount);
+
+        Span<byte> message = stackalloc byte[data.Length + eccCount];
+        data.CopyTo(message);
+
+        for (var i = 0; i < data.Length; i++)
+        {
+            var coefficient = message[i];
+            if (coefficient == 0) continue;
+
+            for (var j = 0; j < eccCount; j++)
+            {
+                message[i + j + 1] ^= GaloisField.Multiply(generator[j + 1], coefficient);
+            }
+        }
+
+        message.Slice(data.Length, eccCount).CopyTo(ecc);
+    }
+
     // Log-domain generator polynomial cache, indexed by eccCount (1..255).
     // logGen[j] = Log[generator[j + 1]] (the leading 1 coefficient is implicit).
-    // Benign race: concurrent builds produce identical arrays and reference
-    // assignment is atomic.
+    // A sentinel empty array marks counts whose generator cannot be represented in
+    // log domain. Benign race: concurrent builds produce identical arrays; published
+    // with Volatile.Write so readers on weakly-ordered runtimes never observe a
+    // partially initialized array.
     private static readonly byte[]?[] s_logGenCache = new byte[]?[256];
+    private static readonly byte[] s_logGenUnrepresentable = [];
 
-    private static byte[] GetLogGenerator(int eccCount)
+    /// <summary>
+    /// Returns the cached log-domain generator polynomial, or null when it has no
+    /// log-domain representation.
+    /// </summary>
+    /// <remarks>
+    /// Reed-Solomon generator polynomials have all-nonzero coefficients for
+    /// eccCount ≤ 254: G(x) is itself a codeword of the length-255 RS code with
+    /// minimum distance eccCount + 1 (MDS), so its weight must be ≥ eccCount + 1 —
+    /// every one of its eccCount + 1 coefficients. The single exception is
+    /// eccCount == 255, where G(x) = Π(x - α^i) over all nonzero field elements
+    /// collapses to x^255 + 1 (254 zero coefficients). Verified by exhaustive scan
+    /// over eccCount 1..255.
+    /// </remarks>
+    private static byte[]? GetLogGenerator(int eccCount)
     {
         var cached = s_logGenCache[eccCount];
-        if (cached is not null) return cached;
+        if (cached is not null) return cached.Length == 0 ? null : cached;
 
         Span<byte> generator = stackalloc byte[eccCount + 1];
         GenerateGeneratorPolynomial(generator, eccCount);
@@ -122,14 +172,13 @@ internal static partial class EccBinaryEncoder
             var coefficient = generator[j + 1];
             if (coefficient == 0)
             {
-                // Reed-Solomon generator polynomials (distinct roots α^0..α^(n-1)) have no
-                // zero coefficients; the log-domain representation relies on that.
-                throw new InvalidOperationException($"RS generator polynomial has zero coefficient at {j + 1} for eccCount={eccCount}.");
+                Volatile.Write(ref s_logGenCache[eccCount], s_logGenUnrepresentable);
+                return null;
             }
             logGen[j] = GaloisField.Log[coefficient];
         }
 
-        s_logGenCache[eccCount] = logGen;
+        Volatile.Write(ref s_logGenCache[eccCount], logGen);
         return logGen;
     }
 

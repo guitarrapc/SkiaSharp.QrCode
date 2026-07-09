@@ -463,8 +463,11 @@ internal static partial class EccBinaryEncoder
 #endif
 
     // ---------------------------------------------------------------------------
-    // Table construction (all lazy, per eccCount; benign races — identical results,
-    // atomic reference assignment)
+    // Table construction (all lazy, per eccCount). Benign races: concurrent builders
+    // produce identical arrays and the losing build is garbage. Publication uses
+    // Volatile.Write so readers on weakly-ordered hardware can never observe a
+    // partially initialized array; plain reads suffice because the element loads are
+    // address-dependent on the reference load.
     // ---------------------------------------------------------------------------
 
     // Normal-domain generator coefficients (generator[1..eccCount], leading 1
@@ -483,7 +486,7 @@ internal static partial class EccBinaryEncoder
         var padded = new byte[32];
         generator.Slice(1, eccCount).CopyTo(padded);
 
-        s_paddedGenCache[eccCount] = padded;
+        Volatile.Write(ref s_paddedGenCache[eccCount], padded);
         return padded;
     }
 
@@ -549,7 +552,7 @@ internal static partial class EccBinaryEncoder
             }
         }
 
-        s_nibbleCache[eccCount] = t;
+        Volatile.Write(ref s_nibbleCache[eccCount], t);
         return t;
     }
 
@@ -589,7 +592,7 @@ internal static partial class EccBinaryEncoder
             }
         }
 
-        s_quadFactorCache[eccCount] = t;
+        Volatile.Write(ref s_quadFactorCache[eccCount], t);
         return t;
     }
 
@@ -617,7 +620,7 @@ internal static partial class EccBinaryEncoder
             }
         }
 
-        s_quadUpdateCache[eccCount] = t;
+        Volatile.Write(ref s_quadUpdateCache[eccCount], t);
         return t;
     }
 
@@ -647,7 +650,7 @@ internal static partial class EccBinaryEncoder
             }
         }
 
-        s_composedTUCache[eccCount] = t;
+        Volatile.Write(ref s_composedTUCache[eccCount], t);
         return t;
     }
 
@@ -671,7 +674,7 @@ internal static partial class EccBinaryEncoder
         MemoryMarshal.AsBytes(GetComposedTUTables(eccCount).AsSpan()).CopyTo(blob.AsSpan((int)BlobTu, 4096));
         GetPaddedGenerator(eccCount).CopyTo(blob.AsSpan((int)BlobGen, 32)); // last 8 bytes stay 0
 
-        s_blobCache[eccCount] = blob;
+        Volatile.Write(ref s_blobCache[eccCount], blob);
         return blob;
     }
 
