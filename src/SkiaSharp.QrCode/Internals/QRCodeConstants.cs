@@ -7,12 +7,10 @@ internal static class QRCodeConstants
     private static readonly Lazy<IReadOnlyList<AlignmentPattern>> alignmentPatternTable = new(() => CreateAlignmentPatternTable());
     private static readonly Lazy<IReadOnlyList<ECCInfo>> capacityECCTable = new(() => CreateCapacityECCTable());
     private static readonly Lazy<IReadOnlyList<VersionInfo>> capacityTable = new(() => CreateCapacityTable());
-    private static readonly Lazy<GaloisFieldData> galoisField = new(() => CreateCreateGaloisFieldData());
 
     public static IReadOnlyList<AlignmentPattern> AlignmentPatternTable => alignmentPatternTable.Value;
     public static IReadOnlyList<ECCInfo> CapacityECCTable => capacityECCTable.Value;
     public static IReadOnlyList<VersionInfo> CapacityTable => capacityTable.Value;
-    public static GaloisFieldData GaloisField => galoisField.Value;
 
     /// <summary>
     /// Checks if a character is numeric (0-9).
@@ -1020,45 +1018,6 @@ internal static class QRCodeConstants
         return table;
     }
 
-    /// <summary>
-    /// Creates the Galois field (GF(256)) antilog table for Reed-Solomon error correction.
-    /// Generates α^0 to α^255 values using polynomial x^8 + x^4 + x^3 + x^2 + 1 (0x11D).
-    /// </summary>
-    private static GaloisFieldData CreateCreateGaloisFieldData()
-    {
-        var table = new Antilog[256]; // 256 entries for GF(256)
-        var expToInt = new byte[256];
-        var intToExp = new byte[256];
-
-        for (var i = 0; i < 256; i++)
-        {
-            int gfItem;
-
-            if (i > 7)
-            {
-                gfItem = table[i - 1].IntegerValue * 2;
-            }
-            else
-            {
-                gfItem = (int)Math.Pow(2, i);
-            }
-
-            if (gfItem > 255)
-            {
-                gfItem = gfItem ^ 285; // Polynomial: x^8 + x^4 + x^3 + x^2 + 1 = 0x11D
-            }
-
-            var antilog = new Antilog(i, gfItem);
-            table[i] = antilog;
-
-            // lookup tables
-            expToInt[i] = (byte)gfItem;
-            intToExp[gfItem] = (byte)i;
-        }
-
-        return new GaloisFieldData(table, expToInt, intToExp);
-    }
-
     // struct definitions
 
     /// <summary>
@@ -1109,39 +1068,5 @@ internal static class QRCodeConstants
         /// Key: EncodingMode, Value: Maximum number of characters/bytes.
         /// </summary>
         public Dictionary<EncodingMode, int> CapacityDict { get; }
-    }
-
-    /// <summary>
-    /// Galois field antilog table entry.
-    /// Maps alpha exponent to integer value: α^n → integer (0-255).
-    /// Used for Reed-Solomon error correction calculations.
-    /// </summary>
-    public struct Antilog
-    {
-        public Antilog(int exponentAlpha, int integerValue)
-        {
-            ExponentAlpha = exponentAlpha;
-            IntegerValue = integerValue;
-        }
-        public int ExponentAlpha { get; }
-        public int IntegerValue { get; }
-    }
-
-    /// <summary>
-    /// Glois field data and lookup tables
-    /// </summary>
-    public readonly struct GaloisFieldData
-    {
-        private readonly Antilog[] antilogTable;
-        public ReadOnlySpan<Antilog> AntilogTable => antilogTable;
-        public byte[] ExpToInt { get; }  // α^n → integer
-        public byte[] IntToExp { get; }  // integer → α^n
-
-        public GaloisFieldData(Antilog[] antilogTable, byte[] expToInt, byte[] intToExp)
-        {
-            this.antilogTable = antilogTable;
-            ExpToInt = expToInt;
-            IntToExp = intToExp;
-        }
     }
 }
