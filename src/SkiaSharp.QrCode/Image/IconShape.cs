@@ -63,7 +63,8 @@ public sealed class ImageIconShape : IconShape
         }
 
         // Draw an image
-        canvas.DrawBitmap(_image, rect);
+        // SKSamplingOptions.Default matches what the obsolete DrawBitmap(bitmap, rect) overload used.
+        canvas.DrawBitmap(_image, rect, SKSamplingOptions.Default);
     }
 }
 
@@ -116,7 +117,8 @@ public sealed class ImageTextIconShape : IconShape
         }
 
         // Draw an image
-        canvas.DrawBitmap(_image, rect);
+        // SKSamplingOptions.Default matches what the obsolete DrawBitmap(bitmap, rect) overload used.
+        canvas.DrawBitmap(_image, rect, SKSamplingOptions.Default);
 
         // Draw text below the image
         if (!string.IsNullOrEmpty(_text))

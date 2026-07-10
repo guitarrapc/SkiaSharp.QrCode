@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>SkiaSharp.QrCode Playground</title>
+  <meta name="description" content="Generate beautiful QR codes with SkiaSharp.QrCode — entirely in your browser via WebAssembly">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="SkiaSharp.QrCode Playground | Try in your browser">
+  <meta name="twitter:description" content="Generate beautiful QR codes with gradients, shapes and logos — entirely in your browser">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://guitarrapc.github.io/SkiaSharp.QrCode/">
+  <meta property="og:title" content="SkiaSharp.QrCode Playground | Try in your browser">
+  <meta property="og:description" content="Generate beautiful QR codes with gradients, shapes and logos — entirely in your browser">
+  <meta property="og:site_name" content="SkiaSharp.QrCode Playground">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" id="meta-color-scheme" content="light dark" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <script>
+    (function () {
+      var key = 'skqr-playground-color-mode';
+      var root = document.documentElement;
+      var meta = document.getElementById('meta-color-scheme');
+      function syncMeta(mode) {
+        if (!meta) return;
+        if (mode === 'light') meta.setAttribute('content', 'light');
+        else if (mode === 'dark') meta.setAttribute('content', 'dark');
+        else meta.setAttribute('content', 'light dark');
+      }
+      try {
+        var v = localStorage.getItem(key);
+        if (v === 'light') {
+          root.setAttribute('data-theme', 'light');
+          syncMeta('light');
+        } else if (v === 'dark') {
+          root.setAttribute('data-theme', 'dark');
+          syncMeta('dark');
+        } else {
+          root.removeAttribute('data-theme');
+          syncMeta('system');
+        }
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="style#[.{fingerprint}].css">
+</head>
+
+<body>
+  <nav id="header-bar">
+    <header>
+      <div class="site-title-row">
+        <h1>
+          <a href="https://github.com/guitarrapc/SkiaSharp.QrCode" aria-label="SkiaSharp.QrCode on GitHub"><span
+              class="site-logo" aria-hidden="true"></span></a>
+          SkiaSharp.QrCode Playground
+        </h1>
+        <a id="playground-version" class="version-badge" hidden target="_blank" rel="noopener noreferrer"
+          href="https://github.com/guitarrapc/SkiaSharp.QrCode/releases"
+          aria-label="Playground build version — GitHub releases"></a>
+      </div>
+      <p class="tagline">QR codes with gradients, shapes and logos — rendered by Skia in your browser</p>
+    </header>
+  </nav>
+  <div id="toast-stack" class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
+  <main>
+    <section id="playground">
+      <div class="controls-column">
+        <div class="panel">
+          <label class="field">
+            <span class="field__label">Content</span>
+            <textarea id="content" rows="3" spellcheck="false"
+              placeholder="Text or URL to encode">https://github.com/guitarrapc/SkiaSharp.QrCode</textarea>
+          </label>
+          <label class="field">
+            <span class="field__label">Style preset</span>
+            <select id="preset-select">
+              <option value="instagram" selected>Instagram gradient + logo</option>
+              <option value="classic">Classic black &amp; white</option>
+              <option value="midnight">Midnight neon</option>
+              <option value="ocean">Ocean</option>
+              <option value="sunset">Sunset</option>
+              <option value="custom" hidden>(custom)</option>
+            </select>
+          </label>
+        </div>
+
+        <details class="panel" open>
+          <summary>QR parameters</summary>
+          <div class="panel__grid">
+            <label class="field">
+              <span class="field__label">Error correction</span>
+              <select id="ecc-select" title="Higher levels survive more damage or overlay — H is recommended with a logo">
+                <option value="L">L — 7%</option>
+                <option value="M">M — 15%</option>
+                <option value="Q">Q — 25%</option>
+                <option value="H">H — 30%</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Version</span>
+              <select id="version-select" title="QR symbol version (matrix size). Auto picks the smallest that fits."></select>
+            </label>
+            <label class="field">
+              <span class="field__label">Image size <output id="size-out">512</output> px</span>
+              <input type="range" id="size-range" min="128" max="1024" step="32" value="512" />
+            </label>
+            <label class="field">
+              <span class="field__label">Quiet zone <output id="quiet-out">4</output> modules</span>
+              <input type="range" id="quiet-range" min="0" max="10" step="1" value="4" />
+            </label>
+          </div>
+        </details>
+
+        <details class="panel" open>
+          <summary>Shape</summary>
+          <div class="panel__grid">
+            <label class="field">
+              <span class="field__label">Module shape</span>
+              <select id="module-shape-select">
+                <option value="rectangle">Rectangle</option>
+                <option value="circle">Circle</option>
+                <option value="rounded">Rounded rectangle</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Finder pattern</span>
+              <select id="finder-select" title="The three large squares in the corners">
+                <option value="auto">Auto (follow module shape)</option>
+                <option value="rectangle">Rectangle</option>
+                <option value="circle">Circle</option>
+                <option value="rounded">Rounded rectangle</option>
+                <option value="roundedCircle">Rounded + circle center</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Module size <output id="module-size-out">100</output>%</span>
+              <input type="range" id="module-size-range" min="50" max="100" step="1" value="100"
+                title="Below 100% leaves gaps between modules. Values under 80% may hurt readability." />
+            </label>
+            <label class="field" id="corner-row">
+              <span class="field__label">Corner radius <output id="corner-out">30</output>%</span>
+              <input type="range" id="corner-range" min="0" max="100" step="5" value="30" />
+            </label>
+          </div>
+        </details>
+
+        <details class="panel" open>
+          <summary>Color</summary>
+          <div class="panel__grid">
+            <label class="field field--inline" id="fg-row">
+              <span class="field__label">Modules</span>
+              <input type="color" id="fg-color" value="#000000" />
+            </label>
+            <label class="field field--inline">
+              <span class="field__label">Background</span>
+              <input type="color" id="bg-color" value="#ffffff" />
+            </label>
+            <label class="field field--inline field--checkbox">
+              <input type="checkbox" id="bg-transparent" />
+              <span class="field__label">Transparent background</span>
+            </label>
+            <label class="field field--inline field--checkbox">
+              <input type="checkbox" id="gradient-toggle" />
+              <span class="field__label">Gradient modules</span>
+            </label>
+          </div>
+          <div id="gradient-panel" hidden>
+            <div class="field">
+              <span class="field__label">Gradient stops</span>
+              <div id="gradient-colors" class="gradient-colors"></div>
+              <button type="button" id="gradient-add-btn" class="small-btn">+ Add color</button>
+            </div>
+            <label class="field">
+              <span class="field__label">Direction</span>
+              <select id="gradient-direction">
+                <option value="LeftToRight">Left → Right</option>
+                <option value="RightToLeft">Right → Left</option>
+                <option value="TopToBottom">Top → Bottom</option>
+                <option value="BottomToTop">Bottom → Top</option>
+                <option value="TopLeftToBottomRight">Top-left → Bottom-right</option>
+                <option value="TopRightToBottomLeft">Top-right → Bottom-left</option>
+                <option value="BottomLeftToTopRight">Bottom-left → Top-right</option>
+                <option value="BottomRightToTopLeft">Bottom-right → Top-left</option>
+              </select>
+            </label>
+          </div>
+        </details>
+
+        <details class="panel" open>
+          <summary>Logo</summary>
+          <div class="panel__grid">
+            <label class="field">
+              <span class="field__label">Logo</span>
+              <select id="logo-mode-select">
+                <option value="none">None</option>
+                <option value="default">Built-in camera glyph</option>
+                <option value="custom">Upload image…</option>
+              </select>
+            </label>
+            <label class="field" id="logo-file-row" hidden>
+              <span class="field__label">Image file</span>
+              <input type="file" id="logo-file" accept="image/png,image/jpeg,image/webp" />
+            </label>
+            <label class="field">
+              <span class="field__label">Logo size <output id="logo-size-out">18</output>%</span>
+              <input type="range" id="logo-size-range" min="5" max="35" step="1" value="18" />
+            </label>
+            <label class="field">
+              <span class="field__label">Logo border <output id="logo-border-out">6</output> px</span>
+              <input type="range" id="logo-border-range" min="0" max="24" step="1" value="6" />
+            </label>
+          </div>
+          <p class="field__hint">A logo covers part of the code — use error correction H and verify the result scans.</p>
+        </details>
+
+        <details class="panel">
+          <summary>Performance benchmark</summary>
+          <div class="panel__grid">
+            <label class="field">
+              <span class="field__label">Mode</span>
+              <select id="bench-mode-select"
+                title="Encode only exercises the zero-allocation span API; full pipeline also renders and PNG-encodes with the current visual settings">
+                <option value="encode">Encode only — zero-allocation API</option>
+                <option value="render">Full pipeline — encode + render + PNG</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Iterations</span>
+              <select id="bench-count-select">
+                <option value="100">100</option>
+                <option value="1000" selected>1,000</option>
+                <option value="10000">10,000</option>
+                <option value="100000">100,000</option>
+              </select>
+            </label>
+          </div>
+          <div class="bench-actions">
+            <button type="button" id="bench-run-btn" class="action-btn" disabled>Run benchmark</button>
+            <button type="button" id="bench-cancel-btn" class="small-btn" hidden>Cancel</button>
+          </div>
+          <progress id="bench-progress" value="0" max="100" hidden></progress>
+          <div id="bench-result" class="qr-stats" aria-live="polite"></div>
+          <p class="field__hint">
+            Generates unique codes sequentially (content is suffixed with #1, #2, …) using the current
+            settings, single-threaded on the WASM runtime in this tab. Native .NET throughput is much
+            higher — see the repository benchmarks.
+          </p>
+        </details>
+      </div>
+
+      <div class="preview-column">
+        <div class="panel preview-panel">
+          <div id="loading" class="notification">Loading WebAssembly binary...</div>
+          <div class="preview-frame">
+            <img id="qr-preview" alt="Generated QR code" hidden />
+          </div>
+          <div id="generate-error" class="generate-error" hidden></div>
+          <div id="qr-stats" class="qr-stats"></div>
+          <div class="preview-actions">
+            <button type="button" id="download-btn" class="action-btn" disabled>Download PNG</button>
+            <button type="button" id="copy-image-btn" class="action-btn" disabled>Copy image</button>
+            <button type="button" id="permalink-btn" class="action-btn action-btn--primary" disabled
+              title="Share — copy a link with all settings encoded in the URL">Share link</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <section class="playground-about" aria-labelledby="about-playground-heading">
+    <h2 id="about-playground-heading">About the playground</h2>
+    <div class="playground-about__body">
+      <p>
+        This playground is a static page: after the WASM runtime loads,
+        <a href="https://github.com/guitarrapc/SkiaSharp.QrCode" target="_blank"
+          rel="noopener noreferrer">SkiaSharp.QrCode</a> encodes and renders every QR code
+        <strong>in your browser</strong>. Nothing you type is uploaded to a server.
+      </p>
+      <ul>
+        <li>Rendering uses the real SkiaSharp (Skia) native library compiled to WebAssembly — the output is
+          pixel-identical to what the NuGet package produces on .NET.</li>
+        <li><strong>Share link</strong> stores your settings compressed in the URL hash. Uploaded logo images are not
+          included in share links.</li>
+        <li>Decorated codes (gradients, shapes, logos) trade error margin for looks — always test-scan before printing.</li>
+      </ul>
+      <p>
+        The source code is available on <a href="https://github.com/guitarrapc/SkiaSharp.QrCode" target="_blank"
+          rel="noopener noreferrer">GitHub</a>.
+      </p>
+    </div>
+  </section>
+  <footer>
+    <p class="footer-copy-row">
+      <a class="repo-mark" href="https://github.com/guitarrapc/SkiaSharp.QrCode" target="_blank"
+        rel="noopener noreferrer" aria-label="SkiaSharp.QrCode on GitHub">
+        <svg class="repo-mark__icon" viewBox="0 0 98 96" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"
+            d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.235-22.23-5.42-22.23-24.251 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.251 1.75 1.52 3.318 4.491 3.318 9.022 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z" />
+        </svg>
+      </a>
+      <span class="footer-copy-sep" aria-hidden="true">|</span>
+      <span class="footer-copy-text">© 2026 <a href="https://github.com/guitarrapc">guitarrapc</a>. The source
+        code and website content are licensed <a
+          href="https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/LICENSE">MIT</a>.</span>
+      <span class="footer-copy-sep" aria-hidden="true">|</span>
+      <button type="button" id="theme-cycle-btn" class="theme-cycle-btn toolbar-icon-btn" data-theme-mode="system"
+        title="Cycle color theme: System → Light → Dark"
+        aria-label="Color theme: System. Click to cycle: System, Light, Dark.">
+        <svg class="theme-cycle-btn__svg theme-cycle-btn__svg--system" width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+        <svg class="theme-cycle-btn__svg theme-cycle-btn__svg--light" width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true">
+          <circle cx="12" cy="12" r="5" />
+          <line x1="12" y1="1" x2="12" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="23" />
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+          <line x1="1" y1="12" x2="3" y2="12" />
+          <line x1="21" y1="12" x2="23" y2="12" />
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+        </svg>
+        <svg class="theme-cycle-btn__svg theme-cycle-btn__svg--dark" width="16" height="16" viewBox="0 0 24 24"
+          fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      </button>
+    </p>
+  </footer>
+  <script type="importmap">{}</script>
+  <script type="module" src="main#[.{fingerprint}].js"></script>
+</body>
+
+</html>

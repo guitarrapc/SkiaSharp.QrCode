@@ -49,6 +49,55 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  build-playground:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
+        with:
+          dotnet-version: 10.0
+      - name: Install wasm-tools workload
+        run: dotnet workload install wasm-tools
+      # Version flows into the in-page version badge (AssemblyInformationalVersion).
+      # No -r browser-wasm: the WebAssembly SDK defaults to it, and passing it as a global
+      # property would force the multi-targeted library reference to need wasm-tools-net8.
+      - name: Publish Playground (browser-wasm Release)
+        env:
+          GIT_TAG: ${{ inputs.version || github.ref_name }}
+        run: |
+          dotnet publish src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj -c Release -p:PlaygroundSoftFingerprint=true -p:Version="${GIT_TAG}" -o publish/
+      - name: Add .nojekyll
+        run: touch publish/wwwroot/.nojekyll
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: publish/wwwroot
+
+  # GitHub Pages deploy of the Playground; tag pushes only, same as create-release.
+  # Depends on build-dotnet so a broken release build also blocks the pages deploy.
+  # To redeploy a tag, re-run its release workflow run.
+  deploy-playground:
+    if: ${{ github.event_name == 'push' }}
+    needs: [build-playground, build-dotnet]
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      pages: write
+      id-token: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+
   create-release:
     if: ${{ github.event_name == 'push' }}
     needs: [build-dotnet]

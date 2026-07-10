@@ -24,6 +24,12 @@ You can create professional-looking QR codes like this with just a few lines of 
 
 See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these styles.
 
+## Playground
+
+Try SkiaSharp.QrCode in your browser — no install required: **[SkiaSharp.QrCode Playground](https://guitarrapc.github.io/SkiaSharp.QrCode/)**
+
+The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or share your settings as a permalink. Source lives in [src/SkiaSharp.QrCode.Playground](src/SkiaSharp.QrCode.Playground); it is deployed to GitHub Pages by [release.yaml](.github/workflows/release.yaml) as part of every release.
+
 ## Overview
 
 SkiaSharp.QrCode is a modern, high-performance QR code generation library built on SkiaSharp. SkiaSharp.QrCode allocates memory only for the actual QR code data, with zero additional allocations during processing.
