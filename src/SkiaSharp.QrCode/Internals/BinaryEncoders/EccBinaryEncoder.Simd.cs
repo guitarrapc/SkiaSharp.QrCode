@@ -28,9 +28,11 @@ namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 ///   GFNI does this in one gf2p8affineqb per factor; the SSSE3 kernel uses the
 ///   classic PSHUFB nibble-split multiply (2 shuffles per factor) instead.
 ///
-/// Table cost: ~8 KB static (SSSE3 nibble-split table) + 2 KB static (GFNI matrices),
-/// plus ~8-18 KB per distinct eccCount actually used (QR uses at most 13 values;
-/// a typical app touches one or two). All tables build lazily on first use.
+/// Table cost: 2 KB of GFNI matrices baked into the assembly as constant data
+/// (no runtime build), ~8 KB SSSE3 nibble-split table, plus ~8-18 KB per distinct
+/// eccCount actually used (QR uses at most 13 values; a typical app touches one
+/// or two). All runtime-built tables build lazily on first use, so GFNI machines
+/// never pay for the SSSE3 table.
 /// </remarks>
 internal static partial class EccBinaryEncoder
 {
@@ -72,7 +74,7 @@ internal static partial class EccBinaryEncoder
     {
         var nib = GetNibbleTables(eccCount);
         ref var nibRef = ref MemoryMarshal.GetArrayDataReference(nib);
-        ref var mulBase = ref MemoryMarshal.GetArrayDataReference(_nibbleMulTable);
+        ref var mulBase = ref MemoryMarshal.GetArrayDataReference(GetNibbleMulTable());
         ref var qf = ref MemoryMarshal.GetArrayDataReference(GetQuadFactorTables(eccCount));
         ref var tu = ref MemoryMarshal.GetArrayDataReference(GetComposedTUTables(eccCount));
         ref var dataRef = ref MemoryMarshal.GetReference(data);
@@ -152,7 +154,7 @@ internal static partial class EccBinaryEncoder
     {
         var nib = GetNibbleTables(eccCount);
         ref var nibRef = ref MemoryMarshal.GetArrayDataReference(nib);
-        ref var mulBase = ref MemoryMarshal.GetArrayDataReference(_nibbleMulTable);
+        ref var mulBase = ref MemoryMarshal.GetArrayDataReference(GetNibbleMulTable());
         ref var qf = ref MemoryMarshal.GetArrayDataReference(GetQuadFactorTables(eccCount));
         ref var tu = ref MemoryMarshal.GetArrayDataReference(GetComposedTUTables(eccCount));
         ref var dataRef = ref MemoryMarshal.GetReference(data);
@@ -298,7 +300,7 @@ internal static partial class EccBinaryEncoder
     private static void GfniCore128(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
     {
         ref var blob = ref MemoryMarshal.GetArrayDataReference(GetBlob(eccCount));
-        ref var gm = ref MemoryMarshal.GetArrayDataReference(_gfniMatrix);
+        ref var gm = ref MemoryMarshal.GetReference(GfniMatrix);
         ref var dataRef = ref MemoryMarshal.GetReference(data);
 
         // Raw shifted generator vectors: (gen >> s)[j] = gen[j + s]
@@ -365,7 +367,7 @@ internal static partial class EccBinaryEncoder
     private static void GfniCore256(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
     {
         ref var blob = ref MemoryMarshal.GetArrayDataReference(GetBlob(eccCount));
-        ref var gm = ref MemoryMarshal.GetArrayDataReference(_gfniMatrix);
+        ref var gm = ref MemoryMarshal.GetReference(GfniMatrix);
         ref var dataRef = ref MemoryMarshal.GetReference(data);
 
         var gen0v = Vector256.LoadUnsafe(ref blob, BlobGen);
@@ -493,10 +495,14 @@ internal static partial class EccBinaryEncoder
     // PSHUFB nibble-split GF(256) multiplication tables: for each factor c,
     // 32 bytes = TLo (c·n for low nibble n) followed by THi (c·(n<<4) for high
     // nibble n), so c·x = TLo[x & 0xF] ^ THi[x >> 4]. 256 factors × 32 B = 8 KB.
-    private static readonly byte[] _nibbleMulTable = BuildNibbleMulTable();
+    // Built lazily (not a field initializer) so the GFNI path never constructs it.
+    private static byte[]? _nibbleMulTable;
 
-    private static byte[] BuildNibbleMulTable()
+    private static byte[] GetNibbleMulTable()
     {
+        var cached = _nibbleMulTable;
+        if (cached is not null) return cached;
+
         var table = new byte[256 * 32];
         for (var c = 0; c < 256; c++)
         {
@@ -506,6 +512,8 @@ internal static partial class EccBinaryEncoder
                 table[c * 32 + 16 + n] = GaloisField.Multiply((byte)c, (byte)(n << 4));
             }
         }
+
+        Volatile.Write(ref _nibbleMulTable, table);
         return table;
     }
 
@@ -678,31 +686,78 @@ internal static partial class EccBinaryEncoder
         return blob;
     }
 
-    // GFNI multiply-by-f bit matrices (universal, 2 KB). gf2p8affineqb convention:
-    // qword byte (7-i) = matrix row for result bit i, row bit k = bit i of f·2^k
-    // (identity matrix = 0x0102040810204080).
-    private static readonly ulong[] _gfniMatrix = BuildGfniMatrices();
-
-    private static ulong[] BuildGfniMatrices()
-    {
-        var t = new ulong[256];
-        for (var f = 0; f < 256; f++)
-        {
-            var m = 0UL;
-            for (var i = 0; i < 8; i++)
-            {
-                byte row = 0;
-                for (var k = 0; k < 8; k++)
-                {
-                    var prod = GaloisField.Multiply((byte)f, (byte)(1 << k));
-                    row |= (byte)(((prod >> i) & 1) << k);
-                }
-                m |= (ulong)row << ((7 - i) * 8);
-            }
-            t[f] = m;
-        }
-        return t;
-    }
+    // GFNI multiply-by-f bit matrices (universal for GF(0x11D), 2 KB), baked into
+    // the assembly as constant data so cold start pays no table build.
+    // gf2p8affineqb convention: qword byte (7-i) = matrix row for result bit i,
+    // row bit k = bit i of f·2^k (identity matrix = 0x0102040810204080).
+    // Content is locked to GaloisField.Multiply by GfniMatrixTable_MatchesGaloisFieldMultiply.
+    internal static ReadOnlySpan<ulong> GfniMatrix =>
+    [
+        0x0000000000000000, 0x0102040810204080, 0x8001828488102040, 0x8103868C983060C0,
+        0x408041C2C4881020, 0x418245CAD4A850A0, 0xC081C3464C983060, 0xC183C74E5CB870E0,
+        0x2040A061E2C48810, 0x2142A469F2E4C890, 0xA04122E56AD4A850, 0xA14326ED7AF4E8D0,
+        0x60C0E1A3264C9830, 0x61C2E5AB366CD8B0, 0xE0C16327AE5CB870, 0xE1C3672FBE7CF8F0,
+        0x102050B071E2C488, 0x112254B861C28408, 0x9021D234F9F2E4C8, 0x9123D63CE9D2A448,
+        0x50A01172B56AD4A8, 0x51A2157AA54A9428, 0xD0A193F63D7AF4E8, 0xD1A397FE2D5AB468,
+        0x3060F0D193264C98, 0x3162F4D983060C18, 0xB06172551B366CD8, 0xB163765D0B162C58,
+        0x70E0B11357AE5CB8, 0x71E2B51B478E1C38, 0xF0E13397DFBE7CF8, 0xF1E3379FCF9E3C78,
+        0x8810A8D83871E2C4, 0x8912ACD02851A244, 0x08112A5CB061C284, 0x09132E54A0418204,
+        0xC890E91AFCF9F2E4, 0xC992ED12ECD9B264, 0x48916B9E74E9D2A4, 0x49936F9664C99224,
+        0xA85008B9DAB56AD4, 0xA9520CB1CA952A54, 0x28518A3D52A54A94, 0x29538E3542850A14,
+        0xE8D0497B1E3D7AF4, 0xE9D24D730E1D3A74, 0x68D1CBFF962D5AB4, 0x69D3CFF7860D1A34,
+        0x9830F8684993264C, 0x9932FC6059B366CC, 0x18317AECC183060C, 0x19337EE4D1A3468C,
+        0xD8B0B9AA8D1B366C, 0xD9B2BDA29D3B76EC, 0x58B13B2E050B162C, 0x59B33F26152B56AC,
+        0xB8705809AB57AE5C, 0xB9725C01BB77EEDC, 0x3871DA8D23478E1C, 0x3973DE853367CE9C,
+        0xF8F019CB6FDFBE7C, 0xF9F21DC37FFFFEFC, 0x78F19B4FE7CF9E3C, 0x79F39F47F7EFDEBC,
+        0xC488D46C1C3871E2, 0xC58AD0640C183162, 0x448956E8942851A2, 0x458B52E084081122,
+        0x840895AED8B061C2, 0x850A91A6C8902142, 0x0409172A50A04182, 0x050B132240800102,
+        0xE4C8740DFEFCF9F2, 0xE5CA7005EEDCB972, 0x64C9F68976ECD9B2, 0x65CBF28166CC9932,
+        0xA44835CF3A74E9D2, 0xA54A31C72A54A952, 0x2449B74BB264C992, 0x254BB343A2448912,
+        0xD4A884DC6DDAB56A, 0xD5AA80D47DFAF5EA, 0x54A90658E5CA952A, 0x55AB0250F5EAD5AA,
+        0x9428C51EA952A54A, 0x952AC116B972E5CA, 0x1429479A2142850A, 0x152B43923162C58A,
+        0xF4E824BD8F1E3D7A, 0xF5EA20B59F3E7DFA, 0x74E9A639070E1D3A, 0x75EBA231172E5DBA,
+        0xB468657F4B962D5A, 0xB56A61775BB66DDA, 0x3469E7FBC3860D1A, 0x356BE3F3D3A64D9A,
+        0x4C987CB424499326, 0x4D9A78BC3469D3A6, 0xCC99FE30AC59B366, 0xCD9BFA38BC79F3E6,
+        0x0C183D76E0C18306, 0x0D1A397EF0E1C386, 0x8C19BFF268D1A346, 0x8D1BBBFA78F1E3C6,
+        0x6CD8DCD5C68D1B36, 0x6DDAD8DDD6AD5BB6, 0xECD95E514E9D3B76, 0xEDDB5A595EBD7BF6,
+        0x2C589D1702050B16, 0x2D5A991F12254B96, 0xAC591F938A152B56, 0xAD5B1B9B9A356BD6,
+        0x5CB82C0455AB57AE, 0x5DBA280C458B172E, 0xDCB9AE80DDBB77EE, 0xDDBBAA88CD9B376E,
+        0x1C386DC69123478E, 0x1D3A69CE8103070E, 0x9C39EF42193367CE, 0x9D3BEB4A0913274E,
+        0x7CF88C65B76FDFBE, 0x7DFA886DA74F9F3E, 0xFCF90EE13F7FFFFE, 0xFDFB0AE92F5FBF7E,
+        0x3C78CDA773E7CF9E, 0x3D7AC9AF63C78F1E, 0xBC794F23FBF7EFDE, 0xBD7B4B2BEBD7AF5E,
+        0xE2C46A368E1C3871, 0xE3C66E3E9E3C78F1, 0x62C5E8B2060C1831, 0x63C7ECBA162C58B1,
+        0xA2442BF44A942851, 0xA3462FFC5AB468D1, 0x2245A970C2840811, 0x2347AD78D2A44891,
+        0xC284CA576CD8B061, 0xC386CE5F7CF8F0E1, 0x428548D3E4C89021, 0x43874CDBF4E8D0A1,
+        0x82048B95A850A041, 0x83068F9DB870E0C1, 0x0205091120408001, 0x03070D193060C081,
+        0xF2E43A86FFFEFCF9, 0xF3E63E8EEFDEBC79, 0x72E5B80277EEDCB9, 0x73E7BC0A67CE9C39,
+        0xB2647B443B76ECD9, 0xB3667F4C2B56AC59, 0x3265F9C0B366CC99, 0x3367FDC8A3468C19,
+        0xD2A49AE71D3A74E9, 0xD3A69EEF0D1A3469, 0x52A51863952A54A9, 0x53A71C6B850A1429,
+        0x9224DB25D9B264C9, 0x9326DF2DC9922449, 0x122559A151A24489, 0x13275DA941820409,
+        0x6AD4C2EEB66DDAB5, 0x6BD6C6E6A64D9A35, 0xEAD5406A3E7DFAF5, 0xEBD744622E5DBA75,
+        0x2A54832C72E5CA95, 0x2B56872462C58A15, 0xAA5501A8FAF5EAD5, 0xAB5705A0EAD5AA55,
+        0x4A94628F54A952A5, 0x4B96668744891225, 0xCA95E00BDCB972E5, 0xCB97E403CC993265,
+        0x0A14234D90214285, 0x0B16274580010205, 0x8A15A1C9183162C5, 0x8B17A5C108112245,
+        0x7AF4925EC78F1E3D, 0x7BF69656D7AF5EBD, 0xFAF510DA4F9F3E7D, 0xFBF714D25FBF7EFD,
+        0x3A74D39C03070E1D, 0x3B76D79413274E9D, 0xBA7551188B172E5D, 0xBB7755109B376EDD,
+        0x5AB4323F254B962D, 0x5BB63637356BD6AD, 0xDAB5B0BBAD5BB66D, 0xDBB7B4B3BD7BF6ED,
+        0x1A3473FDE1C3860D, 0x1B3677F5F1E3C68D, 0x9A35F17969D3A64D, 0x9B37F57179F3E6CD,
+        0x264CBE5A92244993, 0x274EBA5282040913, 0xA64D3CDE1A3469D3, 0xA74F38D60A142953,
+        0x66CCFF9856AC59B3, 0x67CEFB90468C1933, 0xE6CD7D1CDEBC79F3, 0xE7CF7914CE9C3973,
+        0x060C1E3B70E0C183, 0x070E1A3360C08103, 0x860D9CBFF8F0E1C3, 0x870F98B7E8D0A143,
+        0x468C5FF9B468D1A3, 0x478E5BF1A4489123, 0xC68DDD7D3C78F1E3, 0xC78FD9752C58B163,
+        0x366CEEEAE3C68D1B, 0x376EEAE2F3E6CD9B, 0xB66D6C6E6BD6AD5B, 0xB76F68667BF6EDDB,
+        0x76ECAF28274E9D3B, 0x77EEAB20376EDDBB, 0xF6ED2DACAF5EBD7B, 0xF7EF29A4BF7EFDFB,
+        0x162C4E8B0102050B, 0x172E4A831122458B, 0x962DCC0F8912254B, 0x972FC807993265CB,
+        0x56AC0F49C58A152B, 0x57AE0B41D5AA55AB, 0xD6AD8DCD4D9A356B, 0xD7AF89C55DBA75EB,
+        0xAE5C1682AA55AB57, 0xAF5E128ABA75EBD7, 0x2E5D940622458B17, 0x2F5F900E3265CB97,
+        0xEEDC57406EDDBB77, 0xEFDE53487EFDFBF7, 0x6EDDD5C4E6CD9B37, 0x6FDFD1CCF6EDDBB7,
+        0x8E1CB6E348912347, 0x8F1EB2EB58B163C7, 0x0E1D3467C0810307, 0x0F1F306FD0A14387,
+        0xCE9CF7218C193367, 0xCF9EF3299C3973E7, 0x4E9D75A504091327, 0x4F9F71AD142953A7,
+        0xBE7C4632DBB76FDF, 0xBF7E423ACB972F5F, 0x3E7DC4B653A74F9F, 0x3F7FC0BE43870F1F,
+        0xFEFC07F01F3F7FFF, 0xFFFE03F80F1F3F7F, 0x7EFD8574972F5FBF, 0x7FFF817C870F1F3F,
+        0x9E3CE6533973E7CF, 0x9F3EE25B2953A74F, 0x1E3D64D7B163C78F, 0x1F3F60DFA143870F,
+        0xDEBCA791FDFBF7EF, 0xDFBEA399EDDBB76F, 0x5EBD251575EBD7AF, 0x5FBF211D65CB972F,
+    ];
 #endif // NET10_0_OR_GREATER
 }
 #endif // NET8_0_OR_GREATER

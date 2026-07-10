@@ -96,6 +96,34 @@ public class EccBinaryEncoderKernelParityTest
             Assert.Equal(expected, actual);
         }
     }
+
+    [Fact]
+    public void GfniMatrixTable_MatchesGaloisFieldMultiply()
+    {
+        // EccBinaryEncoder.GfniMatrix is baked into the assembly as constant data;
+        // this recomputes every entry from GaloisField.Multiply so the constant can
+        // never drift from the field definition. gf2p8affineqb convention: qword
+        // byte (7-i) = matrix row for result bit i, row bit k = bit i of f·2^k.
+        var table = EccBinaryEncoder.GfniMatrix;
+        Assert.Equal(256, table.Length);
+
+        for (var f = 0; f < 256; f++)
+        {
+            var expected = 0UL;
+            for (var i = 0; i < 8; i++)
+            {
+                byte row = 0;
+                for (var k = 0; k < 8; k++)
+                {
+                    var prod = GaloisField.Multiply((byte)f, (byte)(1 << k));
+                    row |= (byte)(((prod >> i) & 1) << k);
+                }
+                expected |= (ulong)row << ((7 - i) * 8);
+            }
+
+            Assert.Equal(expected, table[(int)f]);
+        }
+    }
 #endif
 
     [Fact]
