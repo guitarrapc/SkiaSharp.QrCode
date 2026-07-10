@@ -55,6 +55,21 @@ internal ref struct BitWriter
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Write(int value, int bitCount)
     {
+        // --------------------------------------------
+        // if Write(0b101, 3) & bit position is 0 (accumulator empty)
+        // --------------------------------------------
+        // step 1: (v = 0b101 & 0b111 => 0b101)
+        // step 2: (_accumulator |= 0b101 << (64 - 0 - 3)) => 101x_xxxx ... (top 3 bits, MSB-first)
+        // step 3: (_accumulatorBits = 3) => < 32, so nothing is stored yet
+        // then Write(0b11, 2):
+        // step 1: (v = 0b11)
+        // step 2: (_accumulator |= 0b11 << (64 - 3 - 2)) => 1011_1xxx ...
+        // step 3: (_accumulatorBits = 5)
+        // Once _accumulatorBits reaches 32, the top 32 bits are stored to the buffer
+        // as one big-endian word; the rest stays pending until Flush()/GetData().
+        // Result (after Flush): _buffer[0] = 0b1011_1000
+        // --------------------------------------------
+
         Debug.Assert(bitCount >= 1 && bitCount <= 32, "bitCount must be between 1 and 32");
 
         // stage: place the value's low bitCount bits directly below the pending bits
