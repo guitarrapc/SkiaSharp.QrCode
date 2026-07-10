@@ -38,6 +38,11 @@ export async function decodeShareHash(hashSegment) {
   if (!hashSegment || !hashSegment.length) {
     return { ok: false, error: 'empty hash' };
   }
+  // Reject oversized input before any decode work: the hash is attacker-controlled
+  // (arbitrary URL), and base64 + inflate of a huge payload burns CPU/memory on page load.
+  if (hashSegment.length > MAX_SHARE_HASH_LENGTH) {
+    return { ok: false, error: 'share payload too large' };
+  }
   const dot = hashSegment.indexOf('.');
   if (dot !== 1) {
     return { ok: false, error: 'unknown payload format' };

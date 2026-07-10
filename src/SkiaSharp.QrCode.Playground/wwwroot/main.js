@@ -469,6 +469,14 @@ function isRuntimeDeadError(err) {
 
 function handleRuntimeDeath() {
   runtimeAlive = false;
+  runtimeReady = false;
+  // Stop an in-flight benchmark loop at its next batch boundary.
+  benchCancelled = true;
+  // Everything below either needs the runtime or would act on stale output.
+  downloadBtn.disabled = true;
+  copyImageBtn.disabled = true;
+  permalinkBtn.disabled = true;
+  benchRunBtn.disabled = true;
   showToast('The WebAssembly runtime has crashed. Please reload the page to continue.', 'error', 60000);
   generateErrorEl.hidden = false;
   generateErrorEl.textContent = 'Runtime crashed — please reload the page.';
