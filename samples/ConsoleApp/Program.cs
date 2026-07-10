@@ -7,7 +7,8 @@ Console.OutputEncoding = System.Text.Encoding.UTF8;
 var content = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md";
 var outputDir = "bin/output";
 var iconPath = "samples/test.png";
-var iconInstaPath = "samples/insta.png";
+// Square Instagram logo (128x128). Prefer over samples/insta.png (133x135, non-square).
+var iconInstaPath = "samples/instarich-logo.png";
 
 // prepare
 Directory.CreateDirectory(outputDir);
@@ -60,6 +61,53 @@ Console.WriteLine("""
         .WithQuietZone(2);
 
     var pngBytes = qrBuilder.ToByteArray();
+    File.WriteAllBytes(path, pngBytes);
+
+    Console.WriteLine($"  ✓ Saved to: {path}");
+}
+Console.WriteLine();
+
+// Module Pixel Size (sharp module edges)
+Console.WriteLine("""
+    Pattern 3b: WithModulePixelSize
+      - Best for: Sharp module edges / logo alignment (integer pixels per module)
+      - API: new QRCodeImageBuilder().WithModulePixelSize()
+      - Output side = QR matrix size * modulePixelSize
+    """);
+{
+    var path = Path.Combine(outputDir, "pattern3b_module_pixel_size.png");
+
+    var pngBytes = new QRCodeImageBuilder(content)
+        .WithModulePixelSize(10)
+        .WithErrorCorrection(ECCLevel.H)
+        .WithQuietZone(4)
+        .ToByteArray();
+
+    File.WriteAllBytes(path, pngBytes);
+
+    Console.WriteLine($"  ✓ Saved to: {path}");
+}
+Console.WriteLine();
+
+// Module Pixel Size + fixed canvas padding
+Console.WriteLine("""
+    Pattern 3c: WithModulePixelSize + WithSize (centered padding)
+      - Best for: Module-aligned content inside a fixed UI frame
+      - API: WithModulePixelSize(n) + WithSize(w, h)  (canvas must be >= content)
+      - Extra space is centered padding using clearColor
+    """);
+{
+    var path = Path.Combine(outputDir, "pattern3c_module_pixel_size_padded.png");
+
+    // Content is module-aligned; larger canvas pads with a visible clearColor.
+    var pngBytes = new QRCodeImageBuilder(content)
+        .WithModulePixelSize(8)
+        .WithSize(512, 512)
+        .WithColors(clearColor: SKColor.Parse("E8EEF5"))
+        .WithErrorCorrection(ECCLevel.H)
+        .WithQuietZone(4)
+        .ToByteArray();
+
     File.WriteAllBytes(path, pngBytes);
 
     Console.WriteLine($"  ✓ Saved to: {path}");
@@ -149,16 +197,17 @@ Console.WriteLine();
 Console.WriteLine("""
     Pattern 7: Builder Pattern (Advanced - Icon Overlay)
       - Best for: QR codes with logo/icon in center
-      - API: new QRCodeImageBuilder().WithIcon()
+      - API: IconData.FromImageByModules() + WithModulePixelSize() + WithIcon()
     """);
 {
     var path = Path.Combine(outputDir, "pattern7_builder_icon.png");
 
     using var logo = SKBitmap.Decode(File.ReadAllBytes(iconPath));
-    var icon = IconData.FromImage(logo, iconSizePercent: 15, iconBorderWidth: 18);
+    // Module-based icon sizing keeps logo body/border on the QR grid.
+    var icon = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 2);
 
     var qrBuilder = new QRCodeImageBuilder(content)
-        .WithSize(800, 800)
+        .WithModulePixelSize(12)
         .WithErrorCorrection(ECCLevel.H) // H recommended for icons
         .WithColors(codeColor: SKColors.DarkGreen, backgroundColor: SKColors.LightYellow)
         .WithIcon(icon);
@@ -376,8 +425,8 @@ Console.WriteLine();
 // Instagram-style Profile QR Code
 Console.WriteLine("""
     Pattern 14: Instagram-style Profile QR Code
-      - Best for: Demonstrating complex styling
-      - API: QRCodeImageBuilder with gradient + icon + custom styling
+      - Best for: Demonstrating complex styling with a square logo
+      - API: WithModulePixelSize + FromImageByModules + gradient + shapes
     """);
 {
     var path = Path.Combine(outputDir, "pattern14_instagram_style.png");
@@ -393,13 +442,11 @@ Console.WriteLine("""
         GradientDirection.TopLeftToBottomRight,
         [0f, 0.25f, 0.5f, 0.75f, 1f]);
 
-    // Load Instagram logo (if you have one)
-    // For this example, we'll use the test icon
     using var logo = SKBitmap.Decode(File.ReadAllBytes(iconInstaPath));
-    var icon = IconData.FromImage(logo, iconSizePercent: 14, iconBorderWidth: 9);
+    var icon = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 2, maxCoreOccupancyPercent: 40);
 
     var qrBuilder = new QRCodeImageBuilder(content)
-        .WithSize(1024, 1024)
+        .WithModulePixelSize(12)
         .WithErrorCorrection(ECCLevel.H)
         .WithQuietZone(4)
         .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.White)
@@ -482,9 +529,9 @@ Console.WriteLine("""
             GradientDirection.TopLeftToBottomRight,
             [0f, 0.25f, 0.5f, 0.75f, 1f]);
 
-        // Render QR code
+        // Render QR code (module-aligned size inside the frame)
         using var logo = SKBitmap.Decode(File.ReadAllBytes(iconInstaPath));
-        var icon = IconData.FromImage(logo, iconSizePercent: 15, iconBorderWidth: 9);
+        var icon = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 2, maxCoreOccupancyPercent: 40);
 
         var qrRect = SKRect.Create(sidePadding, topPadding, qrSize, qrSize);
         QRCodeRenderer.Render(
@@ -594,6 +641,180 @@ Console.WriteLine("""
         }
         Console.Write("\n");
     }
+}
+Console.WriteLine();
+
+// Module-aligned logo: avoid ugly module/logo overlap
+Console.WriteLine("""
+    Pattern 18: Module-aligned Logo (avoid overlapping module dots)
+      - Best for: Clean logo islands that sit on whole modules
+      - Compare percent sizing (fractional edges) vs FromImageByModules + WithModulePixelSize
+    """);
+{
+    using var logo = SKBitmap.Decode(File.ReadAllBytes(iconInstaPath));
+
+    // Before: percent/pixel sizing on a fixed box — logo edges can cut through modules.
+    {
+        var path = Path.Combine(outputDir, "pattern18a_logo_percent_overlap.png");
+        var icon = IconData.FromImage(logo, iconSizePercent: 18, iconBorderWidth: 8);
+
+        var pngBytes = new QRCodeImageBuilder(content)
+            .WithSize(512, 512)
+            .WithErrorCorrection(ECCLevel.H)
+            .WithQuietZone(4)
+            .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.92f)
+            .WithIcon(icon)
+            .ToByteArray();
+
+        File.WriteAllBytes(path, pngBytes);
+        Console.WriteLine($"  ✓ Before (percent sizing): {path}");
+    }
+
+    // After: module-based icon + integer module pixels — border covers whole modules cleanly.
+    {
+        var path = Path.Combine(outputDir, "pattern18b_logo_module_aligned.png");
+        var icon = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 2, maxCoreOccupancyPercent: 40);
+
+        var pngBytes = new QRCodeImageBuilder(content)
+            .WithModulePixelSize(12)
+            .WithErrorCorrection(ECCLevel.H)
+            .WithQuietZone(4)
+            .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.92f)
+            .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
+            .WithIcon(icon)
+            .ToByteArray();
+
+        File.WriteAllBytes(path, pngBytes);
+        Console.WriteLine($"  ✓ After  (module-aligned): {path}");
+    }
+}
+Console.WriteLine();
+
+// Showcase: Aurora gradient
+Console.WriteLine("""
+    Pattern 19: Showcase — Aurora
+      - Best for: Attractive gradient + soft circle modules + rounded finder eyes
+    """);
+{
+    var path = Path.Combine(outputDir, "pattern19_showcase_aurora.png");
+
+    var aurora = new GradientOptions(
+        [
+            SKColor.Parse("00C9A7"),
+            SKColor.Parse("1B9CFC"),
+            SKColor.Parse("6C5CE7"),
+            SKColor.Parse("A29BFE"),
+        ],
+        GradientDirection.TopLeftToBottomRight,
+        [0f, 0.35f, 0.7f, 1f]);
+
+    var pngBytes = new QRCodeImageBuilder(content)
+        .WithModulePixelSize(12)
+        .WithErrorCorrection(ECCLevel.H)
+        .WithQuietZone(3)
+        .WithColors(backgroundColor: SKColor.Parse("0B1320"), clearColor: SKColor.Parse("0B1320"))
+        .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.88f)
+        .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
+        .WithGradient(aurora)
+        .ToByteArray();
+
+    File.WriteAllBytes(path, pngBytes);
+    Console.WriteLine($"  ✓ Saved to: {path}");
+}
+Console.WriteLine();
+
+// Showcase: Sunset brand card with padded canvas + logo
+Console.WriteLine("""
+    Pattern 20: Showcase — Sunset Brand Card
+      - Best for: Module-aligned logo + fixed canvas padding + warm gradient
+    """);
+{
+    var path = Path.Combine(outputDir, "pattern20_showcase_sunset_brand.png");
+
+    using var logo = SKBitmap.Decode(File.ReadAllBytes(iconInstaPath));
+    var icon = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 2, maxCoreOccupancyPercent: 40);
+
+    var sunset = new GradientOptions(
+        [
+            SKColor.Parse("FF9A3C"),
+            SKColor.Parse("FF6B6B"),
+            SKColor.Parse("C44569"),
+            SKColor.Parse("2C2C54"),
+        ],
+        GradientDirection.TopToBottom,
+        [0f, 0.35f, 0.7f, 1f]);
+
+    // Content stays module-aligned; WithSize adds centered padding for a card-like frame.
+    var pngBytes = new QRCodeImageBuilder(content)
+        .WithModulePixelSize(10)
+        .WithSize(640, 640)
+        .WithErrorCorrection(ECCLevel.H)
+        .WithQuietZone(4)
+        .WithColors(backgroundColor: SKColors.White, clearColor: SKColor.Parse("FFF5EE"))
+        .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f)
+        .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
+        .WithGradient(sunset)
+        .WithIcon(icon)
+        .ToByteArray();
+
+    File.WriteAllBytes(path, pngBytes);
+    Console.WriteLine($"  ✓ Saved to: {path}");
+}
+Console.WriteLine();
+
+// Showcase: Neon night with icon+text
+Console.WriteLine("""
+    Pattern 21: Showcase — Neon Night (icon + text)
+      - Best for: Combining gradient, shapes, and ImageTextIconShape
+    """);
+{
+    var path = Path.Combine(outputDir, "pattern21_showcase_neon_night.png");
+
+    using var logo = SKBitmap.Decode(File.ReadAllBytes(iconPath));
+    using var font = new SKFont
+    {
+        Size = 14,
+        Typeface = SKTypeface.FromFamilyName("sans-serif", SKFontStyle.Bold),
+    };
+
+    var icon = new IconData
+    {
+        Icon = new ImageTextIconShape(
+            logo,
+            "SCAN ME",
+            SKColor.Parse("00F5D4"),
+            font,
+            horizontalAlign: SKTextAlign.Center,
+            verticalAlign: TextVerticalAlignment.Bottom,
+            textPadding: 2),
+        IconSizeModules = 5,
+        IconBorderModules = 3,
+        MaxCoreOccupancyPercent = 40,
+    };
+
+    var neon = new GradientOptions(
+        [
+            SKColor.Parse("00F5D4"),
+            SKColor.Parse("00BBF9"),
+            SKColor.Parse("9B5DE5"),
+            SKColor.Parse("F15BB5"),
+        ],
+        GradientDirection.TopRightToBottomLeft,
+        [0f, 0.33f, 0.66f, 1f]);
+
+    var pngBytes = new QRCodeImageBuilder(content)
+        .WithModulePixelSize(11)
+        .WithErrorCorrection(ECCLevel.H)
+        .WithQuietZone(4)
+        .WithColors(backgroundColor: SKColor.Parse("111111"), clearColor: SKColor.Parse("111111"))
+        .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.85f)
+        .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
+        .WithGradient(neon)
+        .WithIcon(icon)
+        .ToByteArray();
+
+    File.WriteAllBytes(path, pngBytes);
+    Console.WriteLine($"  ✓ Saved to: {path}");
 }
 Console.WriteLine();
 
