@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "SkiaSharp.QrCode.Playground": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:51800;http://localhost:51801"
+    }
+  }
+}
