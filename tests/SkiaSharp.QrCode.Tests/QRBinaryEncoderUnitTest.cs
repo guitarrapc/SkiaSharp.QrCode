@@ -343,10 +343,10 @@ public class QRBinaryEncoderUnitTest
         Assert.Equal(0xE0, data[15]);
     }
 
-    // Regression: WritePadding with a target below the current position must not
-    // throw and must keep the written data intact (alignment bits only).
+    // Regression: WritePadding with a target at or below the current position is a
+    // no-op aside from flushing - no throw, no position advance, data intact.
     [Fact]
-    public void WritePadding_TargetBelowPosition_KeepsData()
+    public void WritePadding_TargetBelowPosition_KeepsDataAndPosition()
     {
         Span<byte> buffer = stackalloc byte[8];
         var encoder = new QRBinaryEncoder(buffer);
@@ -360,6 +360,7 @@ public class QRBinaryEncoderUnitTest
         var after = encoder.GetEncodedData().ToArray();
 
         Assert.Equal(before, after);
+        Assert.Equal(35, encoder.BitPosition); // no alignment bits added
     }
 
     // helpers

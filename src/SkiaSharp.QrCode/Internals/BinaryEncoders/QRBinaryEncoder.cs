@@ -72,12 +72,17 @@ internal ref struct QRBinaryEncoder
         var currentBits = _writer.BitPosition;
         var remaining = targetBitCount - currentBits;
 
-        // 1. Terminator (up to 4 bits)
-        if (remaining > 0)
+        // Target already reached (or exceeded): nothing to pad. Only drain pending
+        // bits so callers can read the raw buffer; the position does not advance.
+        if (remaining <= 0)
         {
-            var terminatorBits = Math.Min(remaining, 4);
-            _writer.Write(0, terminatorBits);
+            _writer.Flush();
+            return;
         }
+
+        // 1. Terminator (up to 4 bits)
+        var terminatorBits = Math.Min(remaining, 4);
+        _writer.Write(0, terminatorBits);
 
         // 2. Byte boundary alignment (0-7 bits)
         var alignmentBits = (8 - _writer.BitPosition % 8) % 8;
