@@ -194,20 +194,43 @@ public class QRCodeDecodabilityTest
         AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
     }
 
+    [Theory]
+    [InlineData("Hello, World!", ECCLevel.L, EciMode.Utf8)]
+    [InlineData("こんにちは", ECCLevel.M, EciMode.Utf8)]
+    [InlineData("你好世界", ECCLevel.Q, EciMode.Utf8)]
+    [InlineData("🎉🎊🎈", ECCLevel.L, EciMode.Utf8)]
+    [InlineData("Zürich", ECCLevel.H, EciMode.Utf8)]
+    [InlineData("Résumé", ECCLevel.M, EciMode.Default)]
+    public void CreateQrCode_Utf8Bom_IsDecodable(string content, ECCLevel eccLevel, EciMode eciMode)
+    {
+        // BOM bytes are part of the Byte-mode data stream, so the character count
+        // indicator must include them (ISO/IEC 18004). Decoders strip the BOM.
+        AssertQrCodeIsDecodable(content, eccLevel, eciMode, utf8BOM: true);
+    }
+
+    [Theory]
+    [InlineData("あ", ECCLevel.L)]
+    [InlineData("ああ", ECCLevel.L)]
+    public void CreateQrCode_Utf8Bom_ShortMultibyteText_IsDecodable(string content, ECCLevel eccLevel)
+    {
+        // 1-2 char multi-byte text: encode buffer must reserve room for the 3 BOM bytes
+        AssertQrCodeIsDecodable(content, eccLevel, EciMode.Utf8, utf8BOM: true);
+    }
+
     // helpers
 
     /// <summary>
     /// Assert that generated QR code is decodable and content matches.
     /// </summary>
-    private void AssertQrCodeIsDecodable(string expectedContent, ECCLevel eccLevel, EciMode eciMode)
+    private void AssertQrCodeIsDecodable(string expectedContent, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM = false)
     {
-        AssertQrCodeIsDecodableBinary(expectedContent, eccLevel, eciMode);
-        AssertQrCodeIsDecodableString(expectedContent, eccLevel, eciMode);
+        AssertQrCodeIsDecodableBinary(expectedContent, eccLevel, eciMode, utf8BOM);
+        AssertQrCodeIsDecodableString(expectedContent, eccLevel, eciMode, utf8BOM);
     }
 
-    private void AssertQrCodeIsDecodableBinary(string expectedContent, ECCLevel eccLevel, EciMode eciMode)
+    private void AssertQrCodeIsDecodableBinary(string expectedContent, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM = false)
     {
-        var qr = QRCodeGenerator.CreateQrCode(expectedContent.AsSpan(), eccLevel, eciMode: eciMode, quietZoneSize: 4);
+        var qr = QRCodeGenerator.CreateQrCode(expectedContent.AsSpan(), eccLevel, utf8BOM: utf8BOM, eciMode: eciMode, quietZoneSize: 4);
 
         // Convert QRCodeData to SKBitmap
         using var bitmap = QrCodeToSKBitmap(qr);
@@ -219,8 +242,8 @@ public class QRCodeDecodabilityTest
         Assert.NotNull(result);
         Assert.Equal(BarcodeFormat.QR_CODE, result.BarcodeFormat);
 
-        // Assert content matches
-        Assert.Equal(expectedContent, result.Text);
+        // Assert content matches (some decoders surface the BOM as a leading U+FEFF)
+        Assert.Equal(expectedContent, result.Text.TrimStart('\uFEFF'));
 
         // Additional metadata checks
         if (result.ResultMetadata != null)
@@ -235,9 +258,9 @@ public class QRCodeDecodabilityTest
         }
     }
 
-    private void AssertQrCodeIsDecodableString(string expectedContent, ECCLevel eccLevel, EciMode eciMode)
+    private void AssertQrCodeIsDecodableString(string expectedContent, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM = false)
     {
-        var qr = QRCodeGenerator.CreateQrCode(expectedContent, eccLevel, eciMode: eciMode, quietZoneSize: 4);
+        var qr = QRCodeGenerator.CreateQrCode(expectedContent, eccLevel, utf8BOM: utf8BOM, eciMode: eciMode, quietZoneSize: 4);
 
         // Convert QRCodeData to SKBitmap
         using var bitmap = QrCodeToSKBitmap(qr);
@@ -249,8 +272,8 @@ public class QRCodeDecodabilityTest
         Assert.NotNull(result);
         Assert.Equal(BarcodeFormat.QR_CODE, result.BarcodeFormat);
 
-        // Assert content matches
-        Assert.Equal(expectedContent, result.Text);
+        // Assert content matches (some decoders surface the BOM as a leading U+FEFF)
+        Assert.Equal(expectedContent, result.Text.TrimStart('\uFEFF'));
 
         // Additional metadata checks
         if (result.ResultMetadata != null)

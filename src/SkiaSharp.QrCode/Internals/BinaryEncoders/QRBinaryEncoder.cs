@@ -146,8 +146,8 @@ internal ref struct QRBinaryEncoder
         if (eci != EciMode.Utf8)
             throw new ArgumentOutOfRangeException(nameof(eci), "Unsupported ECI mode for Byte encoding");
 
-        // UTF-8: encode into a temporary buffer, then bulk-write
-        var maxByteCount = textSpan.Length * 4;
+        // UTF-8: encode into a temporary buffer, then bulk-write (+3 reserves room for the UTF-8 BOM)
+        var maxByteCount = textSpan.Length * 4 + (utf8Bom ? 3 : 0);
         if (maxByteCount <= StackAllocThreshold)
         {
             Span<byte> buffer = stackalloc byte[maxByteCount];
