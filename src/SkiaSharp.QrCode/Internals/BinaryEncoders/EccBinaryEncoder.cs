@@ -142,8 +142,8 @@ internal static partial class EccBinaryEncoder
     // log domain. Benign race: concurrent builds produce identical arrays; published
     // with Volatile.Write so readers on weakly-ordered runtimes never observe a
     // partially initialized array.
-    private static readonly byte[]?[] s_logGenCache = new byte[]?[256];
-    private static readonly byte[] s_logGenUnrepresentable = [];
+    private static readonly byte[]?[] _logGenCache = new byte[]?[256];
+    private static readonly byte[] _logGenUnrepresentable = [];
 
     /// <summary>
     /// Returns the cached log-domain generator polynomial, or null when it has no
@@ -160,7 +160,7 @@ internal static partial class EccBinaryEncoder
     /// </remarks>
     private static byte[]? GetLogGenerator(int eccCount)
     {
-        var cached = s_logGenCache[eccCount];
+        var cached = _logGenCache[eccCount];
         if (cached is not null) return cached.Length == 0 ? null : cached;
 
         Span<byte> generator = stackalloc byte[eccCount + 1];
@@ -172,13 +172,13 @@ internal static partial class EccBinaryEncoder
             var coefficient = generator[j + 1];
             if (coefficient == 0)
             {
-                Volatile.Write(ref s_logGenCache[eccCount], s_logGenUnrepresentable);
+                Volatile.Write(ref _logGenCache[eccCount], _logGenUnrepresentable);
                 return null;
             }
             logGen[j] = GaloisField.Log[coefficient];
         }
 
-        Volatile.Write(ref s_logGenCache[eccCount], logGen);
+        Volatile.Write(ref _logGenCache[eccCount], logGen);
         return logGen;
     }
 
