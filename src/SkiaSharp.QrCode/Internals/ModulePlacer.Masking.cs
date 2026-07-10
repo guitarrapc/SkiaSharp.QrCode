@@ -117,7 +117,7 @@ internal static partial class ModulePlacer
             }
             PokeFormatBits64(masked, size, QRCodeConstants.GetFormatBits(eccLevel, patternIndex));
 
-            var score = CalculateScore64(masked, nmasked, size);
+            var score = CalculateScore64(masked, nmasked, size, bestScore);
             if (score < bestScore)
             {
                 bestPatternIndex = patternIndex;
@@ -142,10 +142,18 @@ internal static partial class ModulePlacer
     /// Bit-parallel penalty scoring for single-word rows.
     /// See <see cref="CalculateScorePacked"/> for the rule derivations.
     /// </summary>
+    /// <remarks>
+    /// Terminates early (returning int.MaxValue) once the running sum of rules
+    /// 1-3 exceeds <paramref name="abortAbove"/>: penalty sub-scores only ever
+    /// accumulate, so a pattern whose partial sum already exceeds the best total
+    /// can never be selected — the result is provably identical. Measured ~5-10%
+    /// on this single-word path; the triple-word scorer intentionally has no
+    /// abort because no win was measurable there (see the findings log).
+    /// </remarks>
 #if NET6_0_OR_GREATER
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
 #endif
-    private static int CalculateScore64(ReadOnlySpan<ulong> rows, Span<ulong> nrows, int size)
+    private static int CalculateScore64(ReadOnlySpan<ulong> rows, Span<ulong> nrows, int size, int abortAbove)
     {
         var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
         var startMaskP3 = (1ul << (size - 10)) - 1;
@@ -188,6 +196,11 @@ internal static partial class ModulePlacer
                 var m = eqh & eqv & (eqv >> 1) & maskN1;
                 score2 += 3 * PopCount(m);
             }
+
+            if (score1 + score2 + score3 > abortAbove)
+            {
+                return int.MaxValue;
+            }
         }
 
         // Column-direction rules 1 and 3
@@ -215,6 +228,11 @@ internal static partial class ModulePlacer
                        & rows[b + 4] & nrows[b + 5] & rows[b + 6] & nrows[b + 7]
                        & nrows[b + 8] & nrows[b + 9] & nrows[b + 10];
                 score3 += 40 * (PopCount(mf) + PopCount(mb));
+
+                if (score1 + score2 + score3 > abortAbove)
+                {
+                    return int.MaxValue;
+                }
             }
         }
 
