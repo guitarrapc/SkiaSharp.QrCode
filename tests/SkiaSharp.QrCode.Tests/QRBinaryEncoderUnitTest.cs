@@ -19,8 +19,9 @@ public class QRBinaryEncoderUnitTest
         var encoder = new QRBinaryEncoder(buffer);
 
         encoder.WriteMode(encoding, eci);
+        var data = encoder.GetEncodedData();
 
-        Assert.Equal(expected, buffer[0]);
+        Assert.Equal(expected, data[0]);
     }
 
     [Theory]
@@ -32,9 +33,10 @@ public class QRBinaryEncoderUnitTest
         var encoder = new QRBinaryEncoder(buffer);
 
         encoder.WriteMode(EncodingMode.Byte, eci);
+        var data = encoder.GetEncodedData();
 
-        Assert.Equal(expected0, buffer[0]); // ECI mode + part of UTF-8
-        Assert.Equal(expected1, buffer[1]); // rest of UTF-8 + Byte mode
+        Assert.Equal(expected0, data[0]); // ECI mode + part of UTF-8
+        Assert.Equal(expected1, data[1]); // rest of UTF-8 + Byte mode
     }
 
     [Theory]
@@ -46,7 +48,7 @@ public class QRBinaryEncoderUnitTest
         var encoder = new QRBinaryEncoder(buffer);
 
         encoder.WriteMode(EncodingMode.Byte, eci);
-        var result = ToBinaryString(buffer, encoder.BitPosition);
+        var result = ToBinaryString(encoder.GetEncodedData(), encoder.BitPosition);
 
         // Assert: Total bit length is 16 (4 + 8 + 4)
         Assert.Equal(16, result.Length);
@@ -73,8 +75,9 @@ public class QRBinaryEncoderUnitTest
         var encoder = new QRBinaryEncoder(buffer);
 
         encoder.WriteCharacterCount(count, bitsLength);
+        var data = encoder.GetEncodedData();
 
-        var result = buffer[0] << 8 | buffer[1];
+        var result = data[0] << 8 | data[1];
         Assert.Equal(expectedFirstByte, result);
     }
 
@@ -293,6 +296,71 @@ public class QRBinaryEncoderUnitTest
         var afterPadding = encoder.GetEncodedData().ToArray();
 
         Assert.Equal(beforePadding, afterPadding);
+    }
+
+    // Full pipeline parity (mode + count + data + padding)
+
+    // ISO/IEC 18004 canonical example: "HELLO WORLD", alphanumeric, version 1-M
+    // (16 data codewords). Encoded stream is the well-known byte sequence.
+    [Fact]
+    public void EncodePipeline_HelloWorld_V1M_ProducesCanonicalCodewords()
+    {
+        Span<byte> buffer = stackalloc byte[16];
+        var encoder = new QRBinaryEncoder(buffer);
+
+        encoder.WriteMode(EncodingMode.Alphanumeric, EciMode.Default);
+        encoder.WriteCharacterCount(11, 9); // version 1-9 alphanumeric: 9 bits
+        encoder.WriteData("HELLO WORLD", EncodingMode.Alphanumeric, EciMode.Default, false);
+        encoder.WritePadding(16 * 8);
+
+        var expected = new byte[]
+        {
+            0x20, 0x5B, 0x0B, 0x78, 0xD1, 0x72, 0xDC, 0x4D,
+            0x43, 0x40, 0xEC, 0x11, 0xEC, 0x11, 0xEC, 0x11,
+        };
+        Assert.Equal(16, encoder.ByteCount);
+        Assert.Equal(expected, encoder.GetEncodedData().ToArray());
+    }
+
+    // Exact capacity fit: 14 bytes data in version 1-M (16 data codewords)
+    // leaves room for the 4-bit terminator only - zero pad bytes.
+    [Fact]
+    public void EncodePipeline_ExactCapacityFit_NoPadBytes()
+    {
+        Span<byte> buffer = stackalloc byte[16];
+        var encoder = new QRBinaryEncoder(buffer);
+
+        encoder.WriteMode(EncodingMode.Byte, EciMode.Default);
+        encoder.WriteCharacterCount(14, 8); // version 1-9 byte: 8 bits
+        encoder.WriteData("ABCDEFGHIJKLMN", EncodingMode.Byte, EciMode.Default, false);
+        Assert.Equal(124, encoder.BitPosition); // 4 + 8 + 14*8
+        encoder.WritePadding(16 * 8);
+
+        Assert.Equal(128, encoder.BitPosition); // terminator only, no pad bytes
+        Assert.Equal(16, encoder.ByteCount);
+        var data = encoder.GetEncodedData();
+        // last byte = low nibble of 'N' (0x4E -> 1110) + 4-bit terminator (0000)
+        Assert.Equal(0xE0, data[15]);
+    }
+
+    // Regression: WritePadding with a target at or below the current position is a
+    // no-op aside from flushing - no throw, no position advance, data intact.
+    [Fact]
+    public void WritePadding_TargetBelowPosition_KeepsDataAndPosition()
+    {
+        Span<byte> buffer = stackalloc byte[8];
+        var encoder = new QRBinaryEncoder(buffer);
+
+        encoder.WriteMode(EncodingMode.Numeric, EciMode.Default); // 4 bits
+        encoder.WriteCharacterCount(1234, 14); // 14 bits
+        encoder.WriteData("12345", EncodingMode.Numeric, EciMode.Default, false); // 17 bits -> total 35
+
+        var before = encoder.GetEncodedData().ToArray();
+        encoder.WritePadding(32); // below current position (35 bits)
+        var after = encoder.GetEncodedData().ToArray();
+
+        Assert.Equal(before, after);
+        Assert.Equal(35, encoder.BitPosition); // no alignment bits added
     }
 
     // helpers

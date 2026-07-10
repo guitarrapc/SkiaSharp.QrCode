@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Text;
 
 namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
@@ -71,12 +72,17 @@ internal ref struct QRBinaryEncoder
         var currentBits = _writer.BitPosition;
         var remaining = targetBitCount - currentBits;
 
-        // 1. Terminator (up to 4 bits)
-        if (remaining > 0)
+        // Target already reached (or exceeded): nothing to pad. Only drain pending
+        // bits so callers can read the raw buffer; the position does not advance.
+        if (remaining <= 0)
         {
-            var terminatorBits = Math.Min(remaining, 4);
-            _writer.Write(0, terminatorBits);
+            _writer.Flush();
+            return;
         }
+
+        // 1. Terminator (up to 4 bits)
+        var terminatorBits = Math.Min(remaining, 4);
+        _writer.Write(0, terminatorBits);
 
         // 2. Byte boundary alignment (0-7 bits)
         var alignmentBits = (8 - _writer.BitPosition % 8) % 8;
@@ -85,12 +91,18 @@ internal ref struct QRBinaryEncoder
             _writer.Write(0, alignmentBits);
         }
 
-        // 3. Alternating pad bytes (0xEC, 0x11, 0xEC, 0x11, ...) until target length
-        var useEC = true;
-        while (_writer.BitPosition < targetBitCount)
+        // 3. Alternating pad bytes (0xEC, 0x11, 0xEC, 0x11, ...) until target length.
+        // The position is byte-aligned here, so the bytes are filled directly.
+        // Callers read the raw buffer after WritePadding, so both branches drain
+        // every pending bit to the buffer.
+        var padBytes = (targetBitCount - _writer.BitPosition) / 8;
+        if (padBytes > 0)
         {
-            _writer.Write(useEC ? 0xEC : 0x11, 8);
-            useEC = !useEC;
+            _writer.WritePadBytes(padBytes);
+        }
+        else
+        {
+            _writer.Flush();
         }
     }
 
@@ -106,10 +118,10 @@ internal ref struct QRBinaryEncoder
         switch (encoding)
         {
             case EncodingMode.Numeric:
-                EncodeNumeric(textSpan);
+                WriteNumericData(textSpan);
                 break;
             case EncodingMode.Alphanumeric:
-                EncodeAlphanumeric(textSpan);
+                WriteAlphanumericData(textSpan);
                 break;
             case EncodingMode.Byte:
                 EncodeByte(textSpan, eci, utf8Bom);
@@ -120,136 +132,26 @@ internal ref struct QRBinaryEncoder
     }
 
     /// <summary>
-    /// Writes numeric data from string 
+    /// Writes byte mode data based on ECI mode.
     /// </summary>
-    /// <param name="textSpan"></param>
-    private void EncodeNumeric(ReadOnlySpan<char> textSpan)
-    {
-        // Convert string to ASCII bytes (numeric chars are ASCII compatible)
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        // ascii is 1 char = 1 byte, so length is same
-        if (textSpan.Length <= StackAllocThreshold)
-        {
-            Span<byte> asciiBytes = stackalloc byte[textSpan.Length];
-            var bytesWritten = Encoding.ASCII.GetBytes(textSpan, asciiBytes);
-            WriteNumericData(asciiBytes.Slice(0, bytesWritten));
-        }
-        else
-        {
-            var buffer = ArrayPool<byte>.Shared.Rent(textSpan.Length);
-            try
-            {
-                var bytesWritten = Encoding.ASCII.GetBytes(textSpan, buffer);
-                WriteNumericData(buffer.AsSpan(0, bytesWritten));
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(buffer);
-            }
-        }
-#else
-        // Fallback for older frameworks without Span support
-        if (textSpan.Length <= StackAllocThreshold)
-        {
-            Span<byte> buffer = stackalloc byte[textSpan.Length];
-            for (int i = 0; i < textSpan.Length; i++)
-            {
-                buffer[i] = (byte)textSpan[i]; // direct cast since ASCII, avoids Span.ToString() allocation
-            }
-            WriteNumericData(buffer);
-        }
-        else
-        {
-            var rented = ArrayPool<byte>.Shared.Rent(textSpan.Length);
-            try
-            {
-                var buffer = rented.AsSpan(0, textSpan.Length);
-                for (int i = 0; i < textSpan.Length; i++)
-                {
-                    buffer[i] = (byte)textSpan[i];
-                }
-                WriteNumericData(buffer);
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(rented);
-            }
-        }
-#endif
-    }
-
-    /// <summary>
-    ///  Writes alphanumeric data from string
-    /// </summary>
-    /// <param name="textSpan"></param>
-    private void EncodeAlphanumeric(ReadOnlySpan<char> textSpan)
-    {
-        // Convert string to ASCII bytes (numeric chars are ASCII compatible)
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        // ascii is 1 char = 1 byte, so length is same
-        if (textSpan.Length <= StackAllocThreshold)
-        {
-            Span<byte> asciiBytes = stackalloc byte[textSpan.Length];
-            var bytesWritten = Encoding.ASCII.GetBytes(textSpan, asciiBytes);
-            WriteAlphanumericData(asciiBytes.Slice(0, bytesWritten));
-        }
-        else
-        {
-            var buffer = ArrayPool<byte>.Shared.Rent(textSpan.Length);
-            try
-            {
-                var bytesWritten = Encoding.ASCII.GetBytes(textSpan, buffer);
-                WriteAlphanumericData(buffer.AsSpan(0, bytesWritten));
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(buffer);
-            }
-        }
-#else
-        // Fallback for older frameworks without Span support
-        if (textSpan.Length <= StackAllocThreshold)
-        {
-            Span<byte> buffer = stackalloc byte[textSpan.Length];
-            for (int i = 0; i < textSpan.Length; i++)
-            {
-                buffer[i] = (byte)textSpan[i]; // direct cast since ASCII, avoids Span.ToString() allocation
-            }
-            WriteAlphanumericData(buffer);
-        }
-        else
-        {
-            var rented = ArrayPool<byte>.Shared.Rent(textSpan.Length);
-            try
-            {
-                var buffer = rented.AsSpan(0, textSpan.Length);
-                for (int i = 0; i < textSpan.Length; i++)
-                {
-                    buffer[i] = (byte)textSpan[i];
-                }
-                WriteAlphanumericData(buffer);
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(rented);
-            }
-        }
-#endif
-    }
-
-    /// <summary>
-    ///  Writes alphanumeric data from string
-    /// </summary>
-    /// <param name="textSpan"></param>
     private void EncodeByte(ReadOnlySpan<char> textSpan, EciMode eci, bool utf8Bom)
     {
-        // Determine encoding based on ECI mode (+3 reserves room for the UTF-8 BOM)
-        var maxByteCount = textSpan.Length * 4 + (utf8Bom ? 3 : 0);
+        if (eci is EciMode.Default or EciMode.Iso8859_1)
+        {
+            // ISO-8859-1 is a pure narrowing cast for chars <= 0xFF (validated upstream by TextAnalyzer)
+            WriteLatin1Data(textSpan);
+            return;
+        }
 
+        if (eci != EciMode.Utf8)
+            throw new ArgumentOutOfRangeException(nameof(eci), "Unsupported ECI mode for Byte encoding");
+
+        // UTF-8: encode into a temporary buffer, then bulk-write (+3 reserves room for the UTF-8 BOM)
+        var maxByteCount = textSpan.Length * 4 + (utf8Bom ? 3 : 0);
         if (maxByteCount <= StackAllocThreshold)
         {
             Span<byte> buffer = stackalloc byte[maxByteCount];
-            var length = GetByteData(textSpan, eci, utf8Bom, buffer);
+            var length = GetUtf8Data(textSpan, utf8Bom, buffer);
             WriteByteData(buffer.Slice(0, length));
         }
         else
@@ -257,7 +159,7 @@ internal ref struct QRBinaryEncoder
             var buffer = ArrayPool<byte>.Shared.Rent(maxByteCount);
             try
             {
-                var length = GetByteData(textSpan, eci, utf8Bom, buffer);
+                var length = GetUtf8Data(textSpan, utf8Bom, buffer);
                 WriteByteData(buffer.AsSpan(0, length));
             }
             finally
@@ -271,7 +173,7 @@ internal ref struct QRBinaryEncoder
     /// Writes numeric data (groups of 3 digits as 10 bits, 2 digits as 7 bits, 1 digit as 4 bits)
     /// </summary>
     /// <param name="digits"></param>
-    private void WriteNumericData(scoped ReadOnlySpan<byte> digits)
+    private void WriteNumericData(ReadOnlySpan<char> digits)
     {
         var i = 0;
         var length = digits.Length;
@@ -307,7 +209,7 @@ internal ref struct QRBinaryEncoder
     /// <remarks>
     /// Encoding: Groups of 2 chars → 11 bits, 1 char → 6 bits.
     /// </remarks>
-    private void WriteAlphanumericData(scoped ReadOnlySpan<byte> chars)
+    private void WriteAlphanumericData(ReadOnlySpan<char> chars)
     {
         var length = chars.Length;
         var i = 0;
@@ -318,8 +220,8 @@ internal ref struct QRBinaryEncoder
         // Process 2 characters at a time
         while (i + 1 < length)
         {
-            var value = QRCodeConstants.GetAlphanumericValue((char)chars[i]) * 45
-                + QRCodeConstants.GetAlphanumericValue((char)chars[i + 1]);
+            var value = QRCodeConstants.GetAlphanumericValue(chars[i]) * 45
+                + QRCodeConstants.GetAlphanumericValue(chars[i + 1]);
             _writer.Write(value, 11);
             i += 2;
         }
@@ -327,20 +229,76 @@ internal ref struct QRBinaryEncoder
         // Process remaining 1 character
         if (i < length)
         {
-            var value = QRCodeConstants.GetAlphanumericValue((char)chars[i]);
+            var value = QRCodeConstants.GetAlphanumericValue(chars[i]);
             _writer.Write(value, 6);
         }
     }
 
     /// <summary>
-    /// Writes byte data (each byte should be 8-bit)
+    /// Writes ISO-8859-1 (Latin-1) byte data directly from chars.
+    /// </summary>
+    /// <remarks>
+    /// Chars are pre-validated as ISO-8859-1 (&lt;= 0xFF), so encoding is a narrowing cast.
+    /// </remarks>
+    private void WriteLatin1Data(ReadOnlySpan<char> textSpan)
+    {
+#if NET5_0_OR_GREATER
+        // Encoding.Latin1 narrows chars with SIMD; then bulk-write 8 bytes per store
+        if (textSpan.Length <= StackAllocThreshold)
+        {
+            Span<byte> latin1 = stackalloc byte[textSpan.Length];
+            Encoding.Latin1.GetBytes(textSpan, latin1);
+            WriteByteData(latin1);
+        }
+        else
+        {
+            var buffer = ArrayPool<byte>.Shared.Rent(textSpan.Length);
+            try
+            {
+                var bytesWritten = Encoding.Latin1.GetBytes(textSpan, buffer);
+                WriteByteData(buffer.AsSpan(0, bytesWritten));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+        }
+#else
+        // Scalar fallback: pack 8 narrowed chars into one big-endian ulong per store
+        var i = 0;
+        for (; i + 8 <= textSpan.Length; i += 8)
+        {
+            var v = ((ulong)(byte)textSpan[i] << 56)
+                | ((ulong)(byte)textSpan[i + 1] << 48)
+                | ((ulong)(byte)textSpan[i + 2] << 40)
+                | ((ulong)(byte)textSpan[i + 3] << 32)
+                | ((ulong)(byte)textSpan[i + 4] << 24)
+                | ((ulong)(byte)textSpan[i + 5] << 16)
+                | ((ulong)(byte)textSpan[i + 6] << 8)
+                | (byte)textSpan[i + 7];
+            _writer.Write64(v);
+        }
+        for (; i < textSpan.Length; i++)
+        {
+            _writer.Write((byte)textSpan[i], 8);
+        }
+#endif
+    }
+
+    /// <summary>
+    /// Writes byte data (each byte should be 8-bit), 8 bytes per store where possible.
     /// </summary>
     /// <param name="data"></param>
     private void WriteByteData(scoped ReadOnlySpan<byte> data)
     {
-        foreach (var b in data)
+        var i = 0;
+        for (; i + 8 <= data.Length; i += 8)
         {
-            _writer.Write(b, 8);
+            _writer.Write64(BinaryPrimitives.ReadUInt64BigEndian(data.Slice(i)));
+        }
+        for (; i < data.Length; i++)
+        {
+            _writer.Write(data[i], 8);
         }
     }
 
@@ -351,71 +309,47 @@ internal ref struct QRBinaryEncoder
     public ReadOnlySpan<byte> GetEncodedData() => _writer.GetData();
 
     /// <summary>
-    /// Gets byte data for Byte mode encoding.
+    /// Gets UTF-8 byte data (with optional BOM) for Byte mode encoding.
     /// </summary>
     /// <param name="textSpan">Text to encode.</param>
-    /// <param name="eciMode">ECI mode for character encoding.</param>
     /// <param name="utf8BOM">Whether to include UTF-8 BOM.</param>
     /// <param name="buffer">Buffer to use for encoding.</param>
-    /// <returns>Byte array representing the encoded text.</returns>
-    private static int GetByteData(ReadOnlySpan<char> textSpan, EciMode eciMode, bool utf8BOM, Span<byte> buffer)
+    /// <returns>Number of bytes written to the buffer.</returns>
+    private static int GetUtf8Data(ReadOnlySpan<char> textSpan, bool utf8BOM, Span<byte> buffer)
     {
-        return eciMode switch
-        {
-            EciMode.Default => EncodeISO88591(textSpan, buffer), // already validated as ISO-8859-1
-            EciMode.Iso8859_1 => EncodeISO88591(textSpan, buffer),
-            EciMode.Utf8 => EncodeUtf8(textSpan, utf8BOM, buffer),
-            _ => throw new ArgumentOutOfRangeException(nameof(eciMode), "Unsupported ECI mode for Byte encoding"),
-        };
-
-        static int EncodeISO88591(ReadOnlySpan<char> textSpan, Span<byte> buffer)
-        {
+        var offset = 0;
 #if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-            return Encoding.GetEncoding("ISO-8859-1").GetBytes(textSpan, buffer);
+        if (utf8BOM)
+        {
+            var preamble = Encoding.UTF8.GetPreamble();
+            preamble.CopyTo(buffer);
+            offset += preamble.Length;
+
+            return offset + Encoding.UTF8.GetBytes(textSpan, buffer.Slice(offset));
+        }
+        else
+        {
+            return Encoding.UTF8.GetBytes(textSpan, buffer);
+        }
 #else
+        if (utf8BOM)
+        {
+            var preamble = Encoding.UTF8.GetPreamble();
+            preamble.CopyTo(buffer);
+            offset += preamble.Length;
+
             var input = textSpan.ToString();
-            ReadOnlySpan<byte> bytes = Encoding.GetEncoding("ISO-8859-1").GetBytes(input);
-            bytes.CopyTo(buffer);
-            return bytes.Length;
-#endif
+            ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(input);
+            utf8bytes.CopyTo(buffer.Slice(offset));
+            return offset + utf8bytes.Length;
         }
-
-        static int EncodeUtf8(ReadOnlySpan<char> textSpan, bool utf8BOM, Span<byte> buffer)
+        else
         {
-            var offset = 0;
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-            if (utf8BOM)
-            {
-                var preamble = Encoding.UTF8.GetPreamble();
-                preamble.CopyTo(buffer);
-                offset += preamble.Length;
-
-                return offset + Encoding.UTF8.GetBytes(textSpan, buffer.Slice(offset));
-            }
-            else
-            {
-                return Encoding.UTF8.GetBytes(textSpan, buffer);
-            }
-#else
-            if (utf8BOM)
-            {
-                var preamble = Encoding.UTF8.GetPreamble();
-                preamble.CopyTo(buffer);
-                offset += preamble.Length;
-
-                var input = textSpan.ToString();
-                ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(input);
-                utf8bytes.CopyTo(buffer.Slice(offset));
-                return offset + utf8bytes.Length;
-            }
-            else
-            {
-                var input = textSpan.ToString();
-                ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(input);
-                utf8bytes.CopyTo(buffer);
-                return utf8bytes.Length;
-            }
-#endif
+            var input = textSpan.ToString();
+            ReadOnlySpan<byte> utf8bytes = Encoding.UTF8.GetBytes(input);
+            utf8bytes.CopyTo(buffer);
+            return utf8bytes.Length;
         }
+#endif
     }
 }

@@ -12,8 +12,9 @@ public class BitWriterUnitTests
         var writer = new BitWriter(buffer);
 
         writer.Write(0b_10101010, 8);
+        var data = writer.GetData();
 
-        Assert.Equal(0xAA, buffer[0]);
+        Assert.Equal(0xAA, data[0]);
     }
 
     [Fact]
@@ -25,9 +26,10 @@ public class BitWriterUnitTests
         writer.Write(0b1111, 4);
         writer.Write(0b0000, 4);
         writer.Write(0b1010, 4);
+        var data = writer.GetData();
 
-        Assert.Equal(0xF0, buffer[0]);
-        Assert.Equal(0xA0, buffer[1]);
+        Assert.Equal(0xF0, data[0]);
+        Assert.Equal(0xA0, data[1]);
     }
 
     [Theory]
@@ -44,8 +46,9 @@ public class BitWriterUnitTests
         Span<byte> buffer = stackalloc byte[1];
         var writer = new BitWriter(buffer);
         writer.Write(value, bits);
+        var data = writer.GetData();
 
-        Assert.Equal(expected[0], buffer[0]);
+        Assert.Equal(expected[0], data[0]);
     }
 
     // Edge cases
