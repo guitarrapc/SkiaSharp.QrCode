@@ -88,16 +88,9 @@ public static class QRCodeGenerator
         // Prepare configuration
         var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, requestedVersion);
 
-        // Calculate buffer sizes
         var result = new QRCodeData(config.Version, quietZoneSize);
         var coreSize = result.GetCoreSize();
         var dataLength = coreSize * coreSize;
-
-        var dataCapacity = CalculateMaxBitStringLength(config.Version, config.EccLevel, config.Encoding);
-        var dataBufferSize = (dataCapacity + 7) / 8; // bits to bytes, rounded up
-        var totalBlocks = config.EccInfo.BlocksInGroup1 + config.EccInfo.BlocksInGroup2;
-        var eccBufferSize = totalBlocks * config.EccInfo.ECCPerBlock;
-        var interleavedSize = BinaryInterleaver.CalculateInterleavedSize(config.EccInfo, config.Version);
 
         // Allocate buffers
         byte[]? rentedWorkBuffer = null;
@@ -109,22 +102,7 @@ public static class QRCodeGenerator
             var workBuffer = rentedWorkBuffer.AsSpan(0, dataLength);
             workBuffer.Clear();
 
-            Span<byte> dataBuffer = stackalloc byte[dataBufferSize];
-            Span<byte> eccBuffer = stackalloc byte[eccBufferSize];
-            Span<byte> interleavedBuffer = stackalloc byte[interleavedSize];
-
-            // Encode data
-            var encodedLength = EncodeData(textSpan, config, dataBuffer);
-            var encodedData = dataBuffer.Slice(0, encodedLength);
-
-            // Calculate Error Correction
-            CalculateErrorCorrection(encodedData, config.EccInfo, eccBuffer);
-
-            // Interleave data
-            InterleaveCodewords(encodedData, eccBuffer, config.EccInfo, config.Version, interleavedBuffer);
-
-            // QR matrix in work buffer
-            WriteQRMatrix(workBuffer, coreSize, config.Version, interleavedBuffer, config.EccLevel);
+            WriteCoreModules(textSpan, config, workBuffer, coreSize);
 
             result.SetCoreData(workBuffer);
 
@@ -135,6 +113,146 @@ public static class QRCodeGenerator
             if (rentedWorkBuffer is not null)
                 ArrayPool<byte>.Shared.Return(rentedWorkBuffer, clearArray: false);
         }
+    }
+
+    /// <summary>
+    /// Creates a QR code from the provided plain text and writes the module matrix into the caller-provided buffer without heap allocation.
+    /// </summary>
+    /// <param name="plainText">The text to encode in the QR code.</param>
+    /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
+    /// <param name="destination">The buffer to write the QR code module matrix into. Must be at least <see cref="GetRequiredBufferSize"/> bytes.</param>
+    /// <param name="utf8BOM">Include UTF-8 BOM (Byte Order Mark) in encoded data. Ignore if data is not UTF-8.</param>
+    /// <param name="eciMode">ECI mode for character encoding.</param>
+    /// <param name="requestedVersion">Specific version to use (1-40), or -1 for automatic selection.</param>
+    /// <param name="quietZoneSize">Size of the quiet zone (white border) in modules.</param>
+    /// <returns>The number of bytes written to <paramref name="destination"/>.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is smaller than the required buffer size.</exception>
+    public static int CreateQrCode(string plainText, ECCLevel eccLevel, Span<byte> destination, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
+    {
+        return CreateQrCode(plainText.AsSpan(), eccLevel, destination, utf8BOM, eciMode, requestedVersion, quietZoneSize);
+    }
+
+    /// <summary>
+    /// Creates a QR code from the provided plain text and writes the module matrix into the caller-provided buffer without heap allocation.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Output format: one byte per module (0 = light, 1 = dark), flat row-major order, quiet zone included.
+    /// Module at (row, col) is <c>destination[row * qrSize + col]</c> where qrSize is
+    /// <see cref="QRCodeCalculatedSize.QrSize"/> returned by <see cref="GetRequiredBufferSize"/>.
+    /// </para>
+    /// <para>
+    /// Usage flow for allocation-free generation:
+    /// <code>
+    /// var calculated = QRCodeGenerator.GetRequiredBufferSize(text, ECCLevel.M);
+    /// var buffer = ArrayPool&lt;byte&gt;.Shared.Rent(calculated.BufferSize);
+    /// var written = QRCodeGenerator.CreateQrCode(text, ECCLevel.M, buffer);
+    /// var matrix = buffer.AsSpan(0, written);
+    /// // ... consume matrix ...
+    /// ArrayPool&lt;byte&gt;.Shared.Return(buffer);
+    /// </code>
+    /// </para>
+    /// <para>
+    /// Only the first <see cref="QRCodeCalculatedSize.BufferSize"/> bytes of <paramref name="destination"/> are written
+    /// (cleared first, so a dirty pooled buffer is fine); any remaining bytes are left untouched.
+    /// </para>
+    /// </remarks>
+    /// <param name="textSpan">The text span to encode in the QR code.</param>
+    /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
+    /// <param name="destination">The buffer to write the QR code module matrix into. Must be at least <see cref="GetRequiredBufferSize"/> bytes.</param>
+    /// <param name="utf8BOM">Include UTF-8 BOM (Byte Order Mark) in encoded data. Ignore if data is not UTF-8.</param>
+    /// <param name="eciMode">ECI mode for character encoding.</param>
+    /// <param name="requestedVersion">Specific version to use (1-40), or -1 for automatic selection.</param>
+    /// <param name="quietZoneSize">Size of the quiet zone (white border) in modules.</param>
+    /// <returns>The number of bytes written to <paramref name="destination"/> (always qrSize × qrSize).</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is smaller than the required buffer size.</exception>
+    public static int CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, Span<byte> destination, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
+    {
+        if (requestedVersion != -1 && (requestedVersion < 1 || requestedVersion > 40))
+            throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be 1-40 or -1(auto), but was {requestedVersion}");
+        if (quietZoneSize < 0)
+            throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be non-negative, got {quietZoneSize}");
+
+        // Prepare configuration
+        var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, requestedVersion);
+
+        var coreSize = QRCodeData.SizeFromVersion(config.Version);
+        var totalSize = coreSize + quietZoneSize * 2;
+        var requiredSize = totalSize * totalSize;
+        if (destination.Length < requiredSize)
+            throw new ArgumentException($"Destination buffer too small: {requiredSize} bytes required (version {config.Version}, {totalSize}x{totalSize} modules), got {destination.Length} bytes. Use {nameof(GetRequiredBufferSize)} to calculate the required size.", nameof(destination));
+
+        // Module placement and the quiet zone both assume zeroed memory.
+        var target = destination.Slice(0, requiredSize);
+        target.Clear();
+
+        if (quietZoneSize == 0)
+        {
+            WriteCoreModules(textSpan, config, target, coreSize);
+        }
+        else
+        {
+            // The placement pipeline requires a contiguous coreSize-stride matrix,
+            // so build the core in a rented buffer and center it in the destination.
+            byte[]? rentedWorkBuffer = null;
+            try
+            {
+                var dataLength = coreSize * coreSize;
+                rentedWorkBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
+                var workBuffer = rentedWorkBuffer.AsSpan(0, dataLength);
+                workBuffer.Clear();
+
+                WriteCoreModules(textSpan, config, workBuffer, coreSize);
+
+                for (var row = 0; row < coreSize; row++)
+                {
+                    var destOffset = (row + quietZoneSize) * totalSize + quietZoneSize;
+                    workBuffer.Slice(row * coreSize, coreSize).CopyTo(target.Slice(destOffset, coreSize));
+                }
+            }
+            finally
+            {
+                if (rentedWorkBuffer is not null)
+                    ArrayPool<byte>.Shared.Return(rentedWorkBuffer, clearArray: false);
+            }
+        }
+
+        return requiredSize;
+    }
+
+    /// <summary>
+    /// Runs the encode → ECC → interleave → module placement pipeline and writes
+    /// the core module matrix (one byte per module, no quiet zone) into <paramref name="coreBuffer"/>.
+    /// </summary>
+    /// <param name="textSpan">The text span to encode.</param>
+    /// <param name="config">Prepared QR configuration.</param>
+    /// <param name="coreBuffer">Zeroed output buffer of coreSize × coreSize bytes.</param>
+    /// <param name="coreSize">Module count per side without quiet zone.</param>
+    private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in QRConfiguration config, Span<byte> coreBuffer, int coreSize)
+    {
+        // Calculate buffer sizes
+        var dataCapacity = CalculateMaxBitStringLength(config.Version, config.EccLevel, config.Encoding);
+        var dataBufferSize = (dataCapacity + 7) / 8; // bits to bytes, rounded up
+        var totalBlocks = config.EccInfo.BlocksInGroup1 + config.EccInfo.BlocksInGroup2;
+        var eccBufferSize = totalBlocks * config.EccInfo.ECCPerBlock;
+        var interleavedSize = BinaryInterleaver.CalculateInterleavedSize(config.EccInfo, config.Version);
+
+        Span<byte> dataBuffer = stackalloc byte[dataBufferSize];
+        Span<byte> eccBuffer = stackalloc byte[eccBufferSize];
+        Span<byte> interleavedBuffer = stackalloc byte[interleavedSize];
+
+        // Encode data
+        var encodedLength = EncodeData(textSpan, config, dataBuffer);
+        var encodedData = dataBuffer.Slice(0, encodedLength);
+
+        // Calculate Error Correction
+        CalculateErrorCorrection(encodedData, config.EccInfo, eccBuffer);
+
+        // Interleave data
+        InterleaveCodewords(encodedData, eccBuffer, config.EccInfo, config.Version, interleavedBuffer);
+
+        // QR matrix in core buffer
+        WriteQRMatrix(coreBuffer, coreSize, config.Version, interleavedBuffer, config.EccLevel);
     }
 
     /// <summary>

@@ -424,6 +424,34 @@ var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, quietZoneSize: 
 // Access individual modules: bool isDark = qrData[row, col];
 ```
 
+#### Zero-Allocation Generation (Span destination)
+
+For high-throughput scenarios (e.g., per-request QR generation on a web server), you can generate the module matrix into a caller-provided buffer with zero heap allocation. Calculate the required size with `GetRequiredBufferSize`, allocate (or rent) the buffer yourself, and pass it as `Span<byte>`:
+
+```csharp
+// 1. Calculate required buffer size (no allocation)
+var calculated = QRCodeGenerator.GetRequiredBufferSize("content", ECCLevel.M, quietZoneSize: 4);
+
+// 2. Allocate the buffer yourself (pool it, reuse it, or stackalloc it)
+var buffer = ArrayPool<byte>.Shared.Rent(calculated.BufferSize);
+try
+{
+    // 3. Generate directly into the buffer; returns bytes written (= QrSize * QrSize)
+    var written = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, buffer, quietZoneSize: 4);
+
+    // 4. Slice to the written region and consume
+    var matrix = buffer.AsSpan(0, written);
+    // One byte per module (0 = light, 1 = dark), row-major, quiet zone included:
+    var isDark = matrix[row * calculated.QrSize + col] != 0;
+}
+finally
+{
+    ArrayPool<byte>.Shared.Return(buffer);
+}
+```
+
+Buffer sizes are bounded: version 40 with the standard quiet zone needs 185 × 185 = 34,225 bytes, so a pooled or fixed buffer keeps memory usage constant regardless of request volume. The buffer region is cleared before writing, so dirty pooled buffers are fine; bytes beyond the written region are left untouched.
+
 ## Platform-Specific Considerations
 
 ### Linux Support
