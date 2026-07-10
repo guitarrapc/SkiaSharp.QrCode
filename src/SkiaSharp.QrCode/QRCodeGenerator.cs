@@ -177,8 +177,7 @@ public static class QRCodeGenerator
         var config = PrepareConfiguration(textSpan, eccLevel, utf8BOM, eciMode, requestedVersion);
 
         var coreSize = QRCodeData.SizeFromVersion(config.Version);
-        var totalSize = coreSize + quietZoneSize * 2;
-        var requiredSize = totalSize * totalSize;
+        var (totalSize, requiredSize) = CalculateMatrixSize(coreSize, quietZoneSize);
         if (destination.Length < requiredSize)
             throw new ArgumentException($"Destination buffer too small: {requiredSize} bytes required (version {config.Version}, {totalSize}x{totalSize} modules), got {destination.Length} bytes. Use {nameof(GetRequiredBufferSize)} to calculate the required size.", nameof(destination));
 
@@ -267,6 +266,9 @@ public static class QRCodeGenerator
     /// <exception cref="ArgumentOutOfRangeException">Thrown when the data is too large for version 40.</exception>
     public static QRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int quietZoneSize = 4)
     {
+        if (quietZoneSize < 0)
+            throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be non-negative, got {quietZoneSize}");
+
         var analysisResult = TextAnalyzer.Analyze(text, eciMode);
         var version = GetVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, utf8BOM);
 
@@ -274,10 +276,27 @@ public static class QRCodeGenerator
             throw new ArgumentOutOfRangeException(nameof(version), $"Version must be 1-40, but was {version}");
 
         var baseSize = QRCodeData.SizeFromVersion(version);
-        var totalSize = baseSize + quietZoneSize * 2; // for rendering with quiet zone
-        var bufferSize = totalSize * totalSize; // for buffer allocation
+        var (totalSize, bufferSize) = CalculateMatrixSize(baseSize, quietZoneSize);
 
         return new QRCodeCalculatedSize(bufferSize, totalSize, version);
+    }
+
+    /// <summary>
+    /// Computes the matrix side length (core + quiet zone) and the byte-per-module
+    /// buffer size, guarding against <see cref="int"/> overflow from oversized
+    /// quiet zones.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the buffer size would exceed <see cref="int.MaxValue"/>.</exception>
+    private static (int TotalSize, int BufferSize) CalculateMatrixSize(int coreSize, int quietZoneSize)
+    {
+        // long arithmetic: quietZoneSize is caller-controlled, and totalSize² can
+        // exceed int.MaxValue long before totalSize itself does. The first check
+        // also keeps the squaring below long.MaxValue.
+        var totalSize = coreSize + 2L * quietZoneSize;
+        if (totalSize > int.MaxValue || totalSize * totalSize > int.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size {quietZoneSize} makes the matrix ({totalSize}x{totalSize} modules) exceed the maximum supported buffer size ({int.MaxValue} bytes).");
+
+        return ((int)totalSize, (int)(totalSize * totalSize));
     }
 
     // Pipelines

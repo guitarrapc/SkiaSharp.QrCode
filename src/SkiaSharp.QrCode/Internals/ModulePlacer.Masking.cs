@@ -262,7 +262,8 @@ internal static partial class ModulePlacer
     /// positions as PlaceFormat. Static data spans: no per-call table build, and
     /// no temporary array in unoptimized builds (stackalloc initializers allocate
     /// a heap copy there). Copy 2 coordinates are size-relative and computed
-    /// inline: bit i &lt; 8 sits at (8, size-1-i), bit i &gt;= 8 at (size-15+i, 8).
+    /// inline: bit i &lt; 8 sits at (x = size-1-i, y = 8), bit i &gt;= 8 at
+    /// (x = 8, y = size-15+i).
     /// </summary>
     private static ReadOnlySpan<byte> FormatXs1 => new byte[15] { 8, 8, 8, 8, 8, 8, 8, 8, 7, 5, 4, 3, 2, 1, 0 };
     private static ReadOnlySpan<byte> FormatYs1 => new byte[15] { 0, 1, 2, 3, 4, 5, 7, 8, 8, 8, 8, 8, 8, 8, 8 };

@@ -757,6 +757,26 @@ public class QRCodeGeneratorUnitTest
         Assert.Throws<ArgumentOutOfRangeException>(() => CreateQrCode("HELLO".AsSpan(), ECCLevel.L, buffer.AsSpan(), quietZoneSize: -1));
     }
 
+    [Theory]
+    [InlineData(40_000)]        // totalSize fits in int, but totalSize² overflows
+    [InlineData(int.MaxValue)]  // totalSize itself exceeds int.MaxValue
+    public void CreateQrCode_SpanDestination_OversizedQuietZone_Throws(int quietZoneSize)
+    {
+        var buffer = new byte[64 * 64];
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => CreateQrCode("HELLO".AsSpan(), ECCLevel.L, buffer.AsSpan(), quietZoneSize: quietZoneSize));
+        Assert.Equal("quietZoneSize", ex.ParamName);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(40_000)]
+    [InlineData(int.MaxValue)]
+    public void GetRequiredBufferSize_InvalidQuietZone_Throws(int quietZoneSize)
+    {
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => GetRequiredBufferSize("HELLO".AsSpan(), ECCLevel.L, quietZoneSize: quietZoneSize));
+        Assert.Equal("quietZoneSize", ex.ParamName);
+    }
+
     // Helpers
 
     /// <summary>
