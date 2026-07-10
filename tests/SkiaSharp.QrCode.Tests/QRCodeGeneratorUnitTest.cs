@@ -590,6 +590,193 @@ public class QRCodeGeneratorUnitTest
         }
     }
 
+    // CreateQrCode (Span destination) Tests
+
+    [Theory]
+    [InlineData("HELLO WORLD", ECCLevel.L, 0)]
+    [InlineData("HELLO WORLD", ECCLevel.L, 4)]
+    [InlineData("https://example.com/foobar", ECCLevel.M, 4)]
+    [InlineData("0123456789012345678901234567890123456789", ECCLevel.Q, 4)]
+    [InlineData("こんにちは世界", ECCLevel.H, 4)]
+    [InlineData("", ECCLevel.L, 4)]
+    public void CreateQrCode_SpanDestination_MatchesQRCodeData(string text, ECCLevel eccLevel, int quietZoneSize)
+    {
+        var calculated = GetRequiredBufferSize(text.AsSpan(), eccLevel, quietZoneSize: quietZoneSize);
+        var buffer = new byte[calculated.BufferSize];
+
+        // Act
+        var written = CreateQrCode(text.AsSpan(), eccLevel, buffer.AsSpan(), quietZoneSize: quietZoneSize);
+
+        // Assert - written bytes match the size calculation API
+        Assert.Equal(calculated.BufferSize, written);
+
+        // Assert - every module matches the class-based API
+        var qrCode = CreateQrCode(text.AsSpan(), eccLevel, quietZoneSize: quietZoneSize);
+        Assert.Equal(calculated.QrSize, qrCode.Size);
+        for (var row = 0; row < qrCode.Size; row++)
+        {
+            for (var col = 0; col < qrCode.Size; col++)
+            {
+                Assert.Equal(qrCode[row, col], buffer[row * calculated.QrSize + col] != 0);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(7)]
+    [InlineData(40)]
+    public void CreateQrCode_SpanDestination_RequestedVersion_MatchesQRCodeData(int requestedVersion)
+    {
+        var text = "https://example.com/foobar";
+        var quietZoneSize = 4;
+        var qrCode = CreateQrCode(text.AsSpan(), ECCLevel.L, requestedVersion: requestedVersion, quietZoneSize: quietZoneSize);
+        var buffer = new byte[qrCode.Size * qrCode.Size];
+
+        // Act
+        var written = CreateQrCode(text.AsSpan(), ECCLevel.L, buffer.AsSpan(), requestedVersion: requestedVersion, quietZoneSize: quietZoneSize);
+
+        // Assert
+        Assert.Equal(qrCode.Size * qrCode.Size, written);
+        for (var row = 0; row < qrCode.Size; row++)
+        {
+            for (var col = 0; col < qrCode.Size; col++)
+            {
+                Assert.Equal(qrCode[row, col], buffer[row * qrCode.Size + col] != 0);
+            }
+        }
+    }
+
+    [Fact]
+    public void CreateQrCode_SpanDestination_BufferTooSmall_Throws()
+    {
+        var text = "https://example.com/foobar";
+        var calculated = GetRequiredBufferSize(text.AsSpan(), ECCLevel.L);
+        var buffer = new byte[calculated.BufferSize - 1];
+
+        var ex = Assert.Throws<ArgumentException>(() => CreateQrCode(text.AsSpan(), ECCLevel.L, buffer.AsSpan()));
+        Assert.Contains($"{calculated.BufferSize} bytes required", ex.Message);
+    }
+
+    [Fact]
+    public void CreateQrCode_SpanDestination_DirtyOversizedBuffer_WritesCleanOutputAndLeavesTailUntouched()
+    {
+        var text = "HELLO WORLD";
+        var quietZoneSize = 4;
+        var calculated = GetRequiredBufferSize(text.AsSpan(), ECCLevel.L, quietZoneSize: quietZoneSize);
+
+        // Simulate a dirty pooled buffer, larger than required
+        var buffer = new byte[calculated.BufferSize + 100];
+        buffer.AsSpan().Fill(0xFF);
+
+        // Act
+        var written = CreateQrCode(text.AsSpan(), ECCLevel.L, buffer.AsSpan(), quietZoneSize: quietZoneSize);
+
+        // Assert - written region contains only 0/1 and the quiet zone is light
+        Assert.Equal(calculated.BufferSize, written);
+        var qrSize = calculated.QrSize;
+        for (var row = 0; row < qrSize; row++)
+        {
+            for (var col = 0; col < qrSize; col++)
+            {
+                var module = buffer[row * qrSize + col];
+                Assert.True(module is 0 or 1, $"Module at ({row}, {col}) should be 0 or 1, got {module}");
+
+                var isQuietZone = row < quietZoneSize || row >= qrSize - quietZoneSize
+                    || col < quietZoneSize || col >= qrSize - quietZoneSize;
+                if (isQuietZone)
+                {
+                    Assert.Equal(0, module);
+                }
+            }
+        }
+
+        // Assert - bytes beyond the written region are untouched
+        for (var i = written; i < buffer.Length; i++)
+        {
+            Assert.Equal(0xFF, buffer[i]);
+        }
+    }
+
+    [Fact]
+    public void CreateQrCode_SpanDestination_StringOverload_MatchesSpanOverload()
+    {
+        var text = "https://example.com/foobar";
+        var calculated = GetRequiredBufferSize(text.AsSpan(), ECCLevel.M);
+        var bufferFromString = new byte[calculated.BufferSize];
+        var bufferFromSpan = new byte[calculated.BufferSize];
+
+        // Act
+        var writtenFromString = CreateQrCode(text, ECCLevel.M, bufferFromString.AsSpan());
+        var writtenFromSpan = CreateQrCode(text.AsSpan(), ECCLevel.M, bufferFromSpan.AsSpan());
+
+        // Assert
+        Assert.Equal(writtenFromSpan, writtenFromString);
+        Assert.Equal(bufferFromSpan, bufferFromString);
+    }
+
+#if !DEBUG
+    // Release-only: unoptimized (Debug) JIT allocates small temporaries inside the
+    // SIMD ECC kernel that the optimizing JIT eliminates; the zero-allocation
+    // guarantee applies to shipped (Release) binaries.
+    [Fact]
+    public void CreateQrCode_SpanDestination_DoesNotAllocate()
+    {
+        var text = "https://example.com/foobar";
+        var buffer = new byte[GetRequiredBufferSize(text.AsSpan(), ECCLevel.M).BufferSize];
+
+        // Warm up JIT, ArrayPool and lazily-built static tables
+        for (var i = 0; i < 3; i++)
+        {
+            GetRequiredBufferSize(text.AsSpan(), ECCLevel.M);
+            CreateQrCode(text.AsSpan(), ECCLevel.M, buffer.AsSpan());
+        }
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        GetRequiredBufferSize(text.AsSpan(), ECCLevel.M);
+        CreateQrCode(text.AsSpan(), ECCLevel.M, buffer.AsSpan());
+        var after = GC.GetAllocatedBytesForCurrentThread();
+
+        Assert.Equal(0, after - before);
+    }
+#endif
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(41)]
+    public void CreateQrCode_SpanDestination_InvalidVersion_Throws(int requestedVersion)
+    {
+        var buffer = new byte[64 * 64];
+        Assert.Throws<ArgumentOutOfRangeException>(() => CreateQrCode("HELLO".AsSpan(), ECCLevel.L, buffer.AsSpan(), requestedVersion: requestedVersion));
+    }
+
+    [Fact]
+    public void CreateQrCode_SpanDestination_NegativeQuietZone_Throws()
+    {
+        var buffer = new byte[64 * 64];
+        Assert.Throws<ArgumentOutOfRangeException>(() => CreateQrCode("HELLO".AsSpan(), ECCLevel.L, buffer.AsSpan(), quietZoneSize: -1));
+    }
+
+    [Theory]
+    [InlineData(40_000)]        // totalSize fits in int, but totalSize² overflows
+    [InlineData(int.MaxValue)]  // totalSize itself exceeds int.MaxValue
+    public void CreateQrCode_SpanDestination_OversizedQuietZone_Throws(int quietZoneSize)
+    {
+        var buffer = new byte[64 * 64];
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => CreateQrCode("HELLO".AsSpan(), ECCLevel.L, buffer.AsSpan(), quietZoneSize: quietZoneSize));
+        Assert.Equal("quietZoneSize", ex.ParamName);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(40_000)]
+    [InlineData(int.MaxValue)]
+    public void GetRequiredBufferSize_InvalidQuietZone_Throws(int quietZoneSize)
+    {
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() => GetRequiredBufferSize("HELLO".AsSpan(), ECCLevel.L, quietZoneSize: quietZoneSize));
+        Assert.Equal("quietZoneSize", ex.ParamName);
+    }
+
     // Helpers
 
     /// <summary>

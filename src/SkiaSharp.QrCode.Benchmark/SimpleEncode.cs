@@ -10,6 +10,7 @@ public class SimpleEncode
     private string _textUrl = default!;
     private string _textUnicode = default!;
     private string _textWifi = default!;
+    private byte[] _spanDestination = default!;
     ZXing.BarcodeWriter<SKBitmap> _zxingWriter_ascii = default!;
     ZXing.BarcodeWriter<SKBitmap> _zxingWriter_utf8 = default!;
 
@@ -21,6 +22,11 @@ public class SimpleEncode
         _textUrl = "https://example.com/user/repo?foo=value&bar=piyo";
         _textUnicode = "FooBar你好世界こんにちはПривет мир🎉🎊🎈Zürich";
         _textWifi = "WIFI:S:foobar-wifi;T:WPA;P:test123;H:false;;";
+        // Shared destination for the span-based zero-allocation benchmarks,
+        // sized for the largest of the five payloads.
+        var maxBufferSize = new[] { _textNumber, _textAlphanumeric, _textUrl, _textUnicode, _textWifi }
+            .Max(text => SkiaSharp.QrCode.QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ECCLevel.L).BufferSize);
+        _spanDestination = new byte[maxBufferSize];
         _zxingWriter_ascii = new()
         {
             Format = ZXing.BarcodeFormat.QR_CODE,
@@ -158,6 +164,43 @@ public class SimpleEncode
     public QRCodeData SkiaSharpQRCode_Wifi_Encode()
     {
         return SkiaSharp.QrCode.QRCodeGenerator.CreateQrCode(_textWifi.AsSpan(), ECCLevel.L);
+    }
+
+    // Span-destination (zero-allocation) variants
+
+    [Benchmark]
+    [BenchmarkCategory("SkiaSharp.QrCode")]
+    public int SkiaSharpQRCode_Number_EncodeSpan()
+    {
+        return SkiaSharp.QrCode.QRCodeGenerator.CreateQrCode(_textNumber.AsSpan(), ECCLevel.L, _spanDestination);
+    }
+
+    [Benchmark]
+    [BenchmarkCategory("SkiaSharp.QrCode")]
+    public int SkiaSharpQRCode_Alphanumeric_EncodeSpan()
+    {
+        return SkiaSharp.QrCode.QRCodeGenerator.CreateQrCode(_textAlphanumeric.AsSpan(), ECCLevel.L, _spanDestination);
+    }
+
+    [Benchmark]
+    [BenchmarkCategory("SkiaSharp.QrCode")]
+    public int SkiaSharpQRCode_Url_EncodeSpan()
+    {
+        return SkiaSharp.QrCode.QRCodeGenerator.CreateQrCode(_textUrl.AsSpan(), ECCLevel.L, _spanDestination);
+    }
+
+    [Benchmark]
+    [BenchmarkCategory("SkiaSharp.QrCode")]
+    public int SkiaSharpQRCode_Unicode_EncodeSpan()
+    {
+        return SkiaSharp.QrCode.QRCodeGenerator.CreateQrCode(_textUnicode.AsSpan(), ECCLevel.L, _spanDestination);
+    }
+
+    [Benchmark]
+    [BenchmarkCategory("SkiaSharp.QrCode")]
+    public int SkiaSharpQRCode_Wifi_EncodeSpan()
+    {
+        return SkiaSharp.QrCode.QRCodeGenerator.CreateQrCode(_textWifi.AsSpan(), ECCLevel.L, _spanDestination);
     }
 
     [Benchmark]

@@ -257,19 +257,26 @@ internal static partial class ModulePlacer
         return PopCount(y5) + 2 * PopCount(starts);
     }
 
+    /// <summary>
+    /// Format-bit module coordinates around the top-left finder (copy 1), same
+    /// positions as PlaceFormat. Static data spans: no per-call table build, and
+    /// no temporary array in unoptimized builds (stackalloc initializers allocate
+    /// a heap copy there). Copy 2 coordinates are size-relative and computed
+    /// inline: bit i &lt; 8 sits at (x = size-1-i, y = 8), bit i &gt;= 8 at
+    /// (x = 8, y = size-15+i).
+    /// </summary>
+    private static ReadOnlySpan<byte> FormatXs1 => new byte[15] { 8, 8, 8, 8, 8, 8, 8, 8, 7, 5, 4, 3, 2, 1, 0 };
+    private static ReadOnlySpan<byte> FormatYs1 => new byte[15] { 0, 1, 2, 3, 4, 5, 7, 8, 8, 8, 8, 8, 8, 8, 8 };
+
     private static void PokeFormatBits64(Span<ulong> rows, int size, ushort formatBits)
     {
-        // Same positions as PlaceFormat, poked directly into packed rows.
-        Span<int> xs1 = stackalloc int[15] { 8, 8, 8, 8, 8, 8, 8, 8, 7, 5, 4, 3, 2, 1, 0 };
-        Span<int> ys1 = stackalloc int[15] { 0, 1, 2, 3, 4, 5, 7, 8, 8, 8, 8, 8, 8, 8, 8 };
-        Span<int> xs2 = stackalloc int[15] { size - 1, size - 2, size - 3, size - 4, size - 5, size - 6, size - 7, size - 8, 8, 8, 8, 8, 8, 8, 8 };
-        Span<int> ys2 = stackalloc int[15] { 8, 8, 8, 8, 8, 8, 8, 8, size - 7, size - 6, size - 5, size - 4, size - 3, size - 2, size - 1 };
-
         for (var i = 0; i < 15; i++)
         {
             var bit = (formatBits & (1 << i)) != 0;
-            rows[ys1[i]] = WithBit64(rows[ys1[i]], xs1[i], bit);
-            rows[ys2[i]] = WithBit64(rows[ys2[i]], xs2[i], bit);
+            var x2 = i < 8 ? size - 1 - i : 8;
+            var y2 = i < 8 ? 8 : size - 15 + i;
+            rows[FormatYs1[i]] = WithBit64(rows[FormatYs1[i]], FormatXs1[i], bit);
+            rows[y2] = WithBit64(rows[y2], x2, bit);
         }
     }
 
@@ -662,16 +669,14 @@ internal static partial class ModulePlacer
 
     private static void PokeFormatBits192(Span<Row192> rows, int size, ushort formatBits)
     {
-        Span<int> xs1 = stackalloc int[15] { 8, 8, 8, 8, 8, 8, 8, 8, 7, 5, 4, 3, 2, 1, 0 };
-        Span<int> ys1 = stackalloc int[15] { 0, 1, 2, 3, 4, 5, 7, 8, 8, 8, 8, 8, 8, 8, 8 };
-        Span<int> xs2 = stackalloc int[15] { size - 1, size - 2, size - 3, size - 4, size - 5, size - 6, size - 7, size - 8, 8, 8, 8, 8, 8, 8, 8 };
-        Span<int> ys2 = stackalloc int[15] { 8, 8, 8, 8, 8, 8, 8, 8, size - 7, size - 6, size - 5, size - 4, size - 3, size - 2, size - 1 };
-
+        // Same coordinate scheme as PokeFormatBits64 (see FormatXs1/FormatYs1).
         for (var i = 0; i < 15; i++)
         {
             var bit = (formatBits & (1 << i)) != 0;
-            rows[ys1[i]] = rows[ys1[i]].WithBit(xs1[i], bit);
-            rows[ys2[i]] = rows[ys2[i]].WithBit(xs2[i], bit);
+            var x2 = i < 8 ? size - 1 - i : 8;
+            var y2 = i < 8 ? 8 : size - 15 + i;
+            rows[FormatYs1[i]] = rows[FormatYs1[i]].WithBit(FormatXs1[i], bit);
+            rows[y2] = rows[y2].WithBit(x2, bit);
         }
     }
 
