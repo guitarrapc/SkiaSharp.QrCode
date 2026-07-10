@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -98,8 +99,8 @@ internal static partial class ModulePlacer
             var bitOffset = y * size;
             var byteOff = bitOffset >> 3;
             var sh = bitOffset & 7;
-            var u0 = MemoryMarshal.Read<ulong>(padded.Slice(byteOff));
-            var u1 = MemoryMarshal.Read<ulong>(padded.Slice(byteOff + 8));
+            var u0 = NormalizeEndianness(MemoryMarshal.Read<ulong>(padded.Slice(byteOff)));
+            var u1 = NormalizeEndianness(MemoryMarshal.Read<ulong>(padded.Slice(byteOff + 8)));
             var blocked = sh == 0 ? u0 : (u0 >> sh) | (u1 << (64 - sh));
             allowed[y] = ~blocked & rowMask;
         }
@@ -291,7 +292,7 @@ internal static partial class ModulePlacer
         var c = 0;
         for (; c + 8 <= row.Length; c += 8)
         {
-            var u = MemoryMarshal.Read<ulong>(row.Slice(c));
+            var u = NormalizeEndianness(MemoryMarshal.Read<ulong>(row.Slice(c)));
             w |= ((u * 0x0102040810204080UL) >> 56) << c;
         }
         for (; c < row.Length; c++)
@@ -321,8 +322,10 @@ internal static partial class ModulePlacer
             spread |= spread >> 1;
             spread &= 0x0101010101010101UL;
             ref var p = ref Unsafe.Add(ref rowRef, c);
+            // cur round-trips through the same byte order, so only the spread
+            // (logical little-endian) needs normalizing before the XOR store.
             var cur = Unsafe.ReadUnaligned<ulong>(ref p);
-            Unsafe.WriteUnaligned(ref p, cur ^ spread);
+            Unsafe.WriteUnaligned(ref p, cur ^ NormalizeEndianness(spread));
         }
         for (; c < row.Length; c++)
         {
@@ -689,8 +692,10 @@ internal static partial class ModulePlacer
                 spread |= spread >> 1;
                 spread &= 0x0101010101010101UL;
                 ref var p = ref Unsafe.Add(ref rowRef, c);
+                // cur round-trips through the same byte order, so only the spread
+                // (logical little-endian) needs normalizing before the XOR store.
                 var cur = Unsafe.ReadUnaligned<ulong>(ref p);
-                Unsafe.WriteUnaligned(ref p, cur ^ spread);
+                Unsafe.WriteUnaligned(ref p, cur ^ NormalizeEndianness(spread));
             }
             for (; c < wordEnd; c++)
             {
@@ -720,6 +725,16 @@ internal static partial class ModulePlacer
         var nextMultipleOf5 = Math.Abs((int)Math.Ceiling(percent / 5) * 5 - 50) / 5;
         return Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
     }
+
+    /// <summary>
+    /// Maps between machine byte order and the logical little-endian order the
+    /// SWAR pack/unpack constants assume (memory offset k = ulong byte k).
+    /// The same swap works for both reads and writes; BitConverter.IsLittleEndian
+    /// is a JIT-time constant, so little-endian codegen is unaffected.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong NormalizeEndianness(ulong value)
+        => BitConverter.IsLittleEndian ? value : BinaryPrimitives.ReverseEndianness(value);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int PopCount(ulong value)
@@ -889,7 +904,7 @@ internal static partial class ModulePlacer
             var c = 0;
             for (; c + 8 <= row.Length; c += 8)
             {
-                var u = MemoryMarshal.Read<ulong>(row.Slice(c));
+                var u = NormalizeEndianness(MemoryMarshal.Read<ulong>(row.Slice(c)));
                 var bits = (u * 0x0102040810204080UL) >> 56;
                 if (c < 64) w0 |= bits << c;
                 else if (c < 128) w1 |= bits << (c - 64);
@@ -916,14 +931,14 @@ internal static partial class ModulePlacer
         {
             var byteOff = bitOffset >> 3;
             var sh = bitOffset & 7;
-            var u0 = MemoryMarshal.Read<ulong>(data.Slice(byteOff));
-            var u1 = MemoryMarshal.Read<ulong>(data.Slice(byteOff + 8));
-            var u2 = MemoryMarshal.Read<ulong>(data.Slice(byteOff + 16));
+            var u0 = NormalizeEndianness(MemoryMarshal.Read<ulong>(data.Slice(byteOff)));
+            var u1 = NormalizeEndianness(MemoryMarshal.Read<ulong>(data.Slice(byteOff + 8)));
+            var u2 = NormalizeEndianness(MemoryMarshal.Read<ulong>(data.Slice(byteOff + 16)));
             if (sh == 0)
             {
                 return new Row192(u0, u1, u2);
             }
-            var u3 = MemoryMarshal.Read<ulong>(data.Slice(byteOff + 24));
+            var u3 = NormalizeEndianness(MemoryMarshal.Read<ulong>(data.Slice(byteOff + 24)));
             var inv = 64 - sh;
             return new Row192((u0 >> sh) | (u1 << inv), (u1 >> sh) | (u2 << inv), (u2 >> sh) | (u3 << inv));
         }

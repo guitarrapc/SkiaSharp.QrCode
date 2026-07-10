@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -474,7 +475,10 @@ public class QRCodeData
 
         // Unpack 8 modules per step: replicate the payload byte across a ulong,
         // isolate each bit on its byte's diagonal, then OR-cascade down to bit 0
-        // so byte k of the ulong becomes module bit (7-k) as 0/1.
+        // so byte k of the ulong becomes module bit (7-k) as 0/1. The gather
+        // constants assume little-endian byte order (ulong byte k = memory
+        // offset k); reverse on big-endian targets — the check is a JIT-time
+        // constant, so little-endian codegen is unaffected.
         ref var destRef = ref MemoryMarshal.GetReference(destination);
         var m = 0;
         for (; m + 8 <= totalModules; m += 8)
@@ -484,6 +488,10 @@ public class QRCodeData
             spread |= spread >> 2;
             spread |= spread >> 1;
             spread &= 0x0101010101010101UL;
+            if (!BitConverter.IsLittleEndian)
+            {
+                spread = BinaryPrimitives.ReverseEndianness(spread);
+            }
             Unsafe.WriteUnaligned(ref Unsafe.Add(ref destRef, m), spread);
         }
         for (; m < totalModules; m++)
@@ -507,12 +515,19 @@ public class QRCodeData
         // The payload bit stream is flat row-major module order — the same
         // order as the source buffer — so pack 8 modules per byte via the
         // MSB multiply-gather (byte k of a ulong of 0/1 bytes lands at bit
-        // 56+(7-k) after * 0x8040...01).
+        // 56+(7-k) after * 0x8040...01). The gather constant assumes
+        // little-endian byte order (source[m+k] = ulong byte k); reverse on
+        // big-endian targets — the check is a JIT-time constant, so
+        // little-endian codegen is unaffected.
         ref var srcRef = ref MemoryMarshal.GetReference(source);
         var m = 0;
         for (; m + 8 <= totalModules; m += 8)
         {
             var u = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref srcRef, m));
+            if (!BitConverter.IsLittleEndian)
+            {
+                u = BinaryPrimitives.ReverseEndianness(u);
+            }
             _bits[m >> 3] = (byte)((u * 0x8040201008040201UL) >> 56);
         }
         if (m < totalModules)
