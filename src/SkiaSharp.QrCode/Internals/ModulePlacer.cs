@@ -1,4 +1,6 @@
+using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace SkiaSharp.QrCode.Internals;
 
@@ -17,7 +19,7 @@ internal static partial class ModulePlacer
     /// <param name="interleavedData">Interleaved data and ECC bytes.</param>
     /// <param name="blockedMask">blocked mask bytes.</param>
     /// <remarks>
-    /// Bits are read MSG-first (most significant bit first) from the byte array.
+    /// Bits are read MSB-first (most significant bit first) from the byte array.
     ///
     /// Data placement pattern (ISO/IEC 18004 Section 7.7.3):
     /// - Start from bottom-right corner
@@ -25,12 +27,48 @@ internal static partial class ModulePlacer
     /// - Alternate direction at top/bottom edges.
     /// - Skip timing pattern column (column 6)
     /// - Fill out non-blocked modules
+    ///
+    /// Performance (see the micro-optimization findings log, ~2x over the
+    /// per-module implementation at every version, zero allocations):
+    /// - The stream is consumed strictly sequentially, so the next up-to-64 bits
+    ///   are kept MSB-aligned in a ulong register and refilled 8 bytes at a time,
+    ///   replacing an indexed byte load + variable shift per module.
+    /// - The two modules of a strip row sit at adjacent bit indices (b, b-1) in
+    ///   the blocked mask and ~90% of rows have both free: one 2-bit mask window
+    ///   read + one 2-bit stream consume handles the pair on the fast path.
+    /// - Once the stream is exhausted nothing can be written again, so the
+    ///   remainder modules end the walk via return instead of a per-module guard.
+    /// - Buffer/mask accesses go through refs so the JIT emits no bounds checks
+    ///   in the row loop (measured ~15% at version 10); the index range is
+    ///   validated once up front instead.
     /// </remarks>
     public static void PlaceDataWords(Span<byte> buffer, int size, ReadOnlySpan<byte> interleavedData, ReadOnlySpan<byte> blockedMask)
     {
-        var bitPos = 0;
-        var totalBits = interleavedData.Length * 8;
+        // Ref-based access below elides per-module bounds checks, so validate the
+        // whole traversal range here. size >= 7 keeps the strip column x >= 1
+        // (real QR sizes are 21..177), so b-1 never goes negative.
+        // The module count is computed in long: an int size*size would overflow
+        // for size >= 46341 and could wrap below the actual span lengths, letting
+        // the unchecked writes run out of bounds. With long, any size whose square
+        // exceeds int range can never satisfy the length checks and throws here;
+        // for every size that passes, the int index arithmetic below is exact.
+        if (size < 7)
+            throw new ArgumentOutOfRangeException(nameof(size), $"size must be >= 7, got {size}");
+        var totalModules = (long)size * size;
+        if (buffer.Length < totalModules)
+            throw new ArgumentException($"buffer too small: required {totalModules}, got {buffer.Length}", nameof(buffer));
+        if (blockedMask.Length < (totalModules + 7) / 8)
+            throw new ArgumentException($"blockedMask too small: required {(totalModules + 7) / 8}, got {blockedMask.Length}", nameof(blockedMask));
+
         var up = true;
+
+        // Next up-to-64 stream bits, MSB-aligned; accBits of them are valid.
+        var acc = 0ul;
+        var accBits = 0;
+        var bytePos = 0;
+
+        ref var buf = ref MemoryMarshal.GetReference(buffer);
+        ref var mask = ref MemoryMarshal.GetReference(blockedMask);
 
         for (var x = size - 1; x >= 0; x -= 2)
         {
@@ -38,32 +76,101 @@ internal static partial class ModulePlacer
             if (x == 6)
                 x--;
 
-            // Process each row in zigzag pattern
-            for (var yMod = 1; yMod <= size; yMod++)
+            // Walk the strip via the flat index: right module at b = y * size + x,
+            // left at b - 1; direction alternates per strip.
+            var b = up ? (size - 1) * size + x : x;
+            var step = up ? -size : size;
+
+            for (var rows = 0; rows < size; rows++, b += step)
             {
-                // zigzag direction
-                var y = up ? size - yMod : yMod - 1;
+                // rightmodule = b, leftmodule = b - 1
+                // b tracks the right module's flat index directly; stepping by ±size avoids per-row y computation and re-multiplication.
 
-                // Process 2 columns (x and x-1)
-                for (var xOffset = 0; xOffset < 2; xOffset++)
+                // Blocked bits for the row pair: w bit1 = blocked(b), bit0 = blocked(b-1).
+                // |    `w` |  right `b` | left `b-1` |
+                // | -----: | ---------: | ---------: |
+                // | `0b00` |       free |       free |
+                // | `0b01` |       free |    blocked |
+                // | `0b10` |    blocked |       free |
+                // | `0b11` |    blocked |    blocked |
+                var byteIdx = b >> 3;
+                var sh = b & 7;
+                var w = sh == 0
+                    ? (uint)(((Unsafe.Add(ref mask, byteIdx) & 1) << 1) | (Unsafe.Add(ref mask, byteIdx - 1) >> 7))
+                    : ((uint)Unsafe.Add(ref mask, byteIdx) >> (sh - 1)) & 3u;
+
+                if (w == 0 && accBits >= 2)
                 {
-                    var xModule = x - xOffset;
-                    var bitIndex = y * size + xModule;
+                    // Fast path: both modules free AND >= 2 stream bits buffered.
+                    // Taken for ~90% of rows: blocked regions (finder/timing/alignment/format)
+                    // cover only ~10-15% of the matrix, and the accumulator dips below 2 bits
+                    // at most once per 64 consumed bits.
+                    // 1. w == 0, both right and left modules are free, so we can consume 2 bits from the accumulator.
+                    // 2. accBits >= 2, we have at least 2 bits in the accumulator to write.
 
-                    if (!IsModuleBlocked(blockedMask, bitIndex) && bitPos < totalBits)
+                    Unsafe.Add(ref buf, b) = (byte)(acc >> 63); // place right module (b) with the MSB of acc
+                    Unsafe.Add(ref buf, b - 1) = (byte)((acc >> 62) & 1); // place left module (b-1) with the next bit of acc
+                    acc <<= 2;
+                    accBits -= 2;
+                }
+                else
+                {
+                    // Slow path: a module is blocked, or fewer than 2 bits are buffered.
+                    // Handle each module independently; refill happens only when the
+                    // accumulator is empty (a leftover single bit is consumed first).
+                    if ((w & 2) == 0)
                     {
-                        var byteIndex = bitPos >> 3;
-                        var bitMask = 1 << (7 - (bitPos & 7)); // MSB first
-                        var module = (interleavedData[byteIndex] & bitMask) != 0 ? (byte)1 : (byte)0;
-                        buffer[bitIndex] = module;
-                        bitPos++;
+                        // w bit1 == 0, right module is free
+                        if (accBits == 0 && !RefillAccumulator(interleavedData, ref bytePos, ref acc, ref accBits))
+                            return;
+                        Unsafe.Add(ref buf, b) = (byte)(acc >> 63);
+                        acc <<= 1;
+                        accBits--;
+                    }
+                    if ((w & 1) == 0)
+                    {
+                        // w bit0 == 0, left module is free. Same as above, but for the left module (b-1)
+                        if (accBits == 0 && !RefillAccumulator(interleavedData, ref bytePos, ref acc, ref accBits))
+                            return;
+                        Unsafe.Add(ref buf, b - 1) = (byte)(acc >> 63);
+                        acc <<= 1;
+                        accBits--;
                     }
                 }
             }
 
-            // Alternate direction
+            // Alternate direction for zigzag pattern
             up = !up;
         }
+    }
+
+    /// <summary>
+    /// Loads the next up-to-8 stream bytes MSB-aligned into the accumulator.
+    /// Returns false when the stream is exhausted.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool RefillAccumulator(ReadOnlySpan<byte> data, ref int bytePos, ref ulong acc, ref int accBits)
+    {
+        var remaining = data.Length - bytePos;
+        if (remaining >= 8)
+        {
+            acc = BinaryPrimitives.ReadUInt64BigEndian(data.Slice(bytePos));
+            accBits = 64;
+            bytePos += 8;
+            return true;
+        }
+        if (remaining == 0)
+            return false;
+
+        ulong v = 0;
+        for (var i = 0; i < remaining; i++)
+        {
+            v = (v << 8) | data[bytePos + i];
+        }
+        acc = v << (64 - remaining * 8);
+        accBits = remaining * 8;
+        bytePos = data.Length;
+        return true;
     }
 
     // TODO: Text API, will be removed when text mode is deprecated
@@ -369,13 +476,13 @@ internal static partial class ModulePlacer
     private static bool IsModuleBlocked(ReadOnlySpan<byte> mask, int bitIndex)
     {
         // Performance: O(1) constant-time lookup using bitwise operations.
-        // 
+        //
         // Bit extraction:
         // - Byte index = bitIndex >> 3 (equivalent to bitIndex / 8)
         // - Bit position = bitIndex & 7 (equivalent to bitIndex % 8)
         // - Mask = 1 << bit_position
         // - Result = (byte & mask) != 0
-        // 
+        //
         // Example (bitIndex = 10):
         // - Byte index: 10 >> 3 = 1 (second byte)
         // - Bit position: 10 & 7 = 2 (third bit from LSB)
@@ -397,7 +504,7 @@ internal static partial class ModulePlacer
     /// 2. Use bitwise operations (&amp;, ^) instead of modulo where possible
     /// 3. Avoid repeated Math.Floor calculations
     /// </code>
-    /// 
+    ///
     /// Pre-calculated values (shared across all patterns):
     /// <code>
     /// - rMod2[i] = i % 2  (row modulo 2)
@@ -407,7 +514,7 @@ internal static partial class ModulePlacer
     /// - cDiv3[i] = i / 3  (column integer division by 3)
     /// - cMod3[i] = i % 3  (column modulo 3)
     /// </code>
-    /// 
+    ///
     /// For mathematical background, see:
     /// <code>
     /// - ISO/IEC 18004:2015 Section 7.8.2 (Data Masking)
@@ -426,7 +533,7 @@ internal static partial class ModulePlacer
         /// <code>
         /// (x + y) % 2 == 0
         /// </code>
-        /// 
+        ///
         /// Visual Pattern (8×8 sample, ■=dark, □=light):
         /// <code>
         /// ■□■□■□■□
@@ -438,13 +545,13 @@ internal static partial class ModulePlacer
         /// ■□■□■□■□
         /// □■□■□■□■
         /// </code>
-        /// 
+        ///
         /// Mathematical Properties:
         /// <code>
         /// (a % 2) + (b % 2) ≡ (a + b) % 2
         /// (a % 2) ⊕ (b % 2) == 0 ⟺ (a + b) % 2 == 0  (XOR equivalence)
         /// </code>
-        /// 
+        ///
         /// Optimization:
         /// <code>
         /// Instead of: (row + col) % 2 == 0
@@ -473,7 +580,7 @@ internal static partial class ModulePlacer
         /// <code>
         /// y % 2 == 0
         /// </code>
-        /// 
+        ///
         /// Visual Pattern (8×8 sample, ■=dark, □=light):
         /// <code>
         /// ■■■■■■■■
@@ -485,14 +592,14 @@ internal static partial class ModulePlacer
         /// ■■■■■■■■
         /// □□□□□□□□
         /// </code>
-        /// 
+        ///
         /// Characteristics:
         /// <code>
         /// - Alternating horizontal rows
         /// - Independent of x coordinate
         /// - Period: 2 rows
         /// </code>
-        /// 
+        ///
         /// Example:
         /// <code>
         /// Row 0: 0%2==0 → true  ■■■■
@@ -513,7 +620,7 @@ internal static partial class ModulePlacer
         /// <code>
         /// x % 3 == 0
         /// </code>
-        /// 
+        ///
         /// Visual Pattern (9×8 sample, ■=dark, □=light):
         /// <code>
         /// ■□□■□□■□□
@@ -525,14 +632,14 @@ internal static partial class ModulePlacer
         /// ■□□■□□■□□
         /// ■□□■□□■□□
         /// </code>
-        /// 
+        ///
         /// Characteristics:
         /// <code>
         /// - Alternating vertical columns
         /// - Independent of y coordinate
         /// - Period: 3 columns (wider than Pattern 1)
         /// </code>
-        /// 
+        ///
         /// Example:
         /// <code>
         /// Col 0: 0%3==0 → true  ■
@@ -555,7 +662,7 @@ internal static partial class ModulePlacer
         /// <code>
         /// (x + y) % 3 == 0
         /// </code>
-        /// 
+        ///
         /// Visual Pattern (9×9 sample, ■=dark, □=light):
         /// <code>
         /// ■□□■□□■□□
@@ -568,33 +675,33 @@ internal static partial class ModulePlacer
         /// □□■□□■□□■
         /// □■□□■□□■□
         /// </code>
-        /// 
+        ///
         /// Mathematical Properties:
         /// <code>
         /// (a % 3) + (b % 3) can exceed 3
         /// Example: (2 % 3) + (2 % 3) = 2 + 2 = 4
         /// Therefore: Must apply modulo to sum: (2 + 2) % 3 = 1
         /// </code>
-        /// 
+        ///
         /// Optimization - Avoid Modulo:
         /// <code>
         /// rowMod3 ∈ {0, 1, 2}
         /// colMod3 ∈ {0, 1, 2}
         /// sum = rowMod3 + colMod3 ∈ {0, 1, 2, 3, 4}
-        /// 
+        ///
         /// sum % 3 == 0 ⟺ sum ∈ {0, 3}
-        /// 
+        ///
         /// Instead of: (rowMod3 + colMod3) % 3 == 0
         /// Use:        sum == 0 || sum == 3
         /// Benefit:    Eliminates modulo operation
         /// </code>
-        /// 
+        ///
         /// Diagonal Pattern:
         /// <code>
         /// Slope: -1/1 (45° diagonal)
         /// Period: 3 modules
         /// </code>
-        /// 
+        ///
         /// Example:
         /// <code>
         /// (0,0): 0+0=0 → true  ■
@@ -621,7 +728,7 @@ internal static partial class ModulePlacer
         /// <code>
         /// (⌊y/2⌋ + ⌊x/3⌋) % 2 == 0
         /// </code>
-        /// 
+        ///
         /// Visual Pattern (12×12 sample, ■=dark, □=light):
         /// <code>
         /// ■■■□□□■■■□□□
@@ -637,20 +744,20 @@ internal static partial class ModulePlacer
         /// □□□■■■□□□■■■
         /// □□□■■■□□□■■■
         /// </code>
-        /// 
+        ///
         /// Mathematical Optimization:
         /// <code>
         /// ⌊y/2⌋ = y >> 1     (for non-negative integers)
         /// ⌊x/3⌋ = x / 3      (integer division)
         /// (a + b) % 2 ≡ (a + b) &amp; 1  (bitwise optimization)
         /// </code>
-        /// 
+        ///
         /// Block Size:
         /// <code>
         /// Vertical blocks:   2 rows
         /// Horizontal blocks: 3 columns
         /// </code>
-        /// 
+        ///
         /// Example:
         /// <code>
         /// (0,0): (0/2 + 0/3)%2 = (0+0)%2 = 0 → true  ■
@@ -675,7 +782,7 @@ internal static partial class ModulePlacer
         /// <code>
         /// ((x·y) % 2) + ((x·y) % 3) == 0
         /// </code>
-        /// 
+        ///
         /// Visual Pattern (12×12 sample, ■=dark, □=light):
         /// <code>
         /// ■■■■■■■■■■■■
@@ -691,7 +798,7 @@ internal static partial class ModulePlacer
         /// ■■□□□□□□□□□□
         /// ■□■□■□□■□■□■
         /// </code>
-        /// 
+        ///
         /// Mathematical Properties:
         /// <code>
         /// ((x·y) % 2) + ((x·y) % 3) == 0
@@ -699,19 +806,19 @@ internal static partial class ModulePlacer
         /// ⟺ (x·y) % lcm(2,3) == 0
         /// ⟺ (x·y) % 6 == 0
         /// </code>
-        /// 
+        ///
         /// Optimization - Avoid Multiplication:
         /// <code>
         /// (x·y) % 2 == 0  ⟺  (x % 2 == 0) OR (y % 2 == 0)  (either is even)
         /// (x·y) % 3 == 0  ⟺  (x % 3 == 0) OR (y % 3 == 0)  (either is divisible by 3)
-        /// 
+        ///
         /// Therefore:
         /// ((x·y) % 2) + ((x·y) % 3) == 0
         /// ⟺ (rowMod2 == 0 OR colMod2 == 0) AND (rowMod3 == 0 OR colMod3 == 0)
-        /// 
+        ///
         /// Benefit: Eliminates multiplication and modulo operations entirely
         /// </code>
-        /// 
+        ///
         /// Example:
         /// <code>
         /// # Basic
@@ -719,7 +826,7 @@ internal static partial class ModulePlacer
         /// (2,3): 6%2 + 6%3 = 0+0 = 0 → true  ■
         /// (1,1): 1%2 + 1%3 = 1+1 = 2 → false □
         /// (2,2): 4%2 + 4%3 = 0+1 = 1 → false □
-        /// 
+        ///
         /// # Optimized:
         /// (0,0): (0==0 OR 0==0) AND (0==0 OR 0==0) → true  ■
         /// (2,3): (0==0 OR 1==0) AND (2==0 OR 0==0) → true  ■
@@ -743,7 +850,7 @@ internal static partial class ModulePlacer
         /// <code>
         /// (((x·y) % 2) + ((x·y) % 3)) % 2 == 0
         /// </code>
-        /// 
+        ///
         /// Visual Pattern (12×12 sample, ■=dark, □=light):
         /// <code>
         /// ■■■■■■■■■■■■
@@ -759,22 +866,22 @@ internal static partial class ModulePlacer
         /// ■■□□■■□□■■■■
         /// ■□■□■□□■□■□■
         /// </code>
-        /// 
+        ///
         /// Mathematical Properties:
         /// <code>
         /// Similar to Pattern 5, but checks parity of sum
         /// Sum can be: 0, 1, 2, or 3
         /// Pattern is dark when sum is even (0 or 2)
         /// </code>
-        /// 
+        ///
         /// Optimization - Avoid Multiplication and Modulo:
         /// <code>
         /// Break down into two components:
-        /// 
+        ///
         /// 1. (x·y) % 2 parity:
         ///    - Product is odd only when both x and y are odd
         ///    - rowMod2 &amp; colMod2  (bitwise AND gives 1 only if both are 1)
-        /// 
+        ///
         /// 2. (x·y) % 3 parity (using 3×3 lookup table):
         ///    - rowMod3 ∈ {0,1,2}, colMod3 ∈ {0,1,2}
         ///    - Product table:
@@ -784,13 +891,13 @@ internal static partial class ModulePlacer
         ///      2   0  2  4  (all even → parity 0)
         ///    - Parity is odd (1) only when: (1,1) or (2,2)
         ///    - Condition: rowMod3 != 0 AND rowMod3 == colMod3
-        /// 
+        ///
         /// Final result:
         ///    ((p2) + (p3)) % 2 == 0  ⟺  p2 ^ p3 == 0  (XOR for parity)
-        /// 
+        ///
         /// Benefit: Eliminates multiplication and modulo operations entirely
         /// </code>
-        /// 
+        ///
         /// Example:
         /// <code>
         /// # Basic formula:
@@ -798,7 +905,7 @@ internal static partial class ModulePlacer
         /// (1,1): (1%2 + 1%3)%2 = (1+1)%2 = 0 → true  ■
         /// (2,1): (2%2 + 2%3)%2 = (0+2)%2 = 0 → true  ■
         /// (1,2): (2%2 + 2%3)%2 = (0+2)%2 = 0 → true  ■
-        /// 
+        ///
         /// # Optimized:
         /// (0,0): p2=0 &amp; 0=0, p3=(0!=0 &amp;&amp; 0==0)=0 → 0^0=0 → true  ■
         /// (1,1): p2=1 &amp; 1=1, p3=(1!=0 &amp;&amp; 1==1)=1 → 1^1=0 → true  ■
@@ -835,7 +942,7 @@ internal static partial class ModulePlacer
         /// <code>
         /// (((x+y) % 2) + ((x·y) % 3)) % 2 == 0
         /// </code>
-        /// 
+        ///
         /// Visual Pattern (12×12 sample, ■=dark, □=light):
         /// <code>
         /// ■□■□■□■□■□■□
@@ -851,7 +958,7 @@ internal static partial class ModulePlacer
         /// ■□■■□■■□■■□■
         /// □■■■■■□■■■■□
         /// </code>
-        /// 
+        ///
         /// Hybrid Pattern:
         /// <code>
         /// Combines two components:
@@ -859,16 +966,16 @@ internal static partial class ModulePlacer
         /// 2. Product grid: (x·y) % 3
         /// Result is dark when their sum is even
         /// </code>
-        /// 
+        ///
         /// Optimization Strategy:
         /// <code>
         /// (x+y) % 2: Use pre-calculated rowMod2 + colMod2
         /// (x·y) % 3: Calculate at runtime (cannot pre-calculate)
-        /// 
+        ///
         /// Mathematical property: (a%2) + (b%2) ∈ {0, 1, 2}
         /// Final check: ((sum) + (product%3)) &amp; 1 == 0
         /// </code>
-        /// 
+        ///
         /// Example:
         /// <code>
         /// (0,0): ((0+0)%2 + 0%3)%2 = (0+0)%2 = 0 → true  ■
