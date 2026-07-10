@@ -104,7 +104,7 @@ internal static partial class ModulePlacer
             allowed[y] = ~blocked & rowMask;
         }
 
-        var templates = s_maskTemplates64;
+        var templates = _maskTemplates64;
         var bestPatternIndex = 0;
         var bestScore = int.MaxValue;
         for (var patternIndex = 0; patternIndex < 8; patternIndex++)
@@ -130,7 +130,7 @@ internal static partial class ModulePlacer
             var tplBase = bestPatternIndex * 12;
             for (int y = 0, tplRow = 0; y < size; y++)
             {
-                XorUnpackRow64(buffer.Slice(y * size, size), s_maskTemplates64[tplBase + tplRow] & allowed[y]);
+                XorUnpackRow64(buffer.Slice(y * size, size), _maskTemplates64[tplBase + tplRow] & allowed[y]);
                 if (++tplRow == 12) tplRow = 0;
             }
         }
@@ -376,7 +376,7 @@ internal static partial class ModulePlacer
                 allowed[y] = Row192.FromBitSlice(padded, y * size).AndNot(rowMask);
             }
 
-            var templates = s_maskTemplates;
+            var templates = _maskTemplates;
             var bestPatternIndex = 0;
             var bestScore = int.MaxValue;
             for (var patternIndex = 0; patternIndex < 8; patternIndex++)
@@ -742,10 +742,10 @@ internal static partial class ModulePlacer
     /// per pattern cover every matrix size (bits beyond a row's length are removed
     /// by ANDing with the allowed mask).
     /// </summary>
-    private static readonly Row192[] s_maskTemplates = BuildMaskTemplates();
+    private static readonly Row192[] _maskTemplates = BuildMaskTemplates();
 
-    /// <summary>Low words of <see cref="s_maskTemplates"/> for the single-word path.</summary>
-    private static readonly ulong[] s_maskTemplates64 = BuildMaskTemplates64();
+    /// <summary>Low words of <see cref="_maskTemplates"/> for the single-word path.</summary>
+    private static readonly ulong[] _maskTemplates64 = BuildMaskTemplates64();
 
     private static Row192[] BuildMaskTemplates()
     {
@@ -790,7 +790,7 @@ internal static partial class ModulePlacer
 
     private static ulong[] BuildMaskTemplates64()
     {
-        var templates = s_maskTemplates;
+        var templates = _maskTemplates;
         var result = new ulong[templates.Length];
         for (var i = 0; i < templates.Length; i++)
         {
