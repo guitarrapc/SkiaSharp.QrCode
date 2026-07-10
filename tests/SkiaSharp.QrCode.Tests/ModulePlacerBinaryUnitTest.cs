@@ -73,8 +73,8 @@ public class ModulePlacerBinaryUnitTest
     {
         // Arrange
         var qrCode = CreateEmptyQRCodeData(version);
-        var buffer = qrCode.GetMutableData();
         var size = qrCode.Size;
+        Span<byte> buffer = new byte[size * size]; // byte-per-module work buffer, loaded via SetCoreData below
         Span<Rectangle> blockedModules = stackalloc Rectangle[30];
         var blockedCount = 0;
 
@@ -90,6 +90,7 @@ public class ModulePlacerBinaryUnitTest
 
         // Act
         ModulePlacer.PlaceDataWords(buffer, size, data, blockedMask);
+        qrCode.SetCoreData(buffer);
 
         // Assert - Verify data is placed (not all zeros/all ones)
         int darkCount = 0;
