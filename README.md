@@ -6,7 +6,7 @@
 
 # SkiaSharp.QrCode
 
-[Migration](docs/migration.md) | [Data Capacity](docs/data-capacity.md) | [Playground](https://guitarrapc.github.io/SkiaSharp.QrCode/)
+[Migration](docs/migration.md) | [Data Capacity](docs/data-capacity.md)
 
 SkiaSharp.QrCode provides high-performance QR code generation with [SkiaSharp](https://github.com/mono/SkiaSharp) integration.
 
