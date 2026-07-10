@@ -486,9 +486,20 @@ public class QRCodeImageBuilder
         using var surface = SKSurface.Create(info);
         var canvas = surface.Canvas;
 
-        // Extension clears the full canvas with clearColor, then draws QR into contentRect.
-        // Extra canvas area (pad) therefore keeps clearColor.
-        canvas.Render(qrCodeData, contentRect, _clearColor, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
+        // Clear the canvas with clearColor, then draw QR into contentRect; extra
+        // canvas area (pad) keeps clearColor. The clear is skipped when it cannot
+        // remain visible: a fresh surface is already fully transparent, and an
+        // opaque QR background covering the whole canvas overwrites it anyway.
+        var clearColor = _clearColor ?? SKColors.Transparent;
+        var contentCoversCanvas = contentRect.Left <= 0 && contentRect.Top <= 0
+            && contentRect.Right >= info.Width && contentRect.Bottom >= info.Height;
+        var backgroundIsOpaque = (_backgroundColor ?? SKColors.White).Alpha == byte.MaxValue;
+        if (clearColor.Alpha != 0 && !(contentCoversCanvas && backgroundIsOpaque))
+        {
+            canvas.Clear(clearColor);
+        }
+
+        QRCodeRenderer.Render(canvas, contentRect, qrCodeData, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
 
         return surface.Snapshot();
     }
