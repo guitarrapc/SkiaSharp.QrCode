@@ -10,10 +10,26 @@ on:
 
 jobs:
   build:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     permissions:
       contents: read
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            rid: linux-x64
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
+          - os: windows-2025
+            rid: win-x64
+          - os: windows-11-arm
+            rid: win-arm64
+          - os: macos-26
+            rid: osx-arm64
+          - os: macos-26-intel
+            rid: osx-x64
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -28,19 +44,32 @@ jobs:
 
   run:
     needs: [build]
-    strategy:
-      matrix:
-        include:
-          - runs-on: ubuntu-24.04
-            ext: ""
-          - runs-on: windows-2025
-            ext: .exe
-          - runs-on: macos-15
-            ext: ""
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
     permissions:
       contents: read
-    runs-on: ${{ matrix.runs-on }}
-    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            rid: linux-x64
+            ext: ""
+          - os: ubuntu-24.04-arm
+            rid: linux-arm64
+            ext: ""
+          - os: windows-2025
+            rid: win-x64
+            ext: ".exe"
+          - os: windows-11-arm
+            rid: win-arm64
+            ext: ".exe"
+          - os: macos-26
+            rid: osx-arm64
+            ext: ""
+          - os: macos-26-intel
+            rid: osx-x64
+            ext: ""
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -50,17 +79,17 @@ jobs:
           dotnet-version: 10.0.x
       # ConsoleApp
       - name: Run ConsoleApp
-        run: dotnet run --c Release
+        run: dotnet run -c Release -r ${{ matrix.rid }}
         working-directory: ./samples/ConsoleApp
       # SimpleGenerate
       - name: Run SimpleGenerate
-        run: dotnet run -c Release
+        run: dotnet run -c Release -r ${{ matrix.rid }}
         working-directory: ./samples/SimpleGenerate
       # NativeAOT
       - name: Run ConsoleAppNativeAOT
         shell: bash
         run: |
-          dotnet publish ./samples/ConsoleAppNativeAOT/ConsoleAppNativeAOT.csproj -c Release -o ./publish/
+          dotnet publish ./samples/ConsoleAppNativeAOT/ConsoleAppNativeAOT.csproj -c Release -r ${{ matrix.rid }} -o ./publish/
           cd ./publish/
           ls -l
           chmod +x ConsoleAppNativeAOT${{ matrix.ext }}

@@ -24,7 +24,9 @@ public class SkiaImageSizeTest
         Assert.Equal(100, b.Size.Width);
         Assert.Equal(40000, b.BytesSize);
         Assert.Equal(SKAlphaType.Premul, b.AlphaType);
-        Assert.Equal(SKColorType.Bgra8888, b.ColorType);
+        // The default color type is platform-dependent (Bgra8888 on Windows/Linux,
+        // Rgba8888 on macOS), so compare against SkiaSharp's platform default.
+        Assert.Equal(SKImageInfo.PlatformColorType, b.ColorType);
     }
 
     [Fact]

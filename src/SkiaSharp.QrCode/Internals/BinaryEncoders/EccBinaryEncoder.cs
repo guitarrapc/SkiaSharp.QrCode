@@ -9,8 +9,9 @@ namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 /// <remarks>
 /// This encoder implements the Reed-Solomon error correction algorithm as specified in ISO/IEC 18004 Section 8.5.
 /// The public entry point dispatches to the fastest kernel the runtime supports:
-/// GFNI (net10.0+, ~64x over the naive form), SSSE3 (net8.0+, ~52x), or a portable
-/// scalar kernel (~4.4x) used on netstandard, ARM64, and pre-SSSE3 x86.
+/// GFNI (net10.0+, ~64x over the naive form), SSSE3 (net8.0+, ~52x), NEON
+/// (net8.0+ ARM64, ~21-36x), or a portable scalar kernel (~4.4x) used on
+/// netstandard and pre-SSSE3 x86.
 /// All kernels produce byte-identical output; see the kernel parity tests.
 /// </remarks>
 internal static partial class EccBinaryEncoder
@@ -49,17 +50,25 @@ internal static partial class EccBinaryEncoder
         // QR codes use at most 30 ECC codewords per block, so the vectorized kernels
         // (which keep the remainder register in one or two vector registers) cover
         // every real input; the <= 32 guard is a safety net for non-QR callers.
-        if (eccCount <= 32 && System.Runtime.Intrinsics.X86.Ssse3.IsSupported)
+        if (eccCount <= 32)
         {
-            CalculateEccSimd(data, ecc, eccCount);
-            return;
+            if (System.Runtime.Intrinsics.X86.Ssse3.IsSupported)
+            {
+                CalculateEccSimd(data, ecc, eccCount);
+                return;
+            }
+            if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+            {
+                CalculateEccAdvSimd(data, ecc, eccCount);
+                return;
+            }
         }
 #endif
         CalculateEccScalar(data, ecc, eccCount);
     }
 
     /// <summary>
-    /// Portable scalar kernel. Runs on every target (netstandard2.0+, ARM64, old x86).
+    /// Portable scalar kernel. Runs on every target (netstandard2.0+, old x86, pre-NEON ARM).
     /// </summary>
     /// <remarks>
     /// Two optimizations over the naive polynomial division, both measured (~4.4x combined):

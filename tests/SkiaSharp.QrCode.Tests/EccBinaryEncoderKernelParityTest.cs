@@ -5,7 +5,7 @@ using Xunit;
 namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
-/// Verifies that every ECC kernel (scalar, SSSE3, GFNI) produces byte-identical
+/// Verifies that every ECC kernel (scalar, SSSE3, GFNI, NEON) produces byte-identical
 /// output to a naive reference implementation of ISO/IEC 18004 Section 8.5
 /// polynomial division. CalculateECC dispatches by hardware capability, so these
 /// tests exercise each kernel directly in addition to the public entry point.
@@ -73,6 +73,24 @@ public class EccBinaryEncoderKernelParityTest
 
             var actual = new byte[eccCount];
             EccBinaryEncoder.CalculateEccSsse3(data, actual, eccCount);
+
+            Assert.Equal(expected, actual);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(Combos))]
+    public void AdvSimdKernel_MatchesNaiveReference(int dataLength, int eccCount)
+    {
+        Assert.SkipUnless(System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported, "AdvSimd (ARM64 NEON) not supported on this machine");
+
+        foreach (var data in EnumerateInputs(dataLength))
+        {
+            var expected = new byte[eccCount];
+            NaiveReferenceECC(data, expected, eccCount);
+
+            var actual = new byte[eccCount];
+            EccBinaryEncoder.CalculateEccAdvSimd(data, actual, eccCount);
 
             Assert.Equal(expected, actual);
         }
