@@ -417,10 +417,137 @@ internal static partial class ModulePlacer
         }
     }
 
+    // ---------------------------------
+    // Basic penalty calculations for reference.
+    // The plain byte-per-module formulation of ISO/IEC 18004 Section 8.8.2 that
+    // the bit-parallel scorers in this file must reproduce exactly. A runnable
+    // copy is kept in tests (ModulePlacerMaskPackedParityTest.ReferenceScore)
+    // and gates every change.
+    // ---------------------------------
+    // // Penalty 1: Consecutive modules (runs of the same color, length >= 5:
+    // // +3 at the 5th module, +1 for each module beyond)
+    // for (var y = 0; y < size; y++)
+    // {
+    //     var modInRow = 0;
+    //     var modInColumn = 0;
+    //     var lastValRow = qrCode[y, 0];
+    //     var lastValColumn = qrCode[0, y];
+    //     for (var x = 0; x < size; x++)
+    //     {
+    //         if (qrCode[y, x] == lastValRow)
+    //         {
+    //             modInRow++;
+    //         }
+    //         else
+    //         {
+    //             modInRow = 1;
+    //         }
+    //         if (modInRow == 5)
+    //         {
+    //             score1 += 3;
+    //         }
+    //         else if (modInRow > 5)
+    //         {
+    //             score1++;
+    //         }
+    //         lastValRow = qrCode[y, x];
+    //
+    //         if (qrCode[x, y] == lastValColumn)
+    //         {
+    //             modInColumn++;
+    //         }
+    //         else
+    //         {
+    //             modInColumn = 1;
+    //         }
+    //         if (modInColumn == 5)
+    //         {
+    //             score1 += 3;
+    //         }
+    //         else if (modInColumn > 5)
+    //         {
+    //             score1++;
+    //         }
+    //         lastValColumn = qrCode[x, y];
+    //     }
+    // }
+    //
+    // // Penalty 2: Block patterns (each 2x2 block of one color: +3)
+    // for (var y = 0; y < size - 1; y++)
+    // {
+    //     for (var x = 0; x < size - 1; x++)
+    //     {
+    //         if (qrCode[y, x] == qrCode[y, x + 1] &&
+    //             qrCode[y, x] == qrCode[y + 1, x] &&
+    //             qrCode[y, x] == qrCode[y + 1, x + 1])
+    //         {
+    //             score2 += 3;
+    //         }
+    //     }
+    // }
+    //
+    // // Penalty 3: Finder-like patterns (sliding 11-bit window, +40 per match)
+    // // pattern: 1011101 (dark-light-dark-dark-dark-light-dark = 1:1:3:1:1)
+    // // preceded (forward) or followed (backward) by 4 light modules
+    // const uint PATTERN_FORWARD = 0b_0000_1011101; // 4 light modules + pattern
+    // const uint PATTERN_BACKWARD = 0b_1011101_0000; // pattern + 4 light modules
+    // const uint MASK_11BIT = 0b_111_1111_1111; // guarantee 11 bits
+    // for (var y = 0; y < size; y++)
+    // {
+    //     var rowOffset = y * size;
+    //     uint rowBits = 0;
+    //     uint colBits = 0;
+    //     for (var x = 0; x < size; x++)
+    //     {
+    //         // Build row/col bits (shift left and OR with current bit == add new bit)
+    //         rowBits = ((rowBits << 1) | (buffer[rowOffset + x] != 0 ? 1u : 0u)) & MASK_11BIT;
+    //         colBits = ((colBits << 1) | (buffer[x * size + y] != 0 ? 1u : 0u)) & MASK_11BIT;
+    //
+    //         // 11 bits ready, check for pattern
+    //         if (x >= 10)
+    //         {
+    //             // Check row bits
+    //             if (rowBits == PATTERN_FORWARD || rowBits == PATTERN_BACKWARD)
+    //                 score3 += 40;
+    //
+    //             // Check column bits
+    //             if (colBits == PATTERN_FORWARD || colBits == PATTERN_BACKWARD)
+    //                 score3 += 40;
+    //         }
+    //     }
+    // }
+    //
+    // // Penalty 4: Dark/light balance
+    // double blackModules = 0;
+    // for (var row = 0; row < size; row++)
+    // {
+    //     for (var col = 0; col < size; col++)
+    //     {
+    //         if (qrCode[row, col])
+    //         {
+    //             blackModules++;
+    //         }
+    //     }
+    // }
+    //
+    // // Calculate percentage of dark modules
+    // var percent = (blackModules / (size * size)) * 100;
+    //
+    // // ISO/IEC 18004:2015 Section 8.8.2: Score = (|closest multiple of 5 - 50| / 5) x 10
+    // // Evaluate the multiples of 5 on both sides of the percentage and take the
+    // // smaller deviation from 50%. (An earlier version of this reference used
+    // // `Floor(percent / 5) * 5 - 45` for the upper side, which is wrong when the
+    // // percentage is an exact multiple of 5 — e.g. percent = 45 scored 0 instead
+    // // of 10. Ceiling keeps prev == next there, matching the shipped code.)
+    // var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
+    // var nextMultipleOf5 = Math.Abs((int)Math.Ceiling(percent / 5) * 5 - 50) / 5;
+    // score4 = Math.Min(prevMultipleOf5, nextMultipleOf5) * 10;
+
     /// <summary>
     /// Bit-parallel implementation of all four ISO/IEC 18004 Section 8.8.2
     /// penalty rules over packed rows. Produces scores identical to the plain
-    /// byte-per-module formulation (see ModulePlacerMaskPackedParityTest).
+    /// byte-per-module formulation (see the reference block above and
+    /// ModulePlacerMaskPackedParityTest).
     ///
     /// Rule 1 (runs >= 5, rows): y5 = x &amp; (x>>1) &amp; ... &amp; (x>>4) marks every
     ///   position where 5 consecutive equal bits start; a run of length L
