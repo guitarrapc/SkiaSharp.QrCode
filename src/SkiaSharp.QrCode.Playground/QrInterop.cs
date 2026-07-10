@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
@@ -88,8 +89,20 @@ public static partial class QrInterop
             requestedVersion: request.Version,
             quietZoneSize: Math.Clamp(request.QuietZone, 0, 10));
 
+        var bytes = CreateBuilder(request, data, customLogo).ToByteArray();
+        stopwatch.Stop();
+
+        s_lastMeta = string.Create(
+            CultureInfo.InvariantCulture,
+            $"{{\"qrVersion\":{data.Version},\"matrixSize\":{data.Size},\"totalMs\":{stopwatch.Elapsed.TotalMilliseconds:F1},\"bytes\":{bytes.Length}}}");
+        return bytes;
+    }
+
+    /// <summary>Builds the image builder from request options; shared by preview and benchmark rendering.</summary>
+    private static QRCodeImageBuilder CreateBuilder(QrRequest request, QRCodeData data, byte[] customLogo)
+    {
         var size = Math.Clamp(request.Size, 64, 2048);
-        var bytes = new QRCodeImageBuilder(data)
+        return new QRCodeImageBuilder(data)
             .WithSize(size, size)
             .WithColors(
                 ParseColor(request.Foreground, SKColors.Black),
@@ -97,14 +110,122 @@ public static partial class QrInterop
             .WithModuleShape(CreateModuleShape(request), Math.Clamp(request.ModuleSizePercent, 0.5f, 1.0f))
             .WithFinderPatternShape(CreateFinderShape(request.FinderShape))
             .WithGradient(CreateGradient(request.Gradient))
-            .WithIcon(CreateIcon(request.Logo, customLogo))
-            .ToByteArray();
+            .WithIcon(CreateIcon(request.Logo, customLogo));
+    }
+
+    /// <summary>
+    /// Runs one benchmark batch and returns stats as a JSON string:
+    /// <c>{"count":N,"elapsedMs":N,"qrVersion":N,"matrixSize":N,"bytesTotal":N}</c>,
+    /// or <c>{"error":"..."}</c> on failure. The page script chains batches so the UI
+    /// stays responsive and can show progress / cancel.
+    /// <para>
+    /// Content is made unique per iteration by appending <c>" #&lt;index+1&gt;"</c>.
+    /// Mode <c>encode</c> exercises the allocation-free
+    /// <see cref="QRCodeGenerator.CreateQrCode(ReadOnlySpan{char}, ECCLevel, Span{byte}, bool, EciMode, int, int)"/>
+    /// overload only; mode <c>render</c> runs the full pipeline (encode + Skia render + PNG encode)
+    /// with the current visual options.
+    /// </para>
+    /// </summary>
+    /// <param name="optionsJson">Serialized <see cref="QrRequest"/> (camelCase).</param>
+    /// <param name="mode">"encode" or "render".</param>
+    /// <param name="startIndex">Global index of the first iteration in this batch.</param>
+    /// <param name="count">Iterations to run in this batch.</param>
+    /// <param name="customLogo">Uploaded logo bytes for render mode; empty otherwise.</param>
+    [JSExport]
+    public static string BenchmarkBatch(string optionsJson, string mode, int startIndex, int count, byte[] customLogo)
+    {
+        try
+        {
+            var request = JsonSerializer.Deserialize(optionsJson, PlaygroundJsonContext.Default.QrRequest)
+                ?? throw new InvalidOperationException("Options JSON deserialized to null.");
+            if (string.IsNullOrWhiteSpace(request.Content))
+                throw new ArgumentException("Content is empty.");
+            if (count is <= 0 or > 1_000_000)
+                throw new ArgumentOutOfRangeException(nameof(count), "Batch count must be between 1 and 1,000,000.");
+
+            return mode switch
+            {
+                "encode" => BenchmarkEncode(request, startIndex, count),
+                "render" => BenchmarkRender(request, startIndex, count, customLogo),
+                _ => throw new ArgumentException($"Unknown benchmark mode '{mode}'. Use 'encode' or 'render'."),
+            };
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new ErrorPayload(ex.GetBaseException().Message), PlaygroundJsonContext.Default.ErrorPayload);
+        }
+    }
+
+    /// <summary>
+    /// Tight loop over the zero-allocation span API. The per-iteration text is composed in a
+    /// pooled char buffer (no string allocation) and the module matrix is written into a
+    /// pooled byte buffer sized for QR version 40, so the loop itself allocates nothing.
+    /// </summary>
+    private static string BenchmarkEncode(QrRequest request, int startIndex, int count)
+    {
+        var ecc = ParseEcc(request.Ecc);
+        var quietZone = Math.Clamp(request.QuietZone, 0, 10);
+        var prefixLength = request.Content.Length;
+
+        // " #" + int.MaxValue digits
+        var textBuffer = ArrayPool<char>.Shared.Rent(prefixLength + 2 + 11);
+        // Version 40 with quiet zone is the largest possible matrix.
+        var maxSide = 177 + 2 * quietZone;
+        var moduleBuffer = ArrayPool<byte>.Shared.Rent(maxSide * maxSide);
+        try
+        {
+            request.Content.AsSpan().CopyTo(textBuffer);
+            textBuffer[prefixLength] = ' ';
+            textBuffer[prefixLength + 1] = '#';
+
+            long bytesTotal = 0;
+            var written = 0;
+            var stopwatch = Stopwatch.StartNew();
+            for (var i = 0; i < count; i++)
+            {
+                (startIndex + i + 1).TryFormat(textBuffer.AsSpan(prefixLength + 2), out var digits);
+                var text = textBuffer.AsSpan(0, prefixLength + 2 + digits);
+                written = QRCodeGenerator.CreateQrCode(text, ecc, moduleBuffer, requestedVersion: request.Version, quietZoneSize: quietZone);
+                bytesTotal += written;
+            }
+            stopwatch.Stop();
+
+            var matrixSize = (int)Math.Sqrt(written);
+            var qrVersion = (matrixSize - 2 * quietZone - 17) / 4;
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"qrVersion\":{qrVersion},\"matrixSize\":{matrixSize},\"bytesTotal\":{bytesTotal}}}");
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(moduleBuffer, clearArray: false);
+            ArrayPool<char>.Shared.Return(textBuffer, clearArray: false);
+        }
+    }
+
+    /// <summary>Full pipeline per iteration: encode, Skia render with current options, PNG encode.</summary>
+    private static string BenchmarkRender(QrRequest request, int startIndex, int count, byte[] customLogo)
+    {
+        var ecc = ParseEcc(request.Ecc);
+        var quietZone = Math.Clamp(request.QuietZone, 0, 10);
+
+        long bytesTotal = 0;
+        var qrVersion = 0;
+        var matrixSize = 0;
+        var stopwatch = Stopwatch.StartNew();
+        for (var i = 0; i < count; i++)
+        {
+            var text = string.Create(CultureInfo.InvariantCulture, $"{request.Content} #{startIndex + i + 1}");
+            var data = QRCodeGenerator.CreateQrCode(text.AsSpan(), ecc, requestedVersion: request.Version, quietZoneSize: quietZone);
+            qrVersion = data.Version;
+            matrixSize = data.Size;
+            bytesTotal += CreateBuilder(request, data, customLogo).ToByteArray().Length;
+        }
         stopwatch.Stop();
 
-        s_lastMeta = string.Create(
+        return string.Create(
             CultureInfo.InvariantCulture,
-            $"{{\"qrVersion\":{data.Version},\"matrixSize\":{data.Size},\"totalMs\":{stopwatch.Elapsed.TotalMilliseconds:F1},\"bytes\":{bytes.Length}}}");
-        return bytes;
+            $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"qrVersion\":{qrVersion},\"matrixSize\":{matrixSize},\"bytesTotal\":{bytesTotal}}}");
     }
 
     private static ECCLevel ParseEcc(string ecc) => ecc.ToUpperInvariant() switch

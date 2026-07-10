@@ -212,6 +212,40 @@
           </div>
           <p class="field__hint">A logo covers part of the code — use error correction H and verify the result scans.</p>
         </details>
+
+        <details class="panel">
+          <summary>Performance benchmark</summary>
+          <div class="panel__grid">
+            <label class="field">
+              <span class="field__label">Mode</span>
+              <select id="bench-mode-select"
+                title="Encode only exercises the zero-allocation span API; full pipeline also renders and PNG-encodes with the current visual settings">
+                <option value="encode">Encode only — zero-allocation API</option>
+                <option value="render">Full pipeline — encode + render + PNG</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="field__label">Iterations</span>
+              <select id="bench-count-select">
+                <option value="100">100</option>
+                <option value="1000" selected>1,000</option>
+                <option value="10000">10,000</option>
+                <option value="100000">100,000</option>
+              </select>
+            </label>
+          </div>
+          <div class="bench-actions">
+            <button type="button" id="bench-run-btn" class="action-btn" disabled>Run benchmark</button>
+            <button type="button" id="bench-cancel-btn" class="small-btn" hidden>Cancel</button>
+          </div>
+          <progress id="bench-progress" value="0" max="100" hidden></progress>
+          <div id="bench-result" class="qr-stats" aria-live="polite"></div>
+          <p class="field__hint">
+            Generates unique codes sequentially (content is suffixed with #1, #2, …) using the current
+            settings, single-threaded on the WASM runtime in this tab. Native .NET throughput is much
+            higher — see the repository benchmarks.
+          </p>
+        </details>
       </div>
 
       <div class="preview-column">

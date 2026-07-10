@@ -167,6 +167,12 @@ const generateErrorEl = document.getElementById('generate-error');
 const downloadBtn = document.getElementById('download-btn');
 const copyImageBtn = document.getElementById('copy-image-btn');
 const permalinkBtn = document.getElementById('permalink-btn');
+const benchModeSelect = document.getElementById('bench-mode-select');
+const benchCountSelect = document.getElementById('bench-count-select');
+const benchRunBtn = document.getElementById('bench-run-btn');
+const benchCancelBtn = document.getElementById('bench-cancel-btn');
+const benchProgress = document.getElementById('bench-progress');
+const benchResult = document.getElementById('bench-result');
 
 // Version select: auto + 1..40
 {
@@ -710,6 +716,109 @@ permalinkBtn.addEventListener('click', async () => {
   }
 });
 
+/* ─── Performance benchmark ─── */
+
+/** Target wall-clock per BenchmarkBatch call; keeps the UI responsive between batches. */
+const BENCH_BATCH_TARGET_MS = 150;
+
+let benchRunning = false;
+let benchCancelled = false;
+
+function formatRate(count, ms) {
+  if (ms <= 0) return '—';
+  const rate = (count / ms) * 1000;
+  return `${rate >= 100 ? Math.round(rate).toLocaleString() : rate.toFixed(1)} codes/s`;
+}
+
+function setBenchControlsRunning(running) {
+  benchRunBtn.disabled = running || !runtimeReady || !runtimeAlive;
+  benchCancelBtn.hidden = !running;
+  benchModeSelect.disabled = running;
+  benchCountSelect.disabled = running;
+}
+
+benchCancelBtn.addEventListener('click', () => {
+  benchCancelled = true;
+  benchCancelBtn.disabled = true;
+});
+
+benchRunBtn.addEventListener('click', () => void runBenchmark());
+
+async function runBenchmark() {
+  if (benchRunning || !runtimeReady || !runtimeAlive) return;
+
+  const state = collectState();
+  if (!state.content.trim()) {
+    showToast('Enter content to encode before running the benchmark.', 'info');
+    return;
+  }
+  // Snapshot options once so mid-run control edits do not skew results.
+  const optionsJson = JSON.stringify(state);
+  const mode = benchModeSelect.value;
+  const total = Number(benchCountSelect.value);
+  const logoBytes = mode === 'render' && state.logo.mode === 'custom' ? customLogoBytes : EMPTY_BYTES;
+
+  benchRunning = true;
+  benchCancelled = false;
+  benchCancelBtn.disabled = false;
+  setBenchControlsRunning(true);
+  benchProgress.hidden = false;
+  benchProgress.max = total;
+  benchProgress.value = 0;
+  benchResult.textContent = 'Running…';
+
+  let done = 0;
+  let wasmMs = 0;
+  let meta = null;
+  // Encode mode is orders of magnitude faster than render mode; start small and adapt.
+  let batch = mode === 'encode' ? 128 : 4;
+  const wallStart = performance.now();
+
+  try {
+    while (done < total && !benchCancelled) {
+      const count = Math.min(batch, total - done);
+      const json = exports.SkiaSharp.QrCode.Playground.QrInterop.BenchmarkBatch(optionsJson, mode, done, count, logoBytes);
+      const result = JSON.parse(json);
+      if (result.error) {
+        benchResult.textContent = `Failed: ${result.error}`;
+        break;
+      }
+      done += result.count;
+      wasmMs += result.elapsedMs;
+      meta = result;
+
+      benchProgress.value = done;
+      benchResult.textContent = `${done.toLocaleString()} / ${total.toLocaleString()} — ${formatRate(done, wasmMs)}`;
+
+      // Resize the next batch toward the wall-clock target (bounded so one batch cannot stall the tab).
+      const perItem = Math.max(result.elapsedMs / result.count, 0.0001);
+      batch = Math.max(1, Math.min(50000, Math.round(BENCH_BATCH_TARGET_MS / perItem)));
+
+      // Yield to the event loop so progress paints and Cancel stays clickable.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    if (done > 0 && meta && !benchResult.textContent.startsWith('Failed')) {
+      const wallSeconds = ((performance.now() - wallStart) / 1000).toFixed(2);
+      const avgMs = wasmMs / done;
+      const prefix = benchCancelled ? `Cancelled — ${done.toLocaleString()} of ${total.toLocaleString()}` : done.toLocaleString();
+      benchResult.textContent =
+        `${prefix} codes in ${(wasmMs / 1000).toFixed(2)} s of WASM time — ${formatRate(done, wasmMs)} `
+        + `(avg ${avgMs >= 1 ? avgMs.toFixed(2) : avgMs.toFixed(3)} ms/code, QR v${meta.qrVersion} ${meta.matrixSize}×${meta.matrixSize}, wall ${wallSeconds} s)`;
+    }
+  } catch (err) {
+    if (isRuntimeDeadError(err)) {
+      handleRuntimeDeath();
+    } else {
+      benchResult.textContent = `Failed: ${err?.message ?? err}`;
+    }
+  } finally {
+    benchRunning = false;
+    setBenchControlsRunning(false);
+    benchProgress.hidden = true;
+  }
+}
+
 /* ─── Startup ─── */
 
 async function restoreFromLocationHash() {
@@ -742,6 +851,7 @@ async function initializeRuntime() {
     syncVersionBadge();
     loading.style.display = 'none';
     permalinkBtn.disabled = false;
+    benchRunBtn.disabled = false;
     generate();
   } catch (err) {
     if (isRuntimeDeadError(err)) {

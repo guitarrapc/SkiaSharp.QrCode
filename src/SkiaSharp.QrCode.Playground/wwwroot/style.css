@@ -434,6 +434,26 @@ output {
   font-size: 0.9rem;
 }
 
+/* ─── Benchmark ─── */
+
+.bench-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+#bench-progress {
+  width: 100%;
+  height: 8px;
+  margin-top: 10px;
+  accent-color: var(--accent);
+}
+
+#bench-result {
+  margin-top: 6px;
+}
+
 /* ─── Toasts ─── */
 
 .toast-stack {

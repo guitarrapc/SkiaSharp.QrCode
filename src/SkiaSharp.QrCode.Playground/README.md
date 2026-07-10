@@ -27,6 +27,10 @@ dotnet serve -d publish/playground/wwwroot   # or: python -m http.server -d publ
 `-p:PlaygroundSoftFingerprint=true` emits both fingerprinted and plain filenames so the page
 works on hosts without import-map rewriting (GitHub Pages, plain static servers).
 
+Publish to a **clean output directory** (delete it between publishes). Re-publishing into the
+same `-o` directory leaves the previous build's fingerprinted files behind, and the
+`_CopyDotnetJsFallback` target then fails with MSB3094 because two `dotnet.*.js` entry files match.
+
 The production build adds AOT + full trimming:
 
 ```bash
@@ -44,6 +48,18 @@ The `build-playground` / `deploy-playground` jobs in
 `github-pages` environment as part of every release tag push (`X.Y.Z`). To redeploy a tag,
 re-run its release workflow run. GitHub Pages must be configured with
 **Source: GitHub Actions** in the repository settings.
+
+## Performance benchmark
+
+The "Performance benchmark" panel generates many unique codes sequentially (content suffixed
+with `#1`, `#2`, …) to demo library throughput under load, in two modes:
+
+- **Encode only** — the zero-allocation `CreateQrCode(text, ecc, Span<byte>)` overload in a
+  tight loop (pooled text/module buffers, no per-iteration allocation).
+- **Full pipeline** — encode + Skia render + PNG encode with the current visual settings.
+
+The page script chains `BenchmarkBatch` calls sized to ~150ms of wall clock, so progress
+renders and Cancel stays responsive while everything runs single-threaded on the WASM runtime.
 
 ## Share links
 
