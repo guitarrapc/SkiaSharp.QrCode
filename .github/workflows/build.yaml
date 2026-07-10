@@ -94,3 +94,13 @@ jobs:
           ls -l
           chmod +x ConsoleAppNativeAOT${{ matrix.ext }}
           ./ConsoleAppNativeAOT${{ matrix.ext }}
+
+  build-complete:
+    needs: [build, run]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    timeout-minutes: 1
+    steps:
+      - name: Build Complete
+        run: echo "Build and Run completed successfully."
