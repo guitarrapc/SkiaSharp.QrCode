@@ -47,12 +47,18 @@ internal static partial class ModulePlacer
         // Ref-based access below elides per-module bounds checks, so validate the
         // whole traversal range here. size >= 7 keeps the strip column x >= 1
         // (real QR sizes are 21..177), so b-1 never goes negative.
+        // The module count is computed in long: an int size*size would overflow
+        // for size >= 46341 and could wrap below the actual span lengths, letting
+        // the unchecked writes run out of bounds. With long, any size whose square
+        // exceeds int range can never satisfy the length checks and throws here;
+        // for every size that passes, the int index arithmetic below is exact.
         if (size < 7)
             throw new ArgumentOutOfRangeException(nameof(size), $"size must be >= 7, got {size}");
-        if (buffer.Length < size * size)
-            throw new ArgumentException($"buffer too small: required {size * size}, got {buffer.Length}", nameof(buffer));
-        if (blockedMask.Length < (size * size + 7) / 8)
-            throw new ArgumentException($"blockedMask too small: required {(size * size + 7) / 8}, got {blockedMask.Length}", nameof(blockedMask));
+        var totalModules = (long)size * size;
+        if (buffer.Length < totalModules)
+            throw new ArgumentException($"buffer too small: required {totalModules}, got {buffer.Length}", nameof(buffer));
+        if (blockedMask.Length < (totalModules + 7) / 8)
+            throw new ArgumentException($"blockedMask too small: required {(totalModules + 7) / 8}, got {blockedMask.Length}", nameof(blockedMask));
 
         var up = true;
 

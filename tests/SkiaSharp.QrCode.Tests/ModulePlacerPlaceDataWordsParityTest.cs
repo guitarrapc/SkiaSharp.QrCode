@@ -111,6 +111,23 @@ public class ModulePlacerPlaceDataWordsParityTest
             ModulePlacer.PlaceDataWords(buffer, 6, data, mask));
     }
 
+    [Theory]
+    [InlineData(46341)]      // smallest size whose square overflows int
+    [InlineData(65536)]      // size*size wraps to exactly 0 in int
+    [InlineData(int.MaxValue)]
+    public void PlaceDataWords_SizeSquareOverflowsInt_Throws(int size)
+    {
+        // size*size computed in int would wrap (to a small or negative value)
+        // and slip past the length validation, letting the unchecked writes run
+        // out of bounds. The validation must reject these instead.
+        var buffer = new byte[64];
+        var mask = new byte[64];
+        var data = new byte[8];
+
+        Assert.Throws<ArgumentException>(() =>
+            ModulePlacer.PlaceDataWords(buffer, size, data, mask));
+    }
+
     /// <summary>
     /// Builds the matrix state right before data placement the same way
     /// QRCodeGenerator.WriteQRMatrix does: all function patterns placed via
