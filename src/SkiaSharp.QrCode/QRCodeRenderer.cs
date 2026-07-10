@@ -54,15 +54,16 @@ public static class QRCodeRenderer
         // disable antialiasing as it causes gray border around each module.
         using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
 
-        // Apply gradient if specified
-        if (gradientOptions is not null && gradientOptions.Direction != GradientDirection.None)
+        // Apply gradient if specified. The shader wrapper must be disposed here;
+        // disposing the paint alone leaves the SKShader to the finalizer.
+        using var gradientShader = CreateGradientShader(area, gradientOptions);
+        if (gradientShader is not null)
         {
-            var (start, end) = GetLinearGradientPoints(area, gradientOptions.Direction);
-            darkPaint.Shader = SKShader.CreateLinearGradient(start, end, gradientOptions.Colors, gradientOptions.ColorPositions, SKShaderTileMode.Clamp);
+            darkPaint.Shader = gradientShader;
         }
         else
         {
-            darkPaint.Color = codeColor ?? SKColors.Black;
+            darkPaint.Color = fgColor;
         }
 
         // Draw the modules
@@ -278,6 +279,15 @@ public static class QRCodeRenderer
                 finderHeight),
             _ => throw new ArgumentOutOfRangeException(nameof(patternIndex), "Pattern index must be 0 (top-left), 1 (top-right), or 2 (bottom-left)."),
         };
+    }
+
+    private static SKShader? CreateGradientShader(SKRect area, GradientOptions? gradientOptions)
+    {
+        if (gradientOptions is null || gradientOptions.Direction == GradientDirection.None)
+            return null;
+
+        var (start, end) = GetLinearGradientPoints(area, gradientOptions.Direction);
+        return SKShader.CreateLinearGradient(start, end, gradientOptions.Colors, gradientOptions.ColorPositions, SKShaderTileMode.Clamp);
     }
 
     private static (SKPoint start, SKPoint end) GetLinearGradientPoints(SKRect area, GradientDirection direction)
