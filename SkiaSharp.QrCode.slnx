@@ -13,6 +13,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/SkiaSharp.QrCode.Benchmark/SkiaSharp.QrCode.Benchmark.csproj" />
+    <Project Path="src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj" />
     <Project Path="src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj" />
   </Folder>
   <Folder Name="/tests/">

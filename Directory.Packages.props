@@ -23,6 +23,7 @@
     <PackageVersion Include="NativeCompressions" Version="0.6.1" />
     <PackageVersion Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.NanoServer" Version="4.148.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.WebAssembly" Version="4.148.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
     <PackageVersion Include="SkiaSharp.Views.Blazor" Version="4.148.0" />
     <!-- Supply chain -->

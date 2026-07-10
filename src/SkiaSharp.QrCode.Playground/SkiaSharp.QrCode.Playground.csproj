@@ -1,0 +1,74 @@
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>SkiaSharp.QrCode.Playground</RootNamespace>
+    <AssemblyName>SkiaSharp.QrCode.Playground</AssemblyName>
+    <!-- Required by the [JSExport] source generator (SYSLIB1075) -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <InvariantTimezone>true</InvariantTimezone>
+    <!-- Keep readable exception messages; they are surfaced in the UI as generation errors -->
+    <UseSystemResourceKeys>false</UseSystemResourceKeys>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Pre-allocate 64MB at startup to reduce early memory.grow fragmentation -->
+    <EmccInitialHeapSize>67108864</EmccInitialHeapSize>
+    <!-- Allow up to 1GB; Debug builds (no trim, no AOT) plus large canvases can exceed 512MB -->
+    <EmccMaximumHeapSize>1073741824</EmccMaximumHeapSize>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+    <RunAOTCompilation>true</RunAOTCompilation>
+    <WasmEnableWebcil>true</WasmEnableWebcil>
+  </PropertyGroup>
+
+  <!--
+    Static-host deploy (GitHub Pages): use -p:PlaygroundSoftFingerprint=true so the SDK
+    emits BOTH fingerprinted AND non-fingerprinted files.  This keeps href="style.css" and
+    import './_framework/dotnet.js' resolvable without server-side rewrites or import maps.
+    Default (!) keeps only fingerprinted files (suited for hosts that handle import maps).
+  -->
+  <PropertyGroup Condition="'$(PlaygroundSoftFingerprint)' == 'true'">
+    <PlaygroundFingerprintSuffix>?</PlaygroundFingerprintSuffix>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(PlaygroundSoftFingerprint)' != 'true'">
+    <PlaygroundFingerprintSuffix>!</PlaygroundFingerprintSuffix>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- This app only runs in the browser; silences CA1416 for [JSExport] on plain net10.0 TFM -->
+    <SupportedPlatform Include="browser" />
+    <ProjectReference Include="..\SkiaSharp.QrCode\SkiaSharp.QrCode.csproj" />
+    <StaticWebAssetFingerprintPattern Include="JS" Pattern="*.js" Expression="#[.{fingerprint}]$(PlaygroundFingerprintSuffix)" />
+    <StaticWebAssetFingerprintPattern Include="CSS" Pattern="*.css" Expression="#[.{fingerprint}]$(PlaygroundFingerprintSuffix)" />
+  </ItemGroup>
+
+  <!--
+    libSkiaSharp.a is linked into dotnet.native.wasm only when publishing: the native relink
+    requires the wasm-tools workload (Emscripten) and takes minutes. Solution builds stay
+    managed-only so CI matrix legs do not need a native toolchain. Run the app locally via
+    `dotnet publish` (Debug is fast: no AOT, no trimming), then serve the published wwwroot.
+  -->
+  <ItemGroup Condition="'$(_IsPublishing)' == 'true'">
+    <PackageReference Include="SkiaSharp.NativeAssets.WebAssembly" />
+  </ItemGroup>
+
+  <!--
+    Static-host fallback: copy the fingerprinted dotnet entry JS to _framework/dotnet.js so that
+    the ES module import in main.js resolves without an import map (GitHub Pages has no rewrite rules).
+  -->
+  <Target Name="_CopyDotnetJsFallback" AfterTargets="Publish" Condition="'$(PlaygroundSoftFingerprint)' == 'true'">
+    <ItemGroup>
+      <_DotnetEntryJs Include="$(PublishDir)wwwroot/_framework/dotnet.*.js"
+                      Exclude="$(PublishDir)wwwroot/_framework/dotnet.native.*.js;$(PublishDir)wwwroot/_framework/dotnet.runtime.*.js" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_DotnetEntryJs)" DestinationFiles="$(PublishDir)wwwroot/_framework/dotnet.js" />
+  </Target>
+
+</Project>

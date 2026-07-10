@@ -95,8 +95,30 @@ jobs:
           chmod +x ConsoleAppNativeAOT${{ matrix.ext }}
           ./ConsoleAppNativeAOT${{ matrix.ext }}
 
+  # Playground native relink (SkiaSharp + Emscripten) only happens on publish, so the
+  # matrix `dotnet build` above stays managed-only. Verify the publish path on one leg.
+  # AOT is disabled here for speed; the Deploy Playground workflow publishes with full AOT.
+  build-playground:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
+        with:
+          dotnet-version: 10.0
+      - name: Install wasm-tools workload
+        run: dotnet workload install wasm-tools
+      # No -r browser-wasm: it would propagate to the multi-targeted library reference
+      # and require the wasm-tools-net8 workload; the WebAssembly SDK defaults the RID anyway.
+      - name: Publish Playground (browser-wasm Release, no AOT)
+        run: dotnet publish src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj -c Release -p:RunAOTCompilation=false -p:PlaygroundSoftFingerprint=true -o publish/playground/
+
   build-complete:
-    needs: [build, run]
+    needs: [build, run, build-playground]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
