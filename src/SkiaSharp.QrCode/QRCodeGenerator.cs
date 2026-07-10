@@ -186,7 +186,15 @@ public static class QRCodeGenerator
         // Create ECCInfo
         var eccInfo = QRCodeConstants.GetEccInfo(version, eccLevel);
 
-        return new QRConfiguration(version, eccLevel, analysisResult.EncodingMode, analysisResult.EciMode, utf8BOM, eccInfo, analysisResult.DataLength);
+        // UTF-8 BOM bytes ([0xEF, 0xBB, 0xBF]) are written into the Byte-mode data stream,
+        // so the character count indicator must include them (ISO/IEC 18004 7.4.5)
+        var dataLength = analysisResult.DataLength;
+        if (utf8BOM && analysisResult.EncodingMode == EncodingMode.Byte && analysisResult.EciMode == EciMode.Utf8)
+        {
+            dataLength += 3;
+        }
+
+        return new QRConfiguration(version, eccLevel, analysisResult.EncodingMode, analysisResult.EciMode, utf8BOM, eccInfo, dataLength);
     }
 
     /// <summary>

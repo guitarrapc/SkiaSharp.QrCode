@@ -243,8 +243,8 @@ internal ref struct QRBinaryEncoder
     /// <param name="textSpan"></param>
     private void EncodeByte(ReadOnlySpan<char> textSpan, EciMode eci, bool utf8Bom)
     {
-        // Determine encoding based on ECI mode
-        var maxByteCount = textSpan.Length * 4;
+        // Determine encoding based on ECI mode (+3 reserves room for the UTF-8 BOM)
+        var maxByteCount = textSpan.Length * 4 + (utf8Bom ? 3 : 0);
 
         if (maxByteCount <= StackAllocThreshold)
         {
