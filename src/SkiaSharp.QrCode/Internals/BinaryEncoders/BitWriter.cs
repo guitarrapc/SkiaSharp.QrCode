@@ -1,17 +1,28 @@
+using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 
 /// <summary>
-/// Writes bit to a byte buffer with precise bit-level control.
+/// Writes bits to a byte buffer with precise bit-level control (MSB-first).
 /// Used for QR code data encoding.
 /// </summary>
+/// <remarks>
+/// Bits are staged in a 64-bit accumulator and stored as 32-bit big-endian words
+/// once available, so up to 31 bits stay pending between writes. Buffer contents
+/// are only guaranteed after <see cref="Flush"/> (called by <see cref="GetData"/>
+/// and <see cref="WritePadBytes"/>); <see cref="BitPosition"/> and
+/// <see cref="ByteCount"/> are always valid.
+/// The caller guarantees the buffer is large enough for all writes; exceeding it
+/// surfaces as an out-of-range exception from the underlying span access.
+/// </remarks>
 internal ref struct BitWriter
 {
     private Span<byte> _buffer;
     private int _bytePosition;
-    private byte _accumulator;
-    private int _accumulatorBits;
+    private ulong _accumulator;   // pending bits stored at the top (MSB-first)
+    private int _accumulatorBits; // 0..31 between writes
 
     /// <summary>
     /// Current bit position in the buffer.
@@ -24,7 +35,7 @@ internal ref struct BitWriter
     /// <remarks>
     /// If written 9 bits, this will be 2
     /// </remarks>
-    public int ByteCount => _bytePosition + (_accumulatorBits > 0 ? 1 : 0);
+    public int ByteCount => _bytePosition + (_accumulatorBits + 7) / 8;
 
     public BitWriter(Span<byte> buffer)
     {
@@ -32,97 +43,100 @@ internal ref struct BitWriter
         _bytePosition = 0;
         _accumulator = 0;
         _accumulatorBits = 0;
-        buffer.Clear(); // 0 initialization
+        // No upfront clear: every byte in [0, ByteCount) is stored by
+        // Write/Flush/WritePadBytes, so zero-initialization is redundant.
     }
 
     /// <summary>
-    /// Writes specified number of bits from value (LSB first)
+    /// Writes specified number of bits from value (MSB of the value range first).
     /// </summary>
-    /// <param name="value"></param>
-    /// <param name="bitCount"></param>
+    /// <param name="value">Value whose low <paramref name="bitCount"/> bits are written.</param>
+    /// <param name="bitCount">Number of bits to write (1-32).</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Write(int value, int bitCount)
     {
-        // --------------------------------------------
-        // if Write(0b101, 3) & bit position is 0
-        // --------------------------------------------
-        // step 1: (i = 2), (bit = (0b101 >> 2) & 1 => 1), (byteIndex = 0), (bitIndex = 7 - (0 % 8) => 7), (_buffer[0] after write => 10000000), (_bitPosition = 1)
-        // step 2: (i = 1), (bit = (0b101 >> 1) & 1 => 0), (byteIndex = 0), (bitIndex = 7 - (1 % 8) => 6), (_buffer[0] after write => 10000000), (_bitPosition = 2)
-        // step 3: (i = 0), (bit = (0b101 >> 0) & 1 => 1), (byteIndex = 0), (bitIndex = 7 - (2 % 8) => 5), (_buffer[0] after write => 10100000), (_bitPosition = 3)
-        // Result: _buffer[0] = 0b10100000
-        // --------------------------------------------
+        Debug.Assert(bitCount >= 1 && bitCount <= 32, "bitCount must be between 1 and 32");
 
-        if (bitCount < 1 || bitCount > 32)
-            throw new ArgumentOutOfRangeException(nameof(bitCount), "bitCount must be between 1 and 32");
+        // stage: place the value's low bitCount bits directly below the pending bits
+        // headroom: _accumulatorBits <= 31, bitCount <= 32 -> at most 63 bits pending
+        var v = (ulong)(uint)value & ((1UL << bitCount) - 1);
+        _accumulator |= v << (64 - _accumulatorBits - bitCount);
+        _accumulatorBits += bitCount;
 
-        if (BitPosition + bitCount > _buffer.Length * 8)
-            throw new InvalidOperationException($"Buffer overflow: trying to write {bitCount} bits at position {BitPosition}, buffer size: {_buffer.Length * 8} bits");
-
-        // 16 bits over, split into two writes
-        if (bitCount > 16)
+        // store a full 32-bit word once available
+        if (_accumulatorBits >= 32)
         {
-            var highBits = bitCount - 16;
-            Write(value >> 16, highBits);
-            Write(value & 0xFFFF, 16);
-            return;
+            BinaryPrimitives.WriteUInt32BigEndian(_buffer.Slice(_bytePosition), (uint)(_accumulator >> 32));
+            _bytePosition += 4;
+            _accumulator <<= 32;
+            _accumulatorBits -= 32;
         }
+    }
 
-        // 8 bits over and accumulator is empty, split into two writes
-        if (bitCount > 8 && _accumulatorBits == 0)
-        {
-            var highBits = bitCount - 8;
-            WriteInternal(value >> 8, highBits);
-            WriteInternal(value & 0xFF, 8);
-        }
-        else
-        {
-            WriteInternal(value, bitCount);
-        }
+    /// <summary>
+    /// Writes 64 bits at once (bulk path for byte-mode data).
+    /// </summary>
+    /// <param name="value">Big-endian bit sequence: the MSB is written first.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Write64(ulong value)
+    {
+        // merge pending bits with the head of the value and store 8 bytes;
+        // the displaced tail bits stay pending (count unchanged)
+        var combined = _accumulator | (value >> _accumulatorBits);
+        BinaryPrimitives.WriteUInt64BigEndian(_buffer.Slice(_bytePosition), combined);
+        _bytePosition += 8;
+        _accumulator = _accumulatorBits == 0 ? 0UL : value << (64 - _accumulatorBits);
+    }
 
-        // if there are remaining bits in the accumulator, flush them to the buffer
+    /// <summary>
+    /// Stores all pending bits to the buffer. Full bytes advance the position;
+    /// a trailing partial byte is stored (low bits zero) without advancing.
+    /// Idempotent; writing may continue afterwards.
+    /// </summary>
+    public void Flush()
+    {
+        while (_accumulatorBits >= 8)
+        {
+            _buffer[_bytePosition++] = (byte)(_accumulator >> 56);
+            _accumulator <<= 8;
+            _accumulatorBits -= 8;
+        }
         if (_accumulatorBits > 0)
         {
-            _buffer[_bytePosition] = _accumulator;
+            _buffer[_bytePosition] = (byte)(_accumulator >> 56);
         }
     }
 
     /// <summary>
-    /// Internal write logic that assumes bitCount <= 16 and fits in the buffer
+    /// Writes alternating pad bytes (0xEC, 0x11, ...) directly to the buffer.
+    /// Requires the current position to be byte-aligned.
     /// </summary>
-    /// <param name="value"></param>
-    /// <param name="bitCount"></param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void WriteInternal(int value, int bitCount)
+    public void WritePadBytes(int count)
     {
-        var remainingBits = bitCount;
-        while (remainingBits > 0)
+        // drain pending full bytes so _bytePosition is the true write position
+        while (_accumulatorBits >= 8)
         {
-            // decide how many bits to write in this iteration
-            var bitsToWrite = Math.Min(remainingBits, 8 - _accumulatorBits);
-
-            // extract the bits to write (from MSB)
-            var shift = remainingBits - bitsToWrite;
-            var mask = (1 << bitsToWrite) - 1;
-            var bits = (value >> shift) & mask;
-
-            // add to accumulator
-            _accumulator |= (byte)(bits << (8 - _accumulatorBits - bitsToWrite));
-            _accumulatorBits += bitsToWrite;
-            remainingBits -= bitsToWrite;
-
-            // if accumulator is full, write to buffer
-            if (_accumulatorBits == 8)
-            {
-                _buffer[_bytePosition++] = _accumulator;
-                _accumulator = 0;
-                _accumulatorBits = 0;
-            }
+            _buffer[_bytePosition++] = (byte)(_accumulator >> 56);
+            _accumulator <<= 8;
+            _accumulatorBits -= 8;
         }
+        Debug.Assert(_accumulatorBits == 0, "Pad fill requires byte alignment");
+
+        var span = _buffer.Slice(_bytePosition, count);
+        for (var i = 0; i < span.Length; i++)
+        {
+            span[i] = (i & 1) == 0 ? (byte)0xEC : (byte)0x11;
+        }
+        _bytePosition += count;
     }
 
     /// <summary>
-    /// Gets the written data as a read-only span
+    /// Gets the written data as a read-only span (flushes pending bits first).
     /// </summary>
     /// <returns></returns>
-    public ReadOnlySpan<byte> GetData() => _buffer[..ByteCount];
+    public ReadOnlySpan<byte> GetData()
+    {
+        Flush();
+        return _buffer.Slice(0, ByteCount);
+    }
 }
