@@ -97,8 +97,128 @@ QRCodeImageBuilder.SavePng("Your content here", stream, ECCLevel.M, size: 512);
 
 ## Migration
 
+- **v1.0.0 removes the obsolete `QrCode` class.** If you still use `QrCode`, see [from before v1.0.0 to v1.0.0](#from-before-v100-to-v100) below.
 - v0.11.0 introduces further improvements to Icon handling. See the IconData section below.
 - v0.9.0 introduces significant performance improvements and API changes. Here's what you need to know to upgrade:
+
+### from before v1.0.0 to v1.0.0
+
+The `QrCode` class has been **removed** in v1.0.0. It was marked obsolete in v0.9.0; use `QRCodeImageBuilder` instead.
+
+> **Default ECC level change:** `QrCode.GenerateImage()` defaulted to `ECCLevel.L`. `QRCodeImageBuilder` defaults to `ECCLevel.M`. Pass `WithErrorCorrection(ECCLevel.L)` or the `eccLevel` argument on static methods if you need the previous behavior.
+
+#### Basic: generate to stream
+
+**Before (0.12.x and earlier):**
+
+```csharp
+using SkiaSharp.QrCode.Image;
+
+var qrCode = new QrCode(content, new Vector2Slim(256, 256), SKEncodedImageFormat.Png);
+using var stream = File.OpenWrite(path);
+qrCode.GenerateImage(stream);
+```
+
+**After (v1.0.0):**
+
+```csharp
+using SkiaSharp.QrCode.Image;
+
+using var stream = File.OpenWrite(path);
+QRCodeImageBuilder.SavePng(content, stream, ECCLevel.L, size: 256);
+```
+
+Or with the builder pattern:
+
+```csharp
+using var stream = File.OpenWrite(path);
+new QRCodeImageBuilder(content)
+    .WithSize(256, 256)
+    .WithErrorCorrection(ECCLevel.L)
+    .SaveTo(stream);
+```
+
+#### Format and quality
+
+**Before:**
+
+```csharp
+var qrCode = new QrCode(content, new Vector2Slim(512, 512), SKEncodedImageFormat.Jpeg, quality: 90);
+qrCode.GenerateImage(stream);
+```
+
+**After:**
+
+```csharp
+new QRCodeImageBuilder(content)
+    .WithSize(512, 512)
+    .WithFormat(SKEncodedImageFormat.Jpeg, quality: 90)
+    .SaveTo(stream);
+```
+
+#### Get bytes instead of writing to stream
+
+**Before:**
+
+```csharp
+using var stream = new MemoryStream();
+qrCode.GenerateImage(stream);
+var bytes = stream.ToArray();
+```
+
+**After:**
+
+```csharp
+var bytes = QRCodeImageBuilder.GetPngBytes(content, ECCLevel.L, size: 256);
+// Or with format:
+var bytes = QRCodeImageBuilder.GetImageBytes(content, SKEncodedImageFormat.Png, ECCLevel.L, size: 256);
+```
+
+#### Stream position (`resetStreamPosition`)
+
+`QrCode.GenerateImage()` could rewind a seekable stream before writing (`resetStreamPosition: true` by default). `QRCodeImageBuilder` does not reset stream position. Reset manually when needed:
+
+```csharp
+if (stream.CanSeek)
+    stream.Seek(0, SeekOrigin.Begin);
+
+QRCodeImageBuilder.SavePng(content, stream, size: 256);
+```
+
+#### Overlay QR code on a base image
+
+`QrCode` had overloads to composite a QR code onto an existing image. Use SkiaSharp canvas drawing instead:
+
+**Before:**
+
+```csharp
+var qrCode = new QrCode(content, new Vector2Slim(qrWidth, qrHeight), SKEncodedImageFormat.Png);
+using var output = File.OpenWrite(path);
+qrCode.GenerateImage(output, baseImageBytes, new Vector2Slim(canvasWidth, canvasHeight), new Vector2Slim(x, y));
+```
+
+**After:**
+
+```csharp
+using var baseBitmap = SKBitmap.Decode(baseImageBytes);
+var info = new SKImageInfo(canvasWidth, canvasHeight);
+using var surface = SKSurface.Create(info);
+var canvas = surface.Canvas;
+
+canvas.DrawBitmap(baseBitmap, 0, 0);
+
+using (var qrBitmap = new QRCodeImageBuilder(content)
+    .WithSize(qrWidth, qrHeight)
+    .ToBitmap())
+{
+    canvas.DrawBitmap(qrBitmap, x, y);
+}
+
+using var image = surface.Snapshot();
+using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+using var output = File.OpenWrite(path);
+data.SaveTo(output);
+```
 
 ### from 0.10.0 to 0.11.0 and higher
 
@@ -161,31 +281,7 @@ For complete migration details and examples, see [Release 0.9.0](https://github.
 
 #### 🔄 Primary API Change: `QrCode` → `QRCodeImageBuilder`
 
-The `QrCode` class is now **obsolete**. Replace it with `QRCodeImageBuilder`:
-
-**Before (0.8.0):**
-```csharp
-var qrCode = new QrCode(content, new Vector2Slim(512, 512), SKEncodedImageFormat.Png);
-using (var output = new FileStream(path, FileMode.OpenOrCreate))
-{
-    qrCode.GenerateImage(output);
-}
-```
-
-**After (0.9.0) - Simple approach:**
-```csharp
-var pngBytes = QRCodeImageBuilder.GetPngBytes(content);
-File.WriteAllBytes(path, pngBytes);
-```
-
-**After (0.9.0) - Builder pattern:**
-```csharp
-using var stream = File.OpenWrite(path);
-new QRCodeImageBuilder(content)
-    .WithSize(512, 512)
-    .WithErrorCorrection(ECCLevel.H)
-    .SaveTo(stream);
-```
+The `QrCode` class was marked **obsolete** in v0.9.0 and **removed** in v1.0.0. Replace it with `QRCodeImageBuilder`. For full migration examples (stream output, format/quality, base-image overlay, and more), see [from before v1.0.0 to v1.0.0](#from-before-v100-to-v100).
 
 #### 🗑️ Remove `using` Statements
 
