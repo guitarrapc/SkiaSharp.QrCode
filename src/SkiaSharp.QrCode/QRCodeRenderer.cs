@@ -66,44 +66,17 @@ public static class QRCodeRenderer
             darkPaint.Color = fgColor;
         }
 
-        // Draw the modules
-        var size = data.Size;
-        var coreSize = data.GetCoreSize();
-        var cellHeight = area.Height / size;
-        var cellWidth = area.Width / size;
-        var quietZoneOffset = size - coreSize;
-
-        // Calculate module size with gaps
-        var moduleWidth = cellWidth * moduleSizePercent;
-        var moduleHeight = cellHeight * moduleSizePercent;
-        var xOffset = (cellWidth - moduleWidth) / 2;
-        var yOffset = (cellHeight - moduleHeight) / 2;
-
-        // Draw regular modules (exclude finder patterns)
-        for (int row = 0; row < size; row++)
+        // Draw regular modules (exclude finder patterns when a custom shape draws them).
+        // Full-cell rectangles with antialiasing off touch exactly, so horizontal runs
+        // of dark modules collapse into single rects — far fewer native draw calls.
+        var skipFinderPatterns = finderPatternShape is not null;
+        if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
         {
-            for (int col = 0; col < size; col++)
-            {
-                // Convert to core coordinates
-                var coreRow = row - quietZoneOffset / 2;
-                var coreCol = col - quietZoneOffset / 2;
-
-                // Skip if outside core area
-                if (coreRow < 0 || coreRow >= coreSize || coreCol < 0 || coreCol >= coreSize)
-                    continue;
-
-                // Skip finder pattern if custom shape is used
-                if (finderPatternShape is not null && data.IsFinderPattern(coreRow, coreCol))
-                    continue;
-
-                if (data[row, col])
-                {
-                    var x = area.Left + col * cellWidth + xOffset;
-                    var y = area.Top + row * cellHeight + yOffset;
-                    var rect = SKRect.Create(x, y, moduleWidth, moduleHeight);
-                    shape.Draw(canvas, rect, darkPaint);
-                }
-            }
+            DrawModuleRuns(canvas, data, area, darkPaint, skipFinderPatterns);
+        }
+        else
+        {
+            DrawModules(canvas, data, area, darkPaint, shape, moduleSizePercent, skipFinderPatterns);
         }
 
         // Draw finder patterns
@@ -279,6 +252,85 @@ public static class QRCodeRenderer
                 finderHeight),
             _ => throw new ArgumentOutOfRangeException(nameof(patternIndex), "Pattern index must be 0 (top-left), 1 (top-right), or 2 (bottom-left)."),
         };
+    }
+
+    /// <summary>
+    /// Draws dark modules as merged horizontal runs of full-cell rectangles.
+    /// Only valid for <see cref="RectangleModuleShape"/> at 100% module size, where
+    /// adjacent modules share edges and merging is visually identical.
+    /// </summary>
+    private static void DrawModuleRuns(SKCanvas canvas, QRCodeData data, SKRect area, SKPaint paint, bool skipFinderPatterns)
+    {
+        var size = data.Size;
+        var coreSize = data.GetCoreSize();
+        var cellWidth = area.Width / size;
+        var cellHeight = area.Height / size;
+        var quietZone = (size - coreSize) / 2;
+
+        // The quiet zone is always light, so only the core area is scanned.
+        for (var coreRow = 0; coreRow < coreSize; coreRow++)
+        {
+            var top = area.Top + (coreRow + quietZone) * cellHeight;
+            var bottom = top + cellHeight;
+            var coreCol = 0;
+            while (coreCol < coreSize)
+            {
+                if (!data.GetCoreModule(coreRow, coreCol) || (skipFinderPatterns && data.IsFinderPattern(coreRow, coreCol)))
+                {
+                    coreCol++;
+                    continue;
+                }
+
+                var runStart = coreCol;
+                do
+                {
+                    coreCol++;
+                } while (coreCol < coreSize
+                    && data.GetCoreModule(coreRow, coreCol)
+                    && !(skipFinderPatterns && data.IsFinderPattern(coreRow, coreCol)));
+
+                var left = area.Left + (runStart + quietZone) * cellWidth;
+                var right = area.Left + (coreCol + quietZone) * cellWidth;
+                canvas.DrawRect(new SKRect(left, top, right, bottom), paint);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Draws dark modules one by one through the module shape.
+    /// Used for custom shapes and for module sizes below 100% (gaps between modules).
+    /// </summary>
+    private static void DrawModules(SKCanvas canvas, QRCodeData data, SKRect area, SKPaint paint, ModuleShape shape, float moduleSizePercent, bool skipFinderPatterns)
+    {
+        var size = data.Size;
+        var coreSize = data.GetCoreSize();
+        var cellWidth = area.Width / size;
+        var cellHeight = area.Height / size;
+        var quietZone = (size - coreSize) / 2;
+
+        // Calculate module size with gaps
+        var moduleWidth = cellWidth * moduleSizePercent;
+        var moduleHeight = cellHeight * moduleSizePercent;
+        var xOffset = (cellWidth - moduleWidth) / 2;
+        var yOffset = (cellHeight - moduleHeight) / 2;
+
+        // The quiet zone is always light, so only the core area is scanned.
+        for (var coreRow = 0; coreRow < coreSize; coreRow++)
+        {
+            var y = area.Top + (coreRow + quietZone) * cellHeight + yOffset;
+            for (var coreCol = 0; coreCol < coreSize; coreCol++)
+            {
+                if (skipFinderPatterns && data.IsFinderPattern(coreRow, coreCol))
+                    continue;
+
+                if (data.GetCoreModule(coreRow, coreCol))
+                {
+                    var x = area.Left + (coreCol + quietZone) * cellWidth + xOffset;
+                    var rect = SKRect.Create(x, y, moduleWidth, moduleHeight);
+                    shape.Draw(canvas, rect, paint);
+                }
+            }
+        }
     }
 
     private static SKShader? CreateGradientShader(SKRect area, GradientOptions? gradientOptions)
