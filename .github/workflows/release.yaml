@@ -6,13 +6,81 @@ on:
       - "[0-9]+.[0-9]+.[0-9]+*" # only tag
   workflow_dispatch:
     inputs:
-      version:
-        description: "Version to release"
-        required: false
-        default: "0.0.0-dev"
+      tag:
+        description: "Existing Git tag to release (e.g. 1.0.0). Must already exist on the remote."
+        required: true
+        type: string
+
+permissions: {}
 
 jobs:
+  # Gate: resolve tag, verify Directory.Build.props version matches, build & test
+  validate:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Resolve tag ref
+        id: ref
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            TAG="${INPUT_TAG#v}" # normalize: tags in this repo have no "v" prefix
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+
+      - name: Verify tag on remote (workflow_dispatch)
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ref.outputs.tag }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --silent \
+            || { echo "::error::Tag '${TAG}' does not exist on the remote. Push it first, then re-run."; exit 1; }
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          ref: ${{ steps.ref.outputs.tag }}
+
+      - name: Verify version ↔ tag consistency
+        id: version
+        env:
+          TAG: ${{ steps.ref.outputs.tag }}
+        run: |
+          set -euo pipefail
+          PROPS_VERSION=$(grep -oP '(?<=<Version>)[^<]+' Directory.Build.props)
+          if [ "$PROPS_VERSION" != "$TAG" ]; then
+            echo "::error::Version mismatch: Directory.Build.props has '$PROPS_VERSION' but tag is '$TAG'. Update Directory.Build.props before tagging."
+            exit 1
+          fi
+          echo "version=${PROPS_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "### Version check passed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Tag:** \`${TAG}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version:** \`${PROPS_VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
+        with:
+          restore-wasm-workload: true
+          dotnet-version: |
+            10.0.x
+            8.0.x
+      - name: Build
+        run: dotnet build -c Release
+      - name: Test
+        run: dotnet test -c Release --no-build --logger GitHubActions --logger "console;verbosity=normal"
+
   build-dotnet:
+    needs: [validate]
     permissions:
       attestations: write
       contents: read
@@ -23,20 +91,15 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+          ref: ${{ needs.validate.outputs.tag }}
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
         with:
           restore-wasm-workload: true
           dotnet-version: |
             10.0.x
             8.0.x
-      # build
-      - run: dotnet build -c Release -p:Version="${GIT_TAG}"
-        env:
-          GIT_TAG: ${{ inputs.version || github.ref_name }}
-      # pack
-      - run: dotnet pack -c Release -p:Version="${GIT_TAG}" -o ./publish
-        env:
-          GIT_TAG: ${{ inputs.version || github.ref_name }}
+      # pack (version comes from Directory.Build.props, verified against the tag in validate)
+      - run: dotnet pack -c Release -o ./publish
       # attestations
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
@@ -50,6 +113,7 @@ jobs:
           if-no-files-found: error
 
   build-playground:
+    needs: [validate]
     permissions:
       contents: read
     runs-on: ubuntu-24.04
@@ -58,30 +122,28 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+          ref: ${{ needs.validate.outputs.tag }}
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
         with:
           dotnet-version: 10.0
       - name: Install wasm-tools workload
         run: dotnet workload install wasm-tools
-      # Version flows into the in-page version badge (AssemblyInformationalVersion).
+      # Version for the in-page badge (AssemblyInformationalVersion) comes from Directory.Build.props.
       # No -r browser-wasm: the WebAssembly SDK defaults to it, and passing it as a global
       # property would force the multi-targeted library reference to need wasm-tools-net8.
       - name: Publish Playground (browser-wasm Release)
-        env:
-          GIT_TAG: ${{ inputs.version || github.ref_name }}
         run: |
-          dotnet publish src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj -c Release -p:PlaygroundSoftFingerprint=true -p:Version="${GIT_TAG}" -o publish/
+          dotnet publish src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj -c Release -p:PlaygroundSoftFingerprint=true -o publish/
       - name: Add .nojekyll
         run: touch publish/wwwroot/.nojekyll
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: publish/wwwroot
 
-  # GitHub Pages deploy of the Playground; tag pushes only, same as create-release.
+  # GitHub Pages deploy of the Playground.
   # Depends on build-dotnet so a broken release build also blocks the pages deploy.
-  # To redeploy a tag, re-run its release workflow run.
+  # To redeploy a tag, re-run its release workflow run or dispatch with the tag.
   deploy-playground:
-    if: ${{ github.event_name == 'push' }}
     needs: [build-playground, build-dotnet]
     concurrency:
       group: pages
@@ -99,8 +161,7 @@ jobs:
         uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
 
   create-release:
-    if: ${{ github.event_name == 'push' }}
-    needs: [build-dotnet]
+    needs: [validate, build-dotnet]
     permissions:
       contents: write
       id-token: write # for NuGet Trusted Publish
@@ -124,10 +185,10 @@ jobs:
       - name: Create Release
         uses: guitarrapc/actions/.github/actions/create-release@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
         with:
-          tag: ${{ github.ref_name }}
-          title: ${{ github.ref_name }}
+          tag: ${{ needs.validate.outputs.tag }}
+          title: ${{ needs.validate.outputs.tag }}
           gh-token: ${{ secrets.GITHUB_TOKEN }}
-      # upload nuget
+      # upload nuget (--skip-duplicate keeps re-runs / dispatch re-releases idempotent)
       - run: dotnet nuget push "./nuget/*.nupkg" --skip-duplicate -s https://api.nuget.org/v3/index.json -k "${NUGET_KEY}"
         env:
           NUGET_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
