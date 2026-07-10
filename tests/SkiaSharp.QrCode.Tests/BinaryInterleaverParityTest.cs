@@ -56,6 +56,36 @@ public class BinaryInterleaverParityTest
         }
     }
 
+    [Theory]
+    [InlineData(5, ECCLevel.Q)]  // multi-block (2+2), version with 7 remainder bits
+    [InlineData(5, ECCLevel.L)]  // single-block fast path, 7 remainder bits
+    [InlineData(1, ECCLevel.L)]  // single-block fast path, 0 remainder bits (no tail)
+    public void InterleaveCodewords_DirtyOutputBuffer_RemainderTailIsZeroed(int version, ECCLevel level)
+    {
+        // The remainder-bits byte is placed into the matrix by PlaceDataWords and must
+        // be 0 per ISO/IEC 18004 — the function must not rely on the caller handing
+        // over a pre-zeroed buffer (SkipLocalsInit stackalloc, pooled arrays).
+        var eccInfo = GetEccInfo(version, level);
+        var dataLen = eccInfo.TotalDataCodewords;
+        var eccLen = (eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock;
+        var outputSize = BinaryInterleaver.CalculateInterleavedSize(eccInfo, version);
+
+        var data = new byte[dataLen];
+        var ecc = new byte[eccLen];
+        new Random(1).NextBytes(data);
+        new Random(101).NextBytes(ecc);
+
+        var output = new byte[outputSize];
+        output.AsSpan().Fill(0xFF); // dirty buffer
+
+        BinaryInterleaver.InterleaveCodewords(data, ecc, output, version, eccInfo);
+
+        for (var i = dataLen + eccLen; i < outputSize; i++)
+        {
+            Assert.Equal(0, output[i]);
+        }
+    }
+
     [Fact]
     public void InterleaveCodewords_UndersizedDataBuffer_Throws()
     {

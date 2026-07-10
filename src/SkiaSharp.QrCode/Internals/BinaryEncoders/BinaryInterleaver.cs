@@ -49,6 +49,13 @@ internal static class BinaryInterleaver
         if (output.Length < dataLen + eccLen)
             throw new ArgumentException($"Output buffer too small: required {dataLen + eccLen}, got {output.Length}", nameof(output));
 
+        // Zero the remainder-bits tail (at most 1 byte for CalculateInterleavedSize-sized
+        // buffers) so the output is deterministic even if the caller passes an
+        // uninitialized buffer (SkipLocalsInit stackalloc, pooled arrays). The remainder
+        // bits are consumed by ModulePlacer.PlaceDataWords and must be 0 per ISO/IEC 18004.
+        if (output.Length > dataLen + eccLen)
+            output.Slice(dataLen + eccLen).Clear();
+
         // Single block: interleaving is the identity permutation (versions 1-2 at most
         // ECC levels, v5L, ...) — two sequential copies, ~5x faster than the loop
         if (totalBlocks == 1)
@@ -119,7 +126,7 @@ internal static class BinaryInterleaver
             }
         }
 
-        // Remainder bits are already zeroed in the output buffer. No need to explicitly write remainder bits.
+        // Remainder bits were zeroed upfront (tail Clear after validation).
     }
 
     /// <summary>
