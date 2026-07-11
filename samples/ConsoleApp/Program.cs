@@ -4,11 +4,19 @@ using SkiaSharp.QrCode.Image;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-var content = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md";
-var outputDir = "bin/output";
-var iconPath = "samples/test.png";
+// Resolve paths from the project directory (not cwd), so output lands in
+// samples/ConsoleApp/samples/ regardless of where dotnet run is invoked from.
+static string GetProjectDirectory() =>
+    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", ".."));
+
+var projectDir = GetProjectDirectory();
+var samplesDir = Path.Combine(projectDir, "samples");
+var outputDir = samplesDir;
+var iconPath = Path.Combine(samplesDir, "test.png");
 // Square Instagram logo (128x128). Prefer over samples/insta.png (133x135, non-square).
-var iconInstaPath = "samples/instarich-logo.png";
+var iconInstaPath = Path.Combine(samplesDir, "instarich-logo.png");
+
+var content = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md";
 
 // prepare
 Directory.CreateDirectory(outputDir);
