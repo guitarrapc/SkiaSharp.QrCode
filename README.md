@@ -64,7 +64,7 @@ Single line QR code generation:
 using SkiaSharp.QrCode.Image;
 
 // one-liner save to file
-QRCodeImageBuilder.SavePng("Hello", "qrcode.png");
+File.WriteAllBytes("qrcode.png", QRCodeImageBuilder.GetPngBytes("Hello"));
 
 // Or get bytes
 var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
@@ -83,14 +83,13 @@ WiFi QR Code.
 
 ```csharp
 var wifiString = "WIFI:T:WPA;S:MyNetwork;P:MyPassword;;";
-QRCodeImageBuilder.SavePng(wifiString, "wifi-qr.png");
+File.WriteAllBytes("wifi-qr.png", QRCodeImageBuilder.GetPngBytes(wifiString));
 ```
 
 SVG (vector) output.
 
 ```csharp
-using var stream = File.Create("qrcode.svg");
-QRCodeImageBuilder.SaveSvg("https://example.com", stream);
+File.WriteAllText("qrcode.svg", QRCodeImageBuilder.GetSvgString("https://example.com"));
 ```
 
 Generate with Custom Settings.
