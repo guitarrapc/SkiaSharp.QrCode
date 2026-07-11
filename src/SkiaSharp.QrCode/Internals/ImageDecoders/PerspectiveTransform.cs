@@ -15,7 +15,7 @@ namespace SkiaSharp.QrCode.Internals.ImageDecoders;
 /// </remarks>
 internal readonly struct PerspectiveTransform
 {
-    private readonly float a11, a12, a13, a21, a22, a23, a31, a32, a33;
+    internal readonly float a11, a12, a13, a21, a22, a23, a31, a32, a33;
 
     private PerspectiveTransform(float a11, float a21, float a31, float a12, float a22, float a32, float a13, float a23, float a33)
     {

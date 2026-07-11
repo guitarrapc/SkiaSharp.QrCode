@@ -136,6 +136,14 @@ Kanji mode, FNC1, Structured Append, other ECI charsets.
   Pre-mapping the whole codeword to remove the in-loop affine measured *slower*: that
   affine was off the carried dependency chain, so removing it saved nothing while the
   extra pass cost real time.
+- Perspective grid sampling ships a SIMD kernel (net8.0+ AVX2): 8 module centers per
+  vector iteration with the exact scalar op sequence (no FMA, keeping bit parity) —
+  2.7x at version 40 (79 µs → 29 µs), scalar row-hoisted fallback elsewhere. Measured
+  refutation worth keeping: the loop is *not* division-bound — module computations
+  are independent, so out-of-order execution hides division latency (halving the
+  division count measured no gain); the cost was scalar conversion/clamp/branch
+  overhead. Sampling is ~0.8% of a typical (version 4) image decode — the win
+  matters for large symbols only (`MICRO_OPTIMIZATION_PerspectiveSample`).
 - The alignment pattern search is failure-path-dominated: the expanding window sweep
   (4→8→16 modules) runs to completion when no pattern exists, up to 4× per failed
   decode (secondary dimension × inversion) — baseline ~40% of an image decode. Shipped
