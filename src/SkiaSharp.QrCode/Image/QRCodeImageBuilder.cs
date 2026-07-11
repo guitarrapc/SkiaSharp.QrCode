@@ -483,12 +483,39 @@ public class QRCodeImageBuilder
         var qrCodeData = _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, requestedVersion: _requestedVersion, quietZoneSize: _quietZoneSize);
 
         var (info, contentRect) = CreateLayout(qrCodeData);
+
+        var clearColor = _clearColor ?? SKColors.Transparent;
+        var contentCoversCanvas = contentRect.Left <= 0 && contentRect.Top <= 0
+            && contentRect.Right >= info.Width && contentRect.Bottom >= info.Height;
+        var backgroundIsOpaque = (_backgroundColor ?? SKColors.White).Alpha == byte.MaxValue;
+        var clearIsOpaque = clearColor.Alpha == byte.MaxValue;
+
+        // When the base layer (QR background fill, or the cleared canvas) is opaque
+        // everywhere, anything drawn over it stays opaque, so the whole image is
+        // opaque no matter what modules/icons/gradients are painted on top.
+        // An opaque surface lets encoders skip the alpha channel and the unpremul
+        // pass — PNG output becomes RGB: smaller and faster to encode.
+        var isOpaque = contentCoversCanvas
+            ? backgroundIsOpaque || clearIsOpaque
+            : clearIsOpaque;
+        if (isOpaque)
+        {
+            info = info.WithAlphaType(SKAlphaType.Opaque);
+        }
+
         using var surface = SKSurface.Create(info);
         var canvas = surface.Canvas;
 
-        // Extension clears the full canvas with clearColor, then draws QR into contentRect.
-        // Extra canvas area (pad) therefore keeps clearColor.
-        canvas.Render(qrCodeData, contentRect, _clearColor, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
+        // Clear the canvas with clearColor, then draw QR into contentRect; extra
+        // canvas area (pad) keeps clearColor. The clear is skipped when it cannot
+        // remain visible: a fresh surface is already fully transparent, and an
+        // opaque QR background covering the whole canvas overwrites it anyway.
+        if (clearColor.Alpha != 0 && !(contentCoversCanvas && backgroundIsOpaque))
+        {
+            canvas.Clear(clearColor);
+        }
+
+        QRCodeRenderer.Render(canvas, contentRect, qrCodeData, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
 
         return surface.Snapshot();
     }

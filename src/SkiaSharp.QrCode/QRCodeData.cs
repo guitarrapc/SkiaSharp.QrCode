@@ -462,6 +462,20 @@ public class QRCodeData
     internal int GetCoreSize() => _baseSize;
 
     /// <summary>
+    /// Gets the module state at the specified core position (excluding quiet zone),
+    /// skipping the quiet-zone coordinate translation of the public indexer.
+    /// Caller must guarantee 0 &lt;= coreRow/coreCol &lt; core size.
+    /// </summary>
+    /// <param name="coreRow">Row index in core data (0-based, excluding quiet zone)</param>
+    /// <param name="coreCol">Column index in core data (0-based, excluding quiet zone)</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool GetCoreModule(int coreRow, int coreCol)
+    {
+        var bitIndex = coreRow * _baseSize + coreCol;
+        return (_bits[bitIndex >> 3] & (1 << (7 - (bitIndex & 7)))) != 0;
+    }
+
+    /// <summary>
     /// Copies core data (without quiet zone) to the destination buffer as one
     /// byte (0/1) per module.
     /// </summary>
