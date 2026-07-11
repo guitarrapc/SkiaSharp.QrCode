@@ -165,6 +165,7 @@ const previewImg = document.getElementById('qr-preview');
 const statsEl = document.getElementById('qr-stats');
 const generateErrorEl = document.getElementById('generate-error');
 const downloadBtn = document.getElementById('download-btn');
+const downloadSvgBtn = document.getElementById('download-svg-btn');
 const copyImageBtn = document.getElementById('copy-image-btn');
 const permalinkBtn = document.getElementById('permalink-btn');
 const benchModeSelect = document.getElementById('bench-mode-select');
@@ -474,6 +475,7 @@ function handleRuntimeDeath() {
   benchCancelled = true;
   // Everything below either needs the runtime or would act on stale output.
   downloadBtn.disabled = true;
+  downloadSvgBtn.disabled = true;
   copyImageBtn.disabled = true;
   permalinkBtn.disabled = true;
   benchRunBtn.disabled = true;
@@ -562,6 +564,7 @@ function generate() {
   previewImg.hidden = false;
   generateErrorEl.hidden = true;
   downloadBtn.disabled = false;
+  downloadSvgBtn.disabled = false;
   copyImageBtn.disabled = false;
 
   try {
@@ -642,6 +645,50 @@ downloadBtn.addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = url;
   a.download = 'qrcode.png';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+// SVG is rendered on demand (not on every preview regeneration) with the current
+// settings; the preview <img> itself stays PNG-backed.
+downloadSvgBtn.addEventListener('click', () => {
+  if (!runtimeAlive || !runtimeReady || !exports) return;
+
+  const state = collectState();
+  if (!state.content.trim()) return;
+
+  const logoBytes = state.logo.mode === 'custom' ? customLogoBytes : EMPTY_BYTES;
+  let bytes;
+  try {
+    bytes = exports.SkiaSharp.QrCode.Playground.QrInterop.GenerateSvg(JSON.stringify(state), logoBytes);
+  } catch (err) {
+    if (isRuntimeDeadError(err)) {
+      handleRuntimeDeath();
+      return;
+    }
+    showToast(`Could not generate SVG: ${err?.message ?? err}`, 'error');
+    return;
+  }
+
+  // Error envelope is UTF-8 JSON starting with '{'; SVG always starts with '<'.
+  if (bytes.length === 0 || bytes[0] === 0x7b) {
+    let message = 'SVG generation failed.';
+    try {
+      message = JSON.parse(utf8Decoder.decode(bytes)).error ?? message;
+    } catch {
+      /* keep generic message */
+    }
+    showToast(message, 'error');
+    return;
+  }
+
+  const blob = new Blob([bytes], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'qrcode.svg';
   document.body.appendChild(a);
   a.click();
   a.remove();

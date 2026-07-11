@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512">
+<svg viewBox="0 0 512 512" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512">
 	<rect fill="white" width="512" height="512"/>
 	<rect x="45.511112" y="45.511112" width="79.64444" height="11.377777"/>
 	<rect x="136.53334" y="45.511112" width="22.755554" height="11.377777"/>

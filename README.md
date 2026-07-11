@@ -30,7 +30,7 @@ See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these 
 
 Try SkiaSharp.QrCode in your browser — no install required: **[SkiaSharp.QrCode Playground](https://guitarrapc.github.io/SkiaSharp.QrCode/)**
 
-The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or share your settings as a permalink. Source lives in [src/SkiaSharp.QrCode.Playground](src/SkiaSharp.QrCode.Playground); it is deployed to GitHub Pages by [release.yaml](.github/workflows/release.yaml) as part of every release.
+The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or SVG, or share your settings as a permalink. Source lives in [src/SkiaSharp.QrCode.Playground](src/SkiaSharp.QrCode.Playground); it is deployed to GitHub Pages by [release.yaml](.github/workflows/release.yaml) as part of every release.
 
 ## Overview
 
@@ -64,7 +64,7 @@ Single line QR code generation:
 using SkiaSharp.QrCode.Image;
 
 // one-liner save to file
-QRCodeImageBuilder.SavePng("Hello", "qrcode.png");
+File.WriteAllBytes("qrcode.png", QRCodeImageBuilder.GetPngBytes("Hello"));
 
 // Or get bytes
 var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
@@ -83,14 +83,13 @@ WiFi QR Code.
 
 ```csharp
 var wifiString = "WIFI:T:WPA;S:MyNetwork;P:MyPassword;;";
-QRCodeImageBuilder.SavePng(wifiString, "wifi-qr.png");
+File.WriteAllBytes("wifi-qr.png", QRCodeImageBuilder.GetPngBytes(wifiString));
 ```
 
 SVG (vector) output.
 
 ```csharp
-using var stream = File.Create("qrcode.svg");
-QRCodeImageBuilder.SaveSvg("https://example.com", stream);
+File.WriteAllText("qrcode.svg", QRCodeImageBuilder.GetSvgString("https://example.com"));
 ```
 
 Generate with Custom Settings.
@@ -334,6 +333,12 @@ app.MapGet("/qr", (string url) =>
     var pngBytes = QRCodeImageBuilder.GetPngBytes(url);
     return Results.File(pngBytes, "image/png");
 });
+
+app.MapGet("/qr.svg", (string url) =>
+{
+    var svgBytes = QRCodeImageBuilder.GetSvgBytes(url);
+    return Results.File(svgBytes, "image/svg+xml");
+});
 ```
 
 ### Does it support Blazor WebAssembly?
@@ -514,18 +519,24 @@ SVG output draws the QR code as vector shapes, so it scales to any size without 
 using SkiaSharp;
 using SkiaSharp.QrCode.Image;
 
+// One-liner: save to stream
 using var stream = File.Create("qrcode.svg");
 QRCodeImageBuilder.SaveSvg("https://example.com", stream);
+
+// One-liner: SVG document string, e.g. for inline HTML embedding
+var svg = QRCodeImageBuilder.GetSvgString("https://example.com");
 
 // Builder: full styling support
 var svgString = new QRCodeImageBuilder("https://example.com")
     .WithModulePixelSize(10)
     .WithErrorCorrection(ECCLevel.H)
     .WithColors(codeColor: SKColor.Parse("1B9CFC"))
-    .ToSvgString(); // or SaveToSvg(stream) / GetSvgBytes(...)
+    .ToSvgString(); // or SaveToSvg(stream) / SaveToSvg(bufferWriter) / GetSvgBytes(...)
 ```
 
 Size options define the SVG viewport (in SVG units instead of pixels); `WithFormat()` does not apply to SVG output.
+
+The root element always carries a `viewBox`, so the QR code scales its content when displayed at any size (`<img>`, CSS, or attribute-based sizing). Plain rectangular modules also get `shape-rendering="crispEdges"` to prevent antialiasing seams between modules; custom shapes (circles, rounded rects) keep antialiasing for smooth curves.
 
 > [!TIP]
 > Default rectangle modules produce compact SVG (horizontal module runs merge into single `<rect>` elements). Custom module shapes and gradients render correctly but produce larger documents, since each module becomes an individual vector element. Icon images are embedded as base64 data URIs.

@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Text;
 
 namespace SkiaSharp.QrCode.Image;
 
@@ -207,6 +208,62 @@ public class QRCodeImageBuilder
         new QRCodeImageBuilder(qrCodeData)
             .WithSize(size, size)
             .SaveToSvg(output);
+    }
+
+    /// <summary>
+    /// Generate a QR code as SVG document string with default settings.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
+    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
+    /// <returns>SVG document.</returns>
+    public static string GetSvgString(string content, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    {
+        return new QRCodeImageBuilder(content)
+            .WithSize(size, size)
+            .WithErrorCorrection(eccLevel)
+            .ToSvgString();
+    }
+
+    /// <summary>
+    /// Generate a QR code as SVG document string with default settings.
+    /// </summary>
+    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
+    /// <returns>SVG document.</returns>
+    public static string GetSvgString(QRCodeData qrCodeData, int size = 512)
+    {
+        return new QRCodeImageBuilder(qrCodeData)
+            .WithSize(size, size)
+            .ToSvgString();
+    }
+
+    /// <summary>
+    /// Generate a QR code and write as SVG (UTF-8 encoded) to an IBufferWriter with default settings.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="writer">The buffer writer to write to.</param>
+    /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
+    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
+    public static void WriteSvg(string content, IBufferWriter<byte> writer, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    {
+        new QRCodeImageBuilder(content)
+            .WithSize(size, size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToSvg(writer);
+    }
+
+    /// <summary>
+    /// Generate a QR code and write as SVG (UTF-8 encoded) to an IBufferWriter with default settings.
+    /// </summary>
+    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="writer">The buffer writer to write to.</param>
+    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
+    public static void WriteSvg(QRCodeData qrCodeData, IBufferWriter<byte> writer, int size = 512)
+    {
+        new QRCodeImageBuilder(qrCodeData)
+            .WithSize(size, size)
+            .SaveToSvg(writer);
     }
 
     /// <summary>
@@ -497,11 +554,9 @@ public class QRCodeImageBuilder
         using var image = GenerateImage();
         using var data = image.Encode(_format, _quality);
 
-        // write to IBufferWriter
-        var span = data.AsSpan();
-        var buffer = writer.GetSpan(span.Length);
-        span.CopyTo(buffer);
-        writer.Advance(span.Length);
+        // Write in writer-provided segments; a single GetSpan for the whole payload
+        // would force segmented writers (e.g. PipeWriter) into one contiguous buffer.
+        writer.Write(data.AsSpan());
     }
 
     /// <summary>
@@ -512,6 +567,12 @@ public class QRCodeImageBuilder
     /// The QR code is drawn as vector shapes via <see cref="SKSvgCanvas"/>, so the output scales
     /// without quality loss. All builder options apply: colors, module shapes, gradients, finder
     /// pattern shapes, and icons (icon images are embedded as base64 data URIs).
+    /// </para>
+    /// <para>
+    /// The root element carries a <c>viewBox</c>, so the document scales its content when
+    /// embedded at a different size (img element, CSS). For plain rectangular modules,
+    /// <c>shape-rendering="crispEdges"</c> is added to avoid antialiasing seams between modules;
+    /// custom shapes keep antialiasing for smooth curves.
     /// </para>
     /// <para>
     /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> is ignored — SVG is a vector format,
@@ -530,13 +591,26 @@ public class QRCodeImageBuilder
         if (!output.CanWrite)
             throw new ArgumentException("Output stream must be writable", nameof(output));
 
-        var qrCodeData = ResolveQrCodeData();
-        var (info, contentRect) = CreateLayout(qrCodeData);
+        RenderSvg(output);
+    }
 
-        // SKSvgCanvas flushes the SVG document when the canvas is disposed,
-        // so dispose before the stream is consumed. The stream itself stays open.
-        using var canvas = SKSvgCanvas.Create(SKRect.Create(0, 0, info.Width, info.Height), output);
-        RenderContent(canvas, qrCodeData, info, contentRect);
+    /// <summary>
+    /// Generate QR code and write as SVG document to an IBufferWriter.
+    /// </summary>
+    /// <remarks>
+    /// See <see cref="SaveToSvg(Stream)"/> for rendering behavior. Data is written in
+    /// writer-provided segments, so segmented writers (e.g. PipeWriter) work without
+    /// a single contiguous buffer for the whole document.
+    /// </remarks>
+    /// <param name="writer">The buffer writer to write to.</param>
+    /// <exception cref="ArgumentNullException"></exception>
+    public void SaveToSvg(IBufferWriter<byte> writer)
+    {
+        if (writer is null)
+            throw new ArgumentNullException(nameof(writer));
+
+        using var stream = new BufferWriterStream(writer);
+        RenderSvg(stream);
     }
 
     /// <summary>
@@ -550,7 +624,53 @@ public class QRCodeImageBuilder
     {
         using var stream = new MemoryStream();
         SaveToSvg(stream);
-        return System.Text.Encoding.UTF8.GetString(stream.GetBuffer(), 0, (int)stream.Length);
+        return Encoding.UTF8.GetString(stream.GetBuffer(), 0, (int)stream.Length);
+    }
+
+    /// <summary>
+    /// Renders the SVG document to the output stream, injecting root element attributes
+    /// (<c>viewBox</c>, optional <c>shape-rendering</c>) while streaming.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="SKSvgCanvas"/> writes <c>width</c>/<c>height</c> on the root element but no
+    /// <c>viewBox</c>. Without a viewBox, an SVG embedded at a different size (img element, CSS)
+    /// keeps its content at the original coordinates instead of scaling — the main reason to use
+    /// SVG in the first place. <see cref="SvgRootAttributeInjectorStream"/> inserts the attributes
+    /// right after the <c>&lt;svg </c> marker while the canvas streams to the output, so the
+    /// document is never buffered as a whole; if the marker is not found (unexpected upstream
+    /// format change), the document passes through unpatched.
+    /// </remarks>
+    private void RenderSvg(Stream output)
+    {
+        var qrCodeData = ResolveQrCodeData();
+        var (info, contentRect) = CreateLayout(qrCodeData);
+
+        var viewBox = $"viewBox=\"0 0 {info.Width} {info.Height}\" ";
+        var rootAttributes = UseCrispEdges() ? viewBox + "shape-rendering=\"crispEdges\" " : viewBox;
+
+        using var injector = new SvgRootAttributeInjectorStream(output, rootAttributes);
+        // SKSvgCanvas flushes the SVG document when the canvas is disposed, so dispose
+        // it before the injector (which then flushes any pending header bytes).
+        // The output stream itself stays open.
+        using (var canvas = SKSvgCanvas.Create(SKRect.Create(0, 0, info.Width, info.Height), injector))
+        {
+            RenderContent(canvas, qrCodeData, info, contentRect);
+        }
+    }
+
+    /// <summary>
+    /// Antialiasing between adjacent vector shapes produces visible hairline seams when the SVG
+    /// is scaled to non-integer sizes. For plain rectangular modules crispEdges removes the seams;
+    /// for custom shapes (circles, rounded rects, custom finder patterns or icons) antialiasing
+    /// is kept for smooth curves. Built-in icon shapes only draw rectangles, bitmaps, and text,
+    /// none of which degrade under crispEdges.
+    /// </summary>
+    private bool UseCrispEdges()
+    {
+        return (_moduleShape is null || _moduleShape is RectangleModuleShape)
+            && _moduleSizePercent == 1.0f
+            && _finderPatternShape is null
+            && (_iconData?.Icon is null or ImageIconShape or ImageTextIconShape);
     }
 
     /// <summary>

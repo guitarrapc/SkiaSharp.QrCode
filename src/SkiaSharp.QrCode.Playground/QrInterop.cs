@@ -77,6 +77,40 @@ public static partial class QrInterop
         }
     }
 
+    /// <summary>
+    /// Generates a QR code SVG document from JSON options (see <see cref="QrRequest"/>).
+    /// Returns UTF-8 SVG bytes on success (first byte '&lt;' 0x3C), or UTF-8 JSON
+    /// <c>{"error":"..."}</c> on failure (first byte 0x7B) — the JS side
+    /// distinguishes the two by the first byte.
+    /// </summary>
+    /// <param name="optionsJson">Serialized <see cref="QrRequest"/> (camelCase).</param>
+    /// <param name="customLogo">Uploaded logo image bytes; empty unless logo mode is "custom".</param>
+    [JSExport]
+    public static byte[] GenerateSvg(string optionsJson, byte[] customLogo)
+    {
+        try
+        {
+            var request = JsonSerializer.Deserialize(optionsJson, PlaygroundJsonContext.Default.QrRequest)
+                ?? throw new InvalidOperationException("Options JSON deserialized to null.");
+            if (string.IsNullOrWhiteSpace(request.Content))
+                throw new ArgumentException("Content is empty.");
+
+            var data = QRCodeGenerator.CreateQrCode(
+                request.Content.AsSpan(),
+                ParseEcc(request.Ecc),
+                requestedVersion: request.Version,
+                quietZoneSize: Math.Clamp(request.QuietZone, 0, 10));
+
+            using var stream = new MemoryStream();
+            CreateBuilder(request, data, customLogo).SaveToSvg(stream);
+            return stream.ToArray();
+        }
+        catch (Exception ex)
+        {
+            return SerializeError(ex);
+        }
+    }
+
     private static byte[] GenerateCore(QrRequest request, byte[] customLogo)
     {
         if (string.IsNullOrWhiteSpace(request.Content))

@@ -854,7 +854,7 @@ Console.WriteLine();
 Console.WriteLine("""
     Pattern 22: SVG Output (Vector Format)
       - Best for: Print, web embedding, infinite scaling without quality loss
-      - API: QRCodeImageBuilder.SaveSvg() / SaveToSvg() / ToSvgString()
+      - API: QRCodeImageBuilder.SaveSvg() / GetSvgString() / SaveToSvg() / ToSvgString()
     """);
 {
     // One-liner: save SVG to stream
@@ -890,6 +890,10 @@ Console.WriteLine("""
     var firstLineEnd = svgString.IndexOf('\n');
     var firstLine = firstLineEnd >= 0 ? svgString.Substring(0, firstLineEnd) : svgString;
     Console.WriteLine($"  ✓ ToSvgString(): {svgString.Length} chars, starts with: {firstLine}");
+
+    // Static one-liner string output for inline HTML embedding
+    var inlineSvg = QRCodeImageBuilder.GetSvgString(content, ECCLevel.M, size: 256);
+    Console.WriteLine($"  ✓ GetSvgString(): viewBox present: {inlineSvg.Contains("viewBox=\"0 0 256 256\"")}");
 }
 Console.WriteLine();
 
