@@ -15,8 +15,14 @@ namespace SkiaSharp.QrCode.Internals.BinaryDecoders;
 /// 4. Forney:           magnitudes e_k = X_k·Ω(X_k^-1)/Λ'(X_k^-1)  (b = 0)
 /// </code>
 /// Corrects up to ⌊eccCount/2⌋ byte errors per block, in place.
+/// <para>
+/// The syndrome pass (the only cost clean blocks pay, and the dominant cost of the
+/// verification pass) dispatches to a GFNI kernel on net10.0+ x64 (see
+/// EccBinaryDecoder.Simd.cs) with a scalar log-domain fallback everywhere else.
+/// All kernels produce byte-identical output; see the decoder kernel parity tests.
+/// </para>
 /// </remarks>
-internal static class EccBinaryDecoder
+internal static partial class EccBinaryDecoder
 {
     // QR codes use at most 30 ECC codewords per block (ISO/IEC 18004), so all
     // intermediate polynomials fit in fixed stackalloc buffers.
@@ -46,21 +52,9 @@ internal static class EccBinaryDecoder
 
         // 1. Syndromes: S_i = R(α^i) where codeword[0] is the highest-degree
         // coefficient (the same polynomial orientation the encoder divides in).
-        // Evaluate via Horner: v = (((c_0·x + c_1)·x + c_2)·x + ...) at x = α^i.
         Span<byte> syndromes = stackalloc byte[MaxEccPerBlock];
         syndromes = syndromes.Slice(0, eccCount);
-        var hasError = false;
-        for (var i = 0; i < eccCount; i++)
-        {
-            var x = GaloisField.Exp[i]; // α^i
-            byte value = 0;
-            for (var j = 0; j < codeword.Length; j++)
-            {
-                value = (byte)(GaloisField.Multiply(value, x) ^ codeword[j]);
-            }
-            syndromes[i] = value;
-            hasError |= value != 0;
-        }
+        var hasError = ComputeSyndromes(codeword, eccCount, syndromes);
 
         if (!hasError)
             return true;
@@ -203,20 +197,55 @@ internal static class EccBinaryDecoder
 
         // Verify the correction: recomputed syndromes must all be zero. This guards
         // against silent miscorrection (worse than failing) at the cost of one extra
-        // O(n·eccCount) pass, taken only on blocks that actually had errors.
-        for (var i = 0; i < eccCount; i++)
-        {
-            var x = GaloisField.Exp[i];
-            byte value = 0;
-            for (var j = 0; j < codeword.Length; j++)
-            {
-                value = (byte)(GaloisField.Multiply(value, x) ^ codeword[j]);
-            }
-            if (value != 0)
-                return false;
-        }
+        // syndrome pass, taken only on blocks that actually had errors.
+        Span<byte> check = stackalloc byte[MaxEccPerBlock];
+        if (ComputeSyndromes(codeword, eccCount, check.Slice(0, eccCount)))
+            return false;
 
         errorsCorrected = errorCount;
         return true;
+    }
+
+    /// <summary>
+    /// Computes the syndromes S_i = R(α^i) for i = 0..eccCount-1 via Horner
+    /// evaluation: v = (((c_0·x + c_1)·x + c_2)·x + ...) at x = α^i.
+    /// Returns true when any syndrome is non-zero (the block has errors).
+    /// </summary>
+    /// <remarks>
+    /// Dispatches to the GFNI kernel (all accumulators in one vector register, one
+    /// multiply per data byte for every syndrome at once) when available; the scalar
+    /// path keeps the Horner multiply in log domain — the multiplier's log is the
+    /// constant i, so each step is one zero-check + one log load + one exp load
+    /// (measured 0.84-0.90x of the GaloisField.Multiply form).
+    /// </remarks>
+    private static bool ComputeSyndromes(ReadOnlySpan<byte> codeword, int eccCount, Span<byte> syndromes)
+    {
+#if NET10_0_OR_GREATER
+        if (System.Runtime.Intrinsics.X86.Gfni.V256.IsSupported)
+        {
+            return ComputeSyndromesGfni(codeword, eccCount, syndromes);
+        }
+#endif
+        return ComputeSyndromesScalar(codeword, eccCount, syndromes);
+    }
+
+    internal static bool ComputeSyndromesScalar(ReadOnlySpan<byte> codeword, int eccCount, Span<byte> syndromes)
+    {
+        var exp = GaloisField.Exp;
+        var log = GaloisField.Log;
+
+        var hasError = false;
+        for (var i = 0; i < eccCount; i++)
+        {
+            byte value = 0;
+            for (var j = 0; j < codeword.Length; j++)
+            {
+                // value·α^i = exp[log[value] + i]; exp is 512 entries so no % 255
+                value = (byte)((value == 0 ? (byte)0 : exp[log[value] + i]) ^ codeword[j]);
+            }
+            syndromes[i] = value;
+            hasError |= value != 0;
+        }
+        return hasError;
     }
 }

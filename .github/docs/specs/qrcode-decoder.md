@@ -94,3 +94,15 @@ Kanji mode, FNC1, Structured Append, other ECI charsets.
   matrix scenarios mirroring the encode scenarios for direct comparison.
 - The syndrome pass is the cost every decode pays (clean blocks exit early after it);
   Berlekamp-Massey/Chien/Forney run only on blocks that actually contain errors.
+- The syndrome pass ships with a GFNI kernel (net10.0+ x64, EccBinaryDecoder.Simd.cs):
+  all ≤30 syndrome accumulators live in one 256-bit register in an isomorphic image
+  of the field (GF2P8MULB is hardwired to 0x11B while QR uses 0x11D), Horner unrolled
+  ×4. Measured ~284x per version-40 block; end-to-end version-40 matrix decode dropped
+  369µs → 131µs — decode is now faster than encode. The scalar fallback keeps the
+  Horner multiply in log domain.
+- Lessons from the tuning loop: β = 0x03 as the isomorphism root makes φ its own
+  inverse, so one matrix constant serves both directions. Unrolling beyond ×4 stalls —
+  the loop moves from latency-bound (accumulator chain) to GFNI-port throughput-bound.
+  Pre-mapping the whole codeword to remove the in-loop affine measured *slower*: that
+  affine was off the carried dependency chain, so removing it saved nothing while the
+  extra pass cost real time.
