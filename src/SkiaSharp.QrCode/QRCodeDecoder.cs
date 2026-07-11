@@ -149,7 +149,7 @@ public static class QRCodeDecoder
     /// </summary>
     /// <remarks>
     /// Tier-1 image support: clean, well-lit images such as screenshots, rendered
-    /// QR codes and scans, including arbitrary rotation, mirroring and reflectance reversal (light-on-dark). Photos with
+    /// QR codes and scans, including arbitrary rotation, mirroring, reflectance reversal (light-on-dark) and mild perspective distortion. Photos with
     /// strong perspective distortion, uneven lighting or blur are out of scope —
     /// use a computer-vision grade reader (e.g. ZXing.Net) for those.
     /// </remarks>
@@ -165,7 +165,7 @@ public static class QRCodeDecoder
     /// </summary>
     /// <remarks>
     /// Tier-1 image support: clean, well-lit images such as screenshots, rendered
-    /// QR codes and scans, including arbitrary rotation, mirroring and reflectance reversal (light-on-dark). Photos with
+    /// QR codes and scans, including arbitrary rotation, mirroring, reflectance reversal (light-on-dark) and mild perspective distortion. Photos with
     /// strong perspective distortion, uneven lighting or blur are out of scope —
     /// use a computer-vision grade reader (e.g. ZXing.Net) for those.
     /// </remarks>

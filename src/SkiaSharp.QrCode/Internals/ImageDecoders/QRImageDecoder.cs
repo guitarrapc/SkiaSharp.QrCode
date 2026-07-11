@@ -5,8 +5,9 @@ using SkiaSharp.QrCode.Internals.BinaryDecoders;
 namespace SkiaSharp.QrCode.Internals.ImageDecoders;
 
 /// <summary>
-/// Decodes a QR code from a grayscale image (Tier 1: clean, well-lit, screen-rendered
-/// or scanned inputs, including arbitrary rotation).
+/// Decodes a QR code from a grayscale image: clean, well-lit, screen-rendered or
+/// scanned inputs, including arbitrary rotation, mirroring, reflectance reversal
+/// and mild perspective distortion (Tier 2).
 /// </summary>
 /// <remarks>
 /// Pipeline:
@@ -15,12 +16,13 @@ namespace SkiaSharp.QrCode.Internals.ImageDecoders;
 /// 2. Finder pattern detection (1:1:3:1:1 scan + cross checks)
 /// 3. Orientation from the three finder centers (rotation-invariant)
 /// 4. Dimension estimate from center distances and module size
-/// 5. Affine grid sampling into a module matrix
-/// 6. Matrix decoding (format → unmask → deinterleave → Reed-Solomon → bitstream)
+/// 5. Bottom-right alignment pattern search (version 2+; parallelogram estimate as fallback)
+/// 6. Perspective grid sampling into a module matrix (4-point projective transform)
+/// 7. Matrix decoding (format → unmask → deinterleave → Reed-Solomon → bitstream)
 /// </code>
-/// Out of scope for Tier 1 (documented, by design): perspective distortion beyond
-/// what affine sampling absorbs, uneven lighting (global threshold only), blur,
-/// and multiple QR codes per image.
+/// Out of scope (documented, by design): strong perspective where the four-point
+/// transform no longer models the surface, uneven lighting (global threshold only),
+/// blur, and multiple QR codes per image.
 /// </remarks>
 internal static class QRImageDecoder
 {
@@ -83,13 +85,13 @@ internal static class QRImageDecoder
 
         OrderFinderPatterns(patterns, out var topLeft, out var topRight, out var bottomLeft);
 
-        if (!TryEstimateDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, out var dimension, out var secondaryDimension))
+        if (!TryEstimateDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, out var dimension, out var secondaryDimension, out var moduleSize))
         {
             info = new QRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
             return QRCodeDecodeStatus.NotDetected;
         }
 
-        var status = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, destination, out charsWritten, out info);
+        var status = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, moduleSize, destination, out charsWritten, out info);
         if (status == QRCodeDecodeStatus.Success)
             return status;
 
@@ -98,7 +100,7 @@ internal static class QRImageDecoder
         // one retry with it rescues estimates that snapped to the wrong version.
         if (secondaryDimension != 0)
         {
-            var secondaryStatus = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, secondaryDimension, destination, out var secondaryCharsWritten, out var secondaryInfo);
+            var secondaryStatus = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, secondaryDimension, moduleSize, destination, out var secondaryCharsWritten, out var secondaryInfo);
             if (secondaryStatus == QRCodeDecodeStatus.Success)
             {
                 charsWritten = secondaryCharsWritten;
@@ -118,13 +120,15 @@ internal static class QRImageDecoder
     /// failure — a permuted format pattern may fall within BCH distance of a wrong
     /// candidate and surface as DataUncorrectable instead of FormatInformationInvalid.
     /// </summary>
-    private static QRCodeDecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    private static QRCodeDecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
+        var transform = BuildGridTransform(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, moduleSize);
+
         var rented = ArrayPool<byte>.Shared.Rent(dimension * dimension);
         try
         {
             var modules = rented.AsSpan(0, dimension * dimension);
-            SampleGrid(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, modules);
+            SampleGrid(luminance, width, height, threshold, transform, dimension, modules);
 
             var status = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out info);
             if (status == QRCodeDecodeStatus.Success)
@@ -202,7 +206,7 @@ internal static class QRImageDecoder
     /// span the diagonal (top-right / bottom-left), the remaining one is top-left;
     /// the cross product resolves which diagonal end is which.
     /// </summary>
-    private static void OrderFinderPatterns(ReadOnlySpan<FinderPattern> patterns, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
+    internal static void OrderFinderPatterns(ReadOnlySpan<FinderPattern> patterns, out FinderPattern topLeft, out FinderPattern topRight, out FinderPattern bottomLeft)
     {
         var d01 = DistanceSquared(patterns[0], patterns[1]);
         var d02 = DistanceSquared(patterns[0], patterns[2]);
@@ -258,12 +262,13 @@ internal static class QRImageDecoder
     /// Second-nearest valid dimension when the estimate is also within one version
     /// step of it (retry candidate for estimates near a snap boundary), else 0.
     /// </param>
-    private static bool TryEstimateDimension(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, out int dimension, out int secondaryDimension)
+    /// <param name="moduleSize">Measured module size in pixels (for the alignment pattern search).</param>
+    private static bool TryEstimateDimension(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, out int dimension, out int secondaryDimension, out float moduleSize)
     {
         dimension = 0;
         secondaryDimension = 0;
 
-        var moduleSize = MeasureModuleSize(luminance, width, height, threshold, topLeft, topRight, bottomLeft);
+        moduleSize = MeasureModuleSize(luminance, width, height, threshold, topLeft, topRight, bottomLeft);
         if (moduleSize < 1f)
             return false; // below one pixel per module nothing can be sampled reliably
 
@@ -396,30 +401,80 @@ internal static class QRImageDecoder
     }
 
     /// <summary>
-    /// Samples every module center through the affine frame spanned by the three
-    /// finder centers. Handles rotation, scale and shear; module (3,3)'s center maps
-    /// exactly onto the top-left finder center.
+    /// Builds the grid-to-pixel projective transform from the three finder centers
+    /// plus a fourth correspondence point: the bottom-right alignment pattern when
+    /// one exists and is found, otherwise the parallelogram corner estimate (which
+    /// degrades the transform to affine — exact for flat, on-axis captures).
+    /// Grid coordinates put module (u, v)'s center at (u+0.5, v+0.5), so finder
+    /// centers sit at 3.5 and the alignment center at dimension−6.5.
     /// </summary>
-    private static void SampleGrid(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, Span<byte> modules)
+    internal static PerspectiveTransform BuildGridTransform(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize)
     {
-        var span = dimension - 7; // module distance between finder centers
-        var exX = (topRight.X - topLeft.X) / span;
-        var exY = (topRight.Y - topLeft.Y) / span;
-        var eyX = (bottomLeft.X - topLeft.X) / span;
-        var eyY = (bottomLeft.Y - topLeft.Y) / span;
+        // Parallelogram estimate of the bottom-right corner (grid dimension−3.5)
+        var cornerX = topRight.X + bottomLeft.X - topLeft.X;
+        var cornerY = topRight.Y + bottomLeft.Y - topLeft.Y;
 
+        // Version 2+ has an alignment pattern centered 6.5 modules in from the
+        // bottom-right corner; its predicted position pulls the corner estimate
+        // toward the top-left by 3 modules on both axes.
+        if (dimension >= 25)
+        {
+            var correction = 1f - 3f / (dimension - 7);
+            var expectedX = topLeft.X + correction * (cornerX - topLeft.X);
+            var expectedY = topLeft.Y + correction * (cornerY - topLeft.Y);
+
+            // Per-module grid axis vectors, for orientation-aware ring validation
+            var span = dimension - 7;
+            var axisX = ((topRight.X - topLeft.X) / span, (topRight.Y - topLeft.Y) / span);
+            var axisY = ((bottomLeft.X - topLeft.X) / span, (bottomLeft.Y - topLeft.Y) / span);
+
+            // Expanding search window; mild perspective shifts the true position
+            // further from the parallelogram prediction as the tilt grows.
+            foreach (var allowance in stackalloc float[] { 4f, 8f, 16f })
+            {
+                if (AlignmentPatternFinder.TryFind(luminance, width, height, threshold, expectedX, expectedY, moduleSize, axisX, axisY, allowance, out var alignmentX, out var alignmentY))
+                {
+                    return PerspectiveTransform.QuadrilateralToQuadrilateral(
+                        3.5f, 3.5f,
+                        dimension - 3.5f, 3.5f,
+                        dimension - 6.5f, dimension - 6.5f,
+                        3.5f, dimension - 3.5f,
+                        topLeft.X, topLeft.Y,
+                        topRight.X, topRight.Y,
+                        alignmentX, alignmentY,
+                        bottomLeft.X, bottomLeft.Y);
+                }
+            }
+        }
+
+        // No alignment pattern (version 1) or not found: parallelogram corner
+        return PerspectiveTransform.QuadrilateralToQuadrilateral(
+            3.5f, 3.5f,
+            dimension - 3.5f, 3.5f,
+            dimension - 3.5f, dimension - 3.5f,
+            3.5f, dimension - 3.5f,
+            topLeft.X, topLeft.Y,
+            topRight.X, topRight.Y,
+            cornerX, cornerY,
+            bottomLeft.X, bottomLeft.Y);
+    }
+
+    /// <summary>
+    /// Samples every module center through the projective grid-to-pixel transform.
+    /// Handles rotation, scale, shear and mild perspective.
+    /// </summary>
+    internal static void SampleGrid(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int dimension, Span<byte> modules)
+    {
         for (var v = 0; v < dimension; v++)
         {
             var rowBase = v * dimension;
-            var du = -3f;
-            var dv = v - 3f;
-            var startX = topLeft.X + du * exX + dv * eyX;
-            var startY = topLeft.Y + du * exY + dv * eyY;
+            var gridY = v + 0.5f;
 
             for (var u = 0; u < dimension; u++)
             {
-                var px = (int)(startX + u * exX + 0.5f);
-                var py = (int)(startY + u * exY + 0.5f);
+                transform.Transform(u + 0.5f, gridY, out var x, out var y);
+                var px = (int)(x + 0.5f);
+                var py = (int)(y + 0.5f);
 
                 // Clamp: mild inaccuracy at the outermost modules must not read OOB
                 if (px < 0)

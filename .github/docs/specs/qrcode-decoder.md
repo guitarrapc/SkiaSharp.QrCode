@@ -13,22 +13,28 @@ in code comments next to the code (see the [spec-to-code map](qrcode-specs.md)).
   format info → unmask → codeword extraction → deinterleave → Reed-Solomon correction →
   bit stream parsing. Allocation-free in steady state via the `Span<char>` overloads.
 - **Image level** — from `SKBitmap` or a grayscale luminance span. Adds binarization
-  (Otsu), finder pattern detection, orientation resolution and affine grid sampling in
-  front of the matrix pipeline.
+  (Otsu), finder pattern detection, orientation resolution, bottom-right alignment
+  pattern search (version 2+) and projective grid sampling (4-point perspective
+  transform) in front of the matrix pipeline.
 
 Supported: versions 1-40, all ECC levels, Numeric / Alphanumeric / Byte segments,
 ECI (ISO-8859-1 / UTF-8), UTF-8 BOM, multi-segment streams; at the image level:
-arbitrary rotation, mirroring and reflectance reversal (light-on-dark).
-Unsupported (detected and reported, never misdecoded):
+arbitrary rotation, mirroring, reflectance reversal (light-on-dark) and mild
+perspective (Tier 2 — measured envelope: keystone up to ~12-15% of the edge for
+versions 2-5, ~6-8% for versions 10-15, ~2% for version 1 which has no alignment
+pattern). Unsupported (detected and reported, never misdecoded):
 Kanji mode, FNC1, Structured Append, other ECI charsets.
 
 ## Why
 
-- **Tier-1 scope by design.** Image support targets clean inputs: screenshots,
-  rendered QR codes, scans — with arbitrary rotation, mirroring and reflectance reversal (light-on-dark, one inverted retry). Real-world photo
-  robustness (perspective, uneven lighting, blur) is a computer-vision problem that
-  ZXing spent years on; it is deliberately out of scope, and the API docs point such
-  users to ZXing.Net. This keeps the library dependency-free and the code auditable.
+- **Tier-1/2 scope by design.** Image support targets clean inputs: screenshots,
+  rendered QR codes, scans — with arbitrary rotation, mirroring, reflectance
+  reversal (light-on-dark, one inverted retry) and mild perspective (single
+  homography anchored at the three finder centers plus the bottom-right alignment
+  pattern). Real-world photo robustness (strong perspective, uneven lighting, blur)
+  is a computer-vision problem that ZXing spent years on; it is deliberately out of
+  scope, and the API docs point such users to ZXing.Net. This keeps the library
+  dependency-free and the code auditable.
 - **Encoder-decoder parity by construction.** The decoder reuses the encoder's own
   function-pattern placement (`QRCodeGenerator.PlaceFunctionModules`) to build its
   blocked-module map, and the format-information decoder matches against patterns
@@ -86,6 +92,17 @@ Kanji mode, FNC1, Structured Append, other ECI charsets.
   generator roots α^0..α^(n-1) (b = 0), which puts an X_k factor in the Forney
   formula that b = 1 conventions omit. Deriving it from `EccBinaryEncoder`'s
   documented generator polynomial made the round-trip pass on the first run.
+- **The light-dark-light alignment signature matches every isolated dark data
+  module.** A single dark module with light neighbors on all four sides — extremely
+  common in data areas — passes both the horizontal triple and the vertical
+  cross-check, and one false positive shears the whole sampling transform into
+  ~50% mis-sampled garbage. Only the 5×5 dark border ring distinguishes the real
+  pattern: all eight ring samples at ±2 modules must be dark.
+- **Ring validation must follow the grid axes, not the image axes.** With
+  image-axis offsets the ±2-module ring corners land outside a rotated pattern and
+  reject the true alignment pattern — the fix that rescued keystone-only inputs
+  broke rotation+keystone combinations until the ring samples were taken along the
+  finder-derived grid axis vectors.
 - **Pixel-quantized module-size measurement biases the dimension estimate one whole
   version low.** The dark-light-dark runs walk in 1-pixel steps and originally
   returned the position of the first light pixel — the boundary rounded *up*, a

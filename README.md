@@ -226,7 +226,7 @@ Buffer sizes are bounded: version 40 with the standard quiet zone needs 185 × 1
 Decodes QR codes back into text — the inverse of `QRCodeGenerator`. Works at two levels:
 
 - **Matrix level**: from `QRCodeData` or a byte-per-module span (the same format the zero-allocation generator produces). Full Reed-Solomon error correction included.
-- **Image level**: from `SKBitmap` or a grayscale luminance span. Detects the QR code (arbitrary rotation, mirroring and inverted light-on-dark palettes supported), samples the grid, then decodes.
+- **Image level**: from `SKBitmap` or a grayscale luminance span. Detects the QR code (arbitrary rotation, mirroring, inverted light-on-dark palettes and mild perspective supported), samples the grid, then decodes.
 
 **Scope**: image decoding targets *clean* inputs — screenshots, rendered QR codes, and scans. Real-world photos with strong perspective, uneven lighting, or blur are out of scope; use a computer-vision grade reader such as ZXing.Net for those. See [QR Code Decoder](.github/docs/specs/qrcode-decoder.md) for design details.
 

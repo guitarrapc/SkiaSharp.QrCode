@@ -118,8 +118,8 @@ public static partial class QrInterop
     /// on success, <c>{"ok":false,"status":"NotDetected","totalMs":N}</c> when no QR
     /// decodes, or <c>{"error":"..."}</c> on unexpected failure.
     /// <para>
-    /// Uses the library's Tier-1 image decoder: clean, screen-rendered images
-    /// (arbitrary rotation and mirroring included). Heavily stylized codes
+    /// Uses the library's built-in image decoder: clean, screen-rendered images
+    /// (arbitrary rotation, mirroring and mild perspective included). Heavily stylized codes
     /// (low-contrast colors, inverted palettes, strong decoration) may report
     /// NotDetected even when a computer-vision grade phone scanner reads them.
     /// </para>

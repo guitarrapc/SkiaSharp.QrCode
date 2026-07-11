@@ -73,12 +73,12 @@ Reference tests: [ModulePlacerMaskPackedParityTest](../../../tests/SkiaSharp.QrC
 ## Decoding Pipeline
 
 ```
-Image ──> Binarization ──> Finder detection ──> Grid sampling ──┐
-                                                                ├──> Format info ──> Unmask/Extract ──> Deinterleave ──> RS correction ──> Bit stream ──> Text
-Module matrix (QRCodeData / span) ──────────────────────────────┘
+Image ──> Binarization ──> Finder detection ──> Alignment pattern ──> Perspective sampling ──┐
+                                                                                             ├──> Format info ──> Unmask/Extract ──> Deinterleave ──> RS correction ──> Bit stream ──> Text
+Module matrix (QRCodeData / span) ───────────────────────────────────────────────────────────┘
 ```
 
-Design notes (WHAT/WHY and Tier-1 scope) are in [QR Code Decoder](.github/docs/specs/qrcode-decoder.md).
+Design notes (WHAT/WHY and scope tiers) are in [QR Code Decoder](qrcode-decoder.md).
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
@@ -88,9 +88,11 @@ Design notes (WHAT/WHY and Tier-1 scope) are in [QR Code Decoder](.github/docs/s
 | Section 8.5 | Reed-Solomon error correction (syndromes → Berlekamp-Massey → Chien → Forney) | [EccBinaryDecoder.TryCorrect](../../../src/SkiaSharp.QrCode/Internals/BinaryDecoders/EccBinaryDecoder.cs) |
 | Section 7.4 | Bit stream decoding (mode segments, character count, ECI) | [QRBinaryDecoder.DecodeBitStream](../../../src/SkiaSharp.QrCode/Internals/BinaryDecoders/QRBinaryDecoder.cs) |
 | Section 6.3.3 | Finder pattern detection (1:1:3:1:1 ratio scan + cross checks) | [FinderPatternFinder](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/FinderPatternFinder.cs) |
-| — | Binarization (Otsu), module-size measurement, affine grid sampling | [QRImageDecoder](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/QRImageDecoder.cs) |
+| Section 6.3.6 / Annex E | Alignment pattern detection (light-dark-light core + grid-axis border-ring validation) | [AlignmentPatternFinder](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/AlignmentPatternFinder.cs) |
+| — | Projective grid sampling (4-point perspective transform) | [PerspectiveTransform](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/PerspectiveTransform.cs), [QRImageDecoder.SampleGrid](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/QRImageDecoder.cs) |
+| — | Binarization (Otsu), module-size measurement, dimension estimation | [QRImageDecoder](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/QRImageDecoder.cs) |
 
-Reference tests: [QRCodeDecoderRoundTripTest](../../../tests/SkiaSharp.QrCode.Tests/QRCodeDecoderRoundTripTest.cs) (encode→decode round-trips, error injection), [EccBinaryDecoderUnitTest](../../../tests/SkiaSharp.QrCode.Tests/EccBinaryDecoderUnitTest.cs) (correction capacity boundaries), [QRCodeDecoderZXingCrossTest](../../../tests/SkiaSharp.QrCode.Tests/QRCodeDecoderZXingCrossTest.cs) (independent-encoder cross-validation), [QRCodeDecoderImageTest](../../../tests/SkiaSharp.QrCode.Tests/QRCodeDecoderImageTest.cs) (rotation/mirror/scale image cases).
+Reference tests: [QRCodeDecoderRoundTripTest](../../../tests/SkiaSharp.QrCode.Tests/QRCodeDecoderRoundTripTest.cs) (encode→decode round-trips, error injection), [EccBinaryDecoderUnitTest](../../../tests/SkiaSharp.QrCode.Tests/EccBinaryDecoderUnitTest.cs) (correction capacity boundaries), [QRCodeDecoderZXingCrossTest](../../../tests/SkiaSharp.QrCode.Tests/QRCodeDecoderZXingCrossTest.cs) (independent-encoder cross-validation), [QRCodeDecoderImageTest](../../../tests/SkiaSharp.QrCode.Tests/QRCodeDecoderImageTest.cs) (rotation/mirror/scale/inversion image cases), [QRCodeDecoderPerspectiveTest](../../../tests/SkiaSharp.QrCode.Tests/QRCodeDecoderPerspectiveTest.cs) (keystone envelope, rotation+perspective combinations).
 
 ## Maintenance Notes
 
