@@ -46,6 +46,36 @@ public class QRCodeDecoderImageTest
         Assert.Equal(content, decoded);
     }
 
+    [Theory]
+    [InlineData(12)]
+    [InlineData(13)]
+    [InlineData(14)] // 512px / 81 modules = 6.32 px/module — snapped one version low before the run-boundary fix
+    [InlineData(15)]
+    [InlineData(16)]
+    [InlineData(17)] // 5.51 px/module — same regression
+    [InlineData(18)]
+    [InlineData(20)]
+    [InlineData(25)]
+    public void Decode_FixedCanvas_NonIntegerModuleSize(int version)
+    {
+        // A fixed 512px canvas gives fractional pixels-per-module at most versions;
+        // the pixel-quantized module-size measurement must not snap the dimension
+        // estimate to a neighboring version (regression: v14/v17/v18/v20 read as
+        // one version lower and failed with DataUncorrectable).
+        var content = "https://github.com/guitarrapc/SkiaSharp.QrCode";
+        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, requestedVersion: version, quietZoneSize: 4);
+        using var bitmap = new SKBitmap(new SKImageInfo(512, 512, SKColorType.Bgra8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, 512, 512), qr, SKColors.Black, SKColors.White);
+            canvas.Flush();
+        }
+
+        Assert.True(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info), $"version={version}, status={info.Status}, detected version={info.Version}");
+        Assert.Equal(content, decoded);
+        Assert.Equal(version, info.Version);
+    }
+
     [Fact]
     public void Decode_LargerVersion()
     {

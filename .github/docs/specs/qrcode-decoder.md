@@ -86,6 +86,18 @@ Kanji mode, FNC1, Structured Append, other ECI charsets.
   generator roots α^0..α^(n-1) (b = 0), which puts an X_k factor in the Forney
   formula that b = 1 conventions omit. Deriving it from `EccBinaryEncoder`'s
   documented generator polynomial made the round-trip pass on the first run.
+- **Pixel-quantized module-size measurement biases the dimension estimate one whole
+  version low.** The dark-light-dark runs walk in 1-pixel steps and originally
+  returned the position of the first light pixel — the boundary rounded *up*, a
+  systematic +0.07..+0.25 px overestimate of the module size. Divided into the
+  finder distance, that undershoots the module count by several modules at small
+  pixels-per-module: a fixed 512 px canvas read version 14 (6.32 px/module) as
+  version 13, and versions 17+ as one lower, while 15/16 (near-integer px/module)
+  happened to survive — a *non-monotonic* failure pattern that looked style-dependent
+  but reproduced with plain black-and-white renders. Fixes: report run boundaries at
+  step − 0.5 (centers the quantization error), and keep the second-nearest valid
+  dimension as a one-shot retry when the primary fails. Regression-tested by
+  decoding versions 12-25 on a fixed 512 px canvas.
 
 ## Performance Notes
 

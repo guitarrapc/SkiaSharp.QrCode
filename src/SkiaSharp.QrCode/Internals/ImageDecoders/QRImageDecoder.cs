@@ -83,12 +83,43 @@ internal static class QRImageDecoder
 
         OrderFinderPatterns(patterns, out var topLeft, out var topRight, out var bottomLeft);
 
-        if (!TryEstimateDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, out var dimension))
+        if (!TryEstimateDimension(luminance, width, height, threshold, topLeft, topRight, bottomLeft, out var dimension, out var secondaryDimension))
         {
             info = new QRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
             return QRCodeDecodeStatus.NotDetected;
         }
 
+        var status = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, destination, out charsWritten, out info);
+        if (status == QRCodeDecodeStatus.Success)
+            return status;
+
+        // The dimension estimate can land between two valid sizes (module-size
+        // measurement quantizes to pixels); when a plausible runner-up exists,
+        // one retry with it rescues estimates that snapped to the wrong version.
+        if (secondaryDimension != 0)
+        {
+            var secondaryStatus = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, secondaryDimension, destination, out var secondaryCharsWritten, out var secondaryInfo);
+            if (secondaryStatus == QRCodeDecodeStatus.Success)
+            {
+                charsWritten = secondaryCharsWritten;
+                info = secondaryInfo;
+                return secondaryStatus;
+            }
+        }
+
+        // All candidates failed: report the primary attempt's diagnostics
+        return status;
+    }
+
+    /// <summary>
+    /// Samples the module grid at the given dimension and decodes it, retrying once
+    /// transposed for mirrored images (e.g. front-camera captures): finder geometry
+    /// is identical but data is transposed. The mirror retry triggers on any decode
+    /// failure — a permuted format pattern may fall within BCH distance of a wrong
+    /// candidate and surface as DataUncorrectable instead of FormatInformationInvalid.
+    /// </summary>
+    private static QRCodeDecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    {
         var rented = ArrayPool<byte>.Shared.Rent(dimension * dimension);
         try
         {
@@ -99,11 +130,6 @@ internal static class QRImageDecoder
             if (status == QRCodeDecodeStatus.Success)
                 return status;
 
-            // Mirrored image (e.g. front-camera captures): finder geometry is
-            // identical but data is transposed. Retry on any decode failure — a
-            // mirrored matrix can fail at any stage (a permuted format pattern may
-            // even fall within BCH distance of a wrong candidate and surface as
-            // DataUncorrectable instead of FormatInformationInvalid).
             TransposeInPlace(modules, dimension);
             var mirroredStatus = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out var mirroredInfo);
             if (mirroredStatus == QRCodeDecodeStatus.Success)
@@ -227,9 +253,15 @@ internal static class QRImageDecoder
     /// cuts the rotated rings diagonally). Instead it is measured along the actual
     /// finder-to-finder lines, which is rotation-invariant.
     /// </remarks>
-    private static bool TryEstimateDimension(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, out int dimension)
+    /// <param name="dimension">Nearest valid dimension to the estimate.</param>
+    /// <param name="secondaryDimension">
+    /// Second-nearest valid dimension when the estimate is also within one version
+    /// step of it (retry candidate for estimates near a snap boundary), else 0.
+    /// </param>
+    private static bool TryEstimateDimension(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, out int dimension, out int secondaryDimension)
     {
         dimension = 0;
+        secondaryDimension = 0;
 
         var moduleSize = MeasureModuleSize(luminance, width, height, threshold, topLeft, topRight, bottomLeft);
         if (moduleSize < 1f)
@@ -241,12 +273,28 @@ internal static class QRImageDecoder
         var estimate = (widthModules + heightModules) / 2f;
 
         // Snap to the nearest valid dimension; reject wild estimates
-        var version = (int)Math.Round((estimate - 17f) / 4f);
+        var versionExact = (estimate - 17f) / 4f;
+        var version = (int)Math.Round(versionExact);
         if (version < 1 || version > 40)
             return false;
 
         dimension = 17 + version * 4;
-        return Math.Abs(estimate - dimension) <= 4f;
+        if (Math.Abs(estimate - dimension) > 4f)
+        {
+            dimension = 0;
+            return false;
+        }
+
+        // Runner-up on the other side of the estimate
+        var secondaryVersion = versionExact > version ? version + 1 : version - 1;
+        if (secondaryVersion >= 1 && secondaryVersion <= 40)
+        {
+            var candidate = 17 + secondaryVersion * 4;
+            if (Math.Abs(estimate - candidate) <= 4f)
+                secondaryDimension = candidate;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -310,6 +358,14 @@ internal static class QRImageDecoder
     /// sequence completes (center square → light ring → dark ring → out), returning
     /// the traveled distance (≈ 3.5 modules). NaN when the image edge interrupts.
     /// </summary>
+    /// <remarks>
+    /// The walk samples at integer pixel steps, so the first light pixel after the
+    /// dark ring overshoots the true boundary by up to one pixel. Returning
+    /// step − 0.5 centers that error: without the correction the module size is
+    /// systematically overestimated (~+0.07..+0.25 px measured), which at small
+    /// pixels-per-module snaps the dimension estimate one whole version low
+    /// (e.g. a 512 px version 14 render read as version 13).
+    /// </remarks>
     private static float DarkLightDarkRun(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float startX, float startY, float dirX, float dirY)
     {
         var phase = 0;
@@ -333,7 +389,7 @@ internal static class QRImageDecoder
                     break;
                 default: // dark ring; run ends at the transition out of it
                     if (!dark)
-                        return step;
+                        return step - 0.5f;
                     break;
             }
         }
