@@ -334,6 +334,12 @@ app.MapGet("/qr", (string url) =>
     var pngBytes = QRCodeImageBuilder.GetPngBytes(url);
     return Results.File(pngBytes, "image/png");
 });
+
+app.MapGet("/qr.svg", (string url) =>
+{
+    var svgBytes = QRCodeImageBuilder.GetSvgBytes(url);
+    return Results.File(svgBytes, "image/svg+xml");
+});
 ```
 
 ### Does it support Blazor WebAssembly?
@@ -514,18 +520,24 @@ SVG output draws the QR code as vector shapes, so it scales to any size without 
 using SkiaSharp;
 using SkiaSharp.QrCode.Image;
 
+// One-liner: save to stream
 using var stream = File.Create("qrcode.svg");
 QRCodeImageBuilder.SaveSvg("https://example.com", stream);
+
+// One-liner: SVG document string, e.g. for inline HTML embedding
+var svg = QRCodeImageBuilder.GetSvgString("https://example.com");
 
 // Builder: full styling support
 var svgString = new QRCodeImageBuilder("https://example.com")
     .WithModulePixelSize(10)
     .WithErrorCorrection(ECCLevel.H)
     .WithColors(codeColor: SKColor.Parse("1B9CFC"))
-    .ToSvgString(); // or SaveToSvg(stream) / GetSvgBytes(...)
+    .ToSvgString(); // or SaveToSvg(stream) / SaveToSvg(bufferWriter) / GetSvgBytes(...)
 ```
 
 Size options define the SVG viewport (in SVG units instead of pixels); `WithFormat()` does not apply to SVG output.
+
+The root element always carries a `viewBox`, so the QR code scales its content when displayed at any size (`<img>`, CSS, or attribute-based sizing). Plain rectangular modules also get `shape-rendering="crispEdges"` to prevent antialiasing seams between modules; custom shapes (circles, rounded rects) keep antialiasing for smooth curves.
 
 > [!TIP]
 > Default rectangle modules produce compact SVG (horizontal module runs merge into single `<rect>` elements). Custom module shapes and gradients render correctly but produce larger documents, since each module becomes an individual vector element. Icon images are embedded as base64 data URIs.

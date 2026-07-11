@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="570" height="570">
+<svg viewBox="0 0 570 570" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="570" height="570">
 	<rect fill="white" width="570" height="570"/>
 	<defs>
 		<linearGradient id="gradient_0" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="570" y2="570">

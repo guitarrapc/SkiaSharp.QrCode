@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 using System.Xml.Linq;
 using SkiaSharp.QrCode.Image;
@@ -36,6 +37,122 @@ public class QRCodeImageBuilderSvgTest
     }
 
     [Fact]
+    public void SaveToSvg_RootHasViewBox_SoDocumentScalesWhenEmbedded()
+    {
+        // Without viewBox, an SVG embedded at a different size (img/CSS) keeps its
+        // content at original coordinates instead of scaling.
+        var svg = new QRCodeImageBuilder(TestContent)
+            .WithSize(512, 512)
+            .ToSvgString();
+
+        var doc = XDocument.Parse(svg);
+        Assert.Equal("0 0 512 512", doc.Root!.Attribute("viewBox")?.Value);
+    }
+
+    [Fact]
+    public void SaveToSvg_PlainRectModules_UseCrispEdges()
+    {
+        // Default rect modules get shape-rendering=crispEdges to avoid antialiasing
+        // seams between adjacent modules at non-integer display sizes.
+        var svg = new QRCodeImageBuilder(TestContent)
+            .WithSize(512, 512)
+            .ToSvgString();
+
+        var doc = XDocument.Parse(svg);
+        Assert.Equal("crispEdges", doc.Root!.Attribute("shape-rendering")?.Value);
+    }
+
+    [Fact]
+    public void SaveToSvg_CustomShapes_KeepAntialiasing()
+    {
+        // Curved shapes need antialiasing; crispEdges would render them jagged.
+        var svg = new QRCodeImageBuilder(TestContent)
+            .WithSize(512, 512)
+            .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.9f)
+            .ToSvgString();
+
+        var doc = XDocument.Parse(svg);
+        Assert.Null(doc.Root!.Attribute("shape-rendering"));
+        Assert.NotNull(doc.Root.Attribute("viewBox"));
+    }
+
+    [Fact]
+    public void SaveToSvg_CustomFinderPattern_KeepsAntialiasing()
+    {
+        var svg = new QRCodeImageBuilder(TestContent)
+            .WithSize(512, 512)
+            .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
+            .ToSvgString();
+
+        var doc = XDocument.Parse(svg);
+        Assert.Null(doc.Root!.Attribute("shape-rendering"));
+    }
+
+    [Fact]
+    public void SaveToSvg_BuiltInIconShape_UsesCrispEdges()
+    {
+        // Built-in icon shapes draw rectangles, bitmaps, and text only, none of
+        // which degrade under crispEdges — the QR modules stay seam-free.
+        using var bitmap = new SKBitmap(32, 32);
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            canvas.Clear(SKColors.Red);
+        }
+        var icon = IconData.FromImage(bitmap, iconSizePercent: 15, iconBorderWidth: 4);
+
+        var svg = new QRCodeImageBuilder(TestContent)
+            .WithSize(512, 512)
+            .WithErrorCorrection(ECCLevel.H)
+            .WithIcon(icon)
+            .ToSvgString();
+
+        var doc = XDocument.Parse(svg);
+        Assert.Equal("crispEdges", doc.Root!.Attribute("shape-rendering")?.Value);
+    }
+
+    [Fact]
+    public void SaveToSvg_BufferWriter_MatchesStreamOutput()
+    {
+        var builder = new QRCodeImageBuilder(TestContent).WithSize(256, 256);
+
+        using var stream = new MemoryStream();
+        builder.SaveToSvg(stream);
+
+        var writer = new ArrayBufferWriter<byte>();
+        builder.SaveToSvg(writer);
+
+        Assert.Equal(stream.ToArray(), writer.WrittenSpan.ToArray());
+    }
+
+    [Fact]
+    public void SaveToSvg_BufferWriter_Null_Throws()
+    {
+        var builder = new QRCodeImageBuilder(TestContent).WithSize(256, 256);
+
+        Assert.Throws<ArgumentNullException>(() => builder.SaveToSvg((IBufferWriter<byte>)null!));
+    }
+
+    [Fact]
+    public void GetSvgString_Content_MatchesToSvgString()
+    {
+        var expected = new QRCodeImageBuilder(TestContent)
+            .WithSize(512, 512)
+            .WithErrorCorrection(ECCLevel.H)
+            .ToSvgString();
+
+        Assert.Equal(expected, QRCodeImageBuilder.GetSvgString(TestContent, ECCLevel.H, size: 512));
+    }
+
+    [Fact]
+    public void WriteSvg_Content_MatchesGetSvgBytes()
+    {
+        var writer = new ArrayBufferWriter<byte>();
+        QRCodeImageBuilder.WriteSvg(TestContent, writer, ECCLevel.M, size: 256);
+
+        Assert.Equal(QRCodeImageBuilder.GetSvgBytes(TestContent, ECCLevel.M, size: 256), writer.WrittenSpan.ToArray());
+    }
+
+    [Fact]
     public void SaveToSvg_LeavesStreamOpen()
     {
         using var stream = new MemoryStream();
@@ -52,7 +169,7 @@ public class QRCodeImageBuilderSvgTest
     {
         var builder = new QRCodeImageBuilder(TestContent).WithSize(256, 256);
 
-        Assert.Throws<ArgumentNullException>(() => builder.SaveToSvg(null!));
+        Assert.Throws<ArgumentNullException>(() => builder.SaveToSvg((Stream)null!));
 
         using var readOnly = new MemoryStream([0x00], writable: false);
         Assert.Throws<ArgumentException>(() => builder.SaveToSvg(readOnly));
