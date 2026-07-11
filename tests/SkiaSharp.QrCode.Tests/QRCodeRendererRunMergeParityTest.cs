@@ -46,6 +46,26 @@ public class QRCodeRendererRunMergeParityTest
         Assert.Equal(perModule, merged);
     }
 
+    [Theory]
+    [InlineData(0.3f, 0.7f, 1.0f)]   // sub-pixel translation
+    [InlineData(0f, 0f, 1.37f)]      // fractional upscale
+    [InlineData(5.5f, 3.25f, 0.61f)] // sub-pixel translation + fractional downscale
+    public void MergedRuns_WithAxisPreservingCanvasTransform_MatchPerModuleRendering(float dx, float dy, float scale)
+    {
+        // Axis-preserving transforms (translation/scale) keep both paths
+        // pixel-identical: they compute the same edge coordinates and rasterize
+        // without antialiasing. Rotation is intentionally outside the parity
+        // guarantee — non-axis-aligned rasterization rounds shared edges at
+        // sub-pixel level, which affects per-module drawing between adjacent
+        // modules just the same (measured ~0.003% of pixels at 7-30 degrees).
+        var qr = QRCodeGenerator.CreateQrCode("transform-parity", ECCLevel.M);
+
+        var merged = RenderTransformedPixels(qr, moduleShape: null, dx, dy, scale);
+        var perModule = RenderTransformedPixels(qr, new PerModuleRectangleShape(), dx, dy, scale);
+
+        Assert.Equal(perModule, merged);
+    }
+
     [Fact]
     public void MergedRuns_WithFinderPatternShape_MatchPerModuleRendering()
     {
@@ -57,6 +77,27 @@ public class QRCodeRendererRunMergeParityTest
         var perModule = RenderPixels(qr, 512, moduleShape: new PerModuleRectangleShape(), finderPatternShape: RectangleFinderPatternShape.Default);
 
         Assert.Equal(perModule, merged);
+    }
+
+    private static byte[] RenderTransformedPixels(QRCodeData qr, ModuleShape? moduleShape, float dx, float dy, float scale)
+    {
+        // Render area uses a fractional cell size (411 / module count) inside a
+        // larger bitmap so scaled content stays within bounds.
+        using var bitmap = new SKBitmap(600, 600);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Transparent);
+        canvas.Translate(dx, dy);
+        canvas.Scale(scale);
+
+        QRCodeRenderer.Render(
+            canvas,
+            SKRect.Create(10, 10, 411, 411),
+            qr,
+            SKColors.Black,
+            SKColors.White,
+            moduleShape: moduleShape);
+
+        return bitmap.Bytes;
     }
 
     private static byte[] RenderPixels(

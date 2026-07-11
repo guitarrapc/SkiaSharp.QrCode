@@ -11,6 +11,15 @@ public static class QRCodeRenderer
     /// <summary>
     /// Render the specified data into the given area of the target canvas.
     /// </summary>
+    /// <remarks>
+    /// With the default rectangle shape at <paramref name="moduleSizePercent"/> 1.0,
+    /// horizontal runs of dark modules are drawn as single merged rectangles
+    /// (fewer native draw calls). Merged and per-module rendering are
+    /// pixel-identical under axis-preserving canvas transforms (translation/scale);
+    /// under rotation, shared-edge rounding may differ at sub-pixel level.
+    /// Any custom module shape or a module size below 1.0 falls back to
+    /// per-module drawing.
+    /// </remarks>
     /// <param name="canvas">The canvas to render the QR code on.</param>
     /// <param name="area">The rectangular area where the QR code will be rendered.</param>
     /// <param name="data">The QR code data to render.</param>
@@ -257,7 +266,13 @@ public static class QRCodeRenderer
     /// <summary>
     /// Draws dark modules as merged horizontal runs of full-cell rectangles.
     /// Only valid for <see cref="RectangleModuleShape"/> at 100% module size, where
-    /// adjacent modules share edges and merging is visually identical.
+    /// adjacent modules share edges, antialiasing is always off
+    /// (<see cref="RectangleModuleShape.RequiresAntialiasing"/> is false), and
+    /// merging is pixel-identical to per-module drawing. The parity holds under
+    /// axis-preserving canvas transforms (translation/scale); rotated canvases may
+    /// rasterize shared edges hairline-differently at sub-pixel level — inherent to
+    /// non-axis-aligned rasterization, which affects per-module drawing between
+    /// adjacent modules just the same.
     /// </summary>
     private static void DrawModuleRuns(SKCanvas canvas, QRCodeData data, SKRect area, SKPaint paint, bool skipFinderPatterns)
     {
