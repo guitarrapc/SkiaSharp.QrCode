@@ -554,11 +554,9 @@ public class QRCodeImageBuilder
         using var image = GenerateImage();
         using var data = image.Encode(_format, _quality);
 
-        // write to IBufferWriter
-        var span = data.AsSpan();
-        var buffer = writer.GetSpan(span.Length);
-        span.CopyTo(buffer);
-        writer.Advance(span.Length);
+        // Write in writer-provided segments; a single GetSpan for the whole payload
+        // would force segmented writers (e.g. PipeWriter) into one contiguous buffer.
+        writer.Write(data.AsSpan());
     }
 
     /// <summary>
@@ -593,27 +591,16 @@ public class QRCodeImageBuilder
         if (!output.CanWrite)
             throw new ArgumentException("Output stream must be writable", nameof(output));
 
-        using var document = RenderSvgDocument(out var insertAt, out var rootAttributes);
-        var buffer = document.GetBuffer();
-        var length = (int)document.Length;
-
-        if (insertAt < 0)
-        {
-            output.Write(buffer, 0, length);
-            return;
-        }
-
-        var attributeBytes = Encoding.UTF8.GetBytes(rootAttributes);
-        output.Write(buffer, 0, insertAt);
-        output.Write(attributeBytes, 0, attributeBytes.Length);
-        output.Write(buffer, insertAt, length - insertAt);
+        RenderSvg(output);
     }
 
     /// <summary>
     /// Generate QR code and write as SVG document to an IBufferWriter.
     /// </summary>
     /// <remarks>
-    /// See <see cref="SaveToSvg(Stream)"/> for rendering behavior.
+    /// See <see cref="SaveToSvg(Stream)"/> for rendering behavior. Data is written in
+    /// writer-provided segments, so segmented writers (e.g. PipeWriter) work without
+    /// a single contiguous buffer for the whole document.
     /// </remarks>
     /// <param name="writer">The buffer writer to write to.</param>
     /// <exception cref="ArgumentNullException"></exception>
@@ -622,25 +609,8 @@ public class QRCodeImageBuilder
         if (writer is null)
             throw new ArgumentNullException(nameof(writer));
 
-        using var document = RenderSvgDocument(out var insertAt, out var rootAttributes);
-        var buffer = document.GetBuffer();
-        var length = (int)document.Length;
-
-        if (insertAt < 0)
-        {
-            var raw = writer.GetSpan(length);
-            buffer.AsSpan(0, length).CopyTo(raw);
-            writer.Advance(length);
-            return;
-        }
-
-        var attributeBytes = Encoding.UTF8.GetBytes(rootAttributes);
-        var total = length + attributeBytes.Length;
-        var span = writer.GetSpan(total);
-        buffer.AsSpan(0, insertAt).CopyTo(span);
-        attributeBytes.AsSpan().CopyTo(span.Slice(insertAt));
-        buffer.AsSpan(insertAt, length - insertAt).CopyTo(span.Slice(insertAt + attributeBytes.Length));
-        writer.Advance(total);
+        using var stream = new BufferWriterStream(writer);
+        RenderSvg(stream);
     }
 
     /// <summary>
@@ -658,37 +628,34 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Renders the SVG document into a memory buffer and prepares root element attributes
-    /// (<c>viewBox</c>, optional <c>shape-rendering</c>) to insert at <paramref name="insertAt"/>.
+    /// Renders the SVG document to the output stream, injecting root element attributes
+    /// (<c>viewBox</c>, optional <c>shape-rendering</c>) while streaming.
     /// </summary>
     /// <remarks>
     /// <see cref="SKSvgCanvas"/> writes <c>width</c>/<c>height</c> on the root element but no
     /// <c>viewBox</c>. Without a viewBox, an SVG embedded at a different size (img element, CSS)
     /// keeps its content at the original coordinates instead of scaling — the main reason to use
-    /// SVG in the first place. The attributes are inserted right after <c>&lt;svg </c>; if the
-    /// marker is not found (unexpected upstream format change), <paramref name="insertAt"/> is -1
-    /// and the document should be written unpatched.
+    /// SVG in the first place. <see cref="SvgRootAttributeInjectorStream"/> inserts the attributes
+    /// right after the <c>&lt;svg </c> marker while the canvas streams to the output, so the
+    /// document is never buffered as a whole; if the marker is not found (unexpected upstream
+    /// format change), the document passes through unpatched.
     /// </remarks>
-    private MemoryStream RenderSvgDocument(out int insertAt, out string rootAttributes)
+    private void RenderSvg(Stream output)
     {
         var qrCodeData = ResolveQrCodeData();
         var (info, contentRect) = CreateLayout(qrCodeData);
 
-        var document = new MemoryStream();
-        // SKSvgCanvas flushes the SVG document when the canvas is disposed,
-        // so dispose before the buffer is consumed.
-        using (var canvas = SKSvgCanvas.Create(SKRect.Create(0, 0, info.Width, info.Height), document))
+        var viewBox = $"viewBox=\"0 0 {info.Width} {info.Height}\" ";
+        var rootAttributes = UseCrispEdges() ? viewBox + "shape-rendering=\"crispEdges\" " : viewBox;
+
+        using var injector = new SvgRootAttributeInjectorStream(output, rootAttributes);
+        // SKSvgCanvas flushes the SVG document when the canvas is disposed, so dispose
+        // it before the injector (which then flushes any pending header bytes).
+        // The output stream itself stays open.
+        using (var canvas = SKSvgCanvas.Create(SKRect.Create(0, 0, info.Width, info.Height), injector))
         {
             RenderContent(canvas, qrCodeData, info, contentRect);
         }
-
-        var viewBox = $"viewBox=\"0 0 {info.Width} {info.Height}\" ";
-        rootAttributes = UseCrispEdges() ? viewBox + "shape-rendering=\"crispEdges\" " : viewBox;
-
-        ReadOnlySpan<byte> marker = "<svg "u8;
-        var index = document.GetBuffer().AsSpan(0, (int)document.Length).IndexOf(marker);
-        insertAt = index < 0 ? -1 : index + marker.Length;
-        return document;
     }
 
     /// <summary>
