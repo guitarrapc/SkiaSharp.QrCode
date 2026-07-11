@@ -866,7 +866,9 @@ Console.WriteLine("""
     var svgString = new QRCodeImageBuilder(content)
         .WithSize(256, 256)
         .ToSvgString();
-    Console.WriteLine($"  ✓ ToSvgString(): {svgString.Length} chars, starts with: {svgString.Substring(0, svgString.IndexOf('\n'))}");
+    var firstLineEnd = svgString.IndexOf('\n');
+    var firstLine = firstLineEnd >= 0 ? svgString.Substring(0, firstLineEnd) : svgString;
+    Console.WriteLine($"  ✓ ToSvgString(): {svgString.Length} chars, starts with: {firstLine}");
 }
 Console.WriteLine();
 
