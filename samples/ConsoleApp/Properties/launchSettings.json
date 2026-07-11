@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ConsoleApp": {
+      "commandName": "Project",
+      "commandLineArgs": "--output-dir samples"
+    }
+  }
+}
