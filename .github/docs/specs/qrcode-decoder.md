@@ -136,3 +136,10 @@ Kanji mode, FNC1, Structured Append, other ECI charsets.
   Pre-mapping the whole codeword to remove the in-loop affine measured *slower*: that
   affine was off the carried dependency chain, so removing it saved nothing while the
   extra pass cost real time.
+- The alignment pattern search is failure-path-dominated: the expanding window sweep
+  (4→8→16 modules) runs to completion when no pattern exists, up to 4× per failed
+  decode (secondary dimension × inversion) — baseline ~40% of an image decode. Shipped
+  kernel (net8.0+ AVX2): 32-px SIMD dark-mask classification + tzcnt run walk × a
+  ⌊moduleSize/2⌋ row stride (the vertical cross-check recenters exactly, so striding
+  is result-identical) — 23x on the not-found sweep, scalar fallback elsewhere
+  (`MICRO_OPTIMIZATION_AlignmentFind` in the MicroBenchmarks repository).

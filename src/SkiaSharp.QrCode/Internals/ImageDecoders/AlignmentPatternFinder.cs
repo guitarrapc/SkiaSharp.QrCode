@@ -1,3 +1,9 @@
+#if NET8_0_OR_GREATER
+using System.Numerics;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+#endif
+
 namespace SkiaSharp.QrCode.Internals.ImageDecoders;
 
 /// <summary>
@@ -35,6 +41,13 @@ internal static class AlignmentPatternFinder
     /// <param name="centerY">Found center y.</param>
     /// <returns>True when a cross-checked alignment pattern was found in the window.</returns>
     public static bool TryFind(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float expectedX, float expectedY, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, float allowanceModules, out float centerX, out float centerY)
+        => TryFindCore(luminance, width, height, threshold, expectedX, expectedY, moduleSize, axisX, axisY, allowanceModules, forceScalar: false, out centerX, out centerY);
+
+    /// <summary>Scalar-scan entry for kernel parity tests; behavior-identical to <see cref="TryFind"/>.</summary>
+    internal static bool TryFindScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float expectedX, float expectedY, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, float allowanceModules, out float centerX, out float centerY)
+        => TryFindCore(luminance, width, height, threshold, expectedX, expectedY, moduleSize, axisX, axisY, allowanceModules, forceScalar: true, out centerX, out centerY);
+
+    private static bool TryFindCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float expectedX, float expectedY, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, float allowanceModules, bool forceScalar, out float centerX, out float centerY)
     {
         centerX = 0;
         centerY = 0;
@@ -49,16 +62,21 @@ internal static class AlignmentPatternFinder
 
         // Scan rows outward from the middle of the window: the pattern is most
         // likely at the prediction, so the first cross-checked hit wins.
+        // Row stride: the pattern's center dark run is ~1 module tall, so scanning
+        // every ⌊moduleSize/2⌋-th row cannot miss it, and the vertical cross-check
+        // recenters exactly regardless of which row inside the run was hit
+        // (measured 4x on the not-found sweep; see the AlignmentFind findings log).
+        var step = Math.Max(1, (int)(moduleSize / 2f));
         var midY = (minY + maxY) / 2;
-        for (var offset = 0; midY + offset <= maxY || midY - offset >= minY; offset++)
+        for (var offset = 0; midY + offset <= maxY || midY - offset >= minY; offset += step)
         {
             if (midY + offset <= maxY
-                && TryScanRow(luminance, width, height, threshold, midY + offset, minX, maxX, moduleSize, axisX, axisY, ref centerX, ref centerY))
+                && TryScanRow(luminance, width, height, threshold, midY + offset, minX, maxX, moduleSize, axisX, axisY, forceScalar, ref centerX, ref centerY))
             {
                 return true;
             }
             if (offset != 0 && midY - offset >= minY
-                && TryScanRow(luminance, width, height, threshold, midY - offset, minX, maxX, moduleSize, axisX, axisY, ref centerX, ref centerY))
+                && TryScanRow(luminance, width, height, threshold, midY - offset, minX, maxX, moduleSize, axisX, axisY, forceScalar, ref centerX, ref centerY))
             {
                 return true;
             }
@@ -67,7 +85,21 @@ internal static class AlignmentPatternFinder
         return false;
     }
 
-    private static bool TryScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, ref float centerX, ref float centerY)
+    private static bool TryScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, bool forceScalar, ref float centerX, ref float centerY)
+    {
+#if NET8_0_OR_GREATER
+        // SIMD path: classify 32 pixels per compare into a dark bitmask, then walk
+        // RUNS via tzcnt instead of pixels (measured 6.4x on the not-found sweep).
+        if (!forceScalar && Vector256.IsHardwareAccelerated && maxX - minX + 1 >= 32)
+        {
+            return TryScanRowMask(luminance, width, height, threshold, y, minX, maxX, moduleSize, axisX, axisY, ref centerX, ref centerY);
+        }
+#endif
+        _ = forceScalar;
+        return TryScanRowScalar(luminance, width, height, threshold, y, minX, maxX, moduleSize, axisX, axisY, ref centerX, ref centerY);
+    }
+
+    private static bool TryScanRowScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, ref float centerX, ref float centerY)
     {
         // Track the last three completed runs as [light, dark, light]; a window is
         // evaluated whenever a light run completes (light → dark transition).
@@ -125,6 +157,100 @@ internal static class AlignmentPatternFinder
         }
 
         return false;
+    }
+
+#if NET8_0_OR_GREATER
+    /// <summary>
+    /// Mask-based row scan: 32 pixels per vector compare produce a dark bitmask;
+    /// runs are walked via trailing-zero counts, evaluating the same
+    /// (light, dark, light) triple at every light→dark transition as the scalar walk.
+    /// </summary>
+    private static bool TryScanRowMask(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, int minX, int maxX, float moduleSize, (float X, float Y) axisX, (float X, float Y) axisY, ref float centerX, ref float centerY)
+    {
+        var length = maxX - minX + 1;
+        Span<ulong> mask = stackalloc ulong[((length + 63) >> 6) + 1];
+        mask.Clear();
+
+        // Build the dark bitmask (bit i = pixel minX+i is dark)
+        var row = luminance.Slice(y * width + minX, length);
+        var i = 0;
+        if (threshold > 0)
+        {
+            // unsigned v < t ⟺ min(v, t-1) == v; threshold == 0 means nothing is dark
+            var thresholdMinus1 = Vector256.Create((byte)(threshold - 1));
+            ref var rowRef = ref MemoryMarshal.GetReference(row);
+            for (; i + 32 <= length; i += 32)
+            {
+                var v = Vector256.LoadUnsafe(ref rowRef, (nuint)i);
+                var dark = Vector256.Equals(Vector256.Min(v, thresholdMinus1), v);
+                mask[i >> 6] |= (ulong)dark.ExtractMostSignificantBits() << (i & 63);
+            }
+        }
+        for (; i < length; i++)
+        {
+            if (row[i] < threshold)
+                mask[i >> 6] |= 1ul << (i & 63);
+        }
+
+        // Walk dark runs; a leading dark run is skipped (the scalar walk waits for
+        // the first light pixel before opening a window).
+        var pos = NextBit(mask, 0, length, set: false);
+        var lightStart = pos;
+        var previousDarkLength = 0;
+        var previousGap = 0;
+
+        while (true)
+        {
+            var darkStart = NextBit(mask, pos, length, set: true);
+            if (darkStart >= length)
+                break;
+            var darkEnd = NextBit(mask, darkStart, length, set: false);
+
+            var gap = darkStart - lightStart; // light run before this dark run
+            if (previousDarkLength > 0
+                && IsAlignmentRatio(previousGap, previousDarkLength, gap, moduleSize))
+            {
+                var x = minX + darkStart;
+                var candidateX = x - gap - previousDarkLength / 2f;
+                if (TryCrossCheck(luminance, width, height, threshold, candidateX, y, moduleSize, axisX, axisY, out centerX, out centerY))
+                    return true;
+            }
+
+            previousGap = gap;
+            previousDarkLength = darkEnd - darkStart;
+            lightStart = darkEnd;
+            pos = darkEnd;
+        }
+
+        return false;
+    }
+
+    /// <summary>Index of the next set (or clear) bit at or after <paramref name="from"/>, or <paramref name="length"/>.</summary>
+    private static int NextBit(ReadOnlySpan<ulong> mask, int from, int length, bool set)
+    {
+        while (from < length)
+        {
+            var word = mask[from >> 6];
+            if (!set)
+                word = ~word;
+            word &= ulong.MaxValue << (from & 63);
+            if (word != 0)
+            {
+                var index = (from & ~63) + BitOperations.TrailingZeroCount(word);
+                return Math.Min(index, length);
+            }
+            from = (from & ~63) + 64;
+        }
+        return length;
+    }
+#endif
+
+    private static bool IsAlignmentRatio(int lightBefore, int dark, int lightAfter, float moduleSize)
+    {
+        var maxVariance = moduleSize / 2f;
+        return Math.Abs(lightBefore - moduleSize) < maxVariance
+            && Math.Abs(dark - moduleSize) < maxVariance
+            && Math.Abs(lightAfter - moduleSize) < maxVariance;
     }
 
     /// <summary>
