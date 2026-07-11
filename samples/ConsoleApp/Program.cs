@@ -4,17 +4,30 @@ using SkiaSharp.QrCode.Image;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-// Resolve paths from the project directory (not cwd), so output lands in
-// samples/ConsoleApp/samples/ regardless of where dotnet run is invoked from.
-static string GetProjectDirectory() =>
-    Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", ".."));
+static string ParseOutputDir(string[] args)
+{
+    for (var i = 0; i < args.Length; i++)
+    {
+        if (args[i] == "--output-dir")
+        {
+            if (i + 1 >= args.Length)
+                throw new ArgumentException("--output-dir requires a path");
+            return Path.GetFullPath(args[i + 1]);
+        }
 
-var projectDir = GetProjectDirectory();
-var samplesDir = Path.Combine(projectDir, "samples");
-var outputDir = samplesDir;
-var iconPath = Path.Combine(samplesDir, "test.png");
+        const string prefix = "--output-dir=";
+        if (args[i].StartsWith(prefix, StringComparison.Ordinal))
+            return Path.GetFullPath(args[i][prefix.Length..]);
+    }
+
+    // Default: ./samples relative to cwd (gallery when cwd is the project directory).
+    return Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), "samples"));
+}
+
+var outputDir = ParseOutputDir(args);
+var iconPath = Path.Combine(outputDir, "test.png");
 // Square Instagram logo (128x128). Prefer over samples/insta.png (133x135, non-square).
-var iconInstaPath = Path.Combine(samplesDir, "instarich-logo.png");
+var iconInstaPath = Path.Combine(outputDir, "instarich-logo.png");
 
 var content = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md";
 
