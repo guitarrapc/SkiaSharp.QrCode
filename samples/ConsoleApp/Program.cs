@@ -897,5 +897,90 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
+// Decode
+Console.WriteLine("""
+    Pattern 23: Decode (QRCodeData / image round-trip)
+      - Best for: Round-trip validation, reading rendered QR images
+      - API: QRCodeDecoder.TryDecode()
+    """);
+{
+    // 23a. Matrix round-trip: decode straight from QRCodeData (no image involved)
+    var qrData = QRCodeGenerator.CreateQrCode(content, ECCLevel.M);
+    if (QRCodeDecoder.TryDecode(qrData, out var decoded, out var info))
+    {
+        Console.WriteLine($"  ✓ Matrix decode: \"{Truncate(decoded, 48)}\"");
+        Console.WriteLine($"    version {info.Version}, ECC {info.EccLevel}, mask {info.MaskPattern}, {info.ErrorsCorrected} codewords corrected");
+    }
+
+    // 23b. Image decode: read back a PNG produced earlier in this run
+    var pngPath = Path.Combine(outputDir, "pattern1_static_method.png");
+    using (var bitmap = SKBitmap.Decode(File.ReadAllBytes(pngPath)))
+    {
+        if (QRCodeDecoder.TryDecode(bitmap, out var fromImage, out var imageInfo))
+        {
+            Console.WriteLine($"  ✓ Image decode ({Path.GetFileName(pngPath)}): \"{Truncate(fromImage, 48)}\" (version {imageInfo.Version})");
+        }
+        else
+        {
+            Console.WriteLine($"  ✗ Image decode failed: {imageInfo.Status}");
+        }
+    }
+
+    // 23c. Rotation tolerance: the detector resolves arbitrary rotation
+    var rotatedPath = Path.Combine(outputDir, "pattern23_rotated.png");
+    using (var source = SKBitmap.Decode(File.ReadAllBytes(pngPath)))
+    using (var rotated = new SKBitmap(new SKImageInfo((int)(source.Width * 1.5f), (int)(source.Height * 1.5f))))
+    {
+        using (var canvas = new SKCanvas(rotated))
+        {
+            canvas.Clear(SKColors.White);
+            canvas.Translate(rotated.Width / 2f, rotated.Height / 2f);
+            canvas.RotateDegrees(30);
+            canvas.Translate(-source.Width / 2f, -source.Height / 2f);
+            canvas.DrawBitmap(source, 0, 0, SKSamplingOptions.Default);
+        }
+
+        using (var image = SKImage.FromBitmap(rotated))
+        using (var encoded = image.Encode(SKEncodedImageFormat.Png, 100))
+        using (var stream = File.OpenWrite(rotatedPath))
+        {
+            encoded.SaveTo(stream);
+        }
+
+        if (QRCodeDecoder.TryDecode(rotated, out var fromRotated, out _))
+        {
+            Console.WriteLine($"  ✓ 30° rotated image still decodes: \"{Truncate(fromRotated, 48)}\"");
+        }
+    }
+
+    // 23d. Error correction at work: flip modules, Reed-Solomon repairs them
+    var damaged = QRCodeGenerator.CreateQrCode("error correction demo", ECCLevel.M, quietZoneSize: 0);
+    var size = damaged.Size;
+    var modules = new byte[size * size];
+    for (var y = 0; y < size; y++)
+    {
+        for (var x = 0; x < size; x++)
+        {
+            modules[y * size + x] = damaged[y, x] ? (byte)1 : (byte)0;
+        }
+    }
+    modules[9 * size + 9] ^= 1;   // flip three data modules
+    modules[10 * size + 11] ^= 1;
+    modules[12 * size + 10] ^= 1;
+    if (QRCodeDecoder.TryDecode(modules, size, out var repaired, out var repairInfo))
+    {
+        Console.WriteLine($"  ✓ 3 flipped modules repaired by Reed-Solomon: \"{repaired}\" ({repairInfo.ErrorsCorrected} codewords corrected)");
+    }
+
+    // 23e. Failure reporting: statuses explain why a decode failed
+    var blank = new byte[25 * 25];
+    QRCodeDecoder.TryDecode(blank, 25, out _, out var failInfo);
+    Console.WriteLine($"  ✓ Failure diagnostics: blank matrix reports {failInfo.Status}");
+
+    static string Truncate(string value, int max)
+        => value.Length <= max ? value : value[..max] + "…";
+}
+Console.WriteLine();
+
 Console.WriteLine("=== All patterns completed! ===");
 Console.WriteLine($"Output directory: {Path.GetFullPath(outputDir)}");

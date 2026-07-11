@@ -30,7 +30,7 @@ See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these 
 
 Try SkiaSharp.QrCode in your browser — no install required: **[SkiaSharp.QrCode Playground](https://guitarrapc.github.io/SkiaSharp.QrCode/)**
 
-The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or SVG, or share your settings as a permalink. Source lives in [src/SkiaSharp.QrCode.Playground](src/SkiaSharp.QrCode.Playground); it is deployed to GitHub Pages by [release.yaml](.github/workflows/release.yaml) as part of every release.
+The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or SVG, or share your settings as a permalink. Every generated code is decoded back in-browser by the library's own decoder as a self-check, and the *Decode an image* panel reads QR codes from your own image files. Source lives in [src/SkiaSharp.QrCode.Playground](src/SkiaSharp.QrCode.Playground); it is deployed to GitHub Pages by [release.yaml](.github/workflows/release.yaml) as part of every release.
 
 ## Overview
 
@@ -226,7 +226,7 @@ Buffer sizes are bounded: version 40 with the standard quiet zone needs 185 × 1
 Decodes QR codes back into text — the inverse of `QRCodeGenerator`. Works at two levels:
 
 - **Matrix level**: from `QRCodeData` or a byte-per-module span (the same format the zero-allocation generator produces). Full Reed-Solomon error correction included.
-- **Image level**: from `SKBitmap` or a grayscale luminance span. Detects the QR code (arbitrary rotation and mirroring supported), samples the grid, then decodes.
+- **Image level**: from `SKBitmap` or a grayscale luminance span. Detects the QR code (arbitrary rotation, mirroring and inverted light-on-dark palettes supported), samples the grid, then decodes.
 
 **Scope**: image decoding targets *clean* inputs — screenshots, rendered QR codes, and scans. Real-world photos with strong perspective, uneven lighting, or blur are out of scope; use a computer-vision grade reader such as ZXing.Net for those. See [QR Code Decoder](.github/docs/specs/qrcode-decoder.md) for design details.
 

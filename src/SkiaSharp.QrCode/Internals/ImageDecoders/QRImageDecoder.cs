@@ -25,7 +25,9 @@ namespace SkiaSharp.QrCode.Internals.ImageDecoders;
 internal static class QRImageDecoder
 {
     /// <summary>
-    /// Decodes a QR code from grayscale pixels.
+    /// Decodes a QR code from grayscale pixels. Reflectance-reversed codes
+    /// (light modules on a dark background, common in dark-mode UIs) are handled
+    /// by one inverted retry when the normal attempt fails.
     /// </summary>
     /// <param name="luminance">Grayscale pixels, row-major, width × height bytes.</param>
     /// <param name="width">Image width in pixels.</param>
@@ -34,6 +36,39 @@ internal static class QRImageDecoder
     /// <param name="charsWritten">Number of characters written.</param>
     /// <param name="info">Diagnostic information.</param>
     public static QRCodeDecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    {
+        var status = DecodeLuminanceCore(luminance, width, height, destination, out charsWritten, out info);
+        if (status == QRCodeDecodeStatus.Success)
+            return status;
+
+        // Reflectance reversal: invert into a rented buffer and retry once.
+        // Taken only on the failure path, so the normal case stays allocation-free.
+        var rented = ArrayPool<byte>.Shared.Rent(width * height);
+        try
+        {
+            var inverted = rented.AsSpan(0, width * height);
+            for (var i = 0; i < inverted.Length; i++)
+            {
+                inverted[i] = (byte)(255 - luminance[i]);
+            }
+
+            var invertedStatus = DecodeLuminanceCore(inverted, width, height, destination, out charsWritten, out var invertedInfo);
+            if (invertedStatus == QRCodeDecodeStatus.Success)
+            {
+                info = invertedInfo;
+                return invertedStatus;
+            }
+
+            // Both polarities failed: report the original attempt's diagnostics
+            return status;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+    }
+
+    private static QRCodeDecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         charsWritten = 0;
 

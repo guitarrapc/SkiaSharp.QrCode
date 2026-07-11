@@ -17,14 +17,15 @@ in code comments next to the code (see the [spec-to-code map](qrcode-specs.md)).
   front of the matrix pipeline.
 
 Supported: versions 1-40, all ECC levels, Numeric / Alphanumeric / Byte segments,
-ECI (ISO-8859-1 / UTF-8), UTF-8 BOM, multi-segment streams, arbitrary rotation and
-mirroring at the image level. Unsupported (detected and reported, never misdecoded):
+ECI (ISO-8859-1 / UTF-8), UTF-8 BOM, multi-segment streams; at the image level:
+arbitrary rotation, mirroring and reflectance reversal (light-on-dark).
+Unsupported (detected and reported, never misdecoded):
 Kanji mode, FNC1, Structured Append, other ECI charsets.
 
 ## Why
 
 - **Tier-1 scope by design.** Image support targets clean inputs: screenshots,
-  rendered QR codes, scans — with arbitrary rotation and mirroring. Real-world photo
+  rendered QR codes, scans — with arbitrary rotation, mirroring and reflectance reversal (light-on-dark, one inverted retry). Real-world photo
   robustness (perspective, uneven lighting, blur) is a computer-vision problem that
   ZXing spent years on; it is deliberately out of scope, and the API docs point such
   users to ZXing.Net. This keeps the library dependency-free and the code auditable.

@@ -85,6 +85,24 @@ public class QRCodeDecoderImageTest
     }
 
     [Fact]
+    public void Decode_InvertedImage_LightOnDark()
+    {
+        // Reflectance-reversed rendering (dark-mode style): white modules on black
+        var content = "inverted palette";
+        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M);
+        var sizePx = qr.Size * 8;
+        using var bitmap = new SKBitmap(new SKImageInfo(sizePx, sizePx, SKColorType.Bgra8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(bitmap))
+        {
+            QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, sizePx, sizePx), qr, SKColors.White, SKColors.Black);
+            canvas.Flush();
+        }
+
+        Assert.True(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info), $"status={info.Status}");
+        Assert.Equal(content, decoded);
+    }
+
+    [Fact]
     public void Decode_MirroredImage()
     {
         var content = "mirrored capture";
