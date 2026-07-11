@@ -39,6 +39,7 @@ SkiaSharp.QrCode is a modern, high-performance QR code generation library built 
 - **Simple API**: One-liner QR code generation with sensible defaults
 - **High Performance**: Optimal speed and minimum memory allocation
 - **Highly Customizable**: Gradients, icons, custom shapes, colors, and more
+- **Raster & Vector Output**: PNG, JPEG, WebP, and SVG (scales without quality loss)
 - **Cross-Platform**: Windows, Linux, macOS, iOS, Android, WebAssembly
 - **Zero Dependencies**: QR generation without external libraries (SkiaSharp for rendering only)
 - **No System.Drawing**: Avoids GDI+ issues and Windows dependencies
@@ -85,6 +86,13 @@ var wifiString = "WIFI:T:WPA;S:MyNetwork;P:MyPassword;;";
 QRCodeImageBuilder.SavePng(wifiString, "wifi-qr.png");
 ```
 
+SVG (vector) output.
+
+```csharp
+using var stream = File.Create("qrcode.svg");
+QRCodeImageBuilder.SaveSvg("https://example.com", stream);
+```
+
 Generate with Custom Settings.
 
 ```csharp
@@ -126,10 +134,10 @@ SkiaSharp.QrCode provides three main APIs for different use cases.
 Best for Most use cases - simple to advanced QR code generation. The high-level, fluent API for generating QR codes with minimal code. Provides a builder pattern with sensible defaults and extensive customization options.
 
 **Key Features**:
-- One-liner generation with `GetPngBytes()`, `SavePng()`
+- One-liner generation with `GetPngBytes()`, `SavePng()`, `SaveSvg()`
 - Fluent API with `WithXxx()` methods
 - Built-in support for colors, gradients, icons, shapes
-- Multiple output formats (PNG, JPEG, WebP)
+- Multiple output formats (PNG, JPEG, WebP, SVG)
 - Stream and byte array output
 
 **When to use**:
@@ -350,6 +358,10 @@ Currently, SkiaSharp.QrCode supports ISO-8859-1 and UTF-8. Other encodings (e.g.
 | Supported | Byte | UTF-8 |
 | Not Supported | Kanji | Shift-JIS |
 
+### Does SVG output require SkiaSharp.Svg or other packages?
+
+No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package — no additional dependencies. Note that SkiaSharp.QrCode outputs SVG only; it does not read or render existing SVG files.
+
 ### Any plan to support QR code scanning?
 
 Currently, SkiaSharp.QrCode focuses on QR code generation. QR code scanning is not planned at this time, but contributions are welcome.
@@ -463,6 +475,30 @@ new QRCodeImageBuilder("https://example.com")
     .WithErrorCorrection(ECCLevel.H)
     .SaveTo(stream);
 ```
+
+#### SVG Output (Vector)
+
+SVG output draws the QR code as vector shapes, so it scales to any size without quality loss — ideal for print and web embedding. All builder options (colors, module shapes, gradients, finder patterns, icons) apply to SVG as well.
+
+```csharp
+using SkiaSharp.QrCode.Image;
+
+// One-liner: save to stream
+using var stream = File.Create("qrcode.svg");
+QRCodeImageBuilder.SaveSvg("https://example.com", stream);
+
+// Builder: full styling support
+var svgString = new QRCodeImageBuilder("https://example.com")
+    .WithModulePixelSize(10)
+    .WithErrorCorrection(ECCLevel.H)
+    .WithColors(codeColor: SKColor.Parse("1B9CFC"))
+    .ToSvgString(); // or SaveToSvg(stream) / GetSvgBytes(...)
+```
+
+Size options define the SVG viewport (in SVG units instead of pixels); `WithFormat()` does not apply to SVG output.
+
+> [!TIP]
+> Default rectangle modules produce compact SVG (horizontal module runs merge into single `<rect>` elements). Custom module shapes and gradients render correctly but produce larger documents, since each module becomes an individual vector element. Icon images are embedded as base64 data URIs.
 
 #### Choosing Image Size
 

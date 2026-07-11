@@ -150,6 +150,66 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
+    /// Generate a QR code as SVG (UTF-8 encoded) byte array with default settings.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
+    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
+    /// <returns>UTF-8 encoded SVG document.</returns>
+    public static byte[] GetSvgBytes(string content, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    {
+        using var stream = new MemoryStream();
+        new QRCodeImageBuilder(content)
+            .WithSize(size, size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToSvg(stream);
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Generate a QR code as SVG (UTF-8 encoded) byte array with default settings.
+    /// </summary>
+    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
+    /// <returns>UTF-8 encoded SVG document.</returns>
+    public static byte[] GetSvgBytes(QRCodeData qrCodeData, int size = 512)
+    {
+        using var stream = new MemoryStream();
+        new QRCodeImageBuilder(qrCodeData)
+            .WithSize(size, size)
+            .SaveToSvg(stream);
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Generate a QR code and save as SVG to stream with default settings.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="output">The output stream.</param>
+    /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
+    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
+    public static void SaveSvg(string content, Stream output, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    {
+        new QRCodeImageBuilder(content)
+            .WithSize(size, size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToSvg(output);
+    }
+
+    /// <summary>
+    /// Generate a QR code and save as SVG to stream with default settings.
+    /// </summary>
+    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="output">The output stream.</param>
+    /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
+    public static void SaveSvg(QRCodeData qrCodeData, Stream output, int size = 512)
+    {
+        new QRCodeImageBuilder(qrCodeData)
+            .WithSize(size, size)
+            .SaveToSvg(output);
+    }
+
+    /// <summary>
     /// Generate a QR code and write to an IBufferWriter with default PNG settings.
     /// </summary>
     /// <param name="content">The content to encode.</param>
@@ -445,6 +505,55 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
+    /// Generate QR code and save as SVG document to stream.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The QR code is drawn as vector shapes via <see cref="SKSvgCanvas"/>, so the output scales
+    /// without quality loss. All builder options apply: colors, module shapes, gradients, finder
+    /// pattern shapes, and icons (icon images are embedded as base64 data URIs).
+    /// </para>
+    /// <para>
+    /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> is ignored — SVG is a vector format,
+    /// not an <see cref="SKEncodedImageFormat"/>. Size options (<see cref="WithSize(int, int)"/>,
+    /// <see cref="WithModulePixelSize(int)"/>) define the SVG viewport in units.
+    /// The stream is left open after writing.
+    /// </para>
+    /// </remarks>
+    /// <param name="output">The output stream (must be writable).</param>
+    /// <exception cref="ArgumentNullException"></exception>
+    /// <exception cref="ArgumentException"></exception>
+    public void SaveToSvg(Stream output)
+    {
+        if (output is null)
+            throw new ArgumentNullException(nameof(output));
+        if (!output.CanWrite)
+            throw new ArgumentException("Output stream must be writable", nameof(output));
+
+        var qrCodeData = ResolveQrCodeData();
+        var (info, contentRect) = CreateLayout(qrCodeData);
+
+        // SKSvgCanvas flushes the SVG document when the canvas is disposed,
+        // so dispose before the stream is consumed. The stream itself stays open.
+        using var canvas = SKSvgCanvas.Create(SKRect.Create(0, 0, info.Width, info.Height), output);
+        RenderContent(canvas, qrCodeData, info, contentRect);
+    }
+
+    /// <summary>
+    /// Generate QR code and return as SVG document string.
+    /// </summary>
+    /// <remarks>
+    /// See <see cref="SaveToSvg(Stream)"/> for rendering behavior.
+    /// </remarks>
+    /// <returns>SVG document.</returns>
+    public string ToSvgString()
+    {
+        using var stream = new MemoryStream();
+        SaveToSvg(stream);
+        return System.Text.Encoding.UTF8.GetString(stream.GetBuffer(), 0, (int)stream.Length);
+    }
+
+    /// <summary>
     /// Generate QR code and return as byte array.
     /// </summary>
     /// <returns>Encoded image as byte array.</returns>
@@ -475,18 +584,25 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
+    /// Generate the QRCodeData from builder input.
+    /// </summary>
+    private QRCodeData ResolveQrCodeData()
+    {
+        return _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, requestedVersion: _requestedVersion, quietZoneSize: _quietZoneSize);
+    }
+
+    /// <summary>
     /// Generate the SKImage from QR code data.
     /// </summary>
     private SKImage GenerateImage()
     {
         // Generate QR Data
-        var qrCodeData = _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, requestedVersion: _requestedVersion, quietZoneSize: _quietZoneSize);
+        var qrCodeData = ResolveQrCodeData();
 
         var (info, contentRect) = CreateLayout(qrCodeData);
 
         var clearColor = _clearColor ?? SKColors.Transparent;
-        var contentCoversCanvas = contentRect.Left <= 0 && contentRect.Top <= 0
-            && contentRect.Right >= info.Width && contentRect.Bottom >= info.Height;
+        var contentCoversCanvas = ContentCoversCanvas(contentRect, info);
         var backgroundIsOpaque = (_backgroundColor ?? SKColors.White).Alpha == byte.MaxValue;
         var clearIsOpaque = clearColor.Alpha == byte.MaxValue;
 
@@ -504,11 +620,24 @@ public class QRCodeImageBuilder
         }
 
         using var surface = SKSurface.Create(info);
-        var canvas = surface.Canvas;
+        RenderContent(surface.Canvas, qrCodeData, info, contentRect);
+
+        return surface.Snapshot();
+    }
+
+    /// <summary>
+    /// Draws the configured QR code onto the canvas. Shared by the raster
+    /// (<see cref="GenerateImage"/>) and SVG (<see cref="SaveToSvg(Stream)"/>) paths.
+    /// </summary>
+    private void RenderContent(SKCanvas canvas, QRCodeData qrCodeData, SKImageInfo info, SKRect contentRect)
+    {
+        var clearColor = _clearColor ?? SKColors.Transparent;
+        var contentCoversCanvas = ContentCoversCanvas(contentRect, info);
+        var backgroundIsOpaque = (_backgroundColor ?? SKColors.White).Alpha == byte.MaxValue;
 
         // Clear the canvas with clearColor, then draw QR into contentRect; extra
         // canvas area (pad) keeps clearColor. The clear is skipped when it cannot
-        // remain visible: a fresh surface is already fully transparent, and an
+        // remain visible: a fresh canvas is already fully transparent, and an
         // opaque QR background covering the whole canvas overwrites it anyway.
         if (clearColor.Alpha != 0 && !(contentCoversCanvas && backgroundIsOpaque))
         {
@@ -516,8 +645,12 @@ public class QRCodeImageBuilder
         }
 
         QRCodeRenderer.Render(canvas, contentRect, qrCodeData, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
+    }
 
-        return surface.Snapshot();
+    private static bool ContentCoversCanvas(SKRect contentRect, SKImageInfo info)
+    {
+        return contentRect.Left <= 0 && contentRect.Top <= 0
+            && contentRect.Right >= info.Width && contentRect.Bottom >= info.Height;
     }
 
     private (SKImageInfo info, SKRect contentRect) CreateLayout(QRCodeData qrCodeData)

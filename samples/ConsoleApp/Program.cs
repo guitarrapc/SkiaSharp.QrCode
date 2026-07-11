@@ -818,5 +818,46 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
+// SVG output (vector format)
+Console.WriteLine("""
+    Pattern 22: SVG Output (Vector Format)
+      - Best for: Print, web embedding, infinite scaling without quality loss
+      - API: QRCodeImageBuilder.SaveSvg() / SaveToSvg() / ToSvgString()
+    """);
+{
+    // One-liner: save SVG to stream
+    var path = Path.Combine(outputDir, "pattern22_svg_simple.svg");
+    using (var stream = File.Create(path))
+    {
+        QRCodeImageBuilder.SaveSvg(content, stream, ECCLevel.M, size: 512);
+    }
+    Console.WriteLine($"  ✓ Saved to: {path}");
+
+    // Builder: all styling options work in SVG too (shapes, gradients, finder patterns)
+    var styledPath = Path.Combine(outputDir, "pattern22_svg_styled.svg");
+    var gradient = new GradientOptions(
+        [SKColor.Parse("1B9CFC"), SKColor.Parse("6C5CE7")],
+        GradientDirection.TopLeftToBottomRight);
+
+    using (var stream = File.Create(styledPath))
+    {
+        new QRCodeImageBuilder(content)
+            .WithModulePixelSize(10)
+            .WithErrorCorrection(ECCLevel.H)
+            .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f)
+            .WithFinderPatternShape(RoundedRectangleFinderPatternShape.Default)
+            .WithGradient(gradient)
+            .SaveToSvg(stream);
+    }
+    Console.WriteLine($"  ✓ Saved to: {styledPath}");
+
+    // String output: embed directly into HTML or manipulate as text
+    var svgString = new QRCodeImageBuilder(content)
+        .WithSize(256, 256)
+        .ToSvgString();
+    Console.WriteLine($"  ✓ ToSvgString(): {svgString.Length} chars, starts with: {svgString.Substring(0, svgString.IndexOf('\n'))}");
+}
+Console.WriteLine();
+
 Console.WriteLine("=== All patterns completed! ===");
 Console.WriteLine($"Output directory: {Path.GetFullPath(outputDir)}");
