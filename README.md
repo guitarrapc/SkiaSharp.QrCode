@@ -476,6 +476,36 @@ new QRCodeImageBuilder("https://example.com")
     .SaveTo(stream);
 ```
 
+#### Raster Output (PNG / JPEG / WebP)
+
+Default format is PNG. Switch with `WithFormat()` — quality (0–100) applies to lossy formats (JPEG, WebP).
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode.Image;
+
+// PNG (default)
+var pngBytes = new QRCodeImageBuilder("https://example.com")
+    .WithSize(512, 512)
+    .ToByteArray();
+
+// JPEG
+var jpegBytes = new QRCodeImageBuilder("https://example.com")
+    .WithSize(512, 512)
+    .WithFormat(SKEncodedImageFormat.Jpeg, quality: 90)
+    .ToByteArray();
+
+// WebP
+var webpBytes = new QRCodeImageBuilder("https://example.com")
+    .WithSize(512, 512)
+    .WithFormat(SKEncodedImageFormat.Webp, quality: 80)
+    .ToByteArray();
+
+// Or one-liner helpers
+var bytes = QRCodeImageBuilder.GetImageBytes(
+    "https://example.com", SKEncodedImageFormat.Jpeg, ECCLevel.M, size: 512, quality: 90);
+```
+
 #### SVG Output (Vector)
 
 SVG output draws the QR code as vector shapes, so it scales to any size without quality loss — ideal for print and web embedding. All builder options (colors, module shapes, gradients, finder patterns, icons) apply to SVG as well.

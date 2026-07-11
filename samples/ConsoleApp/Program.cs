@@ -375,27 +375,38 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
-// Different Image Formats
+// Raster formats (PNG / JPEG / WebP)
 Console.WriteLine("""
-    Pattern 12: Different Image Formats
-      - Best for: Supporting multiple output formats
-      - API: QRCodeImageBuilder.GetImageBytes() with different formats
+    Pattern 12: Raster Output (PNG / JPEG / WebP)
+      - Best for: Supporting multiple raster formats; default is PNG
+      - API: WithFormat() / QRCodeImageBuilder.GetImageBytes()
     """);
 {
-    var formats = new[]
+    // Builder: switch format with WithFormat (quality applies to JPEG / WebP)
+    var builderFormats = new[]
     {
         (SKEncodedImageFormat.Png, "png", 100),
         (SKEncodedImageFormat.Jpeg, "jpg", 90),
         (SKEncodedImageFormat.Webp, "webp", 80),
     };
 
-    foreach (var (format, ext, quality) in formats)
+    foreach (var (format, ext, quality) in builderFormats)
     {
         var path = Path.Combine(outputDir, $"pattern12_format.{ext}");
-        var bytes = QRCodeImageBuilder.GetImageBytes(content, format, ECCLevel.M, 512, quality);
+        var bytes = new QRCodeImageBuilder(content)
+            .WithSize(512, 512)
+            .WithFormat(format, quality)
+            .ToByteArray();
         File.WriteAllBytes(path, bytes);
-        Console.WriteLine($"  ✓ Saved {format} to: {path}");
+        Console.WriteLine($"  ✓ WithFormat({format}): {path}");
     }
+
+    // One-liner helper (same formats)
+    var jpegBytes = QRCodeImageBuilder.GetImageBytes(
+        content, SKEncodedImageFormat.Jpeg, ECCLevel.M, size: 512, quality: 90);
+    var oneLinerPath = Path.Combine(outputDir, "pattern12_format_oneliner.jpg");
+    File.WriteAllBytes(oneLinerPath, jpegBytes);
+    Console.WriteLine($"  ✓ GetImageBytes(Jpeg): {oneLinerPath}");
 }
 Console.WriteLine();
 
