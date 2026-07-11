@@ -116,9 +116,9 @@ See [Migration Guide](docs/migration.md) for details on migrating from older ver
 
 ## API Overview
 
-SkiaSharp.QrCode provides three main APIs for different use cases.
+SkiaSharp.QrCode provides three main APIs for generation, plus `QRCodeDecoder` for decoding.
 
-**Recommendation**: Start with `QRCodeImageBuilder` for most scenarios. Use `QRCodeRenderer` when you need canvas control. Use `QRCodeGenerator` only for custom rendering implementations.
+**Recommendation**: Start with `QRCodeImageBuilder` for most scenarios. Use `QRCodeRenderer` when you need canvas control. Use `QRCodeGenerator` only for custom rendering implementations. Use `QRCodeDecoder` to read QR codes back (round-trip validation, decoding rendered images).
 
 | Feature | QRCodeImageBuilder | QRCodeRenderer | QRCodeGenerator |
 | --- | --- | --- | --- |
@@ -220,6 +220,40 @@ finally
 ```
 
 Buffer sizes are bounded: version 40 with the standard quiet zone needs 185 × 185 = 34,225 bytes, so a pooled or fixed buffer keeps memory usage constant regardless of request volume. The buffer region is cleared before writing, so dirty pooled buffers are fine; bytes beyond the written region are left untouched.
+
+### QRCodeDecoder (Decoding)
+
+Decodes QR codes back into text — the inverse of `QRCodeGenerator`. Works at two levels:
+
+- **Matrix level**: from `QRCodeData` or a byte-per-module span (the same format the zero-allocation generator produces). Full Reed-Solomon error correction included.
+- **Image level**: from `SKBitmap` or a grayscale luminance span. Detects the QR code (arbitrary rotation and mirroring supported), samples the grid, then decodes.
+
+**Scope**: image decoding targets *clean* inputs — screenshots, rendered QR codes, and scans. Real-world photos with strong perspective, uneven lighting, or blur are out of scope; use a computer-vision grade reader such as ZXing.Net for those. See [QR Code Decoder](.github/docs/specs/qrcode-decoder.md) for design details.
+
+```csharp
+// From QRCodeData (e.g. round-trip validation)
+var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
+if (QRCodeDecoder.TryDecode(qrData, out var text))
+{
+    Console.WriteLine(text); // "content"
+}
+
+// From an image
+using var bitmap = SKBitmap.Decode("qr.png");
+if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info))
+{
+    Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel}, {info.ErrorsCorrected} errors corrected)");
+}
+
+// Zero-allocation: span in, span out
+Span<char> destination = stackalloc char[QRCodeDecoder.GetMaxDecodedLength(version)];
+if (QRCodeDecoder.TryDecode(moduleSpan, size, destination, out var written, out _))
+{
+    var text = destination.Slice(0, written); // no heap allocation
+}
+```
+
+On failure, `QRCodeDecodeInfo.Status` explains why (`NotDetected`, `FormatInformationInvalid`, `DataUncorrectable`, `UnsupportedContent`, ...). Supported content: Numeric / Alphanumeric / Byte modes, ISO-8859-1 and UTF-8 (with or without ECI), versions 1-40, all ECC levels. Kanji mode, FNC1 and Structured Append are detected and reported as unsupported rather than misdecoded.
 
 ## Platform-Specific Considerations
 
@@ -369,7 +403,7 @@ No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package — no additio
 
 ### Any plan to support QR code scanning?
 
-Currently, SkiaSharp.QrCode focuses on QR code generation. QR code scanning is not planned at this time, but contributions are welcome.
+Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#qrcodedecoder-decoding)). Image decoding intentionally targets clean inputs: screenshots, rendered QR codes, and scans, including rotated and mirrored ones. Robust decoding of real-world photos (perspective distortion, uneven lighting, blur) is a computer-vision problem outside this library's scope — use a dedicated reader such as ZXing.Net for camera captures.
 
 ### What QR code style provides the best scan reliability?
 
