@@ -240,15 +240,18 @@ internal static class QRBinaryDecoder
 
         var bytes = byteBuffer.AsSpan(0, count);
 
-        // Resolve the effective charset. A UTF-8 BOM wins over everything (the
-        // encoder can emit one with utf8BOM: true); it is consumed, not decoded.
+        // Resolve the effective charset. A UTF-8 BOM (the encoder can emit one with
+        // utf8BOM: true) is consumed, not decoded — but an explicit ECI ISO-8859-1
+        // declaration wins over the BOM heuristic: there, EF BB BF is the legitimate
+        // Latin-1 text "ï»¿".
         var useUtf8 = charset switch
         {
             ByteCharset.Utf8 => true,
             ByteCharset.Iso8859_1 => false,
             _ => IsValidUtf8(bytes),
         };
-        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
+        if (charset != ByteCharset.Iso8859_1
+            && bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
         {
             useUtf8 = true;
             bytes = bytes.Slice(3);

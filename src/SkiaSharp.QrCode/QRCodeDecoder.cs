@@ -74,7 +74,8 @@ public static class QRCodeDecoder
     /// <exception cref="ArgumentException"></exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int size, out string text, out QRCodeDecodeInfo info)
     {
-        if (size < 1 || modules.Length < size * size)
+        // long arithmetic: size is caller-controlled and size² overflows int at 46341
+        if (size < 1 || modules.Length < (long)size * size)
             throw new ArgumentException($"Module buffer too small: required {(long)size * size}, got {modules.Length}", nameof(modules));
 
         if (!TryLocateCore(modules, size, out var top, out var left, out var coreSize))
@@ -116,7 +117,8 @@ public static class QRCodeDecoder
     /// <exception cref="ArgumentException"></exception>
     public static bool TryDecode(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
-        if (size < 1 || modules.Length < size * size)
+        // long arithmetic: size is caller-controlled and size² overflows int at 46341
+        if (size < 1 || modules.Length < (long)size * size)
             throw new ArgumentException($"Module buffer too small: required {(long)size * size}, got {modules.Length}", nameof(modules));
 
         if (!TryLocateCore(modules, size, out var top, out var left, out var coreSize))
@@ -243,7 +245,8 @@ public static class QRCodeDecoder
     /// <exception cref="ArgumentException"></exception>
     public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
-        if (width < 1 || height < 1 || luminance.Length < width * height)
+        // long arithmetic: dimensions are caller-controlled and width·height can overflow int
+        if (width < 1 || height < 1 || luminance.Length < (long)width * height)
             throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
 
         return QRImageDecoder.DecodeLuminance(luminance, width, height, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
