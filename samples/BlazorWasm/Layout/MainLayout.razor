@@ -1,16 +1,24 @@
-﻿@inherits LayoutComponentBase
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+@inherits LayoutComponentBase
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+<nav id="header-bar">
+    <header>
+        <div class="site-title-row">
+            <h1>
+                <a href="https://github.com/guitarrapc/SkiaSharp.QrCode" aria-label="SkiaSharp.QrCode on GitHub"><span class="site-logo" aria-hidden="true"></span></a>
+                SkiaSharp.QrCode Blazor Sample
+            </h1>
         </div>
+        <p class="tagline">Real-time QR rendering on SKCanvasView — SkiaSharp.QrCode in Blazor WebAssembly</p>
+    </header>
+</nav>
 
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
+<main>
+    @Body
+</main>
+
+<footer>
+    <p>
+        <a href="https://github.com/guitarrapc/SkiaSharp.QrCode">SkiaSharp.QrCode</a> sample —
+        see the <a href="https://guitarrapc.github.io/SkiaSharp.QrCode/">Playground</a> for the full-featured browser demo.
+    </p>
+</footer>

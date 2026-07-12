@@ -1,7 +1,310 @@
-﻿@page "/"
+@page "/"
+@using System.Diagnostics
+@using SkiaSharp
+@using SkiaSharp.QrCode
+@using SkiaSharp.QrCode.Image
+@using SkiaSharp.Views.Blazor
+@inject IJSRuntime JS
+@implements IDisposable
 
-<PageTitle>Home</PageTitle>
+<PageTitle>SkiaSharp.QrCode Blazor Sample</PageTitle>
 
-<h1>Hello, world!</h1>
+<section id="playground">
+    <div class="controls-column">
+        <div class="panel">
+            <label class="field">
+                <span class="field__label">Content</span>
+                <textarea rows="3" spellcheck="false" placeholder="Text or URL to encode"
+                          @bind="Options.Content" @bind:event="oninput" @bind:after="Regenerate"></textarea>
+            </label>
+        </div>
 
-Welcome to your new app.
+        <details class="panel" open>
+            <summary>QR parameters</summary>
+            <div class="panel__grid">
+                <label class="field">
+                    <span class="field__label">Error correction</span>
+                    <select title="Higher levels survive more damage or overlay — H is recommended with a logo"
+                            @bind="Options.Ecc" @bind:after="Regenerate">
+                        <option value="@ECCLevel.L">L — 7%</option>
+                        <option value="@ECCLevel.M">M — 15%</option>
+                        <option value="@ECCLevel.Q">Q — 25%</option>
+                        <option value="@ECCLevel.H">H — 30%</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span class="field__label">Version</span>
+                    <select title="QR symbol version (matrix size). Auto picks the smallest that fits."
+                            @bind="Options.Version" @bind:after="Regenerate">
+                        <option value="-1">Auto</option>
+                        @for (var v = 1; v <= 40; v++)
+                        {
+                            <option value="@v">@v</option>
+                        }
+                    </select>
+                </label>
+                <label class="field">
+                    <span class="field__label">Export size <output>@Options.Size</output> px</span>
+                    <input type="range" min="128" max="1024" step="32"
+                           @bind="Options.Size" @bind:event="oninput" />
+                </label>
+                <label class="field">
+                    <span class="field__label">Quiet zone <output>@Options.QuietZone</output> modules</span>
+                    <input type="range" min="0" max="10" step="1"
+                           @bind="Options.QuietZone" @bind:event="oninput" @bind:after="Regenerate" />
+                </label>
+            </div>
+        </details>
+
+        <details class="panel" open>
+            <summary>Shape</summary>
+            <div class="panel__grid">
+                <label class="field">
+                    <span class="field__label">Module shape</span>
+                    <select @bind="Options.ModuleShape" @bind:after="Regenerate">
+                        <option value="@ModuleShapeKind.Rectangle">Rectangle</option>
+                        <option value="@ModuleShapeKind.Circle">Circle</option>
+                        <option value="@ModuleShapeKind.Rounded">Rounded rectangle</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span class="field__label">Finder pattern</span>
+                    <select title="The three large squares in the corners"
+                            @bind="Options.FinderShape" @bind:after="Regenerate">
+                        <option value="@FinderShapeKind.Auto">Auto (follow module shape)</option>
+                        <option value="@FinderShapeKind.Rectangle">Rectangle</option>
+                        <option value="@FinderShapeKind.Circle">Circle</option>
+                        <option value="@FinderShapeKind.Rounded">Rounded rectangle</option>
+                        <option value="@FinderShapeKind.RoundedCircle">Rounded + circle center</option>
+                    </select>
+                </label>
+                <label class="field">
+                    <span class="field__label">Module size <output>@((int)(Options.ModuleSizePercent * 100))</output>%</span>
+                    <input type="range" min="0.5" max="1" step="0.01"
+                           title="Below 100% leaves gaps between modules. Values under 80% may hurt readability."
+                           @bind="Options.ModuleSizePercent" @bind:event="oninput" @bind:after="Regenerate" />
+                </label>
+                @if (Options.ModuleShape == ModuleShapeKind.Rounded)
+                {
+                    <label class="field">
+                        <span class="field__label">Corner radius <output>@((int)(Options.ModuleCornerRadius * 100))</output>%</span>
+                        <input type="range" min="0" max="1" step="0.05"
+                               @bind="Options.ModuleCornerRadius" @bind:event="oninput" @bind:after="Regenerate" />
+                    </label>
+                }
+            </div>
+        </details>
+
+        <details class="panel" open>
+            <summary>Color</summary>
+            <div class="panel__grid">
+                <label class="field field--inline @(Options.GradientEnabled ? "field--disabled" : null)">
+                    <span class="field__label">Modules</span>
+                    <input type="color" disabled="@Options.GradientEnabled"
+                           @bind="Options.Foreground" @bind:after="Regenerate" />
+                </label>
+                <label class="field field--inline @(Options.TransparentBackground ? "field--disabled" : null)">
+                    <span class="field__label">Background</span>
+                    <input type="color" disabled="@Options.TransparentBackground"
+                           @bind="Options.Background" @bind:after="Regenerate" />
+                </label>
+                <label class="field field--inline field--checkbox">
+                    <input type="checkbox" @bind="Options.TransparentBackground" @bind:after="Regenerate" />
+                    <span class="field__label">Transparent background</span>
+                </label>
+                <label class="field field--inline field--checkbox">
+                    <input type="checkbox" @bind="Options.GradientEnabled" @bind:after="Regenerate" />
+                    <span class="field__label">Gradient modules</span>
+                </label>
+            </div>
+            @if (Options.GradientEnabled)
+            {
+                <div class="panel__grid panel__grid--gap-top">
+                    <label class="field field--inline">
+                        <span class="field__label">Start</span>
+                        <input type="color" @bind="Options.GradientStart" @bind:after="Regenerate" />
+                    </label>
+                    <label class="field field--inline">
+                        <span class="field__label">End</span>
+                        <input type="color" @bind="Options.GradientEnd" @bind:after="Regenerate" />
+                    </label>
+                    <label class="field">
+                        <span class="field__label">Direction</span>
+                        <select @bind="Options.GradientDirection" @bind:after="Regenerate">
+                            <option value="@GradientDirection.LeftToRight">Left → Right</option>
+                            <option value="@GradientDirection.RightToLeft">Right → Left</option>
+                            <option value="@GradientDirection.TopToBottom">Top → Bottom</option>
+                            <option value="@GradientDirection.BottomToTop">Bottom → Top</option>
+                            <option value="@GradientDirection.TopLeftToBottomRight">Top-left → Bottom-right</option>
+                            <option value="@GradientDirection.TopRightToBottomLeft">Top-right → Bottom-left</option>
+                            <option value="@GradientDirection.BottomLeftToTopRight">Bottom-left → Top-right</option>
+                            <option value="@GradientDirection.BottomRightToTopLeft">Bottom-right → Top-left</option>
+                        </select>
+                    </label>
+                </div>
+            }
+        </details>
+
+        <details class="panel" open>
+            <summary>Logo</summary>
+            <div class="panel__grid">
+                <label class="field">
+                    <span class="field__label">Logo</span>
+                    <select @bind="Options.LogoMode" @bind:after="Regenerate">
+                        <option value="@LogoMode.None">None</option>
+                        <option value="@LogoMode.BuiltIn">Built-in camera glyph</option>
+                        <option value="@LogoMode.Custom">Upload image…</option>
+                    </select>
+                </label>
+                @if (Options.LogoMode == LogoMode.Custom)
+                {
+                    <label class="field">
+                        <span class="field__label">Image file</span>
+                        <InputFile OnChange="OnLogoFileChangedAsync" accept="image/png,image/jpeg,image/webp" />
+                    </label>
+                }
+                @if (Options.LogoMode != LogoMode.None)
+                {
+                    <label class="field">
+                        <span class="field__label">Logo size <output>@Options.LogoSizePercent</output>%</span>
+                        <input type="range" min="5" max="35" step="1"
+                               @bind="Options.LogoSizePercent" @bind:event="oninput" @bind:after="Regenerate" />
+                    </label>
+                    <label class="field">
+                        <span class="field__label">Logo border <output>@Options.LogoBorderWidth</output> px</span>
+                        <input type="range" min="0" max="24" step="1"
+                               @bind="Options.LogoBorderWidth" @bind:event="oninput" @bind:after="Regenerate" />
+                    </label>
+                }
+            </div>
+            <p class="field__hint">A logo covers part of the code — use error correction H and verify the result scans.</p>
+        </details>
+    </div>
+
+    <div class="preview-column">
+        <div class="panel preview-panel">
+            <div class="preview-frame">
+                <SKCanvasView class="qr-canvas" OnPaintSurface="OnPaintSurface" @ref="canvasView" />
+            </div>
+            @if (errorMessage is not null)
+            {
+                <div class="generate-error">@errorMessage</div>
+            }
+            <div class="qr-stats">@stats</div>
+            <div class="preview-actions">
+                <button type="button" class="action-btn" @onclick="DownloadPngAsync">Download PNG</button>
+                <button type="button" class="action-btn" @onclick="DownloadSvgAsync"
+                        title="Vector output — scales to any size without quality loss">Download SVG</button>
+            </div>
+        </div>
+    </div>
+</section>
+
+@code {
+    private QrOptions Options { get; } = new();
+    private SKCanvasView? canvasView;
+    private SKBitmap? customLogo;
+    private string? errorMessage;
+    private string stats = "";
+
+    private void Regenerate() => canvasView?.Invalidate();
+
+    /// <summary>
+    /// Live preview: renders the QR code directly onto the SKCanvasView surface with
+    /// <see cref="QRCodeRenderer"/>. The canvas is sized by CSS; SKCanvasView tracks
+    /// the element size and reports the pixel dimensions via <c>e.Info</c>.
+    /// </summary>
+    private void OnPaintSurface(SKPaintSurfaceEventArgs e)
+    {
+        var canvas = e.Surface.Canvas;
+        canvas.Clear(SKColors.Transparent);
+        try
+        {
+            var stopwatch = Stopwatch.StartNew();
+            var data = QrImageFactory.CreateQrData(Options);
+            QRCodeRenderer.Render(
+                canvas,
+                SKRect.Create(e.Info.Width, e.Info.Height),
+                data,
+                QrImageFactory.GetForegroundColor(Options),
+                QrImageFactory.GetBackgroundColor(Options),
+                QrImageFactory.CreateIcon(Options, customLogo),
+                QrImageFactory.CreateModuleShape(Options),
+                Math.Clamp(Options.ModuleSizePercent, 0.5f, 1.0f),
+                QrImageFactory.CreateGradient(Options),
+                QrImageFactory.CreateFinderShape(Options));
+            stopwatch.Stop();
+
+            stats = $"QR version {data.Version} · {data.Size}×{data.Size} modules · rendered in {stopwatch.Elapsed.TotalMilliseconds:F1} ms";
+            errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            stats = "";
+            errorMessage = ex.GetBaseException().Message;
+        }
+        StateHasChanged(); // paint runs outside Blazor's render cycle; publish stats/error to the DOM
+    }
+
+    /// <summary>PNG export via <see cref="SkiaSharp.QrCode.Image.QRCodeImageBuilder"/> at the selected export size.</summary>
+    private async Task DownloadPngAsync()
+    {
+        try
+        {
+            var data = QrImageFactory.CreateQrData(Options);
+            var bytes = QrImageFactory.CreateBuilder(Options, data, customLogo).ToByteArray();
+            await JS.InvokeVoidAsync("downloadFile", "qrcode.png", "image/png", bytes);
+            errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.GetBaseException().Message;
+        }
+    }
+
+    private async Task DownloadSvgAsync()
+    {
+        try
+        {
+            var data = QrImageFactory.CreateQrData(Options);
+            using var stream = new MemoryStream();
+            QrImageFactory.CreateBuilder(Options, data, customLogo).SaveToSvg(stream);
+            await JS.InvokeVoidAsync("downloadFile", "qrcode.svg", "image/svg+xml", stream.ToArray());
+            errorMessage = null;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.GetBaseException().Message;
+        }
+    }
+
+    private async Task OnLogoFileChangedAsync(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var stream = e.File.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+
+            memory.Position = 0;
+            var bitmap = SKBitmap.Decode(memory)
+                ?? throw new ArgumentException("Could not decode the image. Use PNG, JPEG or WebP.");
+            customLogo?.Dispose();
+            customLogo = bitmap;
+            errorMessage = null;
+            Regenerate();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.GetBaseException().Message;
+        }
+    }
+
+    public void Dispose()
+    {
+        // SKCanvasView must not be disposed explicitly: the DOM element is removed before
+        // its JavaScript cleanup runs, which raises a ResizeObserver error. Blazor manages
+        // the component's JS interop lifetime; only dispose resources we own.
+        customLogo?.Dispose();
+    }
+}

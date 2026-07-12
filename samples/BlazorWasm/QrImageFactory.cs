@@ -1,0 +1,134 @@
+using SkiaSharp;
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
+namespace BlazorWasm;
+
+/// <summary>
+/// Translates <see cref="QrOptions"/> into SkiaSharp.QrCode API calls, shared by the
+/// live <c>SKCanvasView</c> preview (<see cref="QRCodeRenderer"/>) and the PNG/SVG
+/// exports (<see cref="QRCodeImageBuilder"/>).
+/// </summary>
+public static class QrImageFactory
+{
+    private static SKBitmap? s_builtInLogo;
+
+    /// <summary>Encodes the content into a QR module matrix.</summary>
+    public static QRCodeData CreateQrData(QrOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.Content))
+            throw new ArgumentException("Content is empty.");
+
+        return QRCodeGenerator.CreateQrCode(
+            options.Content.AsSpan(),
+            options.Ecc,
+            requestedVersion: options.Version,
+            quietZoneSize: Math.Clamp(options.QuietZone, 0, 10));
+    }
+
+    /// <summary>Builds the image builder for PNG/SVG export with the current visual options.</summary>
+    public static QRCodeImageBuilder CreateBuilder(QrOptions options, QRCodeData data, SKBitmap? customLogo)
+    {
+        var size = Math.Clamp(options.Size, 64, 2048);
+        return new QRCodeImageBuilder(data)
+            .WithSize(size, size)
+            .WithColors(GetForegroundColor(options), GetBackgroundColor(options))
+            .WithModuleShape(CreateModuleShape(options), Math.Clamp(options.ModuleSizePercent, 0.5f, 1.0f))
+            .WithFinderPatternShape(CreateFinderShape(options))
+            .WithGradient(CreateGradient(options))
+            .WithIcon(CreateIcon(options, customLogo));
+    }
+
+    public static SKColor GetForegroundColor(QrOptions options)
+        => ParseColor(options.Foreground, SKColors.Black);
+
+    public static SKColor GetBackgroundColor(QrOptions options)
+        => options.TransparentBackground ? SKColors.Transparent : ParseColor(options.Background, SKColors.White);
+
+    /// <summary>Returns null for the default rectangle shape.</summary>
+    public static ModuleShape? CreateModuleShape(QrOptions options) => options.ModuleShape switch
+    {
+        ModuleShapeKind.Circle => CircleModuleShape.Default,
+        ModuleShapeKind.Rounded => new RoundedRectangleModuleShape(Math.Clamp(options.ModuleCornerRadius, 0f, 1f)),
+        _ => null,
+    };
+
+    /// <summary>Returns null for Auto: standard pattern, or the module shape when one is set.</summary>
+    public static FinderPatternShape? CreateFinderShape(QrOptions options) => options.FinderShape switch
+    {
+        FinderShapeKind.Rectangle => RectangleFinderPatternShape.Default,
+        FinderShapeKind.Circle => CircleFinderPatternShape.Default,
+        FinderShapeKind.Rounded => RoundedRectangleFinderPatternShape.Default,
+        FinderShapeKind.RoundedCircle => RoundedRectangleCircleFinderPatternShape.Default,
+        _ => null,
+    };
+
+    public static GradientOptions? CreateGradient(QrOptions options)
+    {
+        if (!options.GradientEnabled || options.GradientDirection == GradientDirection.None)
+            return null;
+
+        return new GradientOptions(
+            [ParseColor(options.GradientStart, SKColors.Black), ParseColor(options.GradientEnd, SKColors.Black)],
+            options.GradientDirection);
+    }
+
+    public static IconData? CreateIcon(QrOptions options, SKBitmap? customLogo)
+    {
+        var bitmap = options.LogoMode switch
+        {
+            LogoMode.BuiltIn => s_builtInLogo ??= CreateBuiltInLogo(),
+            LogoMode.Custom => customLogo,
+            _ => null,
+        };
+        if (bitmap is null)
+            return null;
+
+        return IconData.FromImage(
+            bitmap,
+            iconSizePercent: Math.Clamp(options.LogoSizePercent, 1, 40),
+            iconBorderWidth: Math.Clamp(options.LogoBorderWidth, 0, 24));
+    }
+
+    private static SKColor ParseColor(string value, SKColor fallback)
+        => SKColor.TryParse(value, out var color) ? color : fallback;
+
+    /// <summary>
+    /// Draws the built-in logo: an Instagram-style camera glyph on a warm-to-purple
+    /// gradient rounded square. Rendered with SkiaSharp itself, so no binary asset is shipped.
+    /// </summary>
+    private static SKBitmap CreateBuiltInLogo()
+    {
+        const int S = 256;
+        var bitmap = new SKBitmap(new SKImageInfo(S, S, SKImageInfo.PlatformColorType, SKAlphaType.Premul));
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Transparent);
+
+        // Gradient rounded square (bottom-left warm to top-right purple).
+        using var background = new SKPaint { IsAntialias = true };
+        background.Shader = SKShader.CreateLinearGradient(
+            new SKPoint(0, S),
+            new SKPoint(S, 0),
+            [SKColor.Parse("#FA7E1E"), SKColor.Parse("#D62976"), SKColor.Parse("#962FBF")],
+            null,
+            SKShaderTileMode.Clamp);
+        canvas.DrawRoundRect(SKRect.Create(0, 0, S, S), S * 0.22f, S * 0.22f, background);
+
+        // White camera outline: body, lens, flash dot.
+        using var stroke = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = S * 0.055f,
+            Color = SKColors.White,
+            StrokeCap = SKStrokeCap.Round,
+        };
+        var inset = S * 0.19f;
+        canvas.DrawRoundRect(SKRect.Create(inset, inset, S - 2 * inset, S - 2 * inset), S * 0.12f, S * 0.12f, stroke);
+        canvas.DrawCircle(S / 2f, S / 2f, S * 0.15f, stroke);
+        using var dot = new SKPaint { IsAntialias = true, Color = SKColors.White };
+        canvas.DrawCircle(S * 0.685f, S * 0.315f, S * 0.033f, dot);
+
+        return bitmap;
+    }
+}

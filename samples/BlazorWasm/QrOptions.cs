@@ -1,0 +1,67 @@
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
+namespace BlazorWasm;
+
+/// <summary>
+/// QR generation options bound to the page controls. Mirrors the option set of the
+/// SkiaSharp.QrCode.Playground <c>QrRequest</c>, using library enums directly since
+/// no JS interop boundary is involved.
+/// </summary>
+public sealed class QrOptions
+{
+    public string Content { get; set; } = "https://github.com/guitarrapc/SkiaSharp.QrCode";
+    /// <summary>Error correction level. H is recommended when a logo overlays the code.</summary>
+    public ECCLevel Ecc { get; set; } = ECCLevel.H;
+    /// <summary>Exported image size in pixels (square). The on-screen preview scales to fit.</summary>
+    public int Size { get; set; } = 512;
+    /// <summary>Quiet zone in modules (0-10).</summary>
+    public int QuietZone { get; set; } = 4;
+    /// <summary>QR version 1-40, or -1 for automatic selection.</summary>
+    public int Version { get; set; } = -1;
+    public ModuleShapeKind ModuleShape { get; set; } = ModuleShapeKind.Circle;
+    /// <summary>Module size as a fraction of the cell (0.5-1.0). Below 1.0 leaves gaps between modules.</summary>
+    public float ModuleSizePercent { get; set; } = 1.0f;
+    /// <summary>Corner radius fraction for rounded modules (0.0-1.0).</summary>
+    public float ModuleCornerRadius { get; set; } = 0.3f;
+    public FinderShapeKind FinderShape { get; set; } = FinderShapeKind.RoundedCircle;
+    /// <summary>Module color as #RRGGBB. Ignored while the gradient is enabled.</summary>
+    public string Foreground { get; set; } = "#000000";
+    /// <summary>Background color as #RRGGBB. Ignored while <see cref="TransparentBackground"/> is set.</summary>
+    public string Background { get; set; } = "#ffffff";
+    public bool TransparentBackground { get; set; }
+    public bool GradientEnabled { get; set; } = true;
+    public string GradientStart { get; set; } = "#fa7e1e";
+    public string GradientEnd { get; set; } = "#962fbf";
+    public GradientDirection GradientDirection { get; set; } = GradientDirection.TopLeftToBottomRight;
+    public LogoMode LogoMode { get; set; } = LogoMode.BuiltIn;
+    /// <summary>Logo size as a percentage of the QR side length (1-40).</summary>
+    public int LogoSizePercent { get; set; } = 18;
+    /// <summary>Border padding around the logo in pixels (0-24).</summary>
+    public int LogoBorderWidth { get; set; } = 6;
+}
+
+/// <summary>Module shape choices exposed by the page.</summary>
+public enum ModuleShapeKind
+{
+    Rectangle,
+    Circle,
+    Rounded,
+}
+
+/// <summary>Finder pattern choices exposed by the page. Auto follows the module shape.</summary>
+public enum FinderShapeKind
+{
+    Auto,
+    Rectangle,
+    Circle,
+    Rounded,
+    RoundedCircle,
+}
+
+public enum LogoMode
+{
+    None,
+    BuiltIn,
+    Custom,
+}
