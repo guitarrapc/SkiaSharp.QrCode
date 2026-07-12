@@ -1,8 +1,5 @@
-using Xunit;
 using ZXing;
 using ZXing.SkiaSharp;
-
-[assembly: CaptureConsole]
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -24,67 +21,67 @@ public class QRCodeDecodabilityTest
         };
     }
 
-    [Theory]
-    [InlineData("0123456789", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("Hello, World!", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("special", ECCLevel.L, EciMode.Utf8)]
+    [Test]
+    [Arguments("0123456789", ECCLevel.L, EciMode.Utf8)]
+    [Arguments("Hello, World!", ECCLevel.L, EciMode.Utf8)]
+    [Arguments("special", ECCLevel.L, EciMode.Utf8)]
     public void CreateQrCode_Default_ascii_words_IsDecodable(string content, ECCLevel eccLevel, EciMode eciMode)
     {
         // default is ISO-8859-1 for ASCII-only
         AssertQrCodeIsDecodable(content, eccLevel, eciMode);
     }
 
-    [Theory]
-    [InlineData("こんにちは", ECCLevel.M, EciMode.Utf8)]
-    [InlineData("你好世界", ECCLevel.Q, EciMode.Utf8)]
-    [InlineData("Привет мир", ECCLevel.H, EciMode.Utf8)]
-    [InlineData("🎉🎊🎈", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("café", ECCLevel.M, EciMode.Utf8)]
-    [InlineData("Café", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("Résumé", ECCLevel.M, EciMode.Utf8)]
-    [InlineData("Naïve", ECCLevel.Q, EciMode.Utf8)]
-    [InlineData("Zürich", ECCLevel.H, EciMode.Utf8)]
+    [Test]
+    [Arguments("こんにちは", ECCLevel.M, EciMode.Utf8)]
+    [Arguments("你好世界", ECCLevel.Q, EciMode.Utf8)]
+    [Arguments("Привет мир", ECCLevel.H, EciMode.Utf8)]
+    [Arguments("🎉🎊🎈", ECCLevel.L, EciMode.Utf8)]
+    [Arguments("café", ECCLevel.M, EciMode.Utf8)]
+    [Arguments("Café", ECCLevel.L, EciMode.Utf8)]
+    [Arguments("Résumé", ECCLevel.M, EciMode.Utf8)]
+    [Arguments("Naïve", ECCLevel.Q, EciMode.Utf8)]
+    [Arguments("Zürich", ECCLevel.H, EciMode.Utf8)]
     public void CreateQrCode_Default_utf8_words_IsDecodable(string content, ECCLevel eccLevel, EciMode eciMode)
     {
         // automatic ECI mode selection should match Utf8 for non-ASCII
         AssertQrCodeIsDecodable(content, eccLevel, eciMode);
     }
 
-    [Theory]
-    [InlineData("0123456789", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("Hello, World!", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("special", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("こんにちは", ECCLevel.M, EciMode.Utf8)]
-    [InlineData("你好世界", ECCLevel.Q, EciMode.Utf8)]
-    [InlineData("Привет мир", ECCLevel.H, EciMode.Utf8)]
-    [InlineData("🎉🎊🎈", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("café", ECCLevel.M, EciMode.Utf8)]
-    [InlineData("Café", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("Résumé", ECCLevel.M, EciMode.Utf8)]
-    [InlineData("Naïve", ECCLevel.Q, EciMode.Utf8)]
-    [InlineData("Zürich", ECCLevel.H, EciMode.Utf8)]
+    [Test]
+    [Arguments("0123456789", ECCLevel.L, EciMode.Utf8)]
+    [Arguments("Hello, World!", ECCLevel.L, EciMode.Utf8)]
+    [Arguments("special", ECCLevel.L, EciMode.Utf8)]
+    [Arguments("こんにちは", ECCLevel.M, EciMode.Utf8)]
+    [Arguments("你好世界", ECCLevel.Q, EciMode.Utf8)]
+    [Arguments("Привет мир", ECCLevel.H, EciMode.Utf8)]
+    [Arguments("🎉🎊🎈", ECCLevel.L, EciMode.Utf8)]
+    [Arguments("café", ECCLevel.M, EciMode.Utf8)]
+    [Arguments("Café", ECCLevel.L, EciMode.Utf8)]
+    [Arguments("Résumé", ECCLevel.M, EciMode.Utf8)]
+    [Arguments("Naïve", ECCLevel.Q, EciMode.Utf8)]
+    [Arguments("Zürich", ECCLevel.H, EciMode.Utf8)]
     public void CreateQrCode_Utf8_IsDecodable(string content, ECCLevel eccLevel, EciMode eciMode)
     {
         AssertQrCodeIsDecodable(content, eccLevel, eciMode);
     }
 
-    [Theory]
-    [InlineData("0123456789", ECCLevel.L, EciMode.Iso8859_1)]
-    [InlineData("HELLO WORLD", ECCLevel.M, EciMode.Iso8859_1)]
-    [InlineData("special", ECCLevel.L, EciMode.Iso8859_1)]
-    [InlineData("ABC-123", ECCLevel.Q, EciMode.Iso8859_1)]
-    [InlineData("Test123", ECCLevel.H, EciMode.Iso8859_1)]
-    [InlineData("Café", ECCLevel.L, EciMode.Iso8859_1)]
-    [InlineData("Résumé", ECCLevel.M, EciMode.Iso8859_1)]
-    [InlineData("Naïve", ECCLevel.Q, EciMode.Iso8859_1)]
-    [InlineData("Zürich", ECCLevel.H, EciMode.Iso8859_1)]
+    [Test]
+    [Arguments("0123456789", ECCLevel.L, EciMode.Iso8859_1)]
+    [Arguments("HELLO WORLD", ECCLevel.M, EciMode.Iso8859_1)]
+    [Arguments("special", ECCLevel.L, EciMode.Iso8859_1)]
+    [Arguments("ABC-123", ECCLevel.Q, EciMode.Iso8859_1)]
+    [Arguments("Test123", ECCLevel.H, EciMode.Iso8859_1)]
+    [Arguments("Café", ECCLevel.L, EciMode.Iso8859_1)]
+    [Arguments("Résumé", ECCLevel.M, EciMode.Iso8859_1)]
+    [Arguments("Naïve", ECCLevel.Q, EciMode.Iso8859_1)]
+    [Arguments("Zürich", ECCLevel.H, EciMode.Iso8859_1)]
     public void CreateQrCode_Iso8859_IsDecodable(string content, ECCLevel eccLevel, EciMode eciMode)
     {
         AssertQrCodeIsDecodable(content, eccLevel, eciMode);
     }
 
-    [Fact]
-    public void Debug_Zurich_Version_Check()
+    [Test]
+    public async Task Debug_Zurich_Version_Check()
     {
         var content = "Zürich";
 
@@ -123,84 +120,84 @@ public class QRCodeDecodabilityTest
         Console.WriteLine("  ECC H: Version 2 (16 bytes available)");
 
         // Should be automatically upgrade to Version 2
-        Assert.True(qrH.Version >= 2, $"ECC H should use Version 2 or higher, but got Version {qrH.Version}");
-        Assert.True(qrM.Version >= 1, $"ECC M should use Version 1 or higher, but got Version {qrM.Version}");
+        await Assert.That(qrH.Version >= 2).IsTrue().Because($"ECC H should use Version 2 or higher, but got Version {qrH.Version}");
+        await Assert.That(qrM.Version >= 1).IsTrue().Because($"ECC M should use Version 1 or higher, but got Version {qrM.Version}");
     }
 
-    [Theory]
-    [InlineData("", ECCLevel.L, EciMode.Default)]
-    [InlineData("A", ECCLevel.M, EciMode.Default)]
-    [InlineData(" ", ECCLevel.Q, EciMode.Default)]
-    [InlineData("\t", ECCLevel.H, EciMode.Default)]
-    [InlineData("\n", ECCLevel.L, EciMode.Utf8)]
+    [Test]
+    [Arguments("", ECCLevel.L, EciMode.Default)]
+    [Arguments("A", ECCLevel.M, EciMode.Default)]
+    [Arguments(" ", ECCLevel.Q, EciMode.Default)]
+    [Arguments("\t", ECCLevel.H, EciMode.Default)]
+    [Arguments("\n", ECCLevel.L, EciMode.Utf8)]
     public void CreateQrCode_EdgeCases_IsDecodable(string content, ECCLevel eccLevel, EciMode eciMode)
     {
         AssertQrCodeIsDecodable(content, eccLevel, eciMode);
     }
 
-    [Theory]
-    [InlineData(ECCLevel.L, 41)]  // Version 1 max
-    [InlineData(ECCLevel.L, 42)]  // Version 2 min
-    [InlineData(ECCLevel.M, 34)]  // Version 1 max
-    [InlineData(ECCLevel.M, 35)]  // Version 2 min
-    [InlineData(ECCLevel.Q, 27)]  // Version 1 max
-    [InlineData(ECCLevel.Q, 28)]  // Version 2 min
-    [InlineData(ECCLevel.H, 17)]  // Version 1 max
-    [InlineData(ECCLevel.H, 18)]  // Version 2 min
+    [Test]
+    [Arguments(ECCLevel.L, 41)]  // Version 1 max
+    [Arguments(ECCLevel.L, 42)]  // Version 2 min
+    [Arguments(ECCLevel.M, 34)]  // Version 1 max
+    [Arguments(ECCLevel.M, 35)]  // Version 2 min
+    [Arguments(ECCLevel.Q, 27)]  // Version 1 max
+    [Arguments(ECCLevel.Q, 28)]  // Version 2 min
+    [Arguments(ECCLevel.H, 17)]  // Version 1 max
+    [Arguments(ECCLevel.H, 18)]  // Version 2 min
     public void CreateQrCode_VersionBoundaries_Number_IsDecodable(ECCLevel eccLevel, int charCount)
     {
         var content = new string('1', charCount);
         AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
     }
 
-    [Theory]
-    [InlineData(ECCLevel.L, 25)]  // Version 1 max
-    [InlineData(ECCLevel.L, 26)]  // Version 2 min
-    [InlineData(ECCLevel.M, 20)]  // Version 1 max
-    [InlineData(ECCLevel.M, 21)]  // Version 2 min
-    [InlineData(ECCLevel.Q, 16)]  // Version 1 max
-    [InlineData(ECCLevel.Q, 17)]  // Version 2 min
-    [InlineData(ECCLevel.H, 10)]  // Version 1 max
-    [InlineData(ECCLevel.H, 11)]  // Version 2 min
+    [Test]
+    [Arguments(ECCLevel.L, 25)]  // Version 1 max
+    [Arguments(ECCLevel.L, 26)]  // Version 2 min
+    [Arguments(ECCLevel.M, 20)]  // Version 1 max
+    [Arguments(ECCLevel.M, 21)]  // Version 2 min
+    [Arguments(ECCLevel.Q, 16)]  // Version 1 max
+    [Arguments(ECCLevel.Q, 17)]  // Version 2 min
+    [Arguments(ECCLevel.H, 10)]  // Version 1 max
+    [Arguments(ECCLevel.H, 11)]  // Version 2 min
     public void CreateQrCode_VersionBoundaries_Alphanumeric_IsDecodable(ECCLevel eccLevel, int charCount)
     {
         var content = new string('A', charCount);
         AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
     }
 
-    [Theory]
-    [InlineData(ECCLevel.L, 5)]  // Version 1 max
-    [InlineData(ECCLevel.L, 6)]  // Version 2 min
-    [InlineData(ECCLevel.M, 4)]  // Version 1 max
-    [InlineData(ECCLevel.M, 5)]  // Version 2 min
-    [InlineData(ECCLevel.Q, 3)]  // Version 1 max
-    [InlineData(ECCLevel.Q, 4)]  // Version 2 min
-    [InlineData(ECCLevel.H, 2)]  // Version 1 max
-    [InlineData(ECCLevel.H, 3)]  // Version 2 min
+    [Test]
+    [Arguments(ECCLevel.L, 5)]  // Version 1 max
+    [Arguments(ECCLevel.L, 6)]  // Version 2 min
+    [Arguments(ECCLevel.M, 4)]  // Version 1 max
+    [Arguments(ECCLevel.M, 5)]  // Version 2 min
+    [Arguments(ECCLevel.Q, 3)]  // Version 1 max
+    [Arguments(ECCLevel.Q, 4)]  // Version 2 min
+    [Arguments(ECCLevel.H, 2)]  // Version 1 max
+    [Arguments(ECCLevel.H, 3)]  // Version 2 min
     public void CreateQrCode_VersionBoundaries_Byte_IsDecodable(ECCLevel eccLevel, int charCount)
     {
         var content = new string('あ', charCount);
         AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
     }
 
-    [Theory]
-    [InlineData(ECCLevel.L, 100)]
-    [InlineData(ECCLevel.M, 500)]
-    [InlineData(ECCLevel.Q, 1000)]
-    [InlineData(ECCLevel.H, 200)]
+    [Test]
+    [Arguments(ECCLevel.L, 100)]
+    [Arguments(ECCLevel.M, 500)]
+    [Arguments(ECCLevel.Q, 1000)]
+    [Arguments(ECCLevel.H, 200)]
     public void CreateQrCode_LargeData_IsDecodable(ECCLevel eccLevel, int charCount)
     {
         var content = new string('A', charCount);
         AssertQrCodeIsDecodable(content, eccLevel, EciMode.Default);
     }
 
-    [Theory]
-    [InlineData("Hello, World!", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("こんにちは", ECCLevel.M, EciMode.Utf8)]
-    [InlineData("你好世界", ECCLevel.Q, EciMode.Utf8)]
-    [InlineData("🎉🎊🎈", ECCLevel.L, EciMode.Utf8)]
-    [InlineData("Zürich", ECCLevel.H, EciMode.Utf8)]
-    [InlineData("Résumé", ECCLevel.M, EciMode.Default)]
+    [Test]
+    [Arguments("Hello, World!", ECCLevel.L, EciMode.Utf8)]
+    [Arguments("こんにちは", ECCLevel.M, EciMode.Utf8)]
+    [Arguments("你好世界", ECCLevel.Q, EciMode.Utf8)]
+    [Arguments("🎉🎊🎈", ECCLevel.L, EciMode.Utf8)]
+    [Arguments("Zürich", ECCLevel.H, EciMode.Utf8)]
+    [Arguments("Résumé", ECCLevel.M, EciMode.Default)]
     public void CreateQrCode_Utf8Bom_IsDecodable(string content, ECCLevel eccLevel, EciMode eciMode)
     {
         // BOM bytes are part of the Byte-mode data stream, so the character count
@@ -208,9 +205,9 @@ public class QRCodeDecodabilityTest
         AssertQrCodeIsDecodable(content, eccLevel, eciMode, utf8BOM: true);
     }
 
-    [Theory]
-    [InlineData("あ", ECCLevel.L)]
-    [InlineData("ああ", ECCLevel.L)]
+    [Test]
+    [Arguments("あ", ECCLevel.L)]
+    [Arguments("ああ", ECCLevel.L)]
     public void CreateQrCode_Utf8Bom_ShortMultibyteText_IsDecodable(string content, ECCLevel eccLevel)
     {
         // 1-2 char multi-byte text: encode buffer must reserve room for the 3 BOM bytes
@@ -228,7 +225,7 @@ public class QRCodeDecodabilityTest
         AssertQrCodeIsDecodableString(expectedContent, eccLevel, eciMode, utf8BOM);
     }
 
-    private void AssertQrCodeIsDecodableBinary(string expectedContent, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM = false)
+    private async Task AssertQrCodeIsDecodableBinary(string expectedContent, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM = false)
     {
         var qr = QRCodeGenerator.CreateQrCode(expectedContent.AsSpan(), eccLevel, utf8BOM: utf8BOM, eciMode: eciMode, quietZoneSize: 4);
 
@@ -239,11 +236,11 @@ public class QRCodeDecodabilityTest
         var result = _reader.Decode(bitmap);
 
         // Assert decoding succeeded
-        Assert.NotNull(result);
-        Assert.Equal(BarcodeFormat.QR_CODE, result.BarcodeFormat);
+        await Assert.That(result).IsNotNull();
+        await Assert.That(result.BarcodeFormat).IsEquivalentTo(BarcodeFormat.QR_CODE);
 
         // Assert content matches (some decoders surface the BOM as a leading U+FEFF)
-        Assert.Equal(expectedContent, result.Text.TrimStart('\uFEFF'));
+        await Assert.That(result.Text.TrimStart('\uFEFF')).IsEquivalentTo(expectedContent);
 
         // Additional metadata checks
         if (result.ResultMetadata != null)
@@ -253,12 +250,12 @@ public class QRCodeDecodabilityTest
             {
                 var decodedEccLevel = result.ResultMetadata[ZXing.ResultMetadataType.ERROR_CORRECTION_LEVEL].ToString();
                 var expectedEccString = eccLevel.ToString();
-                Assert.Equal(expectedEccString, decodedEccLevel);
+                await Assert.That(decodedEccLevel).IsEquivalentTo(expectedEccString);
             }
         }
     }
 
-    private void AssertQrCodeIsDecodableString(string expectedContent, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM = false)
+    private async Task AssertQrCodeIsDecodableString(string expectedContent, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM = false)
     {
         var qr = QRCodeGenerator.CreateQrCode(expectedContent, eccLevel, utf8BOM: utf8BOM, eciMode: eciMode, quietZoneSize: 4);
 
@@ -269,11 +266,11 @@ public class QRCodeDecodabilityTest
         var result = _reader.Decode(bitmap);
 
         // Assert decoding succeeded
-        Assert.NotNull(result);
-        Assert.Equal(BarcodeFormat.QR_CODE, result.BarcodeFormat);
+        await Assert.That(result).IsNotNull();
+        await Assert.That(result.BarcodeFormat).IsEquivalentTo(BarcodeFormat.QR_CODE);
 
         // Assert content matches (some decoders surface the BOM as a leading U+FEFF)
-        Assert.Equal(expectedContent, result.Text.TrimStart('\uFEFF'));
+        await Assert.That(result.Text.TrimStart('\uFEFF')).IsEquivalentTo(expectedContent);
 
         // Additional metadata checks
         if (result.ResultMetadata != null)
@@ -283,7 +280,7 @@ public class QRCodeDecodabilityTest
             {
                 var decodedEccLevel = result.ResultMetadata[ZXing.ResultMetadataType.ERROR_CORRECTION_LEVEL].ToString();
                 var expectedEccString = eccLevel.ToString();
-                Assert.Equal(expectedEccString, decodedEccLevel);
+                await Assert.That(decodedEccLevel).IsEquivalentTo(expectedEccString);
             }
         }
     }

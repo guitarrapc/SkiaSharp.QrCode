@@ -1,6 +1,5 @@
 using SkiaSharp.QrCode.Image;
 using System.Buffers;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -10,18 +9,18 @@ public class QRCodeImageBuilderTest
 
     #region Constructor Tests
 
-    [Fact]
-    public void Constructor_ValidContent_Success()
+    [Test]
+    public async Task Constructor_ValidContent_Success()
     {
         var builder = new QRCodeImageBuilder(TestContent);
-        Assert.NotNull(builder);
+        await Assert.That(builder).IsNotNull();
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void Constructor_InvalidContent_ThrowsArgumentException(string? content)
+    [Test]
+    [Arguments(null)]
+    [Arguments("")]
+    [Arguments("   ")]
+    public async Task Constructor_InvalidContent_ThrowsArgumentException(string? content)
     {
         Assert.Throws<ArgumentException>(() => new QRCodeImageBuilder(content!));
     }
@@ -30,160 +29,160 @@ public class QRCodeImageBuilderTest
 
     #region Static Method Tests - GetPngBytes
 
-    [Fact]
-    public void GetPngBytes_DefaultParameters_ReturnsValidPngBytes()
+    [Test]
+    public async Task GetPngBytes_DefaultParameters_ReturnsValidPngBytes()
     {
         var bytes = QRCodeImageBuilder.GetPngBytes(TestContent);
 
-        Assert.NotNull(bytes);
-        Assert.NotEmpty(bytes);
+        await Assert.That(bytes).IsNotNull();
+        await Assert.That(bytes).IsNotEmpty();
         // PNG signature: 89 50 4E 47 0D 0A 1A 0A
-        Assert.Equal(0x89, bytes[0]);
-        Assert.Equal(0x50, bytes[1]);
-        Assert.Equal(0x4E, bytes[2]);
-        Assert.Equal(0x47, bytes[3]);
+        await Assert.That(bytes[0]).IsEqualTo((byte)0x89);
+        await Assert.That(bytes[1]).IsEqualTo((byte)0x50);
+        await Assert.That(bytes[2]).IsEqualTo((byte)0x4E);
+        await Assert.That(bytes[3]).IsEqualTo((byte)0x47);
     }
 
-    [Theory]
-    [InlineData(ECCLevel.L)]
-    [InlineData(ECCLevel.M)]
-    [InlineData(ECCLevel.Q)]
-    [InlineData(ECCLevel.H)]
-    public void GetPngBytes_DifferentEccLevels_ReturnsValidPngBytes(ECCLevel eccLevel)
+    [Test]
+    [Arguments(ECCLevel.L)]
+    [Arguments(ECCLevel.M)]
+    [Arguments(ECCLevel.Q)]
+    [Arguments(ECCLevel.H)]
+    public async Task GetPngBytes_DifferentEccLevels_ReturnsValidPngBytes(ECCLevel eccLevel)
     {
         var bytes = QRCodeImageBuilder.GetPngBytes(TestContent, eccLevel);
 
-        Assert.NotNull(bytes);
-        Assert.NotEmpty(bytes);
+        await Assert.That(bytes).IsNotNull();
+        await Assert.That(bytes).IsNotEmpty();
     }
 
-    [Theory]
-    [InlineData(128)]
-    [InlineData(256)]
-    [InlineData(512)]
-    [InlineData(1024)]
-    public void GetPngBytes_DifferentSizes_ReturnsValidPngBytes(int size)
+    [Test]
+    [Arguments(128)]
+    [Arguments(256)]
+    [Arguments(512)]
+    [Arguments(1024)]
+    public async Task GetPngBytes_DifferentSizes_ReturnsValidPngBytes(int size)
     {
         var bytes = QRCodeImageBuilder.GetPngBytes(TestContent, size: size);
 
-        Assert.NotNull(bytes);
-        Assert.NotEmpty(bytes);
+        await Assert.That(bytes).IsNotNull();
+        await Assert.That(bytes).IsNotEmpty();
     }
 
     #endregion
 
     #region Static Method Tests - GetImageBytes
 
-    [Theory]
-    [InlineData(SKEncodedImageFormat.Png)]
-    [InlineData(SKEncodedImageFormat.Jpeg)]
-    [InlineData(SKEncodedImageFormat.Webp)]
-    public void GetImageBytes_DifferentFormats_ReturnsValidBytes(SKEncodedImageFormat format)
+    [Test]
+    [Arguments(SKEncodedImageFormat.Png)]
+    [Arguments(SKEncodedImageFormat.Jpeg)]
+    [Arguments(SKEncodedImageFormat.Webp)]
+    public async Task GetImageBytes_DifferentFormats_ReturnsValidBytes(SKEncodedImageFormat format)
     {
         var bytes = QRCodeImageBuilder.GetImageBytes(TestContent, format);
 
-        Assert.NotNull(bytes);
-        Assert.NotEmpty(bytes);
+        await Assert.That(bytes).IsNotNull();
+        await Assert.That(bytes).IsNotEmpty();
     }
 
-    [Theory]
-    [InlineData(50)]
-    [InlineData(75)]
-    [InlineData(100)]
-    public void GetImageBytes_DifferentQuality_ReturnsValidBytes(int quality)
+    [Test]
+    [Arguments(50)]
+    [Arguments(75)]
+    [Arguments(100)]
+    public async Task GetImageBytes_DifferentQuality_ReturnsValidBytes(int quality)
     {
         var bytes = QRCodeImageBuilder.GetImageBytes(TestContent, SKEncodedImageFormat.Jpeg, quality: quality);
 
-        Assert.NotNull(bytes);
-        Assert.NotEmpty(bytes);
+        await Assert.That(bytes).IsNotNull();
+        await Assert.That(bytes).IsNotEmpty();
     }
 
     #endregion
 
     #region Static Method Tests - SavePng
 
-    [Fact]
-    public void SavePng_ValidStream_WritesData()
+    [Test]
+    public async Task SavePng_ValidStream_WritesData()
     {
         using var stream = new MemoryStream();
         QRCodeImageBuilder.SavePng(TestContent, stream);
 
-        Assert.True(stream.Length > 0);
+        await Assert.That(stream.Length > 0).IsTrue();
         stream.Position = 0;
         var bytes = stream.ToArray();
         // Verify PNG signature
-        Assert.Equal(0x89, bytes[0]);
-        Assert.Equal(0x50, bytes[1]);
+        await Assert.That(bytes[0]).IsEqualTo((byte)0x89);
+        await Assert.That(bytes[1]).IsEqualTo((byte)0x50);
     }
 
     #endregion
 
     #region Static Method Tests - WritePng
 
-    [Fact]
-    public void WritePng_ValidBufferWriter_WritesData()
+    [Test]
+    public async Task WritePng_ValidBufferWriter_WritesData()
     {
         var writer = new ArrayBufferWriter<byte>();
         QRCodeImageBuilder.WritePng(TestContent, writer);
 
-        var writtenBytes = writer.WrittenSpan;
-        Assert.True(writtenBytes.Length > 0);
+        var writtenBytes = writer.WrittenSpan.ToArray();
+        await Assert.That(writtenBytes.Length > 0).IsTrue();
         // Verify PNG signature
-        Assert.Equal(0x89, writtenBytes[0]);
-        Assert.Equal(0x50, writtenBytes[1]);
+        await Assert.That(writtenBytes[0]).IsEqualTo((byte)0x89);
+        await Assert.That(writtenBytes[1]).IsEqualTo((byte)0x50);
     }
 
     #endregion
 
     #region Static Method Tests - WriteImage
 
-    [Theory]
-    [InlineData(SKEncodedImageFormat.Png)]
-    [InlineData(SKEncodedImageFormat.Jpeg)]
-    [InlineData(SKEncodedImageFormat.Webp)]
-    public void WriteImage_DifferentFormats_WritesData(SKEncodedImageFormat format)
+    [Test]
+    [Arguments(SKEncodedImageFormat.Png)]
+    [Arguments(SKEncodedImageFormat.Jpeg)]
+    [Arguments(SKEncodedImageFormat.Webp)]
+    public async Task WriteImage_DifferentFormats_WritesData(SKEncodedImageFormat format)
     {
         var writer = new ArrayBufferWriter<byte>();
         QRCodeImageBuilder.WriteImage(TestContent, writer, format);
 
-        var writtenBytes = writer.WrittenSpan;
-        Assert.True(writtenBytes.Length > 0);
+        var writtenBytes = writer.WrittenSpan.ToArray();
+        await Assert.That(writtenBytes.Length > 0).IsTrue();
     }
 
     #endregion
 
     #region Fluent API Tests - WithSize
 
-    [Fact]
-    public void WithSize_ValidSize_ReturnsBuilder()
+    [Test]
+    public async Task WithSize_ValidSize_ReturnsBuilder()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithSize(256, 256);
 
-        Assert.Same(builder, result);
+        await Assert.That(result).IsSameReferenceAs(builder);
     }
 
-    [Theory]
-    [InlineData(0, 100)]
-    [InlineData(-1, 100)]
-    [InlineData(100, 0)]
-    [InlineData(100, -1)]
-    public void WithSize_InvalidSize_ThrowsArgumentOutOfRangeException(int width, int height)
+    [Test]
+    [Arguments(0, 100)]
+    [Arguments(-1, 100)]
+    [Arguments(100, 0)]
+    [Arguments(100, -1)]
+    public async Task WithSize_InvalidSize_ThrowsArgumentOutOfRangeException(int width, int height)
     {
         var builder = new QRCodeImageBuilder(TestContent);
         Assert.Throws<ArgumentOutOfRangeException>(() => builder.WithSize(width, height));
     }
 
-    [Fact]
-    public void WithSize_CustomSize_GeneratesCorrectSize()
+    [Test]
+    public async Task WithSize_CustomSize_GeneratesCorrectSize()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var bitmap = builder.WithSize(300, 400).ToBitmap();
 
         using (bitmap)
         {
-            Assert.Equal(300, bitmap.Width);
-            Assert.Equal(400, bitmap.Height);
+            await Assert.That(bitmap.Width).IsEqualTo(300);
+            await Assert.That(bitmap.Height).IsEqualTo(400);
         }
     }
 
@@ -191,26 +190,26 @@ public class QRCodeImageBuilderTest
 
     #region Fluent API Tests - WithModulePixelSize
 
-    [Fact]
-    public void WithModulePixelSize_ValidSize_ReturnsBuilder()
+    [Test]
+    public async Task WithModulePixelSize_ValidSize_ReturnsBuilder()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithModulePixelSize(10);
 
-        Assert.Same(builder, result);
+        await Assert.That(result).IsSameReferenceAs(builder);
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    public void WithModulePixelSize_InvalidSize_ThrowsArgumentOutOfRangeException(int modulePixelSize)
+    [Test]
+    [Arguments(0)]
+    [Arguments(-1)]
+    public async Task WithModulePixelSize_InvalidSize_ThrowsArgumentOutOfRangeException(int modulePixelSize)
     {
         var builder = new QRCodeImageBuilder(TestContent);
         Assert.Throws<ArgumentOutOfRangeException>(() => builder.WithModulePixelSize(modulePixelSize));
     }
 
-    [Fact]
-    public void WithModulePixelSize_CustomSize_GeneratesCorrectSize()
+    [Test]
+    public async Task WithModulePixelSize_CustomSize_GeneratesCorrectSize()
     {
         const int modulePixelSize = 10;
         var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
@@ -220,12 +219,12 @@ public class QRCodeImageBuilderTest
             .WithModulePixelSize(modulePixelSize)
             .ToBitmap();
 
-        Assert.Equal(expectedSide, bitmap.Width);
-        Assert.Equal(expectedSide, bitmap.Height);
+        await Assert.That(bitmap.Width).IsEqualTo(expectedSide);
+        await Assert.That(bitmap.Height).IsEqualTo(expectedSide);
     }
 
-    [Fact]
-    public void WithModulePixelSize_QRCodeDataBuilder_GeneratesCorrectSize()
+    [Test]
+    public async Task WithModulePixelSize_QRCodeDataBuilder_GeneratesCorrectSize()
     {
         const int modulePixelSize = 8;
         var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 10);
@@ -235,20 +234,20 @@ public class QRCodeImageBuilderTest
             .WithModulePixelSize(modulePixelSize)
             .ToBitmap();
 
-        Assert.Equal(expectedSide, bitmap.Width);
-        Assert.Equal(expectedSide, bitmap.Height);
+        await Assert.That(bitmap.Width).IsEqualTo(expectedSide);
+        await Assert.That(bitmap.Height).IsEqualTo(expectedSide);
     }
 
-    [Fact]
-    public void WithModulePixelSize_AndLargerCanvas_PadsAndCentersContent()
+    [Test]
+    public async Task WithModulePixelSize_AndLargerCanvas_PadsAndCentersContent()
     {
         const int modulePixelSize = 6;
         var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
         var contentSide = qrCodeData.Size * modulePixelSize;
         const int canvasWidth = 400;
         const int canvasHeight = 500;
-        Assert.True(canvasWidth >= contentSide);
-        Assert.True(canvasHeight >= contentSide);
+        await Assert.That(canvasWidth >= contentSide).IsTrue();
+        await Assert.That(canvasHeight >= contentSide).IsTrue();
 
         using var bitmap = new QRCodeImageBuilder(TestContent)
             .WithModulePixelSize(modulePixelSize)
@@ -256,23 +255,23 @@ public class QRCodeImageBuilderTest
             .WithColors(codeColor: SKColors.Black, backgroundColor: SKColors.White, clearColor: SKColors.Transparent)
             .ToBitmap();
 
-        Assert.Equal(canvasWidth, bitmap.Width);
-        Assert.Equal(canvasHeight, bitmap.Height);
+        await Assert.That(bitmap.Width).IsEqualTo(canvasWidth);
+        await Assert.That(bitmap.Height).IsEqualTo(canvasHeight);
 
         var expectedLeft = (canvasWidth - contentSide) / 2;
         var expectedTop = (canvasHeight - contentSide) / 2;
 
         // Padding outside content should keep clearColor (transparent).
-        Assert.Equal(0, bitmap.GetPixel(0, 0).Alpha);
-        Assert.Equal(0, bitmap.GetPixel(canvasWidth - 1, canvasHeight - 1).Alpha);
+        await Assert.That(bitmap.GetPixel(0, 0).Alpha).IsEqualTo((byte)0);
+        await Assert.That(bitmap.GetPixel(canvasWidth - 1, canvasHeight - 1).Alpha).IsEqualTo((byte)0);
 
         // Content area corners should be QR background (quiet zone).
-        Assert.Equal(SKColors.White, bitmap.GetPixel(expectedLeft, expectedTop));
-        Assert.Equal(SKColors.White, bitmap.GetPixel(expectedLeft + contentSide - 1, expectedTop + contentSide - 1));
+        await Assert.That(bitmap.GetPixel(expectedLeft, expectedTop)).IsEqualTo(SKColors.White);
+        await Assert.That(bitmap.GetPixel(expectedLeft + contentSide - 1, expectedTop + contentSide - 1)).IsEqualTo(SKColors.White);
     }
 
-    [Fact]
-    public void WithModulePixelSize_AndTooSmallCanvas_ThrowsInvalidOperationException()
+    [Test]
+    public async Task WithModulePixelSize_AndTooSmallCanvas_ThrowsInvalidOperationException()
     {
         const int modulePixelSize = 10;
         var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
@@ -284,11 +283,11 @@ public class QRCodeImageBuilderTest
                 .WithSize(contentSide - 1, contentSide)
                 .ToBitmap());
 
-        Assert.Contains("smaller than QR content size", ex.Message);
+        await Assert.That(ex.Message).Contains("smaller than QR content size");
     }
 
-    [Fact]
-    public void WithModulePixelSize_AndExactCanvas_MatchesContentSize()
+    [Test]
+    public async Task WithModulePixelSize_AndExactCanvas_MatchesContentSize()
     {
         const int modulePixelSize = 8;
         var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
@@ -299,12 +298,12 @@ public class QRCodeImageBuilderTest
             .WithSize(contentSide, contentSide)
             .ToBitmap();
 
-        Assert.Equal(contentSide, bitmap.Width);
-        Assert.Equal(contentSide, bitmap.Height);
+        await Assert.That(bitmap.Width).IsEqualTo(contentSide);
+        await Assert.That(bitmap.Height).IsEqualTo(contentSide);
     }
 
-    [Fact]
-    public void WithModulePixelSize_AndOddPadding_UsesIntegerOrigin()
+    [Test]
+    public async Task WithModulePixelSize_AndOddPadding_UsesIntegerOrigin()
     {
         const int modulePixelSize = 6;
         var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
@@ -319,33 +318,33 @@ public class QRCodeImageBuilderTest
 
         var expectedLeft = (canvasSide - contentSide) / 2;
         var expectedTop = (canvasSide - contentSide) / 2;
-        Assert.Equal(0, expectedLeft);
-        Assert.Equal(0, expectedTop);
+        await Assert.That(expectedLeft).IsEqualTo(0);
+        await Assert.That(expectedTop).IsEqualTo(0);
 
         // Content starts on an integer pixel and keeps QR background in quiet zone.
-        Assert.Equal(SKColors.White, bitmap.GetPixel(expectedLeft, expectedTop));
+        await Assert.That(bitmap.GetPixel(expectedLeft, expectedTop)).IsEqualTo(SKColors.White);
         // The extra 1px pad is on the far edges.
-        Assert.Equal(0, bitmap.GetPixel(canvasSide - 1, 0).Alpha);
-        Assert.Equal(0, bitmap.GetPixel(0, canvasSide - 1).Alpha);
+        await Assert.That(bitmap.GetPixel(canvasSide - 1, 0).Alpha).IsEqualTo((byte)0);
+        await Assert.That(bitmap.GetPixel(0, canvasSide - 1).Alpha).IsEqualTo((byte)0);
     }
 
     #endregion
 
     #region Fluent API Tests - WithFormat
 
-    [Fact]
-    public void WithFormat_ValidFormat_ReturnsBuilder()
+    [Test]
+    public async Task WithFormat_ValidFormat_ReturnsBuilder()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithFormat(SKEncodedImageFormat.Jpeg, 80);
 
-        Assert.Same(builder, result);
+        await Assert.That(result).IsSameReferenceAs(builder);
     }
 
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(101)]
-    public void WithFormat_InvalidQuality_ThrowsArgumentOutOfRangeException(int quality)
+    [Test]
+    [Arguments(-1)]
+    [Arguments(101)]
+    public async Task WithFormat_InvalidQuality_ThrowsArgumentOutOfRangeException(int quality)
     {
         var builder = new QRCodeImageBuilder(TestContent);
         Assert.Throws<ArgumentOutOfRangeException>(() => builder.WithFormat(SKEncodedImageFormat.Png, quality));
@@ -355,65 +354,65 @@ public class QRCodeImageBuilderTest
 
     #region Fluent API Tests - WithErrorCorrection
 
-    [Theory]
-    [InlineData(ECCLevel.L)]
-    [InlineData(ECCLevel.M)]
-    [InlineData(ECCLevel.Q)]
-    [InlineData(ECCLevel.H)]
-    public void WithErrorCorrection_AllLevels_ReturnsBuilder(ECCLevel eccLevel)
+    [Test]
+    [Arguments(ECCLevel.L)]
+    [Arguments(ECCLevel.M)]
+    [Arguments(ECCLevel.Q)]
+    [Arguments(ECCLevel.H)]
+    public async Task WithErrorCorrection_AllLevels_ReturnsBuilder(ECCLevel eccLevel)
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithErrorCorrection(eccLevel);
 
-        Assert.Same(builder, result);
+        await Assert.That(result).IsSameReferenceAs(builder);
     }
 
     #endregion
 
     #region Fluent API Tests - WithEciMode
 
-    [Theory]
-    [InlineData(EciMode.Default)]
-    [InlineData(EciMode.Iso8859_1)]
-    [InlineData(EciMode.Utf8)]
-    public void WithEciMode_ValidModes_ReturnsBuilder(EciMode eciMode)
+    [Test]
+    [Arguments(EciMode.Default)]
+    [Arguments(EciMode.Iso8859_1)]
+    [Arguments(EciMode.Utf8)]
+    public async Task WithEciMode_ValidModes_ReturnsBuilder(EciMode eciMode)
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithEciMode(eciMode);
 
-        Assert.Same(builder, result);
+        await Assert.That(result).IsSameReferenceAs(builder);
     }
 
     #endregion
 
     #region Fluent API Tests - WithVersion
 
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(1)]
-    [InlineData(10)]
-    [InlineData(40)]
-    public void WithVersion_ValidVersions_ReturnsBuilder(int version)
+    [Test]
+    [Arguments(-1)]
+    [Arguments(1)]
+    [Arguments(10)]
+    [Arguments(40)]
+    public async Task WithVersion_ValidVersions_ReturnsBuilder(int version)
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithVersion(version);
 
-        Assert.Same(builder, result);
+        await Assert.That(result).IsSameReferenceAs(builder);
     }
 
-    [Theory]
-    [InlineData(-2)]
-    [InlineData(0)]
-    [InlineData(41)]
-    public void WithVersion_InvalidVersion_ThrowsArgumentOutOfRangeException(int version)
+    [Test]
+    [Arguments(-2)]
+    [Arguments(0)]
+    [Arguments(41)]
+    public async Task WithVersion_InvalidVersion_ThrowsArgumentOutOfRangeException(int version)
     {
         var builder = new QRCodeImageBuilder(TestContent);
 
         Assert.Throws<ArgumentOutOfRangeException>(() => builder.WithVersion(version));
     }
 
-    [Fact]
-    public void WithVersion_QRCodeDataBuilder_ThrowsInvalidOperationException()
+    [Test]
+    public async Task WithVersion_QRCodeDataBuilder_ThrowsInvalidOperationException()
     {
         var qrCodeData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H);
         var builder = new QRCodeImageBuilder(qrCodeData);
@@ -421,8 +420,8 @@ public class QRCodeImageBuilderTest
         Assert.Throws<InvalidOperationException>(() => builder.WithVersion(10));
     }
 
-    [Fact]
-    public void WithVersion_FixedVersion_MatchesQRCodeDataRendering()
+    [Test]
+    public async Task WithVersion_FixedVersion_MatchesQRCodeDataRendering()
     {
         const int fixedVersion = 10;
         using var expectedBitmap = new QRCodeImageBuilder(QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: fixedVersion))
@@ -435,29 +434,29 @@ public class QRCodeImageBuilderTest
             .WithSize(256, 256)
             .ToBitmap();
 
-        Assert.True(BitmapsAreEqual(expectedBitmap, actualBitmap));
+        await Assert.That(BitmapsAreEqual(expectedBitmap, actualBitmap)).IsTrue();
     }
 
     #endregion
 
     #region Fluent API Tests - WithQuietZone
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(4)]
-    [InlineData(10)]
-    public void WithQuietZone_ValidSize_ReturnsBuilder(int size)
+    [Test]
+    [Arguments(0)]
+    [Arguments(4)]
+    [Arguments(10)]
+    public async Task WithQuietZone_ValidSize_ReturnsBuilder(int size)
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithQuietZone(size);
 
-        Assert.Same(builder, result);
+        await Assert.That(result).IsSameReferenceAs(builder);
     }
 
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(11)]
-    public void WithQuietZone_InvalidSize_ThrowsArgumentOutOfRangeException(int size)
+    [Test]
+    [Arguments(-1)]
+    [Arguments(11)]
+    public async Task WithQuietZone_InvalidSize_ThrowsArgumentOutOfRangeException(int size)
     {
         var builder = new QRCodeImageBuilder(TestContent);
         Assert.Throws<ArgumentOutOfRangeException>(() => builder.WithQuietZone(size));
@@ -467,44 +466,44 @@ public class QRCodeImageBuilderTest
 
     #region Fluent API Tests - WithColors
 
-    [Fact]
-    public void WithColors_ValidColors_ReturnsBuilder()
+    [Test]
+    public async Task WithColors_ValidColors_ReturnsBuilder()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithColors(SKColors.Blue, SKColors.Yellow, SKColors.Transparent);
 
-        Assert.Same(builder, result);
+        await Assert.That(result).IsSameReferenceAs(builder);
     }
 
-    [Fact]
-    public void WithColors_NullColors_ReturnsBuilder()
+    [Test]
+    public async Task WithColors_NullColors_ReturnsBuilder()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithColors(null, null, null);
 
-        Assert.Same(builder, result);
+        await Assert.That(result).IsSameReferenceAs(builder);
     }
 
     #endregion
 
     #region Fluent API Tests - WithModuleShape
 
-    [Theory]
-    [InlineData(0.5f)]
-    [InlineData(0.8f)]
-    [InlineData(1.0f)]
-    public void WithModuleShape_ValidSizePercent_ReturnsBuilder(float sizePercent)
+    [Test]
+    [Arguments(0.5f)]
+    [Arguments(0.8f)]
+    [Arguments(1.0f)]
+    public async Task WithModuleShape_ValidSizePercent_ReturnsBuilder(float sizePercent)
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithModuleShape(CircleModuleShape.Default, sizePercent);
 
-        Assert.Same(builder, result);
+        await Assert.That(result).IsSameReferenceAs(builder);
     }
 
-    [Theory]
-    [InlineData(0.4f)]
-    [InlineData(1.1f)]
-    public void WithModuleShape_InvalidSizePercent_ThrowsArgumentOutOfRangeException(float sizePercent)
+    [Test]
+    [Arguments(0.4f)]
+    [Arguments(1.1f)]
+    public async Task WithModuleShape_InvalidSizePercent_ThrowsArgumentOutOfRangeException(float sizePercent)
     {
         var builder = new QRCodeImageBuilder(TestContent);
         Assert.Throws<ArgumentOutOfRangeException>(() => builder.WithModuleShape(CircleModuleShape.Default, sizePercent));
@@ -514,62 +513,62 @@ public class QRCodeImageBuilderTest
 
     #region Fluent API Tests - WithGradient
 
-    [Fact]
-    public void WithGradient_ValidOptions_ReturnsBuilder()
+    [Test]
+    public async Task WithGradient_ValidOptions_ReturnsBuilder()
     {
         var gradientOptions = new GradientOptions([SKColors.Red, SKColors.Blue], GradientDirection.TopToBottom);
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithGradient(gradientOptions);
 
-        Assert.Same(builder, result);
+        await Assert.That(result).IsSameReferenceAs(builder);
     }
 
-    [Fact]
-    public void WithGradient_Null_ReturnsBuilder()
+    [Test]
+    public async Task WithGradient_Null_ReturnsBuilder()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithGradient(null);
 
-        Assert.Same(builder, result);
+        await Assert.That(result).IsSameReferenceAs(builder);
     }
 
     #endregion
 
     #region Fluent API Tests - WithIcon
 
-    [Fact]
-    public void WithIcon_Null_ReturnsBuilder()
+    [Test]
+    public async Task WithIcon_Null_ReturnsBuilder()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var result = builder.WithIcon(null);
 
-        Assert.Same(builder, result);
+        await Assert.That(result).IsSameReferenceAs(builder);
     }
 
     #endregion
 
     #region Output Method Tests - SaveTo Stream
 
-    [Fact]
-    public void SaveTo_Stream_ValidStream_WritesData()
+    [Test]
+    public async Task SaveTo_Stream_ValidStream_WritesData()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         using var stream = new MemoryStream();
 
         builder.SaveTo(stream);
 
-        Assert.True(stream.Length > 0);
+        await Assert.That(stream.Length > 0).IsTrue();
     }
 
-    [Fact]
-    public void SaveTo_Stream_NullStream_ThrowsArgumentNullException()
+    [Test]
+    public async Task SaveTo_Stream_NullStream_ThrowsArgumentNullException()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         Assert.Throws<ArgumentNullException>(() => builder.SaveTo((Stream)null!));
     }
 
-    [Fact]
-    public void SaveTo_Stream_NonWritableStream_ThrowsArgumentException()
+    [Test]
+    public async Task SaveTo_Stream_NonWritableStream_ThrowsArgumentException()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         using var stream = new MemoryStream(new byte[100], writable: false);
@@ -581,19 +580,19 @@ public class QRCodeImageBuilderTest
 
     #region Output Method Tests - SaveTo IBufferWriter
 
-    [Fact]
-    public void SaveTo_BufferWriter_ValidWriter_WritesData()
+    [Test]
+    public async Task SaveTo_BufferWriter_ValidWriter_WritesData()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var writer = new ArrayBufferWriter<byte>();
 
         builder.SaveTo(writer);
 
-        Assert.True(writer.WrittenCount > 0);
+        await Assert.That(writer.WrittenCount > 0).IsTrue();
     }
 
-    [Fact]
-    public void SaveTo_BufferWriter_NullWriter_ThrowsArgumentNullException()
+    [Test]
+    public async Task SaveTo_BufferWriter_NullWriter_ThrowsArgumentNullException()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         Assert.Throws<ArgumentNullException>(() => builder.SaveTo((IBufferWriter<byte>)null!));
@@ -603,52 +602,52 @@ public class QRCodeImageBuilderTest
 
     #region Output Method Tests - ToByteArray
 
-    [Fact]
-    public void ToByteArray_ReturnsValidBytes()
+    [Test]
+    public async Task ToByteArray_ReturnsValidBytes()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         var bytes = builder.ToByteArray();
 
-        Assert.NotNull(bytes);
-        Assert.NotEmpty(bytes);
+        await Assert.That(bytes).IsNotNull();
+        await Assert.That(bytes).IsNotEmpty();
     }
 
     #endregion
 
     #region Output Method Tests - ToImage
 
-    [Fact]
-    public void ToImage_ReturnsValidSKImage()
+    [Test]
+    public async Task ToImage_ReturnsValidSKImage()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         using var image = builder.ToImage();
 
-        Assert.NotNull(image);
-        Assert.Equal(512, image.Width);
-        Assert.Equal(512, image.Height);
+        await Assert.That(image).IsNotNull();
+        await Assert.That(image.Width).IsEqualTo(512);
+        await Assert.That(image.Height).IsEqualTo(512);
     }
 
     #endregion
 
     #region Output Method Tests - ToBitmap
 
-    [Fact]
-    public void ToBitmap_ReturnsValidSKBitmap()
+    [Test]
+    public async Task ToBitmap_ReturnsValidSKBitmap()
     {
         var builder = new QRCodeImageBuilder(TestContent);
         using var bitmap = builder.ToBitmap();
 
-        Assert.NotNull(bitmap);
-        Assert.Equal(512, bitmap.Width);
-        Assert.Equal(512, bitmap.Height);
+        await Assert.That(bitmap).IsNotNull();
+        await Assert.That(bitmap.Width).IsEqualTo(512);
+        await Assert.That(bitmap.Height).IsEqualTo(512);
     }
 
     #endregion
 
     #region Integration Tests
 
-    [Fact]
-    public void FluentAPI_ChainMultipleMethods_GeneratesValidQRCode()
+    [Test]
+    public async Task FluentAPI_ChainMultipleMethods_GeneratesValidQRCode()
     {
         var builder = new QRCodeImageBuilder(TestContent)
             .WithSize(400, 400)
@@ -659,12 +658,12 @@ public class QRCodeImageBuilderTest
 
         var bytes = builder.ToByteArray();
 
-        Assert.NotNull(bytes);
-        Assert.NotEmpty(bytes);
+        await Assert.That(bytes).IsNotNull();
+        await Assert.That(bytes).IsNotEmpty();
     }
 
-    [Fact]
-    public void FluentAPI_WithAllCustomizations_GeneratesValidQRCode()
+    [Test]
+    public async Task FluentAPI_WithAllCustomizations_GeneratesValidQRCode()
     {
         var gradientOptions = new GradientOptions([SKColors.Purple, SKColors.Pink], GradientDirection.TopLeftToBottomRight);
         var builder = new QRCodeImageBuilder(TestContent)
@@ -679,9 +678,9 @@ public class QRCodeImageBuilderTest
 
         using var bitmap = builder.ToBitmap();
 
-        Assert.NotNull(bitmap);
-        Assert.Equal(600, bitmap.Width);
-        Assert.Equal(600, bitmap.Height);
+        await Assert.That(bitmap).IsNotNull();
+        await Assert.That(bitmap.Width).IsEqualTo(600);
+        await Assert.That(bitmap.Height).IsEqualTo(600);
     }
 
     #endregion

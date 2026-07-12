@@ -1,5 +1,4 @@
 using SkiaSharp.QrCode.Image;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -7,23 +6,23 @@ public class IconDataModuleSizingTest
 {
     private const string TestContent = "HELLO-ICON";
 
-    [Fact]
-    public void FromImageByModules_ValidArgs_SetsModuleProperties()
+    [Test]
+    public async Task FromImageByModules_ValidArgs_SetsModuleProperties()
     {
         using var logo = CreateLogo(32);
         var icon = IconData.FromImageByModules(logo, iconSizeModules: 5, iconBorderModules: 1, maxCoreOccupancyPercent: 40);
 
-        Assert.Equal(5, icon.IconSizeModules);
-        Assert.Equal(1, icon.IconBorderModules);
-        Assert.Equal(40, icon.MaxCoreOccupancyPercent);
+        await Assert.That(icon.IconSizeModules).IsEqualTo(5);
+        await Assert.That(icon.IconBorderModules).IsEqualTo(1);
+        await Assert.That(icon.MaxCoreOccupancyPercent).IsEqualTo(40);
     }
 
-    [Theory]
-    [InlineData(0, 1, 30)]
-    [InlineData(-1, 1, 30)]
-    [InlineData(5, -1, 30)]
-    [InlineData(5, 1, 0)]
-    [InlineData(5, 1, 101)]
+    [Test]
+    [Arguments(0, 1, 30)]
+    [Arguments(-1, 1, 30)]
+    [Arguments(5, -1, 30)]
+    [Arguments(5, 1, 0)]
+    [Arguments(5, 1, 101)]
     public void FromImageByModules_InvalidArgs_ThrowsArgumentOutOfRangeException(
         int iconSizeModules,
         int iconBorderModules,
@@ -34,8 +33,8 @@ public class IconDataModuleSizingTest
             IconData.FromImageByModules(logo, iconSizeModules, iconBorderModules, maxCoreOccupancyPercent));
     }
 
-    [Fact]
-    public void GetIconRects_ModuleSizing_WithIntegerModulePixels_AlignsToModules()
+    [Test]
+    public async Task GetIconRects_ModuleSizing_WithIntegerModulePixels_AlignsToModules()
     {
         const int modulePixelSize = 10;
         const int iconSizeModules = 5;
@@ -50,20 +49,20 @@ public class IconDataModuleSizingTest
 
         var (iconRect, borderRect) = QRCodeRenderer.GetIconRects(qrData, area, icon);
 
-        Assert.Equal(iconSizeModules * modulePixelSize, iconRect.Width);
-        Assert.Equal(iconSizeModules * modulePixelSize, iconRect.Height);
-        Assert.Equal((iconSizeModules + iconBorderModules * 2) * modulePixelSize, borderRect.Width);
-        Assert.Equal((iconSizeModules + iconBorderModules * 2) * modulePixelSize, borderRect.Height);
-        Assert.Equal(area.MidX, iconRect.MidX, 0.001f);
-        Assert.Equal(area.MidY, iconRect.MidY, 0.001f);
-        Assert.Equal(0, iconRect.Left % modulePixelSize, 0.001f);
-        Assert.Equal(0, iconRect.Top % modulePixelSize, 0.001f);
-        Assert.Equal(0, borderRect.Left % modulePixelSize, 0.001f);
-        Assert.Equal(0, borderRect.Top % modulePixelSize, 0.001f);
+        await Assert.That(iconRect.Width).IsEqualTo(iconSizeModules * modulePixelSize);
+        await Assert.That(iconRect.Height).IsEqualTo(iconSizeModules * modulePixelSize);
+        await Assert.That(borderRect.Width).IsEqualTo((iconSizeModules + iconBorderModules * 2) * modulePixelSize);
+        await Assert.That(borderRect.Height).IsEqualTo((iconSizeModules + iconBorderModules * 2) * modulePixelSize);
+        await Assert.That(iconRect.MidX).IsEqualTo(area.MidX).Within(0.001f);
+        await Assert.That(iconRect.MidY).IsEqualTo(area.MidY).Within(0.001f);
+        await Assert.That(iconRect.Left % modulePixelSize).IsEqualTo(0).Within(0.001f);
+        await Assert.That(iconRect.Top % modulePixelSize).IsEqualTo(0).Within(0.001f);
+        await Assert.That(borderRect.Left % modulePixelSize).IsEqualTo(0).Within(0.001f);
+        await Assert.That(borderRect.Top % modulePixelSize).IsEqualTo(0).Within(0.001f);
     }
 
-    [Fact]
-    public void GetIconRects_ModuleSizing_EvenIconSize_SnapsToModuleGrid()
+    [Test]
+    public async Task GetIconRects_ModuleSizing_EvenIconSize_SnapsToModuleGrid()
     {
         const int modulePixelSize = 10;
         const int iconSizeModules = 6; // even: cannot be geometrically centered on odd matrix
@@ -79,17 +78,17 @@ public class IconDataModuleSizingTest
         var (iconRect, borderRect) = QRCodeRenderer.GetIconRects(qrData, area, icon);
 
         var expectedOrigin = ((qrData.Size - iconSizeModules) / 2) * modulePixelSize;
-        Assert.Equal(expectedOrigin, iconRect.Left);
-        Assert.Equal(expectedOrigin, iconRect.Top);
-        Assert.Equal(iconSizeModules * modulePixelSize, iconRect.Width);
-        Assert.Equal((iconSizeModules + iconBorderModules * 2) * modulePixelSize, borderRect.Width);
-        Assert.Equal(0, iconRect.Left % modulePixelSize, 0.001f);
-        Assert.Equal(0, borderRect.Left % modulePixelSize, 0.001f);
+        await Assert.That(iconRect.Left).IsEqualTo(expectedOrigin);
+        await Assert.That(iconRect.Top).IsEqualTo(expectedOrigin);
+        await Assert.That(iconRect.Width).IsEqualTo(iconSizeModules * modulePixelSize);
+        await Assert.That(borderRect.Width).IsEqualTo((iconSizeModules + iconBorderModules * 2) * modulePixelSize);
+        await Assert.That(iconRect.Left % modulePixelSize).IsEqualTo(0).Within(0.001f);
+        await Assert.That(borderRect.Left % modulePixelSize).IsEqualTo(0).Within(0.001f);
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(101)]
+    [Test]
+    [Arguments(0)]
+    [Arguments(101)]
     public void GetIconRects_PercentSizing_InvalidPercent_ThrowsArgumentOutOfRangeException(int iconSizePercent)
     {
         var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M, requestedVersion: 1, quietZoneSize: 4);
@@ -101,7 +100,7 @@ public class IconDataModuleSizingTest
         Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeRenderer.GetIconRects(qrData, area, icon));
     }
 
-    [Fact]
+    [Test]
     public void GetIconRects_PercentSizing_NegativeBorder_ThrowsArgumentOutOfRangeException()
     {
         var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M, requestedVersion: 1, quietZoneSize: 4);
@@ -113,8 +112,8 @@ public class IconDataModuleSizingTest
         Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeRenderer.GetIconRects(qrData, area, icon));
     }
 
-    [Fact]
-    public void GetIconRects_ModuleSizing_IgnoresPercentAndPixelBorder()
+    [Test]
+    public async Task GetIconRects_ModuleSizing_IgnoresPercentAndPixelBorder()
     {
         const int modulePixelSize = 8;
         var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 5, quietZoneSize: 4);
@@ -128,12 +127,12 @@ public class IconDataModuleSizingTest
 
         var (iconRect, borderRect) = QRCodeRenderer.GetIconRects(qrData, area, icon);
 
-        Assert.Equal(7 * modulePixelSize, iconRect.Width);
-        Assert.Equal(9 * modulePixelSize, borderRect.Width);
+        await Assert.That(iconRect.Width).IsEqualTo(7 * modulePixelSize);
+        await Assert.That(borderRect.Width).IsEqualTo(9 * modulePixelSize);
     }
 
-    [Fact]
-    public void GetIconRects_ModuleSizing_NullBorderModules_DefaultsToOne()
+    [Test]
+    public async Task GetIconRects_ModuleSizing_NullBorderModules_DefaultsToOne()
     {
         const int modulePixelSize = 10;
         var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 5, quietZoneSize: 4);
@@ -150,12 +149,12 @@ public class IconDataModuleSizingTest
 
         var (iconRect, borderRect) = QRCodeRenderer.GetIconRects(qrData, area, icon);
 
-        Assert.Equal(50, iconRect.Width);
-        Assert.Equal(70, borderRect.Width);
+        await Assert.That(iconRect.Width).IsEqualTo(50);
+        await Assert.That(borderRect.Width).IsEqualTo(70);
     }
 
-    [Fact]
-    public void GetIconRects_ModuleSizing_ExceedsMatrixSize_ThrowsInvalidOperationException()
+    [Test]
+    public async Task GetIconRects_ModuleSizing_ExceedsMatrixSize_ThrowsInvalidOperationException()
     {
         var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 1, quietZoneSize: 0);
         // Version 1 core/matrix size = 21
@@ -165,11 +164,11 @@ public class IconDataModuleSizingTest
         var icon = IconData.FromImageByModules(logo, iconSizeModules: 21, iconBorderModules: 1, maxCoreOccupancyPercent: 100);
 
         var ex = Assert.Throws<InvalidOperationException>(() => QRCodeRenderer.GetIconRects(qrData, area, icon));
-        Assert.Contains("exceeds QR matrix size", ex.Message);
+        await Assert.That(ex.Message).Contains("exceeds QR matrix size");
     }
 
-    [Fact]
-    public void GetIconRects_ModuleSizing_ExceedsCoreOccupancy_ThrowsInvalidOperationException()
+    [Test]
+    public async Task GetIconRects_ModuleSizing_ExceedsCoreOccupancy_ThrowsInvalidOperationException()
     {
         var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.H, requestedVersion: 1, quietZoneSize: 4);
         // coreSize=21, 30% => max 6 modules
@@ -179,12 +178,12 @@ public class IconDataModuleSizingTest
         var icon = IconData.FromImageByModules(logo, iconSizeModules: 5, iconBorderModules: 1); // total 7 > 6
 
         var ex = Assert.Throws<InvalidOperationException>(() => QRCodeRenderer.GetIconRects(qrData, area, icon));
-        Assert.Contains("max allowed is", ex.Message);
-        Assert.Contains("maxCoreOccupancyPercent=30", ex.Message);
+        await Assert.That(ex.Message).Contains("max allowed is");
+        await Assert.That(ex.Message).Contains("maxCoreOccupancyPercent=30");
     }
 
-    [Fact]
-    public void Builder_WithModulePixelSize_AndModuleIcon_RendersSuccessfully()
+    [Test]
+    public async Task Builder_WithModulePixelSize_AndModuleIcon_RendersSuccessfully()
     {
         using var logo = CreateLogo(64);
         var icon = IconData.FromImageByModules(logo, iconSizeModules: 5, iconBorderModules: 0);
@@ -197,12 +196,12 @@ public class IconDataModuleSizingTest
             .WithIcon(icon)
             .ToBitmap();
 
-        Assert.Equal(290, bitmap.Width); // 29 modules * 10px
-        Assert.Equal(290, bitmap.Height);
+        await Assert.That(bitmap.Width).IsEqualTo(290); // 29 modules * 10px
+        await Assert.That(bitmap.Height).IsEqualTo(290);
     }
 
-    [Fact]
-    public void GetIconRects_PercentSizing_StillWorks()
+    [Test]
+    public async Task GetIconRects_PercentSizing_StillWorks()
     {
         var qrData = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M, requestedVersion: 1, quietZoneSize: 4);
         var area = SKRect.Create(0, 0, 500, 500);
@@ -212,10 +211,10 @@ public class IconDataModuleSizingTest
 
         var (iconRect, borderRect) = QRCodeRenderer.GetIconRects(qrData, area, icon);
 
-        Assert.Equal(100, iconRect.Width);
-        Assert.Equal(100, iconRect.Height);
-        Assert.Equal(120, borderRect.Width);
-        Assert.Equal(120, borderRect.Height);
+        await Assert.That(iconRect.Width).IsEqualTo(100);
+        await Assert.That(iconRect.Height).IsEqualTo(100);
+        await Assert.That(borderRect.Width).IsEqualTo(120);
+        await Assert.That(borderRect.Height).IsEqualTo(120);
     }
 
     private static SKBitmap CreateLogo(int size)

@@ -1,5 +1,3 @@
-using Xunit;
-
 namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
@@ -9,7 +7,7 @@ namespace SkiaSharp.QrCode.Tests;
 /// </summary>
 public class QRCodeDecoderRobustnessTest
 {
-    [Fact]
+    [Test]
     public void TryDecode_SizeSquareOverflowsInt_ThrowsArgumentException()
     {
         // 65536² overflows int to 0; the guard must use long arithmetic instead of
@@ -20,7 +18,7 @@ public class QRCodeDecoderRobustnessTest
         Assert.Throws<ArgumentException>(() => QRCodeDecoder.TryDecode(modules, int.MaxValue, out _, out _));
     }
 
-    [Fact]
+    [Test]
     public void TryDecode_CharSpanOverload_SizeSquareOverflowsInt_ThrowsArgumentException()
     {
         var modules = new byte[100];
@@ -29,7 +27,7 @@ public class QRCodeDecoderRobustnessTest
         Assert.Throws<ArgumentException>(() => QRCodeDecoder.TryDecode(modules, 65536, destination, out _, out _));
     }
 
-    [Fact]
+    [Test]
     public void TryDecodeImage_DimensionsOverflowInt_ThrowsArgumentException()
     {
         var luminance = new byte[100];
@@ -38,7 +36,7 @@ public class QRCodeDecoderRobustnessTest
         Assert.Throws<ArgumentException>(() => QRCodeDecoder.TryDecodeImage(luminance, int.MaxValue, 2, out _, out _));
     }
 
-    [Fact]
+    [Test]
     public void TryDecode_RandomMatrices_NeverThrows()
     {
         var random = new Random(20260712);
@@ -58,8 +56,8 @@ public class QRCodeDecoderRobustnessTest
         }
     }
 
-    [Fact]
-    public void TryDecode_ValidPatternsCorruptedDataArea_FailsOrDecodesExactly()
+    [Test]
+    public async Task TryDecode_ValidPatternsCorruptedDataArea_FailsOrDecodesExactly()
     {
         // Take a real QR and corrupt random module subsets of increasing size: the
         // decoder must either fail or return the exact original text — a wrong text
@@ -88,12 +86,12 @@ public class QRCodeDecoderRobustnessTest
 
             if (QRCodeDecoder.TryDecode(modules, size, out var text, out _))
             {
-                Assert.Equal(content, text);
+                await Assert.That(text).IsEquivalentTo(content);
             }
         }
     }
 
-    [Fact]
+    [Test]
     public void TryDecodeImage_RandomLuminance_NeverThrows()
     {
         var random = new Random(20260712);

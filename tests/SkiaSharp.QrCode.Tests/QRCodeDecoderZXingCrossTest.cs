@@ -1,4 +1,3 @@
-using Xunit;
 using ZXing;
 using ZXing.Common;
 using ZXing.QrCode;
@@ -13,30 +12,30 @@ namespace SkiaSharp.QrCode.Tests;
 /// </summary>
 public class QRCodeDecoderZXingCrossTest
 {
-    [Theory]
-    [InlineData("0123456789")]
-    [InlineData("HELLO WORLD $%*+-./:")]
-    [InlineData("Hello, World! lowercase")]
-    [InlineData("https://example.com/path?query=value")]
-    public void Decode_ZXingEncoded_Ascii(string content)
-        => AssertDecodesZXingQr(content, ErrorCorrectionLevel.M);
+    [Test]
+    [Arguments("0123456789")]
+    [Arguments("HELLO WORLD $%*+-./:")]
+    [Arguments("Hello, World! lowercase")]
+    [Arguments("https://example.com/path?query=value")]
+    public async Task Decode_ZXingEncoded_Ascii(string content)
+        => await AssertDecodesZXingQr(content, ErrorCorrectionLevel.M);
 
-    [Theory]
-    [InlineData("こんにちは世界")]
-    [InlineData("你好世界")]
-    [InlineData("Привет мир")]
-    [InlineData("🎉 emoji content 🎊")]
-    public void Decode_ZXingEncoded_Utf8(string content)
-        => AssertDecodesZXingQr(content, ErrorCorrectionLevel.M, characterSet: "UTF-8");
+    [Test]
+    [Arguments("こんにちは世界")]
+    [Arguments("你好世界")]
+    [Arguments("Привет мир")]
+    [Arguments("🎉 emoji content 🎊")]
+    public async Task Decode_ZXingEncoded_Utf8(string content)
+        => await AssertDecodesZXingQr(content, ErrorCorrectionLevel.M, characterSet: "UTF-8");
 
-    [Theory]
-    [InlineData("Café")]
-    [InlineData("Zürich Résumé")]
-    public void Decode_ZXingEncoded_Iso8859_1(string content)
-        => AssertDecodesZXingQr(content, ErrorCorrectionLevel.M, characterSet: "ISO-8859-1");
+    [Test]
+    [Arguments("Café")]
+    [Arguments("Zürich Résumé")]
+    public async Task Decode_ZXingEncoded_Iso8859_1(string content)
+        => await AssertDecodesZXingQr(content, ErrorCorrectionLevel.M, characterSet: "ISO-8859-1");
 
-    [Fact]
-    public void Decode_ZXingEncoded_AllEccLevels()
+    [Test]
+    public async Task Decode_ZXingEncoded_AllEccLevels()
     {
         foreach (var (zxingLevel, expectedLevel) in new[]
         {
@@ -49,29 +48,29 @@ public class QRCodeDecoderZXingCrossTest
             var content = $"ecc level {zxingLevel}";
             var modules = EncodeWithZXing(content, zxingLevel, characterSet: null, out var size);
 
-            Assert.True(QRCodeDecoder.TryDecode(modules, size, out var decoded, out var info), $"level={zxingLevel}, status={info.Status}");
-            Assert.Equal(content, decoded);
-            Assert.Equal(expectedLevel, info.EccLevel);
+            await Assert.That(QRCodeDecoder.TryDecode(modules, size, out var decoded, out var info)).IsTrue().Because($"level={zxingLevel}, status={info.Status}");
+            await Assert.That(decoded).IsEquivalentTo(content);
+            await Assert.That(info.EccLevel).IsEquivalentTo(expectedLevel);
         }
     }
 
-    [Fact]
-    public void Decode_ZXingEncoded_LargeContent_HigherVersion()
+    [Test]
+    public async Task Decode_ZXingEncoded_LargeContent_HigherVersion()
     {
         var content = string.Join(" ", Enumerable.Range(0, 60).Select(i => $"chunk{i:D3}"));
         var modules = EncodeWithZXing(content, ErrorCorrectionLevel.Q, characterSet: null, out var size);
 
-        Assert.True(QRCodeDecoder.TryDecode(modules, size, out var decoded, out var info), $"status={info.Status}");
-        Assert.Equal(content, decoded);
-        Assert.True(info.Version > 5, $"expected a higher version, got {info.Version}");
+        await Assert.That(QRCodeDecoder.TryDecode(modules, size, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(decoded).IsEquivalentTo(content);
+        await Assert.That(info.Version > 5).IsTrue().Because($"expected a higher version, got {info.Version}");
     }
 
-    private static void AssertDecodesZXingQr(string content, ErrorCorrectionLevel level, string? characterSet = null)
+    private static async Task AssertDecodesZXingQr(string content, ErrorCorrectionLevel level, string? characterSet = null)
     {
         var modules = EncodeWithZXing(content, level, characterSet, out var size);
 
-        Assert.True(QRCodeDecoder.TryDecode(modules, size, out var decoded, out var info), $"decode failed: status={info.Status}, version={info.Version}");
-        Assert.Equal(content, decoded);
+        await Assert.That(QRCodeDecoder.TryDecode(modules, size, out var decoded, out var info)).IsTrue().Because($"decode failed: status={info.Status}, version={info.Version}");
+        await Assert.That(decoded).IsEquivalentTo(content);
     }
 
     private static byte[] EncodeWithZXing(string content, ErrorCorrectionLevel level, string? characterSet, out int size)
@@ -93,7 +92,6 @@ public class QRCodeDecoderZXingCrossTest
         };
 
         BitMatrix matrix = writer.Encode(content);
-        Assert.Equal(matrix.Width, matrix.Height);
 
         size = matrix.Width;
         var modules = new byte[size * size];

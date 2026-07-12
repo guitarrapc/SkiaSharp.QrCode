@@ -1,5 +1,3 @@
-using Xunit;
-
 namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
@@ -11,61 +9,61 @@ namespace SkiaSharp.QrCode.Tests;
 /// </summary>
 public class QRCodeDecoderPerspectiveTest
 {
-    [Theory]
-    [InlineData(2, 0.04f)]
-    [InlineData(2, 0.08f)]
-    [InlineData(2, 0.12f)]
-    [InlineData(5, 0.04f)]
-    [InlineData(5, 0.08f)]
-    [InlineData(5, 0.12f)]
-    [InlineData(10, 0.04f)]
-    [InlineData(10, 0.08f)]
-    [InlineData(15, 0.04f)]
-    [InlineData(15, 0.06f)]
+    [Test]
+    [Arguments(2, 0.04f)]
+    [Arguments(2, 0.08f)]
+    [Arguments(2, 0.12f)]
+    [Arguments(5, 0.04f)]
+    [Arguments(5, 0.08f)]
+    [Arguments(5, 0.12f)]
+    [Arguments(10, 0.04f)]
+    [Arguments(10, 0.08f)]
+    [Arguments(15, 0.04f)]
+    [Arguments(15, 0.06f)]
     // Version 14+ engages the piecewise alignment mesh: local anchors extend the
     // envelope where the single global homography's fourth anchor degrades
-    [InlineData(15, 0.08f)]
-    [InlineData(20, 0.04f)] // regression guard: snapped one version low / bent global anchor before the mesh
-    [InlineData(25, 0.04f)]
-    [InlineData(25, 0.08f)]
-    public void Decode_Keystone(int version, float tilt)
+    [Arguments(15, 0.08f)]
+    [Arguments(20, 0.04f)] // regression guard: snapped one version low / bent global anchor before the mesh
+    [Arguments(25, 0.04f)]
+    [Arguments(25, 0.08f)]
+    public async Task Decode_Keystone(int version, float tilt)
     {
         var content = $"perspective v{version} tilt {tilt}";
         using var bitmap = RenderKeystone(content, version, tilt, rotateDegrees: 0);
 
-        Assert.True(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info), $"v={version}, tilt={tilt:P0}, status={info.Status}, detected v{info.Version}");
-        Assert.Equal(content, decoded);
-        Assert.Equal(version, info.Version);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"v={version}, tilt={tilt:P0}, status={info.Status}, detected v{info.Version}");
+        await Assert.That(decoded).IsEquivalentTo(content);
+        await Assert.That(info.Version).IsEquivalentTo(version);
     }
 
-    [Fact]
-    public void Decode_Keystone_Version1_ParallelogramFallback()
+    [Test]
+    public async Task Decode_Keystone_Version1_ParallelogramFallback()
     {
         // Version 1 has no alignment pattern; the fourth point is estimated, so
         // only very mild perspective is absorbed — that boundary is by design.
         var content = "v1 fallback";
         using var bitmap = RenderKeystone(content, version: 1, tilt: 0.02f, rotateDegrees: 0);
 
-        Assert.True(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info), $"status={info.Status}");
-        Assert.Equal(content, decoded);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(decoded).IsEquivalentTo(content);
     }
 
-    [Theory]
-    [InlineData(2, 30, 0.05f)]
-    [InlineData(5, 30, 0.05f)]
-    [InlineData(10, 30, 0.05f)]
-    [InlineData(5, -20, 0.08f)]
-    public void Decode_RotationPlusKeystone(int version, float degrees, float tilt)
+    [Test]
+    [Arguments(2, 30, 0.05f)]
+    [Arguments(5, 30, 0.05f)]
+    [Arguments(10, 30, 0.05f)]
+    [Arguments(5, -20, 0.08f)]
+    public async Task Decode_RotationPlusKeystone(int version, float degrees, float tilt)
     {
         var content = $"rot{degrees} tilt{tilt} v{version}";
         using var bitmap = RenderKeystone(content, version, tilt, degrees);
 
-        Assert.True(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info), $"v={version}, rot={degrees}, tilt={tilt:P0}, status={info.Status}");
-        Assert.Equal(content, decoded);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"v={version}, rot={degrees}, tilt={tilt:P0}, status={info.Status}");
+        await Assert.That(decoded).IsEquivalentTo(content);
     }
 
-    [Fact]
-    public void Decode_MirrorPlusKeystone()
+    [Test]
+    public async Task Decode_MirrorPlusKeystone()
     {
         // The alignment pattern sits on the transpose-invariant diagonal, so the
         // mirror retry composes with perspective sampling.
@@ -79,8 +77,8 @@ public class QRCodeDecoderPerspectiveTest
             canvas.DrawBitmap(source, 0, 0, SKSamplingOptions.Default);
         }
 
-        Assert.True(QRCodeDecoder.TryDecode(mirrored, out var decoded, out var info), $"status={info.Status}");
-        Assert.Equal(content, decoded);
+        await Assert.That(QRCodeDecoder.TryDecode(mirrored, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(decoded).IsEquivalentTo(content);
     }
 
     /// <summary>

@@ -1,6 +1,5 @@
 using SkiaSharp.QrCode.Internals;
 using SkiaSharp.QrCode.Internals.BinaryDecoders;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -11,8 +10,8 @@ namespace SkiaSharp.QrCode.Tests;
 /// </summary>
 public class FormatInformationDecoderUnitTest
 {
-    [Fact]
-    public void AllValidPatterns_DecodeExactly()
+    [Test]
+    public async Task AllValidPatterns_DecodeExactly()
     {
         for (var level = 0; level < 4; level++)
         {
@@ -20,18 +19,18 @@ public class FormatInformationDecoderUnitTest
             {
                 var bits = QRCodeConstants.GetFormatBits((ECCLevel)level, mask);
 
-                Assert.True(FormatInformationDecoder.TryDecode(bits, bits, out var eccLevel, out var maskPattern));
-                Assert.Equal((ECCLevel)level, eccLevel);
-                Assert.Equal(mask, maskPattern);
+                await Assert.That(FormatInformationDecoder.TryDecode(bits, bits, out var eccLevel, out var maskPattern)).IsTrue();
+                await Assert.That(eccLevel).IsEquivalentTo((ECCLevel)level);
+                await Assert.That(maskPattern).IsEquivalentTo(mask);
             }
         }
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(3)]
-    public void BitErrorsWithinBchCapacity_AreCorrected(int errorBits)
+    [Test]
+    [Arguments(1)]
+    [Arguments(2)]
+    [Arguments(3)]
+    public async Task BitErrorsWithinBchCapacity_AreCorrected(int errorBits)
     {
         // Flip N distinct bits in every valid pattern; BCH(15,5) has minimum
         // distance 7, so up to 3 errors must decode to the original.
@@ -46,30 +45,30 @@ public class FormatInformationDecoderUnitTest
                     corrupted ^= (ushort)(1 << (b * 5 % 15)); // distinct positions
                 }
 
-                Assert.True(FormatInformationDecoder.TryDecode(corrupted, corrupted, out var eccLevel, out var maskPattern), $"level={(ECCLevel)level}, mask={mask}, errors={errorBits}");
-                Assert.Equal((ECCLevel)level, eccLevel);
-                Assert.Equal(mask, maskPattern);
+                await Assert.That(FormatInformationDecoder.TryDecode(corrupted, corrupted, out var eccLevel, out var maskPattern)).IsTrue().Because($"level={(ECCLevel)level}, mask={mask}, errors={errorBits}");
+                await Assert.That(eccLevel).IsEquivalentTo((ECCLevel)level);
+                await Assert.That(maskPattern).IsEquivalentTo(mask);
             }
         }
     }
 
-    [Fact]
-    public void CorruptedFirstCopy_IntactSecondCopy_DecodesViaSecond()
+    [Test]
+    public async Task CorruptedFirstCopy_IntactSecondCopy_DecodesViaSecond()
     {
         var bits = QRCodeConstants.GetFormatBits(ECCLevel.Q, 5);
         var destroyed = FindPatternFarFromAllFormats();
 
-        Assert.True(FormatInformationDecoder.TryDecode(destroyed, bits, out var eccLevel, out var maskPattern));
-        Assert.Equal(ECCLevel.Q, eccLevel);
-        Assert.Equal(5, maskPattern);
+        await Assert.That(FormatInformationDecoder.TryDecode(destroyed, bits, out var eccLevel, out var maskPattern)).IsTrue();
+        await Assert.That(eccLevel).IsEquivalentTo(ECCLevel.Q);
+        await Assert.That(maskPattern).IsEquivalentTo(5);
     }
 
-    [Fact]
-    public void BothCopiesBeyondCorrectionDistance_ReturnsFalse()
+    [Test]
+    public async Task BothCopiesBeyondCorrectionDistance_ReturnsFalse()
     {
         var destroyed = FindPatternFarFromAllFormats();
 
-        Assert.False(FormatInformationDecoder.TryDecode(destroyed, destroyed, out _, out _));
+        await Assert.That(FormatInformationDecoder.TryDecode(destroyed, destroyed, out _, out _)).IsFalse();
     }
 
     /// <summary>

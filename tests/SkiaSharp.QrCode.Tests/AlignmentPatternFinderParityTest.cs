@@ -1,5 +1,4 @@
 using SkiaSharp.QrCode.Internals.ImageDecoders;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -14,8 +13,8 @@ public class AlignmentPatternFinderParityTest
     private const int Ppm = 8;
     private const byte Threshold = 128;
 
-    [Fact]
-    public void SimdAndScalarRowScans_Agree()
+    [Test]
+    public async Task SimdAndScalarRowScans_Agree()
     {
         foreach (var seed in new[] { 1, 7, 42, 1234, 20260712 })
         {
@@ -28,14 +27,14 @@ public class AlignmentPatternFinderParityTest
                     var (simdFound, simdX, simdY) = Sweep(scene, size, expectedX, expectedY, forceScalar: false);
                     var (scalarFound, scalarX, scalarY) = Sweep(scene, size, expectedX, expectedY, forceScalar: true);
 
-                    Assert.True(simdFound == scalarFound, $"found mismatch (seed={seed}, offset={offset}, include={include}): simd={simdFound}, scalar={scalarFound}");
+                    await Assert.That(simdFound == scalarFound).IsTrue().Because($"found mismatch (seed={seed}, offset={offset}, include={include}): simd={simdFound}, scalar={scalarFound}");
                     if (simdFound)
                     {
-                        Assert.True(Math.Abs(simdX - scalarX) <= 0.01f && Math.Abs(simdY - scalarY) <= 0.01f, $"center mismatch (seed={seed}, offset={offset}): simd=({simdX},{simdY}), scalar=({scalarX},{scalarY})");
+                        await Assert.That(Math.Abs(simdX - scalarX) <= 0.01f && Math.Abs(simdY - scalarY) <= 0.01f).IsTrue().Because($"center mismatch (seed={seed}, offset={offset}): simd=({simdX},{simdY}), scalar=({scalarX},{scalarY})");
                     }
                     if (include)
                     {
-                        Assert.True(scalarFound, $"pattern not found at all (seed={seed}, offset={offset}) — scene generator or finder broken");
+                        await Assert.That(scalarFound).IsTrue().Because($"pattern not found at all (seed={seed}, offset={offset}) — scene generator or finder broken");
                     }
                 }
             }

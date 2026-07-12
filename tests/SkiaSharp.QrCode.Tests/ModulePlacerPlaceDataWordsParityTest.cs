@@ -1,5 +1,4 @@
 using SkiaSharp.QrCode.Internals;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -18,11 +17,11 @@ public class ModulePlacerPlaceDataWordsParityTest
     // 1 (no alignment patterns), 2/5/6 (alignment, no version info),
     // 7/10 (version info), 11/12/13, 20/40 (large matrices, multiple
     // alignment rows).
-    public static TheoryData<int> Versions => [1, 2, 5, 6, 7, 10, 11, 12, 13, 20, 40];
+    public static IEnumerable<int> Versions => [1, 2, 5, 6, 7, 10, 11, 12, 13, 20, 40];
 
-    [Theory]
-    [MemberData(nameof(Versions))]
-    public void PlaceDataWords_MatchesPerModuleReference(int version)
+    [Test]
+    [MethodDataSource(nameof(Versions))]
+    public async Task PlaceDataWords_MatchesPerModuleReference(int version)
     {
         var (pristine, blockedMask, size, freeModules) = BuildFixture(version);
 
@@ -46,14 +45,14 @@ public class ModulePlacerPlaceDataWordsParityTest
                 var actual = (byte[])pristine.Clone();
                 ModulePlacer.PlaceDataWords(actual, size, data, blockedMask);
 
-                Assert.Equal(expected, actual);
+                await Assert.That(actual).IsEquivalentTo(expected);
             }
         }
     }
 
-    [Theory]
-    [MemberData(nameof(Versions))]
-    public void PlaceDataWords_AllZeroAndAllOneData_MatchesReference(int version)
+    [Test]
+    [MethodDataSource(nameof(Versions))]
+    public async Task PlaceDataWords_AllZeroAndAllOneData_MatchesReference(int version)
     {
         // Degenerate streams exercise the fast path with constant accumulator
         // contents (every 2-bit consume identical).
@@ -70,11 +69,11 @@ public class ModulePlacerPlaceDataWordsParityTest
             var actual = (byte[])pristine.Clone();
             ModulePlacer.PlaceDataWords(actual, size, data, blockedMask);
 
-            Assert.Equal(expected, actual);
+            await Assert.That(actual).IsEquivalentTo(expected);
         }
     }
 
-    [Fact]
+    [Test]
     public void PlaceDataWords_UndersizedBuffer_Throws()
     {
         var (_, blockedMask, size, _) = BuildFixture(1);
@@ -87,7 +86,7 @@ public class ModulePlacerPlaceDataWordsParityTest
         });
     }
 
-    [Fact]
+    [Test]
     public void PlaceDataWords_UndersizedBlockedMask_Throws()
     {
         var (pristine, blockedMask, size, _) = BuildFixture(1);
@@ -100,7 +99,7 @@ public class ModulePlacerPlaceDataWordsParityTest
         });
     }
 
-    [Fact]
+    [Test]
     public void PlaceDataWords_TooSmallSize_Throws()
     {
         var buffer = new byte[36];
@@ -111,10 +110,10 @@ public class ModulePlacerPlaceDataWordsParityTest
             ModulePlacer.PlaceDataWords(buffer, 6, data, mask));
     }
 
-    [Theory]
-    [InlineData(46341)]      // smallest size whose square overflows int
-    [InlineData(65536)]      // size*size wraps to exactly 0 in int
-    [InlineData(int.MaxValue)]
+    [Test]
+    [Arguments(46341)]      // smallest size whose square overflows int
+    [Arguments(65536)]      // size*size wraps to exactly 0 in int
+    [Arguments(int.MaxValue)]
     public void PlaceDataWords_SizeSquareOverflowsInt_Throws(int size)
     {
         // size*size computed in int would wrap (to a small or negative value)

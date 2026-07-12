@@ -1,5 +1,3 @@
-using Xunit;
-
 namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
@@ -7,59 +5,59 @@ namespace SkiaSharp.QrCode.Tests;
 /// </summary>
 public class SkiaImageSizeTest
 {
-    [Fact]
-    public void SKImageInfoBaseTest()
+    [Test]
+    public async Task SKImageInfoBaseTest()
     {
         // no param
         var a = new SKImageInfo();
-        Assert.Equal(0, a.Size.Height);
-        Assert.Equal(0, a.Size.Width);
-        Assert.Equal(0, a.BytesSize);
-        Assert.Equal(SKAlphaType.Unknown, a.AlphaType);
-        Assert.Equal(SKColorType.Unknown, a.ColorType);
+        await Assert.That(a.Size.Height).IsEquivalentTo(0);
+        await Assert.That(a.Size.Width).IsEquivalentTo(0);
+        await Assert.That(a.BytesSize).IsEquivalentTo(0);
+        await Assert.That(a.AlphaType).IsEquivalentTo(SKAlphaType.Unknown);
+        await Assert.That(a.ColorType).IsEquivalentTo(SKColorType.Unknown);
 
         // size
         var b = new SKImageInfo(100, 100);
-        Assert.Equal(100, b.Size.Height);
-        Assert.Equal(100, b.Size.Width);
-        Assert.Equal(40000, b.BytesSize);
-        Assert.Equal(SKAlphaType.Premul, b.AlphaType);
+        await Assert.That(b.Size.Height).IsEquivalentTo(100);
+        await Assert.That(b.Size.Width).IsEquivalentTo(100);
+        await Assert.That(b.BytesSize).IsEquivalentTo(40000);
+        await Assert.That(b.AlphaType).IsEquivalentTo(SKAlphaType.Premul);
         // The default color type is platform-dependent (Bgra8888 on Windows/Linux,
         // Rgba8888 on macOS), so compare against SkiaSharp's platform default.
-        Assert.Equal(SKImageInfo.PlatformColorType, b.ColorType);
+        await Assert.That(b.ColorType).IsEquivalentTo(SKImageInfo.PlatformColorType);
     }
 
-    [Fact]
-    public void SKImageInfoColorTest()
+    [Test]
+    public async Task SKImageInfoColorTest()
     {
         foreach (SKColorType colorType in Enum.GetValues(typeof(SKColorType)))
         {
             var image = new SKImageInfo(100, 100, colorType);
-            Assert.Equal(100, image.Size.Height);
-            Assert.Equal(100, image.Size.Width);
-            Assert.Equal(SKAlphaType.Premul, image.AlphaType);
-            Assert.Equal(colorType, image.ColorType);
+            await Assert.That(image.Size.Height).IsEquivalentTo(100);
+            await Assert.That(image.Size.Width).IsEquivalentTo(100);
+            await Assert.That(image.AlphaType).IsEquivalentTo(SKAlphaType.Premul);
+            await Assert.That(image.ColorType).IsEquivalentTo(colorType);
 
             var size = GetSizeByColorType(colorType);
-            Assert.Equal(size, image.BytesSize);
+            await Assert.That(image.BytesSize).IsEquivalentTo(size);
         }
     }
 
-    [Fact]
-    public void SKImageInfoAlphaTest()
+    [Test]
+    public async Task SKImageInfoAlphaTest()
     {
         foreach (SKColorType colorType in Enum.GetValues(typeof(SKColorType)))
         {
             foreach (SKAlphaType alphaType in Enum.GetValues(typeof(SKAlphaType)))
             {
                 var image = new SKImageInfo(100, 100, colorType, alphaType);
-                Assert.Equal(100, image.Size.Height);
-                Assert.Equal(100, image.Size.Width);
-                Assert.Equal(alphaType, image.AlphaType);
-                Assert.Equal(colorType, image.ColorType);
+                await Assert.That(image.Size.Height).IsEquivalentTo(100);
+                await Assert.That(image.Size.Width).IsEquivalentTo(100);
+                await Assert.That(image.AlphaType).IsEquivalentTo(alphaType);
+                await Assert.That(image.ColorType).IsEquivalentTo(colorType);
 
                 var size = GetSizeByColorType(colorType);
-                Assert.Equal(size, image.BytesSize);
+                await Assert.That(image.BytesSize).IsEquivalentTo(size);
             }
         }
     }

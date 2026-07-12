@@ -1,6 +1,5 @@
 using SkiaSharp.QrCode.Internals;
 using SkiaSharp.QrCode.Internals.BinaryDecoders;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -11,8 +10,8 @@ namespace SkiaSharp.QrCode.Tests;
 /// </summary>
 public class EccBinaryDecoderKernelParityTest
 {
-    [Fact]
-    public void ScalarKernel_MatchesNaiveReference()
+    [Test]
+    public async Task ScalarKernel_MatchesNaiveReference()
     {
         var random = new Random(20260712);
         for (var round = 0; round < 300; round++)
@@ -29,16 +28,20 @@ public class EccBinaryDecoderKernelParityTest
             var actual = new byte[eccCount];
             var actualHasError = EccBinaryDecoder.ComputeSyndromesScalar(codeword, eccCount, actual);
 
-            Assert.Equal(expectedHasError, actualHasError);
-            Assert.Equal(expected, actual);
+            await Assert.That(actualHasError).IsEquivalentTo(expectedHasError);
+            await Assert.That(actual).IsEquivalentTo(expected);
         }
     }
 
 #if NET10_0_OR_GREATER
-    [Fact]
-    public void GfniKernel_MatchesScalarKernel()
+    [Test]
+    public async Task GfniKernel_MatchesScalarKernel()
     {
-        Assert.SkipUnless(System.Runtime.Intrinsics.X86.Gfni.V256.IsSupported, "GFNI not supported on this machine");
+        if (!System.Runtime.Intrinsics.X86.Gfni.V256.IsSupported)
+        {
+            Skip.Test("GFNI not supported on this machine");
+            return;
+        }
 
         var random = new Random(20260712);
         for (var round = 0; round < 300; round++)
@@ -55,17 +58,17 @@ public class EccBinaryDecoderKernelParityTest
             var actual = new byte[eccCount];
             var actualHasError = EccBinaryDecoder.ComputeSyndromesGfni(codeword, eccCount, actual);
 
-            Assert.Equal(expectedHasError, actualHasError);
-            Assert.Equal(expected, actual);
+            await Assert.That(actualHasError).IsEquivalentTo(expectedHasError);
+            await Assert.That(actual).IsEquivalentTo(expected);
         }
     }
 
-    [Fact]
-    public void GfniIsomorphismConstants_MatchFirstPrinciplesConstruction()
+    [Test]
+    public async Task GfniIsomorphismConstants_MatchFirstPrinciplesConstruction()
     {
-        // Rebuild the GF(0x11D) → GF(0x11B) isomorphism from scratch and verify the
-        // constants baked into EccBinaryDecoder.Simd.cs. β is the first root of
-        // x^8+x^4+x^3+x^2+1 in GF(0x11B); φ maps by linearity over the β^i basis.
+        // Rebuild the GF(0x11D) 竊・GF(0x11B) isomorphism from scratch and verify the
+        // constants baked into EccBinaryDecoder.Simd.cs. ﾎｲ is the first root of
+        // x^8+x^4+x^3+x^2+1 in GF(0x11B); ﾏ・maps by linearity over the ﾎｲ^i basis.
         var beta = 0;
         for (var cand = 2; cand < 256; cand++)
         {
@@ -79,7 +82,7 @@ public class EccBinaryDecoderKernelParityTest
                 break;
             }
         }
-        Assert.NotEqual(0, beta);
+        await Assert.That(beta).IsNotEqualTo(0);
 
         Span<byte> basis = stackalloc byte[8];
         basis[0] = 1;
@@ -108,21 +111,21 @@ public class EccBinaryDecoderKernelParityTest
         {
             for (var b = 0; b < 256; b++)
             {
-                Assert.Equal(phi[MulPoly((byte)a, (byte)b, 0x11d)], MulPoly(phi[a], phi[b], 0x11b));
+                await Assert.That(MulPoly(phi[a], phi[b], 0x11b)).IsEquivalentTo(phi[MulPoly((byte)a, (byte)b, 0x11d)]);
             }
         }
 
-        // Baked matrix constants (φ happens to be an involution: φ == ψ)
-        Assert.Equal(EccBinaryDecoder.GfniPhiMatrix, BuildAffineMatrix(phi));
-        Assert.Equal(EccBinaryDecoder.GfniPhiMatrix, BuildAffineMatrix(psi));
+        // Baked matrix constants (ﾏ・happens to be an involution: ﾏ・== ﾏ・
+        await Assert.That(BuildAffineMatrix(phi)).IsEquivalentTo(EccBinaryDecoder.GfniPhiMatrix);
+        await Assert.That(BuildAffineMatrix(psi)).IsEquivalentTo(EccBinaryDecoder.GfniPhiMatrix);
 
-        // Baked per-lane constants: lane i = φ(α^ki) in the 0x11B domain, k = 1..4
+        // Baked per-lane constants: lane i = ﾏ・ﾎｱ^ki) in the 0x11B domain, k = 1..4
         for (var i = 0; i < 32; i++)
         {
-            Assert.Equal(EccBinaryDecoder.GfniAlphas[i], phi[GaloisField.Exp[i]]);
-            Assert.Equal(EccBinaryDecoder.GfniAlphasSquared[i], phi[GaloisField.Exp[2 * i]]);
-            Assert.Equal(EccBinaryDecoder.GfniAlphasCubed[i], phi[GaloisField.Exp[3 * i]]);
-            Assert.Equal(EccBinaryDecoder.GfniAlphasFourth[i], phi[GaloisField.Exp[4 * i]]);
+            await Assert.That(phi[GaloisField.Exp[i]]).IsEquivalentTo(EccBinaryDecoder.GfniAlphas[i]);
+            await Assert.That(phi[GaloisField.Exp[2 * i]]).IsEquivalentTo(EccBinaryDecoder.GfniAlphasSquared[i]);
+            await Assert.That(phi[GaloisField.Exp[3 * i]]).IsEquivalentTo(EccBinaryDecoder.GfniAlphasCubed[i]);
+            await Assert.That(phi[GaloisField.Exp[4 * i]]).IsEquivalentTo(EccBinaryDecoder.GfniAlphasFourth[i]);
         }
     }
 
@@ -139,6 +142,21 @@ public class EccBinaryDecoderKernelParityTest
             m |= (ulong)row << ((7 - i) * 8);
         }
         return m;
+    }
+
+    private static byte MulPoly(byte a, byte b, int poly)
+    {
+        var r = 0;
+        var x = (int)a;
+        var y = (int)b;
+        while (y != 0)
+        {
+            if ((y & 1) != 0) r ^= x;
+            x <<= 1;
+            if ((x & 0x100) != 0) x ^= poly;
+            y >>= 1;
+        }
+        return (byte)r;
     }
 #endif
 
@@ -157,20 +175,5 @@ public class EccBinaryDecoderKernelParityTest
             hasError |= value != 0;
         }
         return hasError;
-    }
-
-    private static byte MulPoly(byte a, byte b, int poly)
-    {
-        var r = 0;
-        var x = (int)a;
-        var y = (int)b;
-        while (y != 0)
-        {
-            if ((y & 1) != 0) r ^= x;
-            x <<= 1;
-            if ((x & 0x100) != 0) x ^= poly;
-            y >>= 1;
-        }
-        return (byte)r;
     }
 }

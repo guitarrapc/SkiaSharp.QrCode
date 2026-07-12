@@ -1,13 +1,12 @@
 using SkiaSharp.QrCode.Internals.BinaryDecoders;
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
 public class EccBinaryDecoderUnitTest
 {
-    [Fact]
-    public void TryCorrect_CleanBlock_ReportsNoErrors()
+    [Test]
+    public async Task TryCorrect_CleanBlock_ReportsNoErrors()
     {
         // Arrange - ISO/IEC 18004 Annex I example
         var codeword = BuildCodeword([64, 86, 134, 86], 10);
@@ -16,18 +15,18 @@ public class EccBinaryDecoderUnitTest
         var result = EccBinaryDecoder.TryCorrect(codeword, 10, out var errorsCorrected);
 
         // Assert
-        Assert.True(result);
-        Assert.Equal(0, errorsCorrected);
-        Assert.Equal(new byte[] { 64, 86, 134, 86 }, codeword.AsSpan(0, 4).ToArray());
+        await Assert.That(result).IsTrue();
+        await Assert.That(errorsCorrected).IsEquivalentTo(0);
+        await Assert.That(codeword.AsSpan(0, 4).ToArray()).IsEquivalentTo(new byte[] { 64, 86, 134, 86 });
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(3)]
-    [InlineData(4)]
-    [InlineData(5)]
-    public void TryCorrect_ErrorsWithinCapacity_Corrects(int errorCount)
+    [Test]
+    [Arguments(1)]
+    [Arguments(2)]
+    [Arguments(3)]
+    [Arguments(4)]
+    [Arguments(5)]
+    public async Task TryCorrect_ErrorsWithinCapacity_Corrects(int errorCount)
     {
         // Arrange - 10 ECC codewords correct up to 5 errors
         byte[] data = [64, 86, 134, 86, 242, 7, 118, 134];
@@ -42,13 +41,13 @@ public class EccBinaryDecoderUnitTest
         var result = EccBinaryDecoder.TryCorrect(codeword, 10, out var errorsCorrected);
 
         // Assert
-        Assert.True(result);
-        Assert.Equal(errorCount, errorsCorrected);
-        Assert.Equal(expected, codeword);
+        await Assert.That(result).IsTrue();
+        await Assert.That(errorsCorrected).IsEquivalentTo(errorCount);
+        await Assert.That(codeword).IsEquivalentTo(expected);
     }
 
-    [Fact]
-    public void TryCorrect_ErrorsBeyondCapacity_Fails()
+    [Test]
+    public async Task TryCorrect_ErrorsBeyondCapacity_Fails()
     {
         // Arrange - 10 ECC codewords, capacity is 5; inject 6 errors
         byte[] data = [64, 86, 134, 86, 242, 7, 118, 134];
@@ -61,15 +60,15 @@ public class EccBinaryDecoderUnitTest
         var result = EccBinaryDecoder.TryCorrect(codeword, 10, out _);
 
         // Assert - must fail, never silently miscorrect to the original
-        Assert.False(result);
+        await Assert.That(result).IsFalse();
     }
 
-    [Theory]
-    [InlineData(7)]   // ECC level L (version 1)
-    [InlineData(16)]  // M
-    [InlineData(22)]  // Q
-    [InlineData(30)]  // H (max per QR spec)
-    public void TryCorrect_EveryQrEccCount_RoundTrips(int eccCount)
+    [Test]
+    [Arguments(7)]   // ECC level L (version 1)
+    [Arguments(16)]  // M
+    [Arguments(22)]  // Q
+    [Arguments(30)]  // H (max per QR spec)
+    public async Task TryCorrect_EveryQrEccCount_RoundTrips(int eccCount)
     {
         // Arrange
         var data = new byte[20];
@@ -85,13 +84,13 @@ public class EccBinaryDecoderUnitTest
         var result = EccBinaryDecoder.TryCorrect(codeword, eccCount, out var errorsCorrected);
 
         // Assert
-        Assert.True(result);
-        Assert.Equal(capacity, errorsCorrected);
-        Assert.Equal(expected, codeword);
+        await Assert.That(result).IsTrue();
+        await Assert.That(errorsCorrected).IsEquivalentTo(capacity);
+        await Assert.That(codeword).IsEquivalentTo(expected);
     }
 
-    [Fact]
-    public void TryCorrect_RandomizedManyRounds_AlwaysRecoversWithinCapacity()
+    [Test]
+    public async Task TryCorrect_RandomizedManyRounds_AlwaysRecoversWithinCapacity()
     {
         // Arrange - fixed seed for reproducibility
         var random = new Random(20260711);
@@ -113,13 +112,13 @@ public class EccBinaryDecoderUnitTest
             var result = EccBinaryDecoder.TryCorrect(codeword, eccCount, out var errorsCorrected);
 
             // Assert
-            Assert.True(result, $"round {round}: dataLength={dataLength}, eccCount={eccCount}, errors={errors}");
-            Assert.Equal(errors, errorsCorrected);
-            Assert.Equal(expected, codeword);
+            await Assert.That(result).IsTrue().Because($"round {round}: dataLength={dataLength}, eccCount={eccCount}, errors={errors}");
+            await Assert.That(errorsCorrected).IsEquivalentTo(errors);
+            await Assert.That(codeword).IsEquivalentTo(expected);
         }
     }
 
-    [Fact]
+    [Test]
     public void TryCorrect_InvalidArguments_Throws()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => EccBinaryDecoder.TryCorrect(new byte[10], 0, out _));

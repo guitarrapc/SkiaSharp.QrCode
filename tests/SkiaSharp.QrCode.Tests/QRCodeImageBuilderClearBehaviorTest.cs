@@ -1,5 +1,4 @@
 using SkiaSharp.QrCode.Image;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -13,19 +12,19 @@ public class QRCodeImageBuilderClearBehaviorTest
 {
     private const string TestContent = "clear-behavior-test";
 
-    [Fact]
-    public void DefaultTransparentClear_FullCoverage_MatchesExtensionRender()
+    [Test]
+    public async Task DefaultTransparentClear_FullCoverage_MatchesExtensionRender()
     {
         var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
 
         var actual = BuilderPixels(new QRCodeImageBuilder(qr).WithSize(300, 300));
         var expected = ExtensionPixels(qr, 300, 300, SKRect.Create(0, 0, 300, 300), clearColor: null, backgroundColor: null);
 
-        Assert.Equal(expected, actual);
+        await Assert.That(actual).IsEquivalentTo(expected);
     }
 
-    [Fact]
-    public void OpaqueClearColor_WithPadding_KeepsClearColorInPad()
+    [Test]
+    public async Task OpaqueClearColor_WithPadding_KeepsClearColorInPad()
     {
         const int modulePixelSize = 4;
         var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
@@ -41,17 +40,17 @@ public class QRCodeImageBuilderClearBehaviorTest
         using var bitmap = builder.ToBitmap();
 
         // Pad outside content keeps the clear color; the clear must not be skipped.
-        Assert.Equal(SKColors.Red, bitmap.GetPixel(0, 0));
-        Assert.Equal(SKColors.Red, bitmap.GetPixel(canvasSide - 1, canvasSide - 1));
+        await Assert.That(bitmap.GetPixel(0, 0)).IsEquivalentTo(SKColors.Red);
+        await Assert.That(bitmap.GetPixel(canvasSide - 1, canvasSide - 1)).IsEquivalentTo(SKColors.Red);
 
         var expected = ExtensionPixels(qr, canvasSide, canvasSide,
             SKRect.Create(origin, origin, contentSide, contentSide),
             clearColor: SKColors.Red, backgroundColor: null);
-        Assert.Equal(expected, bitmap.Bytes);
+        await Assert.That(bitmap.Bytes).IsEquivalentTo(expected);
     }
 
-    [Fact]
-    public void TranslucentBackground_FullCoverage_StillBlendsOverClearColor()
+    [Test]
+    public async Task TranslucentBackground_FullCoverage_StillBlendsOverClearColor()
     {
         // A translucent QR background lets the clear color show through, so the
         // clear must still happen even when the content covers the whole canvas.
@@ -64,11 +63,11 @@ public class QRCodeImageBuilderClearBehaviorTest
         var expected = ExtensionPixels(qr, 300, 300, SKRect.Create(0, 0, 300, 300),
             clearColor: SKColors.Red, backgroundColor: translucentWhite);
 
-        Assert.Equal(expected, actual);
+        await Assert.That(actual).IsEquivalentTo(expected);
     }
 
-    [Fact]
-    public void OpaqueClearColor_FullCoverage_MatchesExtensionRender()
+    [Test]
+    public async Task OpaqueClearColor_FullCoverage_MatchesExtensionRender()
     {
         // Opaque background covering the whole canvas: the clear is skipped, and
         // the output must be identical to the always-clear render.
@@ -80,7 +79,7 @@ public class QRCodeImageBuilderClearBehaviorTest
         var expected = ExtensionPixels(qr, 300, 300, SKRect.Create(0, 0, 300, 300),
             clearColor: SKColors.Red, backgroundColor: null);
 
-        Assert.Equal(expected, actual);
+        await Assert.That(actual).IsEquivalentTo(expected);
     }
 
     private static byte[] BuilderPixels(QRCodeImageBuilder builder)

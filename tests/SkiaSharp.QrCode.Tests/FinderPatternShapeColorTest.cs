@@ -1,13 +1,12 @@
 using SkiaSharp.QrCode.Image;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
 public class FinderPatternShapeColorTest
 {
-    [Theory]
-    [MemberData(nameof(GetFinderPatternShapes))]
-    public void CustomFinderPatternShape_UsesBackgroundColorForInnerRing(FinderPatternShape finderPatternShape)
+    [Test]
+    [MethodDataSource(nameof(GetFinderPatternShapes))]
+    public async Task CustomFinderPatternShape_UsesBackgroundColorForInnerRing(FinderPatternShape finderPatternShape)
     {
         var backgroundColor = new SKColor(0xEA, 0xFB, 0x00, 0xFF);
         var codeColor = SKColors.Green;
@@ -36,15 +35,15 @@ public class FinderPatternShapeColorTest
         var ringPixel = bitmap.GetPixel(ringSampleX, ringSampleY);
         var centerPixel = bitmap.GetPixel(centerSampleX, centerSampleY);
 
-        Assert.Equal(backgroundColor, ringPixel);
-        Assert.Equal(codeColor, centerPixel);
+        await Assert.That(ringPixel).IsEquivalentTo(backgroundColor);
+        await Assert.That(centerPixel).IsEquivalentTo(codeColor);
     }
 
-    public static IEnumerable<object[]> GetFinderPatternShapes()
+    public static IEnumerable<Func<FinderPatternShape>> GetFinderPatternShapes()
     {
-        yield return [RectangleFinderPatternShape.Default];
-        yield return [CircleFinderPatternShape.Default];
-        yield return [RoundedRectangleFinderPatternShape.Default];
-        yield return [RoundedRectangleCircleFinderPatternShape.Default];
+        yield return () => RectangleFinderPatternShape.Default;
+        yield return () => CircleFinderPatternShape.Default;
+        yield return () => RoundedRectangleFinderPatternShape.Default;
+        yield return () => RoundedRectangleCircleFinderPatternShape.Default;
     }
 }

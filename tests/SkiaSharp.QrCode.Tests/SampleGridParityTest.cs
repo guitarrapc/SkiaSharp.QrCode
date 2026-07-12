@@ -1,5 +1,4 @@
 using SkiaSharp.QrCode.Internals.ImageDecoders;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -12,11 +11,15 @@ public class SampleGridParityTest
 {
     private const byte Threshold = 128;
 
-    [Fact]
-    public void SimdAndScalarSampling_AreByteIdentical()
+    [Test]
+    public async Task SimdAndScalarSampling_AreByteIdentical()
     {
 #if NET8_0_OR_GREATER
-        Assert.SkipUnless(System.Runtime.Intrinsics.Vector256.IsHardwareAccelerated, "Vector256 not accelerated on this machine");
+        if (!System.Runtime.Intrinsics.Vector256.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector256 not accelerated on this machine");
+            return;
+        }
 
         foreach (var seed in new[] { 1, 42, 1234 })
         {
@@ -32,7 +35,7 @@ public class SampleGridParityTest
                     var simd = new byte[dimension * dimension];
                     QRImageDecoder.SampleGridSimd(luminance, width, width, Threshold, transform, dimension, simd);
 
-                    Assert.True(simd.AsSpan().SequenceEqual(scalar), $"SIMD/scalar sampling mismatch (seed={seed}, dim={dimension}, projective={projective})");
+                    await Assert.That(simd.AsSpan().SequenceEqual(scalar)).IsTrue().Because($"SIMD/scalar sampling mismatch (seed={seed}, dim={dimension}, projective={projective})");
                 }
             }
         }

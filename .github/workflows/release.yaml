@@ -77,7 +77,9 @@ jobs:
       - name: Build
         run: dotnet build -c Release
       - name: Test
-        run: dotnet test -c Release --no-build --logger GitHubActions --logger "console;verbosity=normal"
+        env:
+          TUNIT_MAX_PARALLEL_TESTS: 4
+        run: dotnet test -c Release --no-build
 
   build-dotnet:
     needs: [validate]

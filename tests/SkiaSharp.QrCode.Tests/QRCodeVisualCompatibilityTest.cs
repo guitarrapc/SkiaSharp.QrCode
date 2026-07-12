@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -23,87 +22,87 @@ public class QRCodeVisualCompatibilityTest
     /// Generate HTML report of all golden files for visual inspection.
     /// </summary>
     //[Fact(Skip = "Manual execution only")]
-    [Fact]
-    public void GenerateGoldenFilesReport()
+    [Test]
+    public async Task GenerateGoldenFilesReport()
     {
         VisualCompatibilityTestHelper.GenerateGoldenFilesReport(directoryName);
     }
 
     // tests
 
-    [Theory]
-    [InlineData("0123456789", ECCLevel.L)]
-    [InlineData("HELLO WORLD", ECCLevel.M)]
-    [InlineData("ABC-123", ECCLevel.Q)]
-    [InlineData("Test123", ECCLevel.H)]
-    [InlineData("Hello, World!", ECCLevel.L)]
-    [InlineData("こんにちは", ECCLevel.M)]
-    [InlineData("你好世界", ECCLevel.Q)]
-    [InlineData("Привет мир", ECCLevel.H)]
-    [InlineData("🎉🎊🎈", ECCLevel.L)]
-    [InlineData("café", ECCLevel.M)]
-    [InlineData("Ñoño", ECCLevel.Q)]
-    public void CreateQrCode_Default_PixelsMatchSample(string content, ECCLevel eccLevel)
+    [Test]
+    [Arguments("0123456789", ECCLevel.L)]
+    [Arguments("HELLO WORLD", ECCLevel.M)]
+    [Arguments("ABC-123", ECCLevel.Q)]
+    [Arguments("Test123", ECCLevel.H)]
+    [Arguments("Hello, World!", ECCLevel.L)]
+    [Arguments("縺薙ｓ縺ｫ縺｡縺ｯ", ECCLevel.M)]
+    [Arguments("菴螂ｽ荳也阜", ECCLevel.Q)]
+    [Arguments("ﾐ湲ﾐｸﾐｲﾐｵﾑ・ﾐｼﾐｸﾑ", ECCLevel.H)]
+    [Arguments("脂至肢", ECCLevel.L)]
+    [Arguments("cafﾃｩ", ECCLevel.M)]
+    [Arguments("ﾃ双ﾃｱo", ECCLevel.Q)]
+    public async Task CreateQrCode_Default_PixelsMatchSample(string content, ECCLevel eccLevel)
     {
         AssertPixelsMatchSample(content, eccLevel, EciMode.Default);
     }
 
-    [Theory]
-    [InlineData("0123456789", ECCLevel.L)]
-    [InlineData("HELLO WORLD", ECCLevel.M)]
-    [InlineData("ABC-123", ECCLevel.Q)]
-    [InlineData("Test123", ECCLevel.H)]
-    [InlineData("Hello, World!", ECCLevel.L)]
-    [InlineData("こんにちは", ECCLevel.M)]
-    [InlineData("你好世界", ECCLevel.Q)]
-    [InlineData("Привет мир", ECCLevel.H)]
-    [InlineData("🎉🎊🎈", ECCLevel.L)]
-    [InlineData("café", ECCLevel.M)]
-    [InlineData("Ñoño", ECCLevel.Q)]
-    public void CreateQrCode_Utf8_PixelsMatchSample(string content, ECCLevel eccLevel)
+    [Test]
+    [Arguments("0123456789", ECCLevel.L)]
+    [Arguments("HELLO WORLD", ECCLevel.M)]
+    [Arguments("ABC-123", ECCLevel.Q)]
+    [Arguments("Test123", ECCLevel.H)]
+    [Arguments("Hello, World!", ECCLevel.L)]
+    [Arguments("縺薙ｓ縺ｫ縺｡縺ｯ", ECCLevel.M)]
+    [Arguments("菴螂ｽ荳也阜", ECCLevel.Q)]
+    [Arguments("ﾐ湲ﾐｸﾐｲﾐｵﾑ・ﾐｼﾐｸﾑ", ECCLevel.H)]
+    [Arguments("脂至肢", ECCLevel.L)]
+    [Arguments("cafﾃｩ", ECCLevel.M)]
+    [Arguments("ﾃ双ﾃｱo", ECCLevel.Q)]
+    public async Task CreateQrCode_Utf8_PixelsMatchSample(string content, ECCLevel eccLevel)
     {
         AssertPixelsMatchSample(content, eccLevel, EciMode.Utf8);
     }
 
-    [Theory]
-    [InlineData("Café", ECCLevel.L)]
-    [InlineData("Résumé", ECCLevel.M)]
-    [InlineData("Naïve", ECCLevel.Q)]
-    [InlineData("Zürich", ECCLevel.H)]
-    public void CreateQrCode_Iso8859_1_PixelsMatchSample(string content, ECCLevel eccLevel)
+    [Test]
+    [Arguments("Cafﾃｩ", ECCLevel.L)]
+    [Arguments("Rﾃｩsumﾃｩ", ECCLevel.M)]
+    [Arguments("Naﾃｯve", ECCLevel.Q)]
+    [Arguments("Zﾃｼrich", ECCLevel.H)]
+    public async Task CreateQrCode_Iso8859_1_PixelsMatchSample(string content, ECCLevel eccLevel)
     {
         AssertPixelsMatchSample(content, eccLevel, EciMode.Iso8859_1);
     }
 
     // edge cases
 
-    [Theory]
-    [InlineData("", ECCLevel.L, EciMode.Default)]
-    [InlineData("", ECCLevel.M, EciMode.Utf8)]
-    [InlineData("", ECCLevel.Q, EciMode.Iso8859_1)]
-    [InlineData("", ECCLevel.H, EciMode.Default)]
-    public void CreateQrCode_EmptyString_PixelsMatchTest(string content, ECCLevel eccLevel, EciMode eciMode)
+    [Test]
+    [Arguments("", ECCLevel.L, EciMode.Default)]
+    [Arguments("", ECCLevel.M, EciMode.Utf8)]
+    [Arguments("", ECCLevel.Q, EciMode.Iso8859_1)]
+    [Arguments("", ECCLevel.H, EciMode.Default)]
+    public async Task CreateQrCode_EmptyString_PixelsMatchTest(string content, ECCLevel eccLevel, EciMode eciMode)
     {
         AssertPixelsMatchSample(content, eccLevel, eciMode);
     }
 
-    [Theory]
-    [InlineData("A", ECCLevel.M, EciMode.Default)]  // Single character
-    [InlineData("0", ECCLevel.Q, EciMode.Default)]  // Single digit
-    [InlineData(" ", ECCLevel.Q, EciMode.Default)]  // Single space
-    [InlineData("\t", ECCLevel.H, EciMode.Default)] // Tab
-    [InlineData("\n", ECCLevel.L, EciMode.Utf8)]    // Newline
-    public void CreateQrCode_EdgeCases_PixelsMatchSample(string content, ECCLevel eccLevel, EciMode eciMode)
+    [Test]
+    [Arguments("A", ECCLevel.M, EciMode.Default)]  // Single character
+    [Arguments("0", ECCLevel.Q, EciMode.Default)]  // Single digit
+    [Arguments(" ", ECCLevel.Q, EciMode.Default)]  // Single space
+    [Arguments("\t", ECCLevel.H, EciMode.Default)] // Tab
+    [Arguments("\n", ECCLevel.L, EciMode.Utf8)]    // Newline
+    public async Task CreateQrCode_EdgeCases_PixelsMatchSample(string content, ECCLevel eccLevel, EciMode eciMode)
     {
         AssertPixelsMatchSample(content, eccLevel, eciMode);
     }
 
-    [Theory]
-    [InlineData(ECCLevel.L)] // Version 1 max
-    [InlineData(ECCLevel.M)]
-    [InlineData(ECCLevel.Q)]
-    [InlineData(ECCLevel.H)]
-    public void CreateQrCode_MaxCapacity_Version1_PixelsMatchSample(ECCLevel eccLevel)
+    [Test]
+    [Arguments(ECCLevel.L)] // Version 1 max
+    [Arguments(ECCLevel.M)]
+    [Arguments(ECCLevel.Q)]
+    [Arguments(ECCLevel.H)]
+    public async Task CreateQrCode_MaxCapacity_Version1_PixelsMatchSample(ECCLevel eccLevel)
     {
         // Max capacity for Version 1 (numeric mode)
         var maxChars = eccLevel switch
@@ -121,14 +120,14 @@ public class QRCodeVisualCompatibilityTest
 
     // Version Boundary Tests
 
-    [Theory]
-    [MemberData(nameof(GetVersionBoundaryTestCases))]
-    public void CreateQrCode_VersionBoundaries_PixelsMatchSample(string content, ECCLevel eccLevel, EciMode eciMode, int expectedVersion)
+    [Test]
+    [MethodDataSource(nameof(GetVersionBoundaryTestCases))]
+    public async Task CreateQrCode_VersionBoundaries_PixelsMatchSample(string content, ECCLevel eccLevel, EciMode eciMode, int expectedVersion)
     {
         var qr = QRCodeGenerator.CreateQrCode(content, eccLevel, eciMode: eciMode);
 
         // Verify version is as expected
-        Assert.Equal(expectedVersion, qr.Version);
+        await Assert.That(qr.Version).IsEqualTo(expectedVersion);
 
         // Verify pixels match golden
         AssertPixelsMatchSample(content, eccLevel, eciMode);
@@ -140,28 +139,28 @@ public class QRCodeVisualCompatibilityTest
     {
         // Default mode (no ECI header)
         // Numeric mode
-        // V1-L: 152 bits - 4 (mode) - 10 (count) = 138 bits → 41 digits
+        // V1-L: 152 bits - 4 (mode) - 10 (count) = 138 bits 遶翫・41 digits
         yield return new object[] { new string('1', 41), ECCLevel.L, EciMode.Default, 1 };  // V1-L max
         yield return new object[] { new string('1', 42), ECCLevel.L, EciMode.Default, 2 };  // V2-L min
 
-        // V1-M: 128 bits - 4 - 10 = 114 bits → 34 digits
+        // V1-M: 128 bits - 4 - 10 = 114 bits 遶翫・34 digits
         yield return new object[] { new string('1', 34), ECCLevel.M, EciMode.Default, 1 };  // V1-M max
         yield return new object[] { new string('1', 35), ECCLevel.M, EciMode.Default, 2 };  // V2-M min
 
-        // V1-H: 72 bits - 4 - 10 = 58 bits → 17 digits
+        // V1-H: 72 bits - 4 - 10 = 58 bits 遶翫・17 digits
         yield return new object[] { new string('1', 17), ECCLevel.H, EciMode.Default, 1 };  // V1-H max
         yield return new object[] { new string('1', 18), ECCLevel.H, EciMode.Default, 2 };  // V2-H min
 
         //Alphanumeric mode
-        // V1-L: 152 bits - 4 - 9 = 139 bits → 25 chars
+        // V1-L: 152 bits - 4 - 9 = 139 bits 遶翫・25 chars
         yield return new object[] { new string('A', 25), ECCLevel.L, EciMode.Default, 1 };  // V1-L max
         yield return new object[] { new string('A', 26), ECCLevel.L, EciMode.Default, 2 };  // V2-L min
 
-        // V1-M: 128 bits - 4 - 9 = 115 bits → 20 chars
+        // V1-M: 128 bits - 4 - 9 = 115 bits 遶翫・20 chars
         yield return new object[] { new string('A', 20), ECCLevel.M, EciMode.Default, 1 };  // V1-M max
         yield return new object[] { new string('A', 21), ECCLevel.M, EciMode.Default, 2 };  // V2-M min
 
-        //  V1-H: 72 bits - 4 - 9 = 59 bits → 10 chars
+        //  V1-H: 72 bits - 4 - 9 = 59 bits 遶翫・10 chars
         yield return new object[] { new string('A', 10), ECCLevel.H, EciMode.Default, 1 };  // V1-H max
         yield return new object[] { new string('A', 11), ECCLevel.H, EciMode.Default, 2 };  // V2-H min
 
@@ -169,28 +168,28 @@ public class QRCodeVisualCompatibilityTest
         foreach (var eci in new[] { EciMode.Iso8859_1, EciMode.Utf8 })
         {
             // Numeric mode
-            // V1-L: 152 bits - 12 (ECI) - 4 (mode) - 10 (count) = 126 bits → 37 digits
+            // V1-L: 152 bits - 12 (ECI) - 4 (mode) - 10 (count) = 126 bits 遶翫・37 digits
             yield return new object[] { new string('1', 37), ECCLevel.L, eci, 1 };  // V1-L max
             yield return new object[] { new string('1', 38), ECCLevel.L, eci, 2 };  // V2-L min
 
-            // V1-M: 128 bits - 12 - 4 - 10 = 102 bits → 30 digits
+            // V1-M: 128 bits - 12 - 4 - 10 = 102 bits 遶翫・30 digits
             yield return new object[] { new string('1', 30), ECCLevel.M, eci, 1 };  // V1-M max
             yield return new object[] { new string('1', 31), ECCLevel.M, eci, 2 };  // V2-M min
 
-            // V1-H: 72 bits - 12 - 4 - 10 = 46 bits → 13 digits
+            // V1-H: 72 bits - 12 - 4 - 10 = 46 bits 遶翫・13 digits
             yield return new object[] { new string('1', 13), ECCLevel.H, eci, 1 };  // V1-H max
             yield return new object[] { new string('1', 14), ECCLevel.H, eci, 2 };  // V2-H min
 
             //Alphanumeric mode
-            // V1-L: 152 bits - 12 - 4 - 9 = 127 bits → 23 chars
+            // V1-L: 152 bits - 12 - 4 - 9 = 127 bits 遶翫・23 chars
             yield return new object[] { new string('A', 23), ECCLevel.L, eci, 1 };  // V1-L max
             yield return new object[] { new string('A', 24), ECCLevel.L, eci, 2 };  // V2-L min
 
-            // V1-M: 128 bits - 12 - 4 - 9 = 103 bits → 18 chars
+            // V1-M: 128 bits - 12 - 4 - 9 = 103 bits 遶翫・18 chars
             yield return new object[] { new string('A', 18), ECCLevel.M, eci, 1 };  // V1-M max
             yield return new object[] { new string('A', 19), ECCLevel.M, eci, 2 };  // V2-M min
 
-            //  V1-H: 72 bits - 12 - 4 - 9 = 47 bits → 8 chars
+            //  V1-H: 72 bits - 12 - 4 - 9 = 47 bits 遶翫・8 chars
             yield return new object[] { new string('A', 8), ECCLevel.H, eci, 1 };  // V1-H max
             yield return new object[] { new string('A', 9), ECCLevel.H, eci, 2 };  // V2-H min
         }
@@ -201,7 +200,7 @@ public class QRCodeVisualCompatibilityTest
     /// <summary>
     /// Assert that generated QR code pixels match sample file.
     /// </summary>
-    private void AssertPixelsMatchSample(string content, ECCLevel eccLevel, EciMode eciMode)
+    private async Task AssertPixelsMatchSample(string content, ECCLevel eccLevel, EciMode eciMode)
     {
         var qr = QRCodeGenerator.CreateQrCode(content.AsSpan(), eccLevel, eciMode: eciMode);
 
@@ -213,7 +212,7 @@ public class QRCodeVisualCompatibilityTest
         {
             // First run: save as sample
             SavePixelData(samplePath, actualPixels, qr.Size);
-            Assert.True(true, $"Sample file created: {samplePath}");
+            await Assert.That(File.Exists(samplePath)).IsTrue().Because($"Sample file created: {samplePath}");
         }
         else
         {
@@ -242,7 +241,7 @@ public class QRCodeVisualCompatibilityTest
             }
 
             // Also verify size matches
-            Assert.Equal(expectedSize, qr.Size);
+            await Assert.That(qr.Size).IsEqualTo(expectedSize);
         }
     }
 
@@ -269,7 +268,7 @@ public class QRCodeVisualCompatibilityTest
     /// Save pixel data with metadata.
     /// Format: [4 bytes size][pixel data]
     /// </summary>
-    private static void SavePixelData(string path, byte[] pixels, int size)
+    private static async Task SavePixelData(string path, byte[] pixels, int size)
     {
         using var fs = File.Create(path);
         using var writer = new BinaryWriter(fs);

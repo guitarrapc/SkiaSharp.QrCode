@@ -2,7 +2,6 @@ using System.Buffers;
 using System.Text;
 using System.Xml.Linq;
 using SkiaSharp.QrCode.Image;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -16,8 +15,8 @@ public class QRCodeImageBuilderSvgTest
 {
     private const string TestContent = "https://example.com/svg-test";
 
-    [Fact]
-    public void SaveToSvg_ProducesWellFormedSvgDocument()
+    [Test]
+    public async Task SaveToSvg_ProducesWellFormedSvgDocument()
     {
         using var stream = new MemoryStream();
         new QRCodeImageBuilder(TestContent)
@@ -25,19 +24,19 @@ public class QRCodeImageBuilderSvgTest
             .SaveToSvg(stream);
 
         var doc = ParseSvg(stream.ToArray());
-        Assert.Equal("svg", doc.Root!.Name.LocalName);
-        Assert.Equal("512", doc.Root.Attribute("width")?.Value);
-        Assert.Equal("512", doc.Root.Attribute("height")?.Value);
+        await Assert.That(doc.Root!.Name.LocalName).IsEquivalentTo("svg");
+        await Assert.That(doc.Root.Attribute("width")?.Value).IsEquivalentTo("512");
+        await Assert.That(doc.Root.Attribute("height")?.Value).IsEquivalentTo("512");
 
         // Background rect plus dark module rects must be present.
         var ns = doc.Root.Name.Namespace;
         var rects = doc.Descendants(ns + "rect").ToArray();
-        Assert.True(rects.Length > 1, $"Expected background + module rects, got {rects.Length}.");
-        Assert.Equal("white", rects[0].Attribute("fill")?.Value);
+        await Assert.That(rects.Length > 1).IsTrue().Because($"Expected background + module rects, got {rects.Length}.");
+        await Assert.That(rects[0].Attribute("fill")?.Value).IsEquivalentTo("white");
     }
 
-    [Fact]
-    public void SaveToSvg_RootHasViewBox_SoDocumentScalesWhenEmbedded()
+    [Test]
+    public async Task SaveToSvg_RootHasViewBox_SoDocumentScalesWhenEmbedded()
     {
         // Without viewBox, an SVG embedded at a different size (img/CSS) keeps its
         // content at original coordinates instead of scaling.
@@ -46,11 +45,11 @@ public class QRCodeImageBuilderSvgTest
             .ToSvgString();
 
         var doc = XDocument.Parse(svg);
-        Assert.Equal("0 0 512 512", doc.Root!.Attribute("viewBox")?.Value);
+        await Assert.That(doc.Root!.Attribute("viewBox")?.Value).IsEquivalentTo("0 0 512 512");
     }
 
-    [Fact]
-    public void SaveToSvg_PlainRectModules_UseCrispEdges()
+    [Test]
+    public async Task SaveToSvg_PlainRectModules_UseCrispEdges()
     {
         // Default rect modules get shape-rendering=crispEdges to avoid antialiasing
         // seams between adjacent modules at non-integer display sizes.
@@ -59,11 +58,11 @@ public class QRCodeImageBuilderSvgTest
             .ToSvgString();
 
         var doc = XDocument.Parse(svg);
-        Assert.Equal("crispEdges", doc.Root!.Attribute("shape-rendering")?.Value);
+        await Assert.That(doc.Root!.Attribute("shape-rendering")?.Value).IsEquivalentTo("crispEdges");
     }
 
-    [Fact]
-    public void SaveToSvg_CustomShapes_KeepAntialiasing()
+    [Test]
+    public async Task SaveToSvg_CustomShapes_KeepAntialiasing()
     {
         // Curved shapes need antialiasing; crispEdges would render them jagged.
         var svg = new QRCodeImageBuilder(TestContent)
@@ -72,12 +71,12 @@ public class QRCodeImageBuilderSvgTest
             .ToSvgString();
 
         var doc = XDocument.Parse(svg);
-        Assert.Null(doc.Root!.Attribute("shape-rendering"));
-        Assert.NotNull(doc.Root.Attribute("viewBox"));
+        await Assert.That(doc.Root!.Attribute("shape-rendering")).IsNull();
+        await Assert.That(doc.Root.Attribute("viewBox")).IsNotNull();
     }
 
-    [Fact]
-    public void SaveToSvg_CustomFinderPattern_KeepsAntialiasing()
+    [Test]
+    public async Task SaveToSvg_CustomFinderPattern_KeepsAntialiasing()
     {
         var svg = new QRCodeImageBuilder(TestContent)
             .WithSize(512, 512)
@@ -85,11 +84,11 @@ public class QRCodeImageBuilderSvgTest
             .ToSvgString();
 
         var doc = XDocument.Parse(svg);
-        Assert.Null(doc.Root!.Attribute("shape-rendering"));
+        await Assert.That(doc.Root!.Attribute("shape-rendering")).IsNull();
     }
 
-    [Fact]
-    public void SaveToSvg_BuiltInIconShape_UsesCrispEdges()
+    [Test]
+    public async Task SaveToSvg_BuiltInIconShape_UsesCrispEdges()
     {
         // Built-in icon shapes draw rectangles, bitmaps, and text only, none of
         // which degrade under crispEdges — the QR modules stay seam-free.
@@ -107,11 +106,11 @@ public class QRCodeImageBuilderSvgTest
             .ToSvgString();
 
         var doc = XDocument.Parse(svg);
-        Assert.Equal("crispEdges", doc.Root!.Attribute("shape-rendering")?.Value);
+        await Assert.That(doc.Root!.Attribute("shape-rendering")?.Value).IsEquivalentTo("crispEdges");
     }
 
-    [Fact]
-    public void SaveToSvg_BufferWriter_MatchesStreamOutput()
+    [Test]
+    public async Task SaveToSvg_BufferWriter_MatchesStreamOutput()
     {
         var builder = new QRCodeImageBuilder(TestContent).WithSize(256, 256);
 
@@ -121,10 +120,10 @@ public class QRCodeImageBuilderSvgTest
         var writer = new ArrayBufferWriter<byte>();
         builder.SaveToSvg(writer);
 
-        Assert.Equal(stream.ToArray(), writer.WrittenSpan.ToArray());
+        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(stream.ToArray());
     }
 
-    [Fact]
+    [Test]
     public void SaveToSvg_BufferWriter_Null_Throws()
     {
         var builder = new QRCodeImageBuilder(TestContent).WithSize(256, 256);
@@ -132,8 +131,8 @@ public class QRCodeImageBuilderSvgTest
         Assert.Throws<ArgumentNullException>(() => builder.SaveToSvg((IBufferWriter<byte>)null!));
     }
 
-    [Fact]
-    public void SaveToSvg_SegmentedBufferWriter_NeverRequestsOversizedSpan()
+    [Test]
+    public async Task SaveToSvg_SegmentedBufferWriter_NeverRequestsOversizedSpan()
     {
         // Segmented writers (e.g. PipeWriter) cannot serve a GetSpan sized to the whole
         // document. This writer caps every request at 64 bytes and throws on larger
@@ -148,11 +147,11 @@ public class QRCodeImageBuilderSvgTest
         var writer = new SegmentCappedBufferWriter(maxSegmentSize: 64);
         builder.SaveToSvg(writer);
 
-        Assert.Equal(expected.ToArray(), writer.WrittenBytes);
+        await Assert.That(writer.WrittenBytes).IsEquivalentTo(expected.ToArray());
     }
 
-    [Fact]
-    public void SvgInjector_SingleByteWrites_InjectsAttributesOnce()
+    [Test]
+    public async Task SvgInjector_SingleByteWrites_InjectsAttributesOnce()
     {
         // A write may split the "<svg " marker at any position; the injector must
         // still find it and insert the attributes exactly once.
@@ -169,11 +168,11 @@ public class QRCodeImageBuilderSvgTest
         }
 
         var result = Encoding.UTF8.GetString(output.ToArray());
-        Assert.Equal(document.Replace("<svg ", "<svg viewBox=\"0 0 8 8\" "), result);
+        await Assert.That(result).IsEquivalentTo(document.Replace("<svg ", "<svg viewBox=\"0 0 8 8\" "));
     }
 
-    [Fact]
-    public void SvgInjector_NoMarkerInLargeDocument_PassesThroughUnmodified()
+    [Test]
+    public async Task SvgInjector_NoMarkerInLargeDocument_PassesThroughUnmodified()
     {
         // Marker absent beyond the scan window: the document must pass through unpatched.
         var payload = Encoding.UTF8.GetBytes(new string('x', 2048));
@@ -184,11 +183,11 @@ public class QRCodeImageBuilderSvgTest
             injector.Write(payload, 0, payload.Length);
         }
 
-        Assert.Equal(payload, output.ToArray());
+        await Assert.That(output.ToArray()).IsEquivalentTo(payload);
     }
 
-    [Fact]
-    public void SvgInjector_NoMarkerInTinyDocument_FlushesOnDispose()
+    [Test]
+    public async Task SvgInjector_NoMarkerInTinyDocument_FlushesOnDispose()
     {
         // A document that ends inside the scan window without a marker must still be
         // written out (on dispose), not silently dropped.
@@ -200,7 +199,7 @@ public class QRCodeImageBuilderSvgTest
             injector.Write(payload, 0, payload.Length);
         }
 
-        Assert.Equal(payload, output.ToArray());
+        await Assert.That(output.ToArray()).IsEquivalentTo(payload);
     }
 
     /// <summary>
@@ -226,39 +225,39 @@ public class QRCodeImageBuilderSvgTest
         public Span<byte> GetSpan(int sizeHint = 0) => GetMemory(sizeHint).Span;
     }
 
-    [Fact]
-    public void GetSvgString_Content_MatchesToSvgString()
+    [Test]
+    public async Task GetSvgString_Content_MatchesToSvgString()
     {
         var expected = new QRCodeImageBuilder(TestContent)
             .WithSize(512, 512)
             .WithErrorCorrection(ECCLevel.H)
             .ToSvgString();
 
-        Assert.Equal(expected, QRCodeImageBuilder.GetSvgString(TestContent, ECCLevel.H, size: 512));
+        await Assert.That(QRCodeImageBuilder.GetSvgString(TestContent, ECCLevel.H, size: 512)).IsEquivalentTo(expected);
     }
 
-    [Fact]
-    public void WriteSvg_Content_MatchesGetSvgBytes()
+    [Test]
+    public async Task WriteSvg_Content_MatchesGetSvgBytes()
     {
         var writer = new ArrayBufferWriter<byte>();
         QRCodeImageBuilder.WriteSvg(TestContent, writer, ECCLevel.M, size: 256);
 
-        Assert.Equal(QRCodeImageBuilder.GetSvgBytes(TestContent, ECCLevel.M, size: 256), writer.WrittenSpan.ToArray());
+        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(QRCodeImageBuilder.GetSvgBytes(TestContent, ECCLevel.M, size: 256));
     }
 
-    [Fact]
-    public void SaveToSvg_LeavesStreamOpen()
+    [Test]
+    public async Task SaveToSvg_LeavesStreamOpen()
     {
         using var stream = new MemoryStream();
         new QRCodeImageBuilder(TestContent)
             .WithSize(256, 256)
             .SaveToSvg(stream);
 
-        Assert.True(stream.CanWrite);
-        Assert.True(stream.Length > 0);
+        await Assert.That(stream.CanWrite).IsTrue();
+        await Assert.That(stream.Length > 0).IsTrue();
     }
 
-    [Fact]
+    [Test]
     public void SaveToSvg_InvalidStream_Throws()
     {
         var builder = new QRCodeImageBuilder(TestContent).WithSize(256, 256);
@@ -269,69 +268,69 @@ public class QRCodeImageBuilderSvgTest
         Assert.Throws<ArgumentException>(() => builder.SaveToSvg(readOnly));
     }
 
-    [Fact]
-    public void ToSvgString_MatchesSaveToSvgOutput()
+    [Test]
+    public async Task ToSvgString_MatchesSaveToSvgOutput()
     {
         var builder = new QRCodeImageBuilder(TestContent).WithSize(256, 256);
 
         using var stream = new MemoryStream();
         builder.SaveToSvg(stream);
 
-        Assert.Equal(Encoding.UTF8.GetString(stream.ToArray()), builder.ToSvgString());
+        await Assert.That(builder.ToSvgString()).IsEquivalentTo(Encoding.UTF8.GetString(stream.ToArray()));
     }
 
-    [Fact]
-    public void ToSvgString_IsDeterministic()
+    [Test]
+    public async Task ToSvgString_IsDeterministic()
     {
         var builder = new QRCodeImageBuilder(TestContent)
             .WithSize(256, 256)
             .WithGradient(new GradientOptions([SKColors.Blue, SKColors.Purple], GradientDirection.TopLeftToBottomRight));
 
-        Assert.Equal(builder.ToSvgString(), builder.ToSvgString());
+        await Assert.That(builder.ToSvgString()).IsEquivalentTo(builder.ToSvgString());
     }
 
-    [Fact]
-    public void GetSvgBytes_Content_ProducesSvg()
+    [Test]
+    public async Task GetSvgBytes_Content_ProducesSvg()
     {
         var bytes = QRCodeImageBuilder.GetSvgBytes(TestContent, ECCLevel.H, size: 300);
 
         var doc = ParseSvg(bytes);
-        Assert.Equal("300", doc.Root!.Attribute("width")?.Value);
+        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEquivalentTo("300");
     }
 
-    [Fact]
-    public void GetSvgBytes_QrCodeData_ProducesSvg()
+    [Test]
+    public async Task GetSvgBytes_QrCodeData_ProducesSvg()
     {
         var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
         var bytes = QRCodeImageBuilder.GetSvgBytes(qr, size: 300);
 
         var doc = ParseSvg(bytes);
-        Assert.Equal("300", doc.Root!.Attribute("width")?.Value);
+        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEquivalentTo("300");
     }
 
-    [Fact]
-    public void SaveSvg_Content_WritesToStream()
+    [Test]
+    public async Task SaveSvg_Content_WritesToStream()
     {
         using var stream = new MemoryStream();
         QRCodeImageBuilder.SaveSvg(TestContent, stream, ECCLevel.M, size: 256);
 
         var doc = ParseSvg(stream.ToArray());
-        Assert.Equal("256", doc.Root!.Attribute("width")?.Value);
+        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEquivalentTo("256");
     }
 
-    [Fact]
-    public void SaveSvg_QrCodeData_WritesToStream()
+    [Test]
+    public async Task SaveSvg_QrCodeData_WritesToStream()
     {
         var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
         using var stream = new MemoryStream();
         QRCodeImageBuilder.SaveSvg(qr, stream, size: 256);
 
         var doc = ParseSvg(stream.ToArray());
-        Assert.Equal("256", doc.Root!.Attribute("width")?.Value);
+        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEquivalentTo("256");
     }
 
-    [Fact]
-    public void WithColors_AreReflectedInSvg()
+    [Test]
+    public async Task WithColors_AreReflectedInSvg()
     {
         // Use colors without SVG named-color aliases; Skia writes named colors
         // (e.g. #000080 becomes "navy") when an exact match exists.
@@ -340,12 +339,12 @@ public class QRCodeImageBuilderSvgTest
             .WithColors(codeColor: SKColor.Parse("123456"), backgroundColor: SKColor.Parse("FEDCBA"))
             .ToSvgString();
 
-        Assert.Contains("#123456", svg);
-        Assert.Contains("#FEDCBA", svg);
+        await Assert.That(svg).Contains("#123456");
+        await Assert.That(svg).Contains("#FEDCBA");
     }
 
-    [Fact]
-    public void WithGradient_EmitsLinearGradient()
+    [Test]
+    public async Task WithGradient_EmitsLinearGradient()
     {
         var svg = new QRCodeImageBuilder(TestContent)
             .WithSize(256, 256)
@@ -354,11 +353,11 @@ public class QRCodeImageBuilderSvgTest
 
         var doc = XDocument.Parse(svg);
         var ns = doc.Root!.Name.Namespace;
-        Assert.NotEmpty(doc.Descendants(ns + "linearGradient"));
+        await Assert.That(doc.Descendants(ns + "linearGradient")).IsNotEmpty();
     }
 
-    [Fact]
-    public void WithIcon_EmbedsImageAsDataUri()
+    [Test]
+    public async Task WithIcon_EmbedsImageAsDataUri()
     {
         using var bitmap = new SKBitmap(32, 32);
         using (var canvas = new SKCanvas(bitmap))
@@ -375,12 +374,12 @@ public class QRCodeImageBuilderSvgTest
 
         var doc = XDocument.Parse(svg);
         var ns = doc.Root!.Name.Namespace;
-        Assert.NotEmpty(doc.Descendants(ns + "image"));
-        Assert.Contains("base64", svg);
+        await Assert.That(doc.Descendants(ns + "image")).IsNotEmpty();
+        await Assert.That(svg).Contains("base64");
     }
 
-    [Fact]
-    public void WithModulePixelSize_SetsViewportToMatrixTimesPixelSize()
+    [Test]
+    public async Task WithModulePixelSize_SetsViewportToMatrixTimesPixelSize()
     {
         const int modulePixelSize = 10;
         var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
@@ -391,12 +390,12 @@ public class QRCodeImageBuilderSvgTest
 
         var doc = XDocument.Parse(svg);
         var expected = (qr.Size * modulePixelSize).ToString();
-        Assert.Equal(expected, doc.Root!.Attribute("width")?.Value);
-        Assert.Equal(expected, doc.Root.Attribute("height")?.Value);
+        await Assert.That(doc.Root!.Attribute("width")?.Value).IsEquivalentTo(expected);
+        await Assert.That(doc.Root.Attribute("height")?.Value).IsEquivalentTo(expected);
     }
 
-    [Fact]
-    public void WithModulePixelSize_AndCanvas_PadsWithClearColor()
+    [Test]
+    public async Task WithModulePixelSize_AndCanvas_PadsWithClearColor()
     {
         const int modulePixelSize = 4;
         var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
@@ -414,11 +413,11 @@ public class QRCodeImageBuilderSvgTest
         var rects = doc.Descendants(ns + "rect").ToArray();
 
         // First rect is the full-canvas clear, second is the QR background offset by the pad.
-        Assert.Equal("#102030", rects[0].Attribute("fill")?.Value);
-        Assert.Equal(canvasSide.ToString(), rects[0].Attribute("width")?.Value);
-        Assert.Equal("white", rects[1].Attribute("fill")?.Value);
-        Assert.Equal("20", rects[1].Attribute("x")?.Value);
-        Assert.Equal(contentSide.ToString(), rects[1].Attribute("width")?.Value);
+        await Assert.That(rects[0].Attribute("fill")?.Value).IsEquivalentTo("#102030");
+        await Assert.That(rects[0].Attribute("width")?.Value).IsEquivalentTo(canvasSide.ToString());
+        await Assert.That(rects[1].Attribute("fill")?.Value).IsEquivalentTo("white");
+        await Assert.That(rects[1].Attribute("x")?.Value).IsEquivalentTo("20");
+        await Assert.That(rects[1].Attribute("width")?.Value).IsEquivalentTo(contentSide.ToString());
     }
 
     private static XDocument ParseSvg(byte[] utf8Bytes)
