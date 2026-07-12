@@ -187,5 +187,17 @@ Kanji mode, FNC1, Structured Append, other ECI charsets.
   compacts and sorts the candidate list in place. Combined result 9.6-11.4x on the
   scan, image E2E (`Image_Url_M`) 309 µs → 132 µs (−57%); the SIMD walk alone is
   bit-identical to the scalar walk and parity-tested
-  (`MICRO_OPTIMIZATION_FinderScan` in the MicroBenchmarks repository). Otsu
-  binarization is now the largest remaining full-image pass.
+  (`MICRO_OPTIMIZATION_FinderScan` in the MicroBenchmarks repository).
+- The Otsu histogram fill aggregates runs instead of incrementing per pixel:
+  `histogram[value]++` serializes on store-forwarding when consecutive pixels hit
+  the same bin, and QR-like images (long runs of two values) are that pattern's
+  worst case — measured ~8x slower per pixel than random input. Reading 8 pixels
+  as one ulong and folding uniform groups (`v == ror(v, 8)`) into a single `+= 8`
+  is 8-10x on QR-like input; the textbook multi-lane fix managed only ~2.4x here
+  because two hot bins keep colliding even across four lanes. The winner is pure
+  scalar C#, so every TFM gets it (no SIMD, no `#if`), and the threshold is
+  byte-identical (OtsuThresholdParityTest). Accepted trade-off: uniform random
+  noise — never-uniform groups, the adversarial floor that even real photos
+  don't hit — pays up to ~1.3x. Image E2E (`Image_Url_M`) 132 µs → 38 µs; with
+  the finder scan work, 309 → 38 µs (8.0x) total
+  (`MICRO_OPTIMIZATION_OtsuHistogram` in the MicroBenchmarks repository).

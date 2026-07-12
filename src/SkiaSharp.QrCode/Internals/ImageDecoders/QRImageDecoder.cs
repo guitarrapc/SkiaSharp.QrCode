@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 #endif
@@ -188,13 +190,48 @@ internal static class QRImageDecoder
     /// Otsu's method: picks the threshold that maximizes between-class variance
     /// of the luminance histogram. Suits Tier-1 inputs with clear bimodal contrast.
     /// </summary>
+    /// <remarks>
+    /// The histogram fill aggregates runs: a per-pixel `histogram[value]++` walk
+    /// serializes on store-forwarding whenever consecutive pixels hit the same
+    /// bin, and QR-like images (long runs of two dominant values) are the worst
+    /// case. Reading 8 pixels as one ulong and testing uniformity with a byte
+    /// rotation turns a whole uniform group into a single `+= 8`; non-uniform
+    /// groups (module boundaries, photos) fall back to 8 increments — measured
+    /// ~8-10x on QR-like inputs, break-even to modestly slower on uniform random
+    /// noise (see the OtsuHistogram findings log in MicroBenchmarks). The result
+    /// is byte-identical either way, and bin order is irrelevant to a histogram,
+    /// so the walk is endian-safe.
+    /// </remarks>
     internal static byte ComputeOtsuThreshold(ReadOnlySpan<byte> luminance)
     {
         Span<int> histogram = stackalloc int[256];
         histogram.Clear();
-        foreach (var value in luminance)
+
+        var offset = 0;
+        ref var p = ref MemoryMarshal.GetReference(luminance);
+        for (; offset + 8 <= luminance.Length; offset += 8)
         {
-            histogram[value]++;
+            var v = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref p, offset));
+            // All 8 bytes equal ⟺ rotating by one byte is a fixed point
+            // (netstandard has no BitOperations.RotateRight; the JIT emits ror)
+            if (v == ((v >> 8) | (v << 56)))
+            {
+                histogram[(byte)v] += 8;
+                continue;
+            }
+
+            histogram[(byte)v]++;
+            histogram[(byte)(v >> 8)]++;
+            histogram[(byte)(v >> 16)]++;
+            histogram[(byte)(v >> 24)]++;
+            histogram[(byte)(v >> 32)]++;
+            histogram[(byte)(v >> 40)]++;
+            histogram[(byte)(v >> 48)]++;
+            histogram[(byte)(v >> 56)]++;
+        }
+        for (; offset < luminance.Length; offset++)
+        {
+            histogram[luminance[offset]]++;
         }
 
         var total = luminance.Length;
