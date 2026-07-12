@@ -30,6 +30,20 @@ additionally build a piecewise-bilinear mesh over the full alignment-pattern lat
 (wavefront detection with iterated homography refinement). A partially-detected mesh
 falls back to the global transform, so the mesh can never decode worse than it.
 
+### Support tiers
+
+"Tier" is this project's own shorthand for image-input difficulty — it is not standard
+QR terminology. The tiers staged the implementation and now name the scope line:
+
+| Tier | Input class | Status |
+|---|---|---|
+| Tier 1 | Clean images: screenshots, rendered QR codes, flatbed scans — arbitrary rotation, mirroring, reflectance reversal; no meaningful perspective distortion | Supported |
+| Tier 2 | Tier-1-clean images with mild perspective (keystone): global 4-point homography, plus the piecewise mesh for version 14+ | Supported within the measured envelope — see [Input envelope](#input-envelope) |
+| Tier 3 | Real-world camera photos: strong perspective, uneven lighting, blur, heavily damaged symbols | Out of scope by design — use ZXing.Net (see [Why](#why)) |
+
+Matrix-level decoding takes an exact module matrix as input, so the tiers apply only
+to the image level.
+
 ### Supported
 
 | Area | Coverage |
@@ -100,7 +114,7 @@ out of scope; the API docs point such users to ZXing.Net.
 - **Version comes from the matrix size, not the version information blocks.** At the
   matrix level the size is exact; at the image level the dimension estimate is snapped
   to the nearest valid size. Reading the v7+ version info blocks would only matter for
-  heavily damaged symbols, which are outside Tier-1 scope.
+  heavily damaged symbols, which are Tier-3 inputs (out of scope).
 - **Format decoding by exhaustive Hamming match, not BCH syndrome decoding.** There
   are only 32 valid patterns; comparing against all of them is simpler, branch-free,
   and naturally yields the minimum-distance decision.
