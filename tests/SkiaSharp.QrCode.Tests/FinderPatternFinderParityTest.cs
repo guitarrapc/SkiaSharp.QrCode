@@ -29,14 +29,14 @@ public class FinderPatternFinderParityTest
             (56, 8, 0),
         };
 
+        Span<FinderPattern> simd = stackalloc FinderPattern[3];
+        Span<FinderPattern> scalar = stackalloc FinderPattern[3];
+
         foreach (var seed in new[] { 1, 7, 42, 1234, 20260712 })
         {
             foreach (var (dimension, ppm, finderCount) in configs)
             {
                 var scene = BuildQrScene(dimension, ppm, finderCount, seed, out var width, out var height);
-
-                Span<FinderPattern> simd = stackalloc FinderPattern[3];
-                Span<FinderPattern> scalar = stackalloc FinderPattern[3];
                 var simdFound = FinderPatternFinder.TryFind(scene, width, height, Threshold, simd);
                 var scalarFound = FinderPatternFinder.TryFindScalar(scene, width, height, Threshold, scalar);
 
