@@ -1,5 +1,4 @@
 using SkiaSharp;
-using SkiaSharp.QrCode;
 using System.Text;
 
 /// <summary>

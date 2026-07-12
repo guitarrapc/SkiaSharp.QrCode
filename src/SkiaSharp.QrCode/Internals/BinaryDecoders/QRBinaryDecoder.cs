@@ -80,49 +80,49 @@ internal static class QRBinaryDecoder
                 switch (mode)
                 {
                     case ModeNumeric:
-                    {
-                        var status = DecodeNumeric(ref reader, totalBits, version, destination, ref charsWritten);
-                        if (status != QRCodeDecodeStatus.Success)
-                            return status;
-                        break;
-                    }
-                    case ModeAlphanumeric:
-                    {
-                        var status = DecodeAlphanumeric(ref reader, totalBits, version, destination, ref charsWritten);
-                        if (status != QRCodeDecodeStatus.Success)
-                            return status;
-                        break;
-                    }
-                    case ModeByte:
-                    {
-                        // Segment payload bytes are staged in a rented buffer (reused
-                        // across segments) so the charset conversion sees them whole.
-                        rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
-                        var status = DecodeByte(ref reader, totalBits, version, charset, rentedBytes, destination, ref charsWritten);
-                        if (status != QRCodeDecodeStatus.Success)
-                            return status;
-                        break;
-                    }
-                    case ModeEci:
-                    {
-                        var status = ReadEciDesignator(ref reader, totalBits, out var eciValue);
-                        if (status != QRCodeDecodeStatus.Success)
-                            return status;
-                        switch (eciValue)
                         {
-                            case EciIso8859_1a:
-                            case EciIso8859_1b:
-                            case EciAscii:
-                                charset = ByteCharset.Iso8859_1;
-                                break;
-                            case EciUtf8:
-                                charset = ByteCharset.Utf8;
-                                break;
-                            default:
-                                return QRCodeDecodeStatus.UnsupportedContent;
+                            var status = DecodeNumeric(ref reader, totalBits, version, destination, ref charsWritten);
+                            if (status != QRCodeDecodeStatus.Success)
+                                return status;
+                            break;
                         }
-                        break;
-                    }
+                    case ModeAlphanumeric:
+                        {
+                            var status = DecodeAlphanumeric(ref reader, totalBits, version, destination, ref charsWritten);
+                            if (status != QRCodeDecodeStatus.Success)
+                                return status;
+                            break;
+                        }
+                    case ModeByte:
+                        {
+                            // Segment payload bytes are staged in a rented buffer (reused
+                            // across segments) so the charset conversion sees them whole.
+                            rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
+                            var status = DecodeByte(ref reader, totalBits, version, charset, rentedBytes, destination, ref charsWritten);
+                            if (status != QRCodeDecodeStatus.Success)
+                                return status;
+                            break;
+                        }
+                    case ModeEci:
+                        {
+                            var status = ReadEciDesignator(ref reader, totalBits, out var eciValue);
+                            if (status != QRCodeDecodeStatus.Success)
+                                return status;
+                            switch (eciValue)
+                            {
+                                case EciIso8859_1a:
+                                case EciIso8859_1b:
+                                case EciAscii:
+                                    charset = ByteCharset.Iso8859_1;
+                                    break;
+                                case EciUtf8:
+                                    charset = ByteCharset.Utf8;
+                                    break;
+                                default:
+                                    return QRCodeDecodeStatus.UnsupportedContent;
+                            }
+                            break;
+                        }
                     case ModeKanji:
                     case ModeStructuredAppend:
                     case ModeFnc1First:
