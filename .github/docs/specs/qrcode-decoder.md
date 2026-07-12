@@ -174,3 +174,18 @@ Kanji mode, FNC1, Structured Append, other ECI charsets.
   ⌊moduleSize/2⌋ row stride (the vertical cross-check recenters exactly, so striding
   is result-identical) — 23x on the not-found sweep, scalar fallback elsewhere
   (`MICRO_OPTIMIZATION_AlignmentFind` in the MicroBenchmarks repository).
+- The finder scan reuses the same SIMD mask-walk kernel shape, but its row stride
+  cannot come from the module size — the module size is unknown before detection.
+  The bound comes from the worst case instead: the 1:1:3:1:1 band is 3 modules tall
+  and a version-40 symbol filling the frame has the smallest possible modules, so
+  stride 3·height/(4·177) still hits every supported symbol's band several times.
+  The key trick making striding envelope-safe: a failed stride pass rescans *only
+  the skipped rows*, keeping its candidates — the union covers exactly the rows of
+  a full scan for exactly one sweep of total work, so detection can never regress
+  (a naive full-rescan fallback measured 0.87x, i.e. a regression, in the scalar
+  variant). The best-3 selection before that fallback must run on a copy: it
+  compacts and sorts the candidate list in place. Combined result 9.6-11.4x on the
+  scan, image E2E (`Image_Url_M`) 309 µs → 132 µs (−57%); the SIMD walk alone is
+  bit-identical to the scalar walk and parity-tested
+  (`MICRO_OPTIMIZATION_FinderScan` in the MicroBenchmarks repository). Otsu
+  binarization is now the largest remaining full-image pass.
