@@ -77,6 +77,8 @@ jobs:
       - name: Build
         run: dotnet build -c Release
       - name: Test
+        env:
+          TUNIT_MAX_PARALLEL_TESTS: 4
         run: dotnet test -c Release --no-build
 
   build-dotnet:

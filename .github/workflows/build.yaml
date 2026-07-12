@@ -44,6 +44,9 @@ jobs:
       - name: Build
         run: dotnet build -c Release
       - name: Test
+        env:
+          # Cap TUnit parallelism to match typical GHA runner cores (avoids CPU-heavy QR/Skia tests oversubscribing).
+          TUNIT_MAX_PARALLEL_TESTS: 4
         run: dotnet test -c Release
 
   run:
