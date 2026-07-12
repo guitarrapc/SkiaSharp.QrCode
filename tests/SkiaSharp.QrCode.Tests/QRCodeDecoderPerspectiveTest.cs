@@ -22,6 +22,12 @@ public class QRCodeDecoderPerspectiveTest
     [InlineData(10, 0.08f)]
     [InlineData(15, 0.04f)]
     [InlineData(15, 0.06f)]
+    // Version 14+ engages the piecewise alignment mesh: local anchors extend the
+    // envelope where the single global homography's fourth anchor degrades
+    [InlineData(15, 0.08f)]
+    [InlineData(20, 0.04f)] // regression guard: snapped one version low / bent global anchor before the mesh
+    [InlineData(25, 0.04f)]
+    [InlineData(25, 0.08f)]
     public void Decode_Keystone(int version, float tilt)
     {
         var content = $"perspective v{version} tilt {tilt}";

@@ -127,31 +127,61 @@ internal static class QRImageDecoder
     {
         var transform = BuildGridTransform(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, moduleSize);
 
+        // Version 7+ symbols carry a lattice of alignment patterns; when most of
+        // them are detected, a piecewise mesh replaces the single global homography
+        // (local anchors absorb the measurement noise that otherwise scales with
+        // distance across large symbols).
+        Span<float> meshGridCoords = stackalloc float[MaxMeshNodes];
+        Span<float> meshNodeXs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
+        Span<float> meshNodeYs = stackalloc float[MaxMeshNodes * MaxMeshNodes];
+        var usePiecewise = TryBuildSampleMesh(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, moduleSize, meshGridCoords, meshNodeXs, meshNodeYs, out var meshSize, out _, out _);
+
         var rented = ArrayPool<byte>.Shared.Rent(dimension * dimension);
         try
         {
             var modules = rented.AsSpan(0, dimension * dimension);
-            SampleGrid(luminance, width, height, threshold, transform, dimension, modules);
 
-            var status = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out info);
-            if (status == QRCodeDecodeStatus.Success)
-                return status;
-
-            TransposeInPlace(modules, dimension);
-            var mirroredStatus = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out var mirroredInfo);
-            if (mirroredStatus == QRCodeDecodeStatus.Success)
+            if (usePiecewise)
             {
-                info = mirroredInfo;
-                return mirroredStatus;
+                SampleGridPiecewise(luminance, width, height, threshold, meshGridCoords.Slice(0, meshSize), meshNodeXs, meshNodeYs, meshSize, dimension, modules);
+                var meshStatus = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info);
+                if (meshStatus == QRCodeDecodeStatus.Success)
+                    return meshStatus;
+
+                // Mesh fallback: a partially-detected mesh (unfound nodes keep
+                // extrapolated predictions) can sample worse than the single global
+                // homography — retrying globally guarantees the mesh path never
+                // regresses below it. Failure-path cost only.
             }
 
-            // Both orientations failed: report the original attempt's diagnostics
-            return status;
+            SampleGrid(luminance, width, height, threshold, transform, dimension, modules);
+            return DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info);
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
+    }
+
+    /// <summary>
+    /// Decodes the sampled matrix, retrying once transposed (mirrored capture).
+    /// On failure reports the non-mirrored attempt's diagnostics.
+    /// </summary>
+    private static QRCodeDecodeStatus DecodeWithMirrorRetry(Span<byte> modules, int dimension, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
+    {
+        var status = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out info);
+        if (status == QRCodeDecodeStatus.Success)
+            return status;
+
+        TransposeInPlace(modules, dimension);
+        var mirroredStatus = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out var mirroredInfo);
+        if (mirroredStatus == QRCodeDecodeStatus.Success)
+        {
+            info = mirroredInfo;
+            return mirroredStatus;
+        }
+
+        return status;
     }
 
     /// <summary>
@@ -399,6 +429,319 @@ internal static class QRImageDecoder
                     if (!dark)
                         return step - 0.5f;
                     break;
+            }
+        }
+    }
+
+    // Alignment lattice: at most 7 coordinates per axis (ISO/IEC 18004 Annex E)
+    private const int MaxMeshNodes = 7;
+
+    /// <summary>
+    /// Builds the piecewise sampling mesh for version 7+ symbols: nodes at every
+    /// alignment lattice position (grid coordinate c + 0.5 for each Annex E center
+    /// coordinate c), located by the alignment finder around the global-transform
+    /// prediction. Unfound nodes keep the prediction; the three finder corners have
+    /// no alignment pattern and always keep it (the prediction is anchored by the
+    /// finder itself there).
+    /// </summary>
+    /// <returns>
+    /// True when the mesh should be used: at least half of the searched nodes were
+    /// actually detected. With mostly-predicted nodes the mesh is merely a bilinear
+    /// approximation of the global homography — strictly worse, so the caller keeps
+    /// the global transform instead.
+    /// </returns>
+    internal static bool TryBuildSampleMesh(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<float> gridCoords, Span<float> nodeXs, Span<float> nodeYs, out int meshSize, out int searchedNodes, out int foundNodes)
+    {
+        meshSize = 0;
+        searchedNodes = 0;
+        foundNodes = 0;
+        var version = (dimension - 17) / 4;
+        if (version < 7)
+            return false;
+
+        var baseValues = QRCodeConstants.AlignmentPatternBaseValues.Slice((version - 1) * 7, 7);
+        var count = 0;
+        for (var i = 0; i < 7; i++)
+        {
+            if (baseValues[i] != 0)
+                gridCoords[count++] = baseValues[i] + 0.5f;
+        }
+        // Mesh needs a 4×4 lattice (version 14+): quadratic edge extrapolation
+        // requires three interior nodes per line, and the linear fallback re-breaks
+        // the first cell band through the same foreshortening drift it is meant to
+        // fix. Below that the global homography's envelope is fine anyway (small
+        // spans keep its fourth-anchor error inside the alignment search window).
+        if (count < 4)
+            return false;
+        meshSize = count;
+
+        var span = dimension - 7;
+        (float X, float Y) axisX = ((topRight.X - topLeft.X) / span, (topRight.Y - topLeft.Y) / span);
+        (float X, float Y) axisY = ((bottomLeft.X - topLeft.X) / span, (bottomLeft.Y - topLeft.Y) / span);
+
+        // Wavefront propagation from the top-left: each interior node is predicted
+        // from its three already-processed neighbors via the local parallelogram
+        // P(i,j) = P(i-1,j) + P(i,j-1) - P(i-1,j-1). Local extrapolation tracks the
+        // perspective cell by cell, so predictions stay within the small search
+        // window even where the global transform has drifted — its fourth anchor
+        // carries the full parallelogram error (≈ 2·keystone-shrink, many modules on
+        // large symbols), so predicting every node through it would make detection
+        // fail exactly when the mesh is needed most.
+        var searched = 0;
+        var found = 0;
+        Span<bool> nodeFound = stackalloc bool[MaxMeshNodes * MaxMeshNodes];
+        nodeFound.Clear();
+        for (var j = 0; j < count; j++)
+        {
+            for (var i = 0; i < count; i++)
+            {
+                var node = j * count + i;
+                float predictedX;
+                float predictedY;
+                var anySourceFound = false;
+                if (i >= 1 && j >= 1)
+                {
+                    predictedX = nodeXs[node - 1] + nodeXs[node - count] - nodeXs[node - count - 1];
+                    predictedY = nodeYs[node - 1] + nodeYs[node - count] - nodeYs[node - count - 1];
+                    anySourceFound = nodeFound[node - 1] || nodeFound[node - count];
+                }
+                else
+                {
+                    // First lattice row/column: seeded from the finder-only affine
+                    // frame, NOT the global transform — the global fourth anchor
+                    // carries the parallelogram/detection error and would bend these
+                    // seeds (and with them every wavefront prediction downstream).
+                    // Along the top/left edges the finder affine is nearly exact.
+                    predictedX = topLeft.X + (gridCoords[i] - 3.5f) * axisX.X + (gridCoords[j] - 3.5f) * axisY.X;
+                    predictedY = topLeft.Y + (gridCoords[i] - 3.5f) * axisX.Y + (gridCoords[j] - 3.5f) * axisY.Y;
+                }
+                nodeXs[node] = predictedX;
+                nodeYs[node] = predictedY;
+
+                // Only interior lattice nodes are searched. Coordinate-6 rows/columns
+                // lie ON the timing lines, whose perfect 1-module alternation floods
+                // the light-dark-light scan with false candidates (a single accepted
+                // fake bends the whole top/left mesh band); the finder corners have
+                // no alignment pattern at all. Both keep the prediction.
+                if (baseValues[i] == 6 || baseValues[j] == 6)
+                    continue;
+
+                searched++;
+                // Adaptive window: wavefront starters (no detected node among the
+                // parallelogram sources) still carry the affine seeds' foreshortening
+                // drift and get a wider window; once a detected neighbor feeds the
+                // prediction, drift differences cancel and the tight window applies.
+                // Keeping the wide window rare matters — a wide-window false positive
+                // does not stay local, the wavefront propagates it downstream
+                // (measured as a broad regression when every node searched wide).
+                var window = anySourceFound ? 2.5f : 4f;
+                if (AlignmentPatternFinder.TryFind(luminance, width, height, threshold, predictedX, predictedY, moduleSize, axisX, axisY, window, out var foundX, out var foundY))
+                {
+                    nodeXs[node] = foundX;
+                    nodeYs[node] = foundY;
+                    nodeFound[node] = true;
+                    found++;
+                }
+            }
+        }
+
+        // Refinement pass: when nodes were missed, rebuild a homography from the
+        // three finder centers plus the detected node closest to the bottom-right
+        // lattice corner (a reliable, ring-validated fourth correspondence — unlike
+        // the global transform's swept-window anchor), then re-search the missed
+        // nodes around its predictions. For an exact-homography distortion four
+        // exact correspondences reproduce the mapping, so the remaining nodes land
+        // within the tight window even where the wavefront seeds drifted.
+        // Iterated: each round can push the anchor further toward the bottom-right,
+        // improving the next round's predictions; stops when a round finds nothing.
+        for (var round = 0; round < 4 && found > 0 && found < searched; round++)
+        {
+            var best = -1;
+            var bestRank = -1;
+            for (var j = count - 1; j >= 1; j--)
+            {
+                for (var i = count - 1; i >= 1; i--)
+                {
+                    if (nodeFound[j * count + i] && i + j > bestRank)
+                    {
+                        best = j * count + i;
+                        bestRank = i + j;
+                    }
+                }
+            }
+
+            // Require the anchor to be genuinely interior-far so the four
+            // correspondences form a non-degenerate quad
+            if (best < 0 || bestRank < 2)
+                break;
+
+            var bestI = best % count;
+            var bestJ = best / count;
+            var refined = PerspectiveTransform.QuadrilateralToQuadrilateral(
+                3.5f, 3.5f,
+                dimension - 3.5f, 3.5f,
+                gridCoords[bestI], gridCoords[bestJ],
+                3.5f, dimension - 3.5f,
+                topLeft.X, topLeft.Y,
+                topRight.X, topRight.Y,
+                nodeXs[best], nodeYs[best],
+                bottomLeft.X, bottomLeft.Y);
+
+            var foundThisRound = 0;
+            for (var j = 0; j < count; j++)
+            {
+                for (var i = 0; i < count; i++)
+                {
+                    var node = j * count + i;
+                    if (nodeFound[node] || baseValues[i] == 6 || baseValues[j] == 6)
+                        continue;
+
+                    refined.Transform(gridCoords[i], gridCoords[j], out var predictedX, out var predictedY);
+                    nodeXs[node] = predictedX;
+                    nodeYs[node] = predictedY;
+                    if (AlignmentPatternFinder.TryFind(luminance, width, height, threshold, predictedX, predictedY, moduleSize, axisX, axisY, allowanceModules: 2.5f, out var foundX, out var foundY))
+                    {
+                        nodeXs[node] = foundX;
+                        nodeYs[node] = foundY;
+                        nodeFound[node] = true;
+                        found++;
+                        foundThisRound++;
+                    }
+                }
+            }
+
+            if (foundThisRound == 0)
+                break;
+        }
+
+        searchedNodes = searched;
+        foundNodes = found;
+        if (found * 2 < searched)
+            return false;
+
+        // Second pass: re-derive the prediction-only edge nodes (coordinate-6 row
+        // and column plus the finder corners) from the detected interior nodes by
+        // extrapolation along their lattice row/column. The affine seeds are good
+        // enough to FIND patterns, but not to SAMPLE with: projective foreshortening
+        // makes lattice spacing non-uniform, and the affine (average-slope) edge
+        // prediction drifts up to ~1.5 modules mid-edge — enough to garble the whole
+        // first cell band. LINEAR extrapolation fails for the same reason (points on
+        // the lattice line are collinear, but their spacing along it is projective):
+        // quadratic (Lagrange) extrapolation through three interior nodes captures
+        // the first-order foreshortening change (measured ~1 px residual where
+        // linear was ~12 px off). Falls back to linear when only two interior nodes
+        // exist (mesh size 3, versions 7-13, where spans are small).
+        for (var i = 1; i < count; i++)
+        {
+            Extrapolate(nodeXs, nodeYs, gridCoords, count, target: i, stride: count, first: count + i);
+        }
+        for (var j = 1; j < count; j++)
+        {
+            Extrapolate(nodeXs, nodeYs, gridCoords, count, target: j * count, stride: 1, first: j * count + 1);
+        }
+        // Top-left corner: average of the row and column extrapolations through the
+        // just-corrected edge nodes
+        {
+            Span<float> cornerX = stackalloc float[2];
+            Span<float> cornerY = stackalloc float[2];
+            var saveX = nodeXs[0];
+            var saveY = nodeYs[0];
+            Extrapolate(nodeXs, nodeYs, gridCoords, count, target: 0, stride: 1, first: 1);
+            cornerX[0] = nodeXs[0];
+            cornerY[0] = nodeYs[0];
+            nodeXs[0] = saveX;
+            nodeYs[0] = saveY;
+            Extrapolate(nodeXs, nodeYs, gridCoords, count, target: 0, stride: count, first: count);
+            cornerX[1] = nodeXs[0];
+            cornerY[1] = nodeYs[0];
+            nodeXs[0] = (cornerX[0] + cornerX[1]) / 2f;
+            nodeYs[0] = (cornerY[0] + cornerY[1]) / 2f;
+        }
+
+        return true;
+
+        // Extrapolates the node at `target` (grid parameter gridCoords[0]) from the
+        // nodes at `first`, `first + stride`, (and `first + 2*stride` when available)
+        // whose grid parameters are gridCoords[1..3].
+        static void Extrapolate(Span<float> nodeXs, Span<float> nodeYs, ReadOnlySpan<float> gridCoords, int count, int target, int stride, int first)
+        {
+            var t0 = gridCoords[0];
+            var t1 = gridCoords[1];
+            var t2 = gridCoords[2];
+
+            if (count >= 4)
+            {
+                // Quadratic Lagrange through three interior nodes
+                var t3 = gridCoords[3];
+                var l1 = (t0 - t2) * (t0 - t3) / ((t1 - t2) * (t1 - t3));
+                var l2 = (t0 - t1) * (t0 - t3) / ((t2 - t1) * (t2 - t3));
+                var l3 = (t0 - t1) * (t0 - t2) / ((t3 - t1) * (t3 - t2));
+                nodeXs[target] = l1 * nodeXs[first] + l2 * nodeXs[first + stride] + l3 * nodeXs[first + 2 * stride];
+                nodeYs[target] = l1 * nodeYs[first] + l2 * nodeYs[first + stride] + l3 * nodeYs[first + 2 * stride];
+                return;
+            }
+
+            // Linear through two interior nodes
+            var ratio = (t0 - t1) / (t2 - t1);
+            nodeXs[target] = nodeXs[first] + (nodeXs[first + stride] - nodeXs[first]) * ratio;
+            nodeYs[target] = nodeYs[first] + (nodeYs[first + stride] - nodeYs[first]) * ratio;
+        }
+    }
+
+    /// <summary>
+    /// Samples every module center through the piecewise-bilinear mesh. Bilinear
+    /// interpolation is exact at the nodes, continuous across cell edges (adjacent
+    /// cells share the same edge interpolation, unlike per-cell homographies), and
+    /// division-free; within ~20-module cells its deviation from the true projective
+    /// map is second-order small. Modules outside the lattice (borders, ≤ 6 modules)
+    /// extrapolate the nearest cell.
+    /// </summary>
+    internal static void SampleGridPiecewise(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, ReadOnlySpan<float> gridCoords, ReadOnlySpan<float> nodeXs, ReadOnlySpan<float> nodeYs, int meshSize, int dimension, Span<byte> modules)
+    {
+        var cells = meshSize - 1;
+        Span<float> rowXs = stackalloc float[MaxMeshNodes];
+        Span<float> rowYs = stackalloc float[MaxMeshNodes];
+
+        var cellJ = 0;
+        for (var v = 0; v < dimension; v++)
+        {
+            var gridY = v + 0.5f;
+            while (cellJ < cells - 1 && gridY >= gridCoords[cellJ + 1])
+                cellJ++;
+            var t = (gridY - gridCoords[cellJ]) / (gridCoords[cellJ + 1] - gridCoords[cellJ]);
+
+            // Interpolate the lattice columns at this row once
+            for (var i = 0; i < meshSize; i++)
+            {
+                var node0 = cellJ * meshSize + i;
+                var node1 = (cellJ + 1) * meshSize + i;
+                rowXs[i] = nodeXs[node0] + (nodeXs[node1] - nodeXs[node0]) * t;
+                rowYs[i] = nodeYs[node0] + (nodeYs[node1] - nodeYs[node0]) * t;
+            }
+
+            var rowBase = v * dimension;
+            var cellI = 0;
+            for (var u = 0; u < dimension; u++)
+            {
+                var gridX = u + 0.5f;
+                while (cellI < cells - 1 && gridX >= gridCoords[cellI + 1])
+                    cellI++;
+                var s = (gridX - gridCoords[cellI]) / (gridCoords[cellI + 1] - gridCoords[cellI]);
+                var x = rowXs[cellI] + (rowXs[cellI + 1] - rowXs[cellI]) * s;
+                var y = rowYs[cellI] + (rowYs[cellI + 1] - rowYs[cellI]) * s;
+
+                var px = (int)(x + 0.5f);
+                var py = (int)(y + 0.5f);
+                if (px < 0)
+                    px = 0;
+                else if (px >= width)
+                    px = width - 1;
+                if (py < 0)
+                    py = 0;
+                else if (py >= height)
+                    py = height - 1;
+
+                modules[rowBase + u] = luminance[py * width + px] < threshold ? (byte)1 : (byte)0;
             }
         }
     }

@@ -15,13 +15,17 @@ in code comments next to the code (see the [spec-to-code map](qrcode-specs.md)).
 - **Image level** — from `SKBitmap` or a grayscale luminance span. Adds binarization
   (Otsu), finder pattern detection, orientation resolution, bottom-right alignment
   pattern search (version 2+) and projective grid sampling (4-point perspective
-  transform) in front of the matrix pipeline.
+  transform) in front of the matrix pipeline. Version 14+ symbols additionally build
+  a piecewise-bilinear mesh over the full alignment-pattern lattice (wavefront
+  detection with iterated homography refinement); a partially-detected mesh falls
+  back to the global transform, so the mesh can never decode worse than it.
 
 Supported: versions 1-40, all ECC levels, Numeric / Alphanumeric / Byte segments,
 ECI (ISO-8859-1 / UTF-8), UTF-8 BOM, multi-segment streams; at the image level:
 arbitrary rotation, mirroring, reflectance reversal (light-on-dark) and mild
 perspective (Tier 2 — measured envelope: keystone up to ~12-15% of the edge for
-versions 2-5, ~6-8% for versions 10-15, ~2% for version 1 which has no alignment
+versions 2-5, ~6-10% for versions 10-15, ~8% for versions 14-25 via the mesh
+(content-marginal around version 20), ~2% for version 1 which has no alignment
 pattern). Unsupported (detected and reported, never misdecoded):
 Kanji mode, FNC1, Structured Append, other ECI charsets.
 
@@ -103,6 +107,25 @@ Kanji mode, FNC1, Structured Append, other ECI charsets.
   reject the true alignment pattern — the fix that rescued keystone-only inputs
   broke rotation+keystone combinations until the ring samples were taken along the
   finder-derived grid axis vectors.
+- **The piecewise mesh must not trust any single upstream estimate.** Every naive
+  seeding strategy failed in a measured way before the shipped design emerged:
+  (a) predicting all lattice nodes through the *global transform* fails exactly when
+  the mesh is needed — its fourth anchor carries the parallelogram error
+  (≈ 2·keystone-shrink, ~9 modules at v20/4%); (b) a *finder-only affine* seed
+  drifts up to ~1.5 modules mid-edge because projective foreshortening makes lattice
+  spacing non-uniform; (c) *linear* extrapolation of the prediction-only edge nodes
+  fails for the same reason (lattice points are collinear but their spacing along
+  the line is projective — measured 12 px off where quadratic Lagrange left 1 px);
+  (d) *wide search windows* turn data-area false positives into cascading mesh
+  corruption, because the wavefront propagates every accepted node into downstream
+  predictions. The shipped combination: wavefront parallelogram prediction from
+  processed neighbors, tight (2.5-module) windows with a wider window only for
+  starters, iterated homography refinement anchored on the farthest detected node,
+  quadratic edge extrapolation, and an unconditional global-transform fallback on
+  decode failure so the mesh can never regress below the single homography.
+- **Coordinate-6 lattice lines lie on the timing patterns** — their perfect
+  1-module alternation floods the light-dark-light alignment signature with false
+  candidates, so edge lattice nodes are never searched, only derived.
 - **Pixel-quantized module-size measurement biases the dimension estimate one whole
   version low.** The dark-light-dark runs walk in 1-pixel steps and originally
   returned the position of the first light pixel — the boundary rounded *up*, a
