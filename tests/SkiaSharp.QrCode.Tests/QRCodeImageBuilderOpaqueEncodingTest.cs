@@ -1,5 +1,4 @@
 using SkiaSharp.QrCode.Image;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -13,18 +12,18 @@ public class QRCodeImageBuilderOpaqueEncodingTest
 {
     private const string TestContent = "opaque-encoding-test";
 
-    [Fact]
-    public void DefaultColors_ProducesOpaqueImage()
+    [Test]
+    public async Task DefaultColors_ProducesOpaqueImage()
     {
         var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
 
         using var image = new QRCodeImageBuilder(qr).WithSize(300, 300).ToImage();
 
-        Assert.Equal(SKAlphaType.Opaque, image.AlphaType);
+        await Assert.That(image.AlphaType).IsEqualTo(SKAlphaType.Opaque);
     }
 
-    [Fact]
-    public void TransparentClearWithPadding_KeepsAlpha()
+    [Test]
+    public async Task TransparentClearWithPadding_KeepsAlpha()
     {
         // Pad area stays transparent, so the surface must keep its alpha channel.
         const int modulePixelSize = 4;
@@ -36,14 +35,14 @@ public class QRCodeImageBuilderOpaqueEncodingTest
             .WithSize(canvasSide, canvasSide)
             .ToImage();
 
-        Assert.Equal(SKAlphaType.Premul, image.AlphaType);
+        await Assert.That(image.AlphaType).IsEqualTo(SKAlphaType.Premul);
 
         using var bitmap = SKBitmap.FromImage(image);
-        Assert.Equal(0, bitmap.GetPixel(0, 0).Alpha);
+        await Assert.That(bitmap.GetPixel(0, 0).Alpha).IsEqualTo((byte)0);
     }
 
-    [Fact]
-    public void OpaqueClearWithPadding_ProducesOpaqueImage()
+    [Test]
+    public async Task OpaqueClearWithPadding_ProducesOpaqueImage()
     {
         const int modulePixelSize = 4;
         var qr = QRCodeGenerator.CreateQrCode(TestContent, ECCLevel.M);
@@ -55,11 +54,11 @@ public class QRCodeImageBuilderOpaqueEncodingTest
             .WithColors(clearColor: SKColors.Red)
             .ToImage();
 
-        Assert.Equal(SKAlphaType.Opaque, image.AlphaType);
+        await Assert.That(image.AlphaType).IsEqualTo(SKAlphaType.Opaque);
     }
 
-    [Fact]
-    public void TranslucentBackground_WithTransparentClear_KeepsAlpha()
+    [Test]
+    public async Task TranslucentBackground_WithTransparentClear_KeepsAlpha()
     {
         // Translucent background over a transparent canvas: pixels stay
         // translucent, so the alpha channel must be preserved.
@@ -71,14 +70,14 @@ public class QRCodeImageBuilderOpaqueEncodingTest
             .WithColors(backgroundColor: translucentWhite)
             .ToImage();
 
-        Assert.Equal(SKAlphaType.Premul, image.AlphaType);
+        await Assert.That(image.AlphaType).IsEqualTo(SKAlphaType.Premul);
 
         using var bitmap = SKBitmap.FromImage(image);
-        Assert.True(bitmap.GetPixel(0, 0).Alpha < byte.MaxValue);
+        await Assert.That(bitmap.GetPixel(0, 0).Alpha < byte.MaxValue).IsTrue();
     }
 
-    [Fact]
-    public void TranslucentBackground_OverOpaqueClear_ProducesOpaqueImage()
+    [Test]
+    public async Task TranslucentBackground_OverOpaqueClear_ProducesOpaqueImage()
     {
         // The opaque cleared canvas is the base layer; the translucent background
         // blends over it and every pixel stays opaque.
@@ -90,11 +89,11 @@ public class QRCodeImageBuilderOpaqueEncodingTest
             .WithColors(backgroundColor: translucentWhite, clearColor: SKColors.Red)
             .ToImage();
 
-        Assert.Equal(SKAlphaType.Opaque, image.AlphaType);
+        await Assert.That(image.AlphaType).IsEqualTo(SKAlphaType.Opaque);
     }
 
-    [Fact]
-    public void OpaquePng_DecodesToSamePixelsAsPremulRender()
+    [Test]
+    public async Task OpaquePng_DecodesToSamePixelsAsPremulRender()
     {
         // The encoded PNG must stay visually identical to the premul render;
         // only the alpha channel representation may differ.
@@ -110,13 +109,13 @@ public class QRCodeImageBuilderOpaqueEncodingTest
             canvas.Render(qr, SKRect.Create(0, 0, size, size));
         }
 
-        Assert.Equal(size, decoded.Width);
-        Assert.Equal(size, decoded.Height);
+        await Assert.That(decoded.Width).IsEqualTo(size);
+        await Assert.That(decoded.Height).IsEqualTo(size);
         for (var y = 0; y < size; y += 3)
         {
             for (var x = 0; x < size; x += 3)
             {
-                Assert.Equal(reference.GetPixel(x, y), decoded.GetPixel(x, y));
+                await Assert.That(decoded.GetPixel(x, y)).IsEqualTo(reference.GetPixel(x, y));
             }
         }
     }

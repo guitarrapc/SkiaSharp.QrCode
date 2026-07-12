@@ -1,5 +1,4 @@
 using SkiaSharp.QrCode.Image;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -19,23 +18,23 @@ public class QRCodeRendererRunMergeParityTest
         public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint) => canvas.DrawRect(rect, paint);
     }
 
-    [Theory]
-    [InlineData("HELLO WORLD 2026", 0, 290)] // v1-2, no quiet zone, exact multiple
-    [InlineData("HELLO WORLD 2026", 4, 290)] // v1-2, standard quiet zone
-    [InlineData("HELLO WORLD 2026", 4, 411)] // fractional cell size
-    [InlineData("https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md?foo=sample&bar=dummy", 4, 512)] // v~5
-    public void MergedRuns_MatchPerModuleRendering(string content, int quietZone, int imageSize)
+    [Test]
+    [Arguments("HELLO WORLD 2026", 0, 290)] // v1-2, no quiet zone, exact multiple
+    [Arguments("HELLO WORLD 2026", 4, 290)] // v1-2, standard quiet zone
+    [Arguments("HELLO WORLD 2026", 4, 411)] // fractional cell size
+    [Arguments("https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md?foo=sample&bar=dummy", 4, 512)] // v~5
+    public async Task MergedRuns_MatchPerModuleRendering(string content, int quietZone, int imageSize)
     {
         var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, quietZoneSize: quietZone);
 
         var merged = RenderPixels(qr, imageSize, moduleShape: null);
         var perModule = RenderPixels(qr, imageSize, moduleShape: new PerModuleRectangleShape());
 
-        Assert.Equal(perModule, merged);
+        await Assert.That(merged).IsEquivalentTo(perModule);
     }
 
-    [Fact]
-    public void MergedRuns_WithGradient_MatchPerModuleRendering()
+    [Test]
+    public async Task MergedRuns_WithGradient_MatchPerModuleRendering()
     {
         var qr = QRCodeGenerator.CreateQrCode("gradient-run-merge-parity", ECCLevel.M);
         var gradient = new GradientOptions([SKColors.Purple, SKColors.Orange], GradientDirection.TopLeftToBottomRight);
@@ -43,14 +42,14 @@ public class QRCodeRendererRunMergeParityTest
         var merged = RenderPixels(qr, 512, moduleShape: null, gradientOptions: gradient);
         var perModule = RenderPixels(qr, 512, moduleShape: new PerModuleRectangleShape(), gradientOptions: gradient);
 
-        Assert.Equal(perModule, merged);
+        await Assert.That(merged).IsEquivalentTo(perModule);
     }
 
-    [Theory]
-    [InlineData(0.3f, 0.7f, 1.0f)]   // sub-pixel translation
-    [InlineData(0f, 0f, 1.37f)]      // fractional upscale
-    [InlineData(5.5f, 3.25f, 0.61f)] // sub-pixel translation + fractional downscale
-    public void MergedRuns_WithAxisPreservingCanvasTransform_MatchPerModuleRendering(float dx, float dy, float scale)
+    [Test]
+    [Arguments(0.3f, 0.7f, 1.0f)]   // sub-pixel translation
+    [Arguments(0f, 0f, 1.37f)]      // fractional upscale
+    [Arguments(5.5f, 3.25f, 0.61f)] // sub-pixel translation + fractional downscale
+    public async Task MergedRuns_WithAxisPreservingCanvasTransform_MatchPerModuleRendering(float dx, float dy, float scale)
     {
         // Axis-preserving transforms (translation/scale) keep both paths
         // pixel-identical: they compute the same edge coordinates and rasterize
@@ -63,11 +62,11 @@ public class QRCodeRendererRunMergeParityTest
         var merged = RenderTransformedPixels(qr, moduleShape: null, dx, dy, scale);
         var perModule = RenderTransformedPixels(qr, new PerModuleRectangleShape(), dx, dy, scale);
 
-        Assert.Equal(perModule, merged);
+        await Assert.That(merged).IsEquivalentTo(perModule);
     }
 
-    [Fact]
-    public void MergedRuns_WithFinderPatternShape_MatchPerModuleRendering()
+    [Test]
+    public async Task MergedRuns_WithFinderPatternShape_MatchPerModuleRendering()
     {
         // Runs must break at finder pattern modules so the custom finder shape
         // is not painted over.
@@ -76,7 +75,7 @@ public class QRCodeRendererRunMergeParityTest
         var merged = RenderPixels(qr, 512, moduleShape: null, finderPatternShape: RectangleFinderPatternShape.Default);
         var perModule = RenderPixels(qr, 512, moduleShape: new PerModuleRectangleShape(), finderPatternShape: RectangleFinderPatternShape.Default);
 
-        Assert.Equal(perModule, merged);
+        await Assert.That(merged).IsEquivalentTo(perModule);
     }
 
     private static byte[] RenderTransformedPixels(QRCodeData qr, ModuleShape? moduleShape, float dx, float dy, float scale)

@@ -1,5 +1,3 @@
-using Xunit;
-
 namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
@@ -8,55 +6,55 @@ namespace SkiaSharp.QrCode.Tests;
 /// </summary>
 public class QRCodeDecoderImageTest
 {
-    [Theory]
-    [InlineData("Hello, World!", ECCLevel.M)]
-    [InlineData("0123456789", ECCLevel.L)]
-    [InlineData("HELLO WORLD $%*+-./:", ECCLevel.Q)]
-    [InlineData("https://example.com/path?query=value", ECCLevel.H)]
-    public void Decode_RenderedBitmap(string content, ECCLevel eccLevel)
+    [Test]
+    [Arguments("Hello, World!", ECCLevel.M)]
+    [Arguments("0123456789", ECCLevel.L)]
+    [Arguments("HELLO WORLD $%*+-./:", ECCLevel.Q)]
+    [Arguments("https://example.com/path?query=value", ECCLevel.H)]
+    public async Task Decode_RenderedBitmap(string content, ECCLevel eccLevel)
     {
         using var bitmap = RenderQr(content, eccLevel, pixelsPerModule: 8);
 
-        Assert.True(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info), $"status={info.Status}");
-        Assert.Equal(content, decoded);
-        Assert.Equal(eccLevel, info.EccLevel);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
+        await Assert.That(info.EccLevel).IsEqualTo(eccLevel);
     }
 
-    [Theory]
-    [InlineData("こんにちは世界")]
-    [InlineData("🎉 emoji 🎊")]
-    public void Decode_RenderedBitmap_Utf8(string content)
+    [Test]
+    [Arguments("縺薙ｓ縺ｫ縺｡縺ｯ荳也阜")]
+    [Arguments("脂 emoji 至")]
+    public async Task Decode_RenderedBitmap_Utf8(string content)
     {
         using var bitmap = RenderQr(content, ECCLevel.M, pixelsPerModule: 8, eciMode: EciMode.Utf8);
 
-        Assert.True(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info), $"status={info.Status}");
-        Assert.Equal(content, decoded);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
-    [Theory]
-    [InlineData(3)]
-    [InlineData(5)]
-    [InlineData(11)]
-    public void Decode_VariousModuleSizes(int pixelsPerModule)
+    [Test]
+    [Arguments(3)]
+    [Arguments(5)]
+    [Arguments(11)]
+    public async Task Decode_VariousModuleSizes(int pixelsPerModule)
     {
         var content = "module size test";
         using var bitmap = RenderQr(content, ECCLevel.M, pixelsPerModule);
 
-        Assert.True(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info), $"ppm={pixelsPerModule}, status={info.Status}");
-        Assert.Equal(content, decoded);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"ppm={pixelsPerModule}, status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
-    [Theory]
-    [InlineData(12)]
-    [InlineData(13)]
-    [InlineData(14)] // 512px / 81 modules = 6.32 px/module — snapped one version low before the run-boundary fix
-    [InlineData(15)]
-    [InlineData(16)]
-    [InlineData(17)] // 5.51 px/module — same regression
-    [InlineData(18)]
-    [InlineData(20)]
-    [InlineData(25)]
-    public void Decode_FixedCanvas_NonIntegerModuleSize(int version)
+    [Test]
+    [Arguments(12)]
+    [Arguments(13)]
+    [Arguments(14)] // 512px / 81 modules = 6.32 px/module 遯ｶ繝ｻsnapped one version low before the run-boundary fix
+    [Arguments(15)]
+    [Arguments(16)]
+    [Arguments(17)] // 5.51 px/module 遯ｶ繝ｻsame regression
+    [Arguments(18)]
+    [Arguments(20)]
+    [Arguments(25)]
+    public async Task Decode_FixedCanvas_NonIntegerModuleSize(int version)
     {
         // A fixed 512px canvas gives fractional pixels-per-module at most versions;
         // the pixel-quantized module-size measurement must not snap the dimension
@@ -71,51 +69,51 @@ public class QRCodeDecoderImageTest
             canvas.Flush();
         }
 
-        Assert.True(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info), $"version={version}, status={info.Status}, detected version={info.Version}");
-        Assert.Equal(content, decoded);
-        Assert.Equal(version, info.Version);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"version={version}, status={info.Status}, detected version={info.Version}");
+        await Assert.That(decoded).IsEqualTo(content);
+        await Assert.That(info.Version).IsEqualTo(version);
     }
 
-    [Fact]
-    public void Decode_LargerVersion()
+    [Test]
+    public async Task Decode_LargerVersion()
     {
         var content = string.Join(";", Enumerable.Range(0, 40).Select(i => $"item{i:D4}"));
         using var bitmap = RenderQr(content, ECCLevel.M, pixelsPerModule: 6);
 
-        Assert.True(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info), $"status={info.Status}");
-        Assert.Equal(content, decoded);
-        Assert.True(info.Version >= 10, $"expected a large version, got {info.Version}");
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
+        await Assert.That(info.Version >= 10).IsTrue().Because($"expected a large version, got {info.Version}");
     }
 
-    [Theory]
-    [InlineData(90)]
-    [InlineData(180)]
-    [InlineData(270)]
-    public void Decode_RightAngleRotations(int degrees)
+    [Test]
+    [Arguments(90)]
+    [Arguments(180)]
+    [Arguments(270)]
+    public async Task Decode_RightAngleRotations(int degrees)
     {
         var content = $"rotation {degrees}";
         using var bitmap = RenderRotatedQr(content, ECCLevel.M, pixelsPerModule: 8, degrees);
 
-        Assert.True(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info), $"degrees={degrees}, status={info.Status}");
-        Assert.Equal(content, decoded);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"degrees={degrees}, status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
-    [Theory]
-    [InlineData(5)]
-    [InlineData(-7)]
-    [InlineData(30)]
-    [InlineData(45)]
-    public void Decode_ArbitraryRotations(int degrees)
+    [Test]
+    [Arguments(5)]
+    [Arguments(-7)]
+    [Arguments(30)]
+    [Arguments(45)]
+    public async Task Decode_ArbitraryRotations(int degrees)
     {
         var content = $"tilt {degrees}";
         using var bitmap = RenderRotatedQr(content, ECCLevel.M, pixelsPerModule: 8, degrees);
 
-        Assert.True(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info), $"degrees={degrees}, status={info.Status}");
-        Assert.Equal(content, decoded);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"degrees={degrees}, status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
-    [Fact]
-    public void Decode_InvertedImage_LightOnDark()
+    [Test]
+    public async Task Decode_InvertedImage_LightOnDark()
     {
         // Reflectance-reversed rendering (dark-mode style): white modules on black
         var content = "inverted palette";
@@ -128,12 +126,12 @@ public class QRCodeDecoderImageTest
             canvas.Flush();
         }
 
-        Assert.True(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info), $"status={info.Status}");
-        Assert.Equal(content, decoded);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
-    [Fact]
-    public void Decode_MirroredImage()
+    [Test]
+    public async Task Decode_MirroredImage()
     {
         var content = "mirrored capture";
         using var source = RenderQr(content, ECCLevel.M, pixelsPerModule: 8);
@@ -145,12 +143,12 @@ public class QRCodeDecoderImageTest
             canvas.DrawBitmap(source, 0, 0, SKSamplingOptions.Default);
         }
 
-        Assert.True(QRCodeDecoder.TryDecode(mirrored, out var decoded, out var info), $"status={info.Status}");
-        Assert.Equal(content, decoded);
+        await Assert.That(QRCodeDecoder.TryDecode(mirrored, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
-    [Fact]
-    public void Decode_LuminanceSpan()
+    [Test]
+    public async Task Decode_LuminanceSpan()
     {
         var content = "luminance span";
         var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M);
@@ -172,17 +170,19 @@ public class QRCodeDecoderImageTest
             }
         }
 
-        Assert.True(QRCodeDecoder.TryDecodeImage(luminance, width, width, out var decoded, out var info), $"status={info.Status}");
-        Assert.Equal(content, decoded);
+        await Assert.That(QRCodeDecoder.TryDecodeImage(luminance, width, width, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
 
         // Char-span destination path
         Span<char> destination = stackalloc char[QRCodeDecoder.GetMaxDecodedLength(info.Version)];
-        Assert.True(QRCodeDecoder.TryDecodeImage(luminance, width, width, destination, out var charsWritten, out _));
-        Assert.Equal(content, destination.Slice(0, charsWritten).ToString());
+        var ok = QRCodeDecoder.TryDecodeImage(luminance, width, width, destination, out var charsWritten, out _);
+        var decodedString = destination.Slice(0, charsWritten).ToString();
+        await Assert.That(ok).IsTrue();
+        await Assert.That(decodedString).IsEqualTo(content);
     }
 
-    [Fact]
-    public void Decode_GrayBitmap_ColorTypeVariants()
+    [Test]
+    public async Task Decode_GrayBitmap_ColorTypeVariants()
     {
         var content = "gray8 bitmap";
         using var source = RenderQr(content, ECCLevel.M, pixelsPerModule: 8);
@@ -193,12 +193,12 @@ public class QRCodeDecoderImageTest
             canvas.DrawBitmap(source, 0, 0, SKSamplingOptions.Default);
         }
 
-        Assert.True(QRCodeDecoder.TryDecode(gray, out var decoded, out var info), $"status={info.Status}");
-        Assert.Equal(content, decoded);
+        await Assert.That(QRCodeDecoder.TryDecode(gray, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
-    [Fact]
-    public void Decode_BlankBitmap_ReturnsNotDetected()
+    [Test]
+    public async Task Decode_BlankBitmap_ReturnsNotDetected()
     {
         using var bitmap = new SKBitmap(new SKImageInfo(200, 200, SKColorType.Bgra8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(bitmap))
@@ -206,13 +206,13 @@ public class QRCodeDecoderImageTest
             canvas.Clear(SKColors.White);
         }
 
-        Assert.False(QRCodeDecoder.TryDecode(bitmap, out var text, out var info));
-        Assert.Equal(string.Empty, text);
-        Assert.Equal(QRCodeDecodeStatus.NotDetected, info.Status);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var text, out var info)).IsFalse();
+        await Assert.That(text).IsEqualTo(string.Empty);
+        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
     }
 
-    [Fact]
-    public void Decode_NoiseBitmap_ReturnsNotDetected()
+    [Test]
+    public async Task Decode_NoiseBitmap_ReturnsNotDetected()
     {
         using var bitmap = new SKBitmap(new SKImageInfo(200, 200, SKColorType.Bgra8888, SKAlphaType.Premul));
         var random = new Random(42);
@@ -225,21 +225,21 @@ public class QRCodeDecoderImageTest
             }
         }
 
-        Assert.False(QRCodeDecoder.TryDecode(bitmap, out _, out var info));
-        Assert.Equal(QRCodeDecodeStatus.NotDetected, info.Status);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out _, out var info)).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
     }
 
-    [Fact]
-    public void Decode_TinyBitmap_ReturnsNotDetected()
+    [Test]
+    public async Task Decode_TinyBitmap_ReturnsNotDetected()
     {
         using var bitmap = new SKBitmap(new SKImageInfo(10, 10, SKColorType.Bgra8888, SKAlphaType.Premul));
 
-        Assert.False(QRCodeDecoder.TryDecode(bitmap, out _, out var info));
-        Assert.Equal(QRCodeDecodeStatus.NotDetected, info.Status);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out _, out var info)).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
     }
 
-    [Fact]
-    public void Decode_NullBitmap_Throws()
+    [Test]
+    public async Task Decode_NullBitmap_Throws()
     {
         Assert.Throws<ArgumentNullException>(() => QRCodeDecoder.TryDecode((SKBitmap)null!, out _));
     }

@@ -1,5 +1,4 @@
 using SkiaSharp.QrCode.Internals.ImageDecoders;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -12,8 +11,8 @@ namespace SkiaSharp.QrCode.Tests;
 /// </summary>
 public class OtsuThresholdParityTest
 {
-    [Fact]
-    public void WideLoadAndNaiveHistogram_AgreeByteForByte()
+    [Test]
+    public async Task WideLoadAndNaiveHistogram_AgreeByteForByte()
     {
         var inputs = new List<byte[]>
         {
@@ -40,7 +39,7 @@ public class OtsuThresholdParityTest
         {
             var expected = NaiveOtsuThreshold(input);
             var actual = QRImageDecoder.ComputeOtsuThreshold(input);
-            Assert.True(expected == actual, $"threshold mismatch on length={input.Length}: wide={actual}, naive={expected}");
+            await Assert.That(expected == actual).IsTrue().Because($"threshold mismatch on length={input.Length}: wide={actual}, naive={expected}");
         }
     }
 

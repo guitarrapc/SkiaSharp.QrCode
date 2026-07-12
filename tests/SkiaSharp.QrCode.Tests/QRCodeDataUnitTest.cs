@@ -1,22 +1,20 @@
-using Xunit;
-
 namespace SkiaSharp.QrCode.Tests;
 
 public class QRCodeDataUnitTest
 {
-    [Theory]
-    [InlineData(1, 21)]   // Version 1: 21×21 = 441 bits (441 % 8 = 1, padding = 7)
-    [InlineData(2, 25)]   // Version 2: 25×25 = 625 bits (625 % 8 = 1, padding = 7)
-    [InlineData(3, 29)]   // Version 3: 29×29 = 841 bits (841 % 8 = 1, padding = 7)
-    [InlineData(10, 57)]  // Version 10: 57×57 = 3249 bits (3249 % 8 = 1, padding = 7)
-    [InlineData(40, 177)] // Version 40: 177×177 = 31329 bits (31329 % 8 = 1, padding = 7)
-    public void GetRawData_CorrectPadding_ByVersion(int version, int expectedSize)
+    [Test]
+    [Arguments(1, 21)]   // Version 1: 21繝ｻ繝ｻ繝ｻ1 = 441 bits (441 % 8 = 1, padding = 7)
+    [Arguments(2, 25)]   // Version 2: 25繝ｻ繝ｻ繝ｻ5 = 625 bits (625 % 8 = 1, padding = 7)
+    [Arguments(3, 29)]   // Version 3: 29繝ｻ繝ｻ繝ｻ9 = 841 bits (841 % 8 = 1, padding = 7)
+    [Arguments(10, 57)]  // Version 10: 57繝ｻ繝ｻ繝ｻ7 = 3249 bits (3249 % 8 = 1, padding = 7)
+    [Arguments(40, 177)] // Version 40: 177繝ｻ繝ｻ繝ｻ77 = 31329 bits (31329 % 8 = 1, padding = 7)
+    public async Task GetRawData_CorrectPadding_ByVersion(int version, int expectedSize)
     {
         // Create QR code data with specific version
         var qrCode = new QRCodeData(version, quietZoneSize: 0);
 
         // Verify size matches expected
-        Assert.Equal(expectedSize, qrCode.Size);
+        await Assert.That(qrCode.Size).IsEqualTo(expectedSize);
 
         // Get raw data
         var rawData = qrCode.GetRawData();
@@ -27,21 +25,21 @@ public class QRCodeDataUnitTest
         var dataBytesCount = (totalBits + 7) / 8;  // Round up to nearest byte
         var expectedBytes = dataBytesCount + 4;     // +4 for header
 
-        Assert.Equal(expectedBytes, rawData.Length);
+        await Assert.That(rawData.Length).IsEqualTo(expectedBytes);
     }
 
-    [Theory]
-    [InlineData(1, 0, 21)]   // Version 1, no quiet zone: 21×21
-    [InlineData(1, 4, 29)]   // Version 1, quiet zone 4: 29×29
-    [InlineData(2, 0, 25)]   // Version 2, no quiet zone: 25×25
-    [InlineData(2, 4, 33)]   // Version 2, quiet zone 4: 33×33
-    public void GetRawData_CorrectPadding_WithQuietZone(int version, int quietZone, int expectedSize)
+    [Test]
+    [Arguments(1, 0, 21)]   // Version 1, no quiet zone: 21繝ｻ繝ｻ繝ｻ1
+    [Arguments(1, 4, 29)]   // Version 1, quiet zone 4: 29繝ｻ繝ｻ繝ｻ9
+    [Arguments(2, 0, 25)]   // Version 2, no quiet zone: 25繝ｻ繝ｻ繝ｻ5
+    [Arguments(2, 4, 33)]   // Version 2, quiet zone 4: 33繝ｻ繝ｻ繝ｻ3
+    public async Task GetRawData_CorrectPadding_WithQuietZone(int version, int quietZone, int expectedSize)
     {
         // Create QR code
         var qrCode = new QRCodeData(version, quietZoneSize: quietZone);
 
         // Verify size
-        Assert.Equal(expectedSize, qrCode.Size);
+        await Assert.That(qrCode.Size).IsEqualTo(expectedSize);
 
         // Get raw data
         var rawData = qrCode.GetRawData();
@@ -51,34 +49,34 @@ public class QRCodeDataUnitTest
         var totalBits = baseSize * baseSize;
         var expectedBytes = (totalBits + 7) / 8 + 4;
 
-        Assert.Equal(expectedBytes, rawData.Length);
+        await Assert.That(rawData.Length).IsEqualTo(expectedBytes);
     }
 
     /// <summary>
     /// Tests padding formula in isolation - verifies mathematical correctness.
     /// </summary>
-    [Theory]
-    [InlineData(0, 0)]    // Already aligned
-    [InlineData(1, 7)]    // 1 bit → need 7 bits padding
-    [InlineData(7, 1)]    // 7 bits → need 1 bit padding
-    [InlineData(256, 0)]  // 256 bits (32 bytes) → no padding → Edge case
-    [InlineData(257, 7)]  // 257 bits → 7 bits padding
-    [InlineData(441, 7)]  // Version 1 QR (21×21)
-    public void PaddingFormula_CalculatesCorrectBoundary(int totalBits, int expectedPadding)
+    [Test]
+    [Arguments(0, 0)]    // Already aligned
+    [Arguments(1, 7)]    // 1 bit 驕ｶ鄙ｫ繝ｻneed 7 bits padding
+    [Arguments(7, 1)]    // 7 bits 驕ｶ鄙ｫ繝ｻneed 1 bit padding
+    [Arguments(256, 0)]  // 256 bits (32 bytes) 驕ｶ鄙ｫ繝ｻno padding 驕ｶ鄙ｫ繝ｻEdge case
+    [Arguments(257, 7)]  // 257 bits 驕ｶ鄙ｫ繝ｻ7 bits padding
+    [Arguments(441, 7)]  // Version 1 QR (21繝ｻ繝ｻ繝ｻ1)
+    public async Task PaddingFormula_CalculatesCorrectBoundary(int totalBits, int expectedPadding)
     {
         var remainder = totalBits % 8;
 
         // Correct formula
         var boundary = (8 - remainder) % 8;
 
-        Assert.Equal(expectedPadding, boundary);
+        await Assert.That(boundary).IsEqualTo(expectedPadding);
 
         // Verify old formula fails for edge cases
         if (remainder == 0)
         {
             var oldBoundary = 8 - remainder;  // = 8 (wrong!)
-            Assert.Equal(8, oldBoundary);
-            Assert.NotEqual(boundary, oldBoundary);
+            await Assert.That(oldBoundary).IsEqualTo(8);
+            await Assert.That(oldBoundary).IsNotEqualTo(boundary);
         }
     }
 
@@ -87,11 +85,11 @@ public class QRCodeDataUnitTest
     /// <summary>
     /// Tests that QuietZone area remains white (false) after SetCoreData
     /// </summary>
-    [Theory]
-    [InlineData(2, 4)]
-    [InlineData(5, 2)]
-    [InlineData(10, 8)]
-    public void SetCoreData_PreservesQuietZone(int version, int quietZoneSize)
+    [Test]
+    [Arguments(2, 4)]
+    [Arguments(5, 2)]
+    [Arguments(10, 8)]
+    public async Task SetCoreData_PreservesQuietZone(int version, int quietZoneSize)
     {
         var baseSize = QRCodeData.SizeFromVersion(version);
         var fullSize = baseSize + (quietZoneSize * 2);
@@ -113,21 +111,21 @@ public class QRCodeDataUnitTest
             // Top and bottom
             for (int row = 0; row < quietZoneSize; row++)
             {
-                Assert.False(qrCode[row, i], $"Top QuietZone corrupted at ({row}, {i})");
-                Assert.False(qrCode[fullSize - 1 - row, i], $"Bottom QuietZone corrupted at ({fullSize - 1 - row}, {i})");
+                await Assert.That(qrCode[row, i]).IsFalse().Because($"Top QuietZone corrupted at ({row}, {i})");
+                await Assert.That(qrCode[fullSize - 1 - row, i]).IsFalse().Because($"Bottom QuietZone corrupted at ({fullSize - 1 - row}, {i})");
             }
             // Left and right
             for (int col = 0; col < quietZoneSize; col++)
             {
-                Assert.False(qrCode[i, col], $"Left QuietZone corrupted at ({i}, {col})");
-                Assert.False(qrCode[i, fullSize - 1 - col], $"Right QuietZone corrupted at ({i}, {fullSize - 1 - col})");
+                await Assert.That(qrCode[i, col]).IsFalse().Because($"Left QuietZone corrupted at ({i}, {col})");
+                await Assert.That(qrCode[i, fullSize - 1 - col]).IsFalse().Because($"Right QuietZone corrupted at ({i}, {fullSize - 1 - col})");
             }
         }
 
         // Verify core data was set correctly
         var retrievedCoreData = new byte[baseSize * baseSize];
         qrCode.GetCoreData(retrievedCoreData);
-        Assert.Equal(coreData, retrievedCoreData);
+        await Assert.That(retrievedCoreData).IsEquivalentTo(coreData);
     }
 
     // Serialization Tests
@@ -138,33 +136,29 @@ public class QRCodeDataUnitTest
     /// <remarks>
     /// if matrixSize is 21 (Version 1), then the pattern is:
     /// ---------------------------------------------
-    /// (row, col) → 1D index → pattern
+    /// (row, col) 驕ｶ鄙ｫ繝ｻ1D index 驕ｶ鄙ｫ繝ｻpattern
     /// ---------------------------------------------
-    /// (0, 0) → 0 * 21 + 0 = 0   → 0 % 7 = 0 → true  ✅
-    /// (0, 1) → 0 * 21 + 1 = 1   → 1 % 7 = 1 → false
-    /// (0, 2) → 0 * 21 + 2 = 2   → 2 % 7 = 2 → false
+    /// (0, 0) 驕ｶ鄙ｫ繝ｻ0 * 21 + 0 = 0   驕ｶ鄙ｫ繝ｻ0 % 7 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    /// (0, 1) 驕ｶ鄙ｫ繝ｻ0 * 21 + 1 = 1   驕ｶ鄙ｫ繝ｻ1 % 7 = 1 驕ｶ鄙ｫ繝ｻfalse
+    /// (0, 2) 驕ｶ鄙ｫ繝ｻ0 * 21 + 2 = 2   驕ｶ鄙ｫ繝ｻ2 % 7 = 2 驕ｶ鄙ｫ繝ｻfalse
     /// ...
-    /// (0, 6) → 0 * 21 + 6 = 6   → 6 % 7 = 6 → false
-    /// (0, 7) → 0 * 21 + 7 = 7   → 7 % 7 = 0 → true  ✅
-    /// (0, 14) → 0 * 21 + 14 = 14 → 14 % 7 = 0 → true ✅
-    /// (1, 6) → 1 * 21 + 6 = 27  → 27 % 7 = 6 → false
-    /// (1, 7) → 1 * 21 + 7 = 28  → 28 % 7 = 0 → true  ✅
-    ///
+    /// (0, 6) 驕ｶ鄙ｫ繝ｻ0 * 21 + 6 = 6   驕ｶ鄙ｫ繝ｻ6 % 7 = 6 驕ｶ鄙ｫ繝ｻfalse
+    /// (0, 7) 驕ｶ鄙ｫ繝ｻ0 * 21 + 7 = 7   驕ｶ鄙ｫ繝ｻ7 % 7 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    /// (0, 14) 驕ｶ鄙ｫ繝ｻ0 * 21 + 14 = 14 驕ｶ鄙ｫ繝ｻ14 % 7 = 0 驕ｶ鄙ｫ繝ｻtrue 髫ｨ・ｨ郢晢ｽｻ    /// (1, 6) 驕ｶ鄙ｫ繝ｻ1 * 21 + 6 = 27  驕ｶ鄙ｫ繝ｻ27 % 7 = 6 驕ｶ鄙ｫ繝ｻfalse
+    /// (1, 7) 驕ｶ鄙ｫ繝ｻ1 * 21 + 7 = 28  驕ｶ鄙ｫ繝ｻ28 % 7 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    ///
     /// ---------------------------------------------
     /// Visualize
     /// ---------------------------------------------
-    /// ■ □ □ □ □ □ □ ■ □ □ □ □ □ □ ■ □ □ □ □ □ □
-    /// □ ■ □ □ □ □ □ □ ■ □ □ □ □ □ □ ■ □ □ □ □ □
-    /// □ □ ■ □ □ □ □ □ □ ■ □ □ □ □ □ □ ■ □ □ □ □
-    /// □ □ □ ■ □ □ □ □ □ □ ■ □ □ □ □ □ □ ■ □ □ □
+    /// 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
+    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
+    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
+    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
     /// ...
     /// </remarks>
-    [Theory]
-    [InlineData(21)]   // Version 1
-    [InlineData(25)]   // Version 2
-    [InlineData(29)]   // Version 3
-    [InlineData(57)]   // Version 10
-    public void Serialization_RoundTrip_PreservesData(int matrixSize)
+    [Test]
+    [Arguments(21)]   // Version 1
+    [Arguments(25)]   // Version 2
+    [Arguments(29)]   // Version 3
+    [Arguments(57)]   // Version 10
+    public async Task Serialization_RoundTrip_PreservesData(int matrixSize)
     {
         var quietZoneSize = 0;
         // Use (row * matrixSize + col) % 7 to create a pattern that is not too dense.
@@ -176,7 +170,7 @@ public class QRCodeDataUnitTest
         var original = new QRCodeData(version, quietZoneSize: quietZoneSize);
 
         // Verify size matched
-        Assert.Equal(matrixSize, original.Size);
+        await Assert.That(original.Size).IsEqualTo(matrixSize);
 
         // Get core buffer and fill pattern
         var coreSize = original.GetCoreSize();
@@ -194,7 +188,7 @@ public class QRCodeDataUnitTest
         var rawData = original.GetRawData();
         var restored = new QRCodeData(rawData, quietZoneSize: quietZoneSize);
 
-        Assert.Equal(matrixSize, restored.Size);
+        await Assert.That(restored.Size).IsEqualTo(matrixSize);
 
         // Verify pattern
         for (int row = 0; row < matrixSize; row++)
@@ -203,7 +197,7 @@ public class QRCodeDataUnitTest
             {
                 var index = row * matrixSize + col;
                 var expected = index % pattern == 0;
-                Assert.Equal(expected, restored[row, col]);
+                await Assert.That(restored[row, col]).IsEquivalentTo(expected);
             }
         }
     }
@@ -214,32 +208,28 @@ public class QRCodeDataUnitTest
     /// <remarks>
     /// if matrixSize is 37 (Version 5), then the pattern is:
     /// ---------------------------------------------
-    /// (row, col) → sum → pattern
+    /// (row, col) 驕ｶ鄙ｫ繝ｻsum 驕ｶ鄙ｫ繝ｻpattern
     /// ---------------------------------------------
-    /// (0, 0) → 0 + 0 = 0 → 0 % 3 = 0 → true  ✅
-    /// (0, 1) → 0 + 1 = 1 → 1 % 3 = 1 → false
-    /// (0, 2) → 0 + 2 = 2 → 2 % 3 = 2 → false
-    /// (0, 3) → 0 + 3 = 3 → 3 % 3 = 0 → true  ✅
-    /// (1, 0) → 1 + 0 = 1 → 1 % 3 = 1 → false
-    /// (1, 1) → 1 + 1 = 2 → 2 % 3 = 2 → false
-    /// (1, 2) → 1 + 2 = 3 → 3 % 3 = 0 → true  ✅
-    /// (2, 1) → 2 + 1 = 3 → 3 % 3 = 0 → true  ✅
-    /// 
+    /// (0, 0) 驕ｶ鄙ｫ繝ｻ0 + 0 = 0 驕ｶ鄙ｫ繝ｻ0 % 3 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    /// (0, 1) 驕ｶ鄙ｫ繝ｻ0 + 1 = 1 驕ｶ鄙ｫ繝ｻ1 % 3 = 1 驕ｶ鄙ｫ繝ｻfalse
+    /// (0, 2) 驕ｶ鄙ｫ繝ｻ0 + 2 = 2 驕ｶ鄙ｫ繝ｻ2 % 3 = 2 驕ｶ鄙ｫ繝ｻfalse
+    /// (0, 3) 驕ｶ鄙ｫ繝ｻ0 + 3 = 3 驕ｶ鄙ｫ繝ｻ3 % 3 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    /// (1, 0) 驕ｶ鄙ｫ繝ｻ1 + 0 = 1 驕ｶ鄙ｫ繝ｻ1 % 3 = 1 驕ｶ鄙ｫ繝ｻfalse
+    /// (1, 1) 驕ｶ鄙ｫ繝ｻ1 + 1 = 2 驕ｶ鄙ｫ繝ｻ2 % 3 = 2 驕ｶ鄙ｫ繝ｻfalse
+    /// (1, 2) 驕ｶ鄙ｫ繝ｻ1 + 2 = 3 驕ｶ鄙ｫ繝ｻ3 % 3 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    /// (2, 1) 驕ｶ鄙ｫ繝ｻ2 + 1 = 3 驕ｶ鄙ｫ繝ｻ3 % 3 = 0 驕ｶ鄙ｫ繝ｻtrue  髫ｨ・ｨ郢晢ｽｻ    /// 
     /// ---------------------------------------------
     /// Visualize
     /// ---------------------------------------------
-    /// ■ □ □ ■ □ □ ■ □ □
-    /// □ □ ■ □ □ ■ □ □ ■
-    /// □ ■ □ □ ■ □ □ ■ □
-    /// ■ □ □ ■ □ □ ■ □ □
-    /// □ □ ■ □ □ ■ □ □ ■
-    /// □ ■ □ □ ■ □ □ ■ □
-    /// ■ □ □ ■ □ □ ■ □ □
-    /// □ □ ■ □ □ ■ □ □ ■
-    /// □ ■ □ □ ■ □ □ ■ □
+    /// 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
+    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ
+    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡
+    /// 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
+    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ
+    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡
+    /// 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡
+    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ
+    /// 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・ｽ・｡ 髫ｨ繝ｻ・｣・ｰ 髫ｨ繝ｻ・ｽ・｡
     /// </remarks>
-    [Fact]
-    public void Serialization_RoundTrip()
+    [Test]
+    public async Task Serialization_RoundTrip()
     {
         var quietZoneSize = 0;
         // Use (row + col) % 3 to create a pattern that is not too dense.
@@ -248,7 +238,7 @@ public class QRCodeDataUnitTest
         var pattern = 3;
 
         // Arrange
-        var original = new QRCodeData(5, quietZoneSize: quietZoneSize);  // Version 5: 37×37
+        var original = new QRCodeData(5, quietZoneSize: quietZoneSize);  // Version 5: 37繝ｻ繝ｻ繝ｻ7
         var size = original.Size;
 
         // Set recognizable pattern
@@ -265,14 +255,14 @@ public class QRCodeDataUnitTest
         var restored = new QRCodeData(rawData, quietZoneSize);
 
         // Assert
-        Assert.Equal(original.Version, restored.Version);
-        Assert.Equal(original.Size, restored.Size);
+        await Assert.That(restored.Version).IsEqualTo(original.Version);
+        await Assert.That(restored.Size).IsEqualTo(original.Size);
 
         for (int row = 0; row < size; row++)
         {
             for (int col = 0; col < size; col++)
             {
-                Assert.Equal(original[row, col], restored[row, col]);
+                await Assert.That(restored[row, col]).IsEqualTo(original[row, col]);
             }
         }
     }
@@ -281,19 +271,19 @@ public class QRCodeDataUnitTest
     /// Tests serialization/deserialization with QuietZone
     /// Verifies that QuietZone is properly excluded from serialized data and can be restored
     /// </summary>
-    [Theory]
-    [InlineData(1, 4)]   // Version 1, QuietZone 4
-    [InlineData(2, 2)]   // Version 2, QuietZone 2
-    [InlineData(5, 4)]   // Version 5, QuietZone 4
-    [InlineData(10, 8)]  // Version 10, QuietZone 8
-    public void Serialization_WithQuietZone_PreservesOnlyCoreData(int version, int quietZoneSize)
+    [Test]
+    [Arguments(1, 4)]   // Version 1, QuietZone 4
+    [Arguments(2, 2)]   // Version 2, QuietZone 2
+    [Arguments(5, 4)]   // Version 5, QuietZone 4
+    [Arguments(10, 8)]  // Version 10, QuietZone 8
+    public async Task Serialization_WithQuietZone_PreservesOnlyCoreData(int version, int quietZoneSize)
     {
         var baseSize = QRCodeData.SizeFromVersion(version);
         var fullSize = baseSize + (quietZoneSize * 2);
 
         // Create QR code with QuietZone
         var original = new QRCodeData(version, quietZoneSize: quietZoneSize);
-        Assert.Equal(fullSize, original.Size);
+        await Assert.That(original.Size).IsEqualTo(fullSize);
 
         // Set pattern in core data area only
         for (int row = quietZoneSize; row < fullSize - quietZoneSize; row++)
@@ -312,14 +302,14 @@ public class QRCodeDataUnitTest
             // Top and bottom rows
             for (int row = 0; row < quietZoneSize; row++)
             {
-                Assert.False(original[row, i], $"Top QuietZone should be white at ({row}, {i})");
-                Assert.False(original[fullSize - 1 - row, i], $"Bottom QuietZone should be white at ({fullSize - 1 - row}, {i})");
+                await Assert.That(original[row, i]).IsFalse().Because($"Top QuietZone should be white at ({row}, {i})");
+                await Assert.That(original[fullSize - 1 - row, i]).IsFalse().Because($"Bottom QuietZone should be white at ({fullSize - 1 - row}, {i})");
             }
             // Left and right columns
             for (int col = 0; col < quietZoneSize; col++)
             {
-                Assert.False(original[i, col], $"Left QuietZone should be white at ({i}, {col})");
-                Assert.False(original[i, fullSize - 1 - col], $"Right QuietZone should be white at ({i}, {fullSize - 1 - col})");
+                await Assert.That(original[i, col]).IsFalse().Because($"Left QuietZone should be white at ({i}, {col})");
+                await Assert.That(original[i, fullSize - 1 - col]).IsFalse().Because($"Right QuietZone should be white at ({i}, {fullSize - 1 - col})");
             }
         }
 
@@ -327,15 +317,15 @@ public class QRCodeDataUnitTest
         var rawData = original.GetRawData();
         var restored = new QRCodeData(rawData, quietZoneSize: quietZoneSize);
 
-        Assert.Equal(original.Version, restored.Version);
-        Assert.Equal(original.Size, restored.Size);
+        await Assert.That(restored.Version).IsEqualTo(original.Version);
+        await Assert.That(restored.Size).IsEqualTo(original.Size);
 
         // Verify core data is preserved
         for (int row = quietZoneSize; row < fullSize - quietZoneSize; row++)
         {
             for (int col = quietZoneSize; col < fullSize - quietZoneSize; col++)
             {
-                Assert.Equal(original[row, col], restored[row, col]);
+                await Assert.That(restored[row, col]).IsEqualTo(original[row, col]);
             }
         }
 
@@ -344,13 +334,13 @@ public class QRCodeDataUnitTest
         {
             for (int row = 0; row < quietZoneSize; row++)
             {
-                Assert.False(restored[row, i]);
-                Assert.False(restored[fullSize - 1 - row, i]);
+                await Assert.That(restored[row, i]).IsFalse();
+                await Assert.That(restored[fullSize - 1 - row, i]).IsFalse();
             }
             for (int col = 0; col < quietZoneSize; col++)
             {
-                Assert.False(restored[i, col]);
-                Assert.False(restored[i, fullSize - 1 - col]);
+                await Assert.That(restored[i, col]).IsFalse();
+                await Assert.That(restored[i, fullSize - 1 - col]).IsFalse();
             }
         }
     }
@@ -359,12 +349,12 @@ public class QRCodeDataUnitTest
     /// Tests that different QuietZone sizes can be specified during deserialization
     /// Serialized data contains only core data, so any QuietZone size can be applied
     /// </summary>
-    [Theory]
-    [InlineData(2, 0, 4)]   // Serialize with no QuietZone, deserialize with QuietZone 4
-    [InlineData(2, 4, 0)]   // Serialize with QuietZone 4, deserialize with no QuietZone
-    [InlineData(2, 2, 8)]   // Serialize with QuietZone 2, deserialize with QuietZone 8
-    [InlineData(5, 4, 2)]   // Serialize with QuietZone 4, deserialize with QuietZone 2
-    public void Serialization_DifferentQuietZoneSizes_WorksCorrectly(int version, int serializeQuietZone, int deserializeQuietZone)
+    [Test]
+    [Arguments(2, 0, 4)]   // Serialize with no QuietZone, deserialize with QuietZone 4
+    [Arguments(2, 4, 0)]   // Serialize with QuietZone 4, deserialize with no QuietZone
+    [Arguments(2, 2, 8)]   // Serialize with QuietZone 2, deserialize with QuietZone 8
+    [Arguments(5, 4, 2)]   // Serialize with QuietZone 4, deserialize with QuietZone 2
+    public async Task Serialization_DifferentQuietZoneSizes_WorksCorrectly(int version, int serializeQuietZone, int deserializeQuietZone)
     {
         var baseSize = QRCodeData.SizeFromVersion(version);
 
@@ -389,8 +379,8 @@ public class QRCodeDataUnitTest
 
         var restoredFullSize = baseSize + (deserializeQuietZone * 2);
 
-        Assert.Equal(version, restored.Version);
-        Assert.Equal(restoredFullSize, restored.Size);
+        await Assert.That(restored.Version).IsEqualTo(version);
+        await Assert.That(restored.Size).IsEqualTo(restoredFullSize);
 
         // Verify core data matches
         for (int coreRow = 0; coreRow < baseSize; coreRow++)
@@ -402,21 +392,21 @@ public class QRCodeDataUnitTest
                 var restoredRow = coreRow + deserializeQuietZone;
                 var restoredCol = coreCol + deserializeQuietZone;
 
-                Assert.Equal(original[originalRow, originalCol], restored[restoredRow, restoredCol]);
+                await Assert.That(restored[restoredRow, restoredCol]).IsEqualTo(original[originalRow, originalCol]);
             }
         }
     }
 
     // IBufferWriter<byte> Test
 
-    [Theory]
-    [InlineData(1, 0)]   // Version 1, no quiet zone
-    [InlineData(1, 4)]   // Version 1, with quiet zone
-    [InlineData(10, 0)]  // Version 10, no quiet zone
-    [InlineData(10, 4)]  // Version 10, with quiet zone
-    [InlineData(40, 0)]  // Version 40 (max), no quiet zone
-    [InlineData(40, 4)]  // Version 40 (max), with quiet zone
-    public void GetRawData_ArrayAndBufferWriter_ProduceSameResult(int version, int quietZoneSize)
+    [Test]
+    [Arguments(1, 0)]   // Version 1, no quiet zone
+    [Arguments(1, 4)]   // Version 1, with quiet zone
+    [Arguments(10, 0)]  // Version 10, no quiet zone
+    [Arguments(10, 4)]  // Version 10, with quiet zone
+    [Arguments(40, 0)]  // Version 40 (max), no quiet zone
+    [Arguments(40, 4)]  // Version 40 (max), with quiet zone
+    public async Task GetRawData_ArrayAndBufferWriter_ProduceSameResult(int version, int quietZoneSize)
     {
         // Arrange
         var qrData = CreateTestQRCode(version, quietZoneSize);
@@ -428,12 +418,12 @@ public class QRCodeDataUnitTest
         var bytesWritten = qrData.GetRawData(writer);
 
         // Assert
-        Assert.Equal(arrayResult.Length, bytesWritten);
-        Assert.Equal(arrayResult, writer.WrittenSpan.ToArray());
+        await Assert.That(bytesWritten).IsEqualTo(arrayResult.Length);
+        await Assert.That(writer.WrittenSpan.ToArray()).IsEquivalentTo(arrayResult);
     }
 
-    [Fact]
-    public void GetRawData_BufferWriter_AdvancesCorrectly()
+    [Test]
+    public async Task GetRawData_BufferWriter_AdvancesCorrectly()
     {
         // Arrange
         var qrData = CreateTestQRCode(1, 0);
@@ -443,18 +433,18 @@ public class QRCodeDataUnitTest
         var bytesWritten = qrData.GetRawData(writer);
 
         // Assert
-        Assert.Equal(bytesWritten, writer.WrittenCount);
-        Assert.True(writer.WrittenCount > 0);
+        await Assert.That(writer.WrittenCount).IsEqualTo(bytesWritten);
+        await Assert.That(writer.WrittenCount > 0).IsTrue();
 
         // Verify header
-        var data = writer.WrittenSpan;
-        Assert.Equal(0x51, data[0]); // 'Q'
-        Assert.Equal(0x52, data[1]); // 'R'
-        Assert.Equal(0x52, data[2]); // 'R'
+        var data = writer.WrittenSpan.ToArray();
+        await Assert.That(data[0]).IsEqualTo((byte)0x51);
+        await Assert.That(data[1]).IsEqualTo((byte)0x52);
+        await Assert.That(data[2]).IsEqualTo((byte)0x52);
     }
 
-    [Fact]
-    public void GetRawData_BufferWriter_CanBeCalledMultipleTimes()
+    [Test]
+    public async Task GetRawData_BufferWriter_CanBeCalledMultipleTimes()
     {
         // Arrange
         var qrData = CreateTestQRCode(1, 0);
@@ -470,12 +460,12 @@ public class QRCodeDataUnitTest
         var data2 = writer.WrittenSpan.ToArray();
 
         // Assert
-        Assert.Equal(bytesWritten1, bytesWritten2);
-        Assert.Equal(data1, data2);
+        await Assert.That(bytesWritten2).IsEqualTo(bytesWritten1);
+        await Assert.That(data2).IsEquivalentTo(data1);
     }
 
-    [Fact]
-    public void GetRawDataSize_ReturnsCorrectSize()
+    [Test]
+    public async Task GetRawDataSize_ReturnsCorrectSize()
     {
         // Arrange
         var qrData = CreateTestQRCode(1, 0);
@@ -485,16 +475,16 @@ public class QRCodeDataUnitTest
         var actualData = qrData.GetRawData();
 
         // Assert
-        Assert.Equal(expectedSize, actualData.Length);
+        await Assert.That(actualData.Length).IsEqualTo(expectedSize);
     }
 
-    [Theory]
-    [InlineData(1)]
-    [InlineData(5)]
-    [InlineData(10)]
-    [InlineData(20)]
-    [InlineData(40)]
-    public void Roundtrip_WithBufferWriter_PreservesData(int version)
+    [Test]
+    [Arguments(1)]
+    [Arguments(5)]
+    [Arguments(10)]
+    [Arguments(20)]
+    [Arguments(40)]
+    public async Task Roundtrip_WithBufferWriter_PreservesData(int version)
     {
         // Arrange
         var original = CreateTestQRCode(version, quietZoneSize: 4);
@@ -508,13 +498,13 @@ public class QRCodeDataUnitTest
         var restored = new QRCodeData(serialized, quietZoneSize: 4);
 
         // Assert
-        Assert.Equal(original.Version, restored.Version);
-        Assert.Equal(original.Size, restored.Size);
+        await Assert.That(restored.Version).IsEqualTo(original.Version);
+        await Assert.That(restored.Size).IsEqualTo(original.Size);
         AssertQRCodeDataEqual(original, restored);
     }
 
-    [Fact]
-    public void GetRawData_BufferWriter_WorksWithCustomWriter()
+    [Test]
+    public async Task GetRawData_BufferWriter_WorksWithCustomWriter()
     {
         // Arrange
         var qrData = CreateTestQRCode(1, 0);
@@ -524,15 +514,15 @@ public class QRCodeDataUnitTest
         var bytesWritten = qrData.GetRawData(customWriter);
 
         // Assert
-        Assert.Equal(bytesWritten, customWriter.WrittenCount);
-        Assert.True(customWriter.AdvanceCalled, "Advance() must be called");
+        await Assert.That(customWriter.WrittenCount).IsEqualTo(bytesWritten);
+        await Assert.That(customWriter.AdvanceCalled).IsTrue().Because("Advance() must be called");
     }
 
-    [Theory]
-    [InlineData(1, 0, 4)]   // Serialize with no QuietZone, deserialize with QuietZone 4
-    [InlineData(2, 4, 0)]   // Serialize with QuietZone 4, deserialize with no QuietZone
-    [InlineData(5, 4, 2)]   // Different QuietZone sizes
-    public void BufferWriter_DifferentQuietZoneSizes_WorksCorrectly(int version, int serializeQuietZone, int deserializeQuietZone)
+    [Test]
+    [Arguments(1, 0, 4)]   // Serialize with no QuietZone, deserialize with QuietZone 4
+    [Arguments(2, 4, 0)]   // Serialize with QuietZone 4, deserialize with no QuietZone
+    [Arguments(5, 4, 2)]   // Different QuietZone sizes
+    public async Task BufferWriter_DifferentQuietZoneSizes_WorksCorrectly(int version, int serializeQuietZone, int deserializeQuietZone)
     {
         var baseSize = QRCodeData.SizeFromVersion(version);
 
@@ -560,8 +550,8 @@ public class QRCodeDataUnitTest
 
         var restoredFullSize = baseSize + (deserializeQuietZone * 2);
 
-        Assert.Equal(version, restored.Version);
-        Assert.Equal(restoredFullSize, restored.Size);
+        await Assert.That(restored.Version).IsEqualTo(version);
+        await Assert.That(restored.Size).IsEqualTo(restoredFullSize);
 
         // Verify core data matches
         for (int coreRow = 0; coreRow < baseSize; coreRow++)
@@ -573,13 +563,13 @@ public class QRCodeDataUnitTest
                 var restoredRow = coreRow + deserializeQuietZone;
                 var restoredCol = coreCol + deserializeQuietZone;
 
-                Assert.Equal(original[originalRow, originalCol], restored[restoredRow, restoredCol]);
+                await Assert.That(restored[restoredRow, restoredCol]).IsEqualTo(original[originalRow, originalCol]);
             }
         }
     }
 
-    [Fact]
-    public void GetRawData_BufferWriter_ReusesBufferEfficiently()
+    [Test]
+    public async Task GetRawData_BufferWriter_ReusesBufferEfficiently()
     {
         // Arrange
         var qrData1 = CreateTestQRCode(1, 0);
@@ -597,15 +587,15 @@ public class QRCodeDataUnitTest
         var data2 = writer.WrittenSpan.ToArray();
 
         // Assert
-        Assert.NotEqual(bytes1, bytes2); // Different sizes
-        Assert.NotEqual(data1, data2); // Different data
+        await Assert.That(bytes2).IsNotEqualTo(bytes1); // Different sizes
+        await Assert.That(data2).IsNotEqualTo(data1); // Different data
 
         // Both should produce valid QR codes
         var restored1 = new QRCodeData(data1, quietZoneSize: 0);
         var restored2 = new QRCodeData(data2, quietZoneSize: 0);
 
-        Assert.Equal(1, restored1.Version);
-        Assert.Equal(2, restored2.Version);
+        await Assert.That(restored1.Version).IsEqualTo(1);
+        await Assert.That(restored2.Version).IsEqualTo(2);
     }
 
     // helpers
@@ -634,16 +624,16 @@ public class QRCodeDataUnitTest
         return qrData;
     }
 
-    private static void AssertQRCodeDataEqual(QRCodeData expected, QRCodeData actual)
+    private static async Task AssertQRCodeDataEqual(QRCodeData expected, QRCodeData actual)
     {
-        Assert.Equal(expected.Version, actual.Version);
-        Assert.Equal(expected.Size, actual.Size);
+        await Assert.That(actual.Version).IsEqualTo(expected.Version);
+        await Assert.That(actual.Size).IsEqualTo(expected.Size);
 
         for (var row = 0; row < expected.Size; row++)
         {
             for (var col = 0; col < expected.Size; col++)
             {
-                Assert.Equal(expected[row, col], actual[row, col]);
+                await Assert.That(actual[row, col]).IsEqualTo(expected[row, col]);
             }
         }
     }

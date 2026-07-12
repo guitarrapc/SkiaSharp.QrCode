@@ -1,81 +1,80 @@
 using SkiaSharp.QrCode.Internals;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
 public class QRCodeConstantsUnitTest
 {
-    [Theory]
-    [InlineData('0', true)]
-    [InlineData('1', true)]
-    [InlineData('2', true)]
-    [InlineData('3', true)]
-    [InlineData('4', true)]
-    [InlineData('5', true)]
-    [InlineData('6', true)]
-    [InlineData('7', true)]
-    [InlineData('8', true)]
-    [InlineData('9', true)]
-    [InlineData('A', false)]
-    [InlineData('#', false)]
-    public void IsNumericTest(char c, bool expected)
+    [Test]
+    [Arguments('0', true)]
+    [Arguments('1', true)]
+    [Arguments('2', true)]
+    [Arguments('3', true)]
+    [Arguments('4', true)]
+    [Arguments('5', true)]
+    [Arguments('6', true)]
+    [Arguments('7', true)]
+    [Arguments('8', true)]
+    [Arguments('9', true)]
+    [Arguments('A', false)]
+    [Arguments('#', false)]
+    public async Task IsNumericTest(char c, bool expected)
     {
         var result = QRCodeConstants.IsNumeric(c);
-        Assert.Equal(expected, result);
+        await Assert.That(result).IsEquivalentTo(expected);
     }
 
-    [Theory]
-    [InlineData('0', true)]
-    [InlineData('9', true)]
-    [InlineData('A', true)]
-    [InlineData('Z', true)]
-    [InlineData(' ', true)]
-    [InlineData('$', true)]
-    [InlineData('%', true)]
-    [InlineData('*', true)]
-    [InlineData('+', true)]
-    [InlineData('-', true)]
-    [InlineData('.', true)]
-    [InlineData('/', true)]
-    [InlineData(':', true)]
-    [InlineData('a', false)] // small letters are invalid
-    [InlineData('z', false)]
-    [InlineData('@', false)]
-    [InlineData('#', false)]
-    public void IsAlphanumericTest(char c, bool expected)
+    [Test]
+    [Arguments('0', true)]
+    [Arguments('9', true)]
+    [Arguments('A', true)]
+    [Arguments('Z', true)]
+    [Arguments(' ', true)]
+    [Arguments('$', true)]
+    [Arguments('%', true)]
+    [Arguments('*', true)]
+    [Arguments('+', true)]
+    [Arguments('-', true)]
+    [Arguments('.', true)]
+    [Arguments('/', true)]
+    [Arguments(':', true)]
+    [Arguments('a', false)] // small letters are invalid
+    [Arguments('z', false)]
+    [Arguments('@', false)]
+    [Arguments('#', false)]
+    public async Task IsAlphanumericTest(char c, bool expected)
     {
         var result = QRCodeConstants.IsAlphanumeric(c);
-        Assert.Equal(expected, result);
+        await Assert.That(result).IsEquivalentTo(expected);
     }
 
-    [Theory]
-    [InlineData('0', 0)]
-    [InlineData('9', 9)]
-    [InlineData('A', 10)]
-    [InlineData('Z', 35)]
-    [InlineData(' ', 36)]
-    [InlineData('$', 37)]
-    [InlineData('%', 38)]
-    [InlineData('*', 39)]
-    [InlineData('+', 40)]
-    [InlineData('-', 41)]
-    [InlineData('.', 42)]
-    [InlineData('/', 43)]
-    [InlineData(':', 44)]
-    [InlineData('a', -1)] // small letters are invalid
-    [InlineData('z', -1)]
-    [InlineData('@', -1)]
-    [InlineData('#', -1)]
-    public void GetAlphanumericValueTest(char c, int expected)
+    [Test]
+    [Arguments('0', 0)]
+    [Arguments('9', 9)]
+    [Arguments('A', 10)]
+    [Arguments('Z', 35)]
+    [Arguments(' ', 36)]
+    [Arguments('$', 37)]
+    [Arguments('%', 38)]
+    [Arguments('*', 39)]
+    [Arguments('+', 40)]
+    [Arguments('-', 41)]
+    [Arguments('.', 42)]
+    [Arguments('/', 43)]
+    [Arguments(':', 44)]
+    [Arguments('a', -1)] // small letters are invalid
+    [Arguments('z', -1)]
+    [Arguments('@', -1)]
+    [Arguments('#', -1)]
+    public async Task GetAlphanumericValueTest(char c, int expected)
     {
         var success = QRCodeConstants.TryGetAlphanumericValue(c, out var result);
         if (expected == -1)
         {
-            Assert.False(success);
+            await Assert.That(success).IsFalse();
         }
         else
         {
-            Assert.Equal(expected, result);
+            await Assert.That(result).IsEquivalentTo(expected);
         }
     }
 }

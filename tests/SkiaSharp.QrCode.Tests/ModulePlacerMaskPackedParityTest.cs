@@ -1,5 +1,4 @@
 using SkiaSharp.QrCode.Internals;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -17,11 +16,11 @@ public class ModulePlacerMaskPackedParityTest
     // 1 (no alignment patterns), 2/5/6 (alignment, no version info),
     // 7/10 (version info), 11/12 (61 -> 65 modules: single-word/triple-word
     // boundary), 20/40 (large matrices, multiple alignment rows).
-    public static TheoryData<int> Versions => [1, 2, 5, 6, 7, 10, 11, 12, 13, 20, 40];
+    public static IEnumerable<int> Versions => [1, 2, 5, 6, 7, 10, 11, 12, 13, 20, 40];
 
-    [Theory]
-    [MemberData(nameof(Versions))]
-    public void MaskCode_MatchesByteDomainReference(int version)
+    [Test]
+    [MethodDataSource(nameof(Versions))]
+    public async Task MaskCode_MatchesByteDomainReference(int version)
     {
         ECCLevel[] eccLevels = [ECCLevel.L, ECCLevel.M, ECCLevel.Q, ECCLevel.H];
 
@@ -37,15 +36,15 @@ public class ModulePlacerMaskPackedParityTest
                 var actualBuffer = (byte[])buffer.Clone();
                 var actualBest = ModulePlacer.MaskCode(actualBuffer, size, version, blockedMask, eccLevel);
 
-                Assert.Equal(expectedBest, actualBest);
-                Assert.Equal(expectedBuffer, actualBuffer);
+                await Assert.That(actualBest).IsEquivalentTo(expectedBest);
+                await Assert.That(actualBuffer).IsEquivalentTo(expectedBuffer);
             }
         }
     }
 
-    [Theory]
-    [MemberData(nameof(Versions))]
-    public void MaskCode_AllZeroAndAllOneData_MatchesReference(int version)
+    [Test]
+    [MethodDataSource(nameof(Versions))]
+    public async Task MaskCode_AllZeroAndAllOneData_MatchesReference(int version)
     {
         // Degenerate fills maximize penalty-rule hits (long runs, uniform 2x2
         // blocks, extreme balance) and exercise every scoring branch.
@@ -66,8 +65,8 @@ public class ModulePlacerMaskPackedParityTest
             var actualBuffer = (byte[])buffer.Clone();
             var actualBest = ModulePlacer.MaskCode(actualBuffer, size, version, blockedMask, ECCLevel.M);
 
-            Assert.Equal(expectedBest, actualBest);
-            Assert.Equal(expectedBuffer, actualBuffer);
+            await Assert.That(actualBest).IsEquivalentTo(expectedBest);
+            await Assert.That(actualBuffer).IsEquivalentTo(expectedBuffer);
         }
     }
 

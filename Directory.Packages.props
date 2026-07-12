@@ -28,11 +28,7 @@
     <!-- Supply chain -->
     <PackageVersion Include="Microsoft.Sbom.Targets" Version="4.1.5" />
     <!-- Tests -->
-    <!-- 3.x requires Microsoft.Testing.Platform 2.0, but xunit.v3 3.2.2 still ships MTP 1.9.1 (CS1705); upgrade together with xunit.v3 4.x -->
-    <PackageVersion Include="GitHubActionsTestLogger" Version="2.4.1" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
-    <PackageVersion Include="xunit.v3" Version="3.2.2" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="TUnit" Version="1.12.111" />
   </ItemGroup>
 </Project>

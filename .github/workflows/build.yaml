@@ -44,7 +44,7 @@ jobs:
       - name: Build
         run: dotnet build -c Release
       - name: Test
-        run: dotnet test -c Release --logger GitHubActions --logger "console;verbosity=normal"
+        run: dotnet test -c Release
 
   run:
     needs: [build]

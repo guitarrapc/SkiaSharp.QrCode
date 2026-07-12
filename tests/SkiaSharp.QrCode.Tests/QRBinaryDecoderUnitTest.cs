@@ -1,6 +1,5 @@
 using SkiaSharp.QrCode.Internals.BinaryDecoders;
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -28,8 +27,8 @@ public class QRBinaryDecoderUnitTest
 
     // Positive cases
 
-    [Fact]
-    public void MultiSegment_NumericAlphanumericByte_ConcatenatesInOrder()
+    [Test]
+    public async Task MultiSegment_NumericAlphanumericByte_ConcatenatesInOrder()
     {
         // "12" (numeric) + "A" (alphanumeric) + "!" (byte) + terminator
         var data = Build(
@@ -40,12 +39,12 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        Assert.Equal(QRCodeDecodeStatus.Success, status);
-        Assert.Equal("12A!", text);
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEquivalentTo("12A!");
     }
 
-    [Fact]
-    public void EciUtf8_ByteSegment_DecodesUtf8()
+    [Test]
+    public async Task EciUtf8_ByteSegment_DecodesUtf8()
     {
         // ECI 26 (UTF-8) + byte segment with a 3-byte UTF-8 char (U+3042 あ)
         var data = Build(
@@ -55,12 +54,12 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        Assert.Equal(QRCodeDecodeStatus.Success, status);
-        Assert.Equal("あ", text);
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEquivalentTo("あ");
     }
 
-    [Fact]
-    public void EciUtf8_WithBom_BomIsStripped()
+    [Test]
+    public async Task EciUtf8_WithBom_BomIsStripped()
     {
         var data = Build(
             (ModeEci, 4), (26, 8),
@@ -69,12 +68,12 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        Assert.Equal(QRCodeDecodeStatus.Success, status);
-        Assert.Equal("A", text);
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEquivalentTo("A");
     }
 
-    [Fact]
-    public void EciIso8859_1_BomLikeBytes_AreLatin1Text_NotBom()
+    [Test]
+    public async Task EciIso8859_1_BomLikeBytes_AreLatin1Text_NotBom()
     {
         // ECI 3 explicitly declares ISO-8859-1: EF BB BF is the legitimate Latin-1
         // text "ï»¿", not a BOM — an explicit charset declaration must win over the
@@ -86,12 +85,12 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        Assert.Equal(QRCodeDecodeStatus.Success, status);
-        Assert.Equal("ï»¿A", text);
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEquivalentTo("ï»¿A");
     }
 
-    [Fact]
-    public void NoEci_BomBytes_TreatedAsUtf8AndStripped()
+    [Test]
+    public async Task NoEci_BomBytes_TreatedAsUtf8AndStripped()
     {
         var data = Build(
             (ModeByte, 4), (4, 8), (0xEF, 8), (0xBB, 8), (0xBF, 8), ('A', 8),
@@ -99,12 +98,12 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        Assert.Equal(QRCodeDecodeStatus.Success, status);
-        Assert.Equal("A", text);
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEquivalentTo("A");
     }
 
-    [Fact]
-    public void EciTwoByteDesignator_Parses()
+    [Test]
+    public async Task EciTwoByteDesignator_Parses()
     {
         // 2-byte designator form: 10xxxxxx xxxxxxxx; value 26 = UTF-8
         var data = Build(
@@ -114,47 +113,47 @@ public class QRBinaryDecoderUnitTest
 
         var status = Decode(data, out var text);
 
-        Assert.Equal(QRCodeDecodeStatus.Success, status);
-        Assert.Equal("X", text);
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEquivalentTo("X");
     }
 
-    [Fact]
-    public void EmptyData_DecodesToEmpty()
+    [Test]
+    public async Task EmptyData_DecodesToEmpty()
     {
         var status = Decode([], out var text);
 
-        Assert.Equal(QRCodeDecodeStatus.Success, status);
-        Assert.Equal(string.Empty, text);
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEquivalentTo(string.Empty);
     }
 
-    [Fact]
-    public void ImplicitTerminator_FewerThanFourBitsRemaining_Succeeds()
+    [Test]
+    public async Task ImplicitTerminator_FewerThanFourBitsRemaining_Succeeds()
     {
         // Single numeric digit, stream ends without an explicit terminator
         var data = Build((ModeNumeric, 4), (1, 10), (7, 4), (0, 6));
 
         var status = Decode(data, out var text);
 
-        Assert.Equal(QRCodeDecodeStatus.Success, status);
-        Assert.Equal("7", text);
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEquivalentTo("7");
     }
 
     // Unsupported content (recognized but rejected — never misdecoded)
 
-    [Theory]
-    [InlineData(ModeKanji)]
-    [InlineData(ModeStructuredAppend)]
-    [InlineData(ModeFnc1First)]
-    [InlineData(ModeFnc1Second)]
-    public void UnsupportedModes_ReturnUnsupportedContent(int mode)
+    [Test]
+    [Arguments(ModeKanji)]
+    [Arguments(ModeStructuredAppend)]
+    [Arguments(ModeFnc1First)]
+    [Arguments(ModeFnc1Second)]
+    public async Task UnsupportedModes_ReturnUnsupportedContent(int mode)
     {
         var data = Build((mode, 4), (0, 12));
 
-        Assert.Equal(QRCodeDecodeStatus.UnsupportedContent, Decode(data, out _));
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.UnsupportedContent);
     }
 
-    [Fact]
-    public void UnknownEciCharset_ReturnsUnsupportedContent()
+    [Test]
+    public async Task UnknownEciCharset_ReturnsUnsupportedContent()
     {
         // ECI 20 = Shift-JIS: recognized designator, unsupported charset
         var data = Build(
@@ -162,91 +161,91 @@ public class QRBinaryDecoderUnitTest
             (ModeByte, 4), (1, 8), ('A', 8),
             (ModeTerminator, 4));
 
-        Assert.Equal(QRCodeDecodeStatus.UnsupportedContent, Decode(data, out _));
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.UnsupportedContent);
     }
 
     // Invalid bitstreams (malformed input must fail cleanly, never throw)
 
-    [Theory]
-    [InlineData(0b0110)]
-    [InlineData(0b1010)]
-    [InlineData(0b1111)]
-    public void UnassignedModeIndicators_ReturnInvalidBitstream(int mode)
+    [Test]
+    [Arguments(0b0110)]
+    [Arguments(0b1010)]
+    [Arguments(0b1111)]
+    public async Task UnassignedModeIndicators_ReturnInvalidBitstream(int mode)
     {
         var data = Build((mode, 4), (0, 12));
 
-        Assert.Equal(QRCodeDecodeStatus.InvalidBitstream, Decode(data, out _));
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
     }
 
-    [Fact]
-    public void Numeric_GroupValueAboveRange_ReturnsInvalidBitstream()
+    [Test]
+    public async Task Numeric_GroupValueAboveRange_ReturnsInvalidBitstream()
     {
         // 10-bit group encodes 3 digits, so values 1000-1023 are invalid
         var data = Build((ModeNumeric, 4), (3, 10), (1000, 10), (ModeTerminator, 4));
 
-        Assert.Equal(QRCodeDecodeStatus.InvalidBitstream, Decode(data, out _));
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
     }
 
-    [Fact]
-    public void Alphanumeric_PairValueAboveRange_ReturnsInvalidBitstream()
+    [Test]
+    public async Task Alphanumeric_PairValueAboveRange_ReturnsInvalidBitstream()
     {
         // 11-bit pair encodes values 0..2024
         var data = Build((ModeAlphanumeric, 4), (2, 9), (2025, 11), (ModeTerminator, 4));
 
-        Assert.Equal(QRCodeDecodeStatus.InvalidBitstream, Decode(data, out _));
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
     }
 
-    [Fact]
-    public void ByteSegment_CountBeyondStream_ReturnsInvalidBitstream()
+    [Test]
+    public async Task ByteSegment_CountBeyondStream_ReturnsInvalidBitstream()
     {
         // Declares 200 bytes but the stream ends immediately
         var data = Build((ModeByte, 4), (200, 8), (0, 8));
 
-        Assert.Equal(QRCodeDecodeStatus.InvalidBitstream, Decode(data, out _));
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
     }
 
-    [Fact]
-    public void Numeric_CountBeyondStream_ReturnsInvalidBitstream()
+    [Test]
+    public async Task Numeric_CountBeyondStream_ReturnsInvalidBitstream()
     {
         var data = Build((ModeNumeric, 4), (100, 10), (0, 2));
 
-        Assert.Equal(QRCodeDecodeStatus.InvalidBitstream, Decode(data, out _));
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
     }
 
-    [Fact]
-    public void EciDesignator_TruncatedMultiByte_ReturnsInvalidBitstream()
+    [Test]
+    public async Task EciDesignator_TruncatedMultiByte_ReturnsInvalidBitstream()
     {
         // 2-byte designator prefix (10xxxxxx) with no second byte
         var data = Build((ModeEci, 4), (0x80, 8));
 
-        Assert.Equal(QRCodeDecodeStatus.InvalidBitstream, Decode(data, out _));
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
     }
 
-    [Fact]
-    public void EciDesignator_InvalidPrefix_ReturnsInvalidBitstream()
+    [Test]
+    public async Task EciDesignator_InvalidPrefix_ReturnsInvalidBitstream()
     {
         // 111xxxxx is not a valid designator length prefix
         var data = Build((ModeEci, 4), (0xE0, 8), (0, 16));
 
-        Assert.Equal(QRCodeDecodeStatus.InvalidBitstream, Decode(data, out _));
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
     }
 
     // Destination sizing
 
-    [Fact]
-    public void DestinationTooSmall_ReportsStatus_NotException()
+    [Test]
+    public async Task DestinationTooSmall_ReportsStatus_NotException()
     {
         var data = Build((ModeNumeric, 4), (3, 10), (123, 10), (ModeTerminator, 4));
 
         Span<char> tiny = stackalloc char[2];
         var status = QRBinaryDecoder.DecodeBitStream(data, Version, tiny, out _);
 
-        Assert.Equal(QRCodeDecodeStatus.DestinationTooSmall, status);
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.DestinationTooSmall);
     }
 
     // Robustness: untrusted input must never throw
 
-    [Fact]
+    [Test]
     public void RandomGarbage_NeverThrows()
     {
         var random = new Random(20260712);

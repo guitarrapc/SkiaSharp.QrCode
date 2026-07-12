@@ -1,6 +1,5 @@
 using SkiaSharp.QrCode.Internals;
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
-using Xunit;
 using static SkiaSharp.QrCode.Internals.QRCodeConstants;
 
 namespace SkiaSharp.QrCode.Tests;
@@ -15,29 +14,27 @@ namespace SkiaSharp.QrCode.Tests;
 /// </summary>
 public class BinaryInterleaverParityTest
 {
-    public static TheoryData<int, ECCLevel> AllVersionLevelCombinations()
+    public static IEnumerable<(int Version, ECCLevel Level)> AllVersionLevelCombinations()
     {
-        var data = new TheoryData<int, ECCLevel>();
         for (var version = 1; version <= 40; version++)
         {
             foreach (var level in new[] { ECCLevel.L, ECCLevel.M, ECCLevel.Q, ECCLevel.H })
             {
-                data.Add(version, level);
+                yield return (version, level);
             }
         }
-        return data;
     }
 
-    [Theory]
-    [MemberData(nameof(AllVersionLevelCombinations))]
-    public void InterleaveCodewords_MatchesReference_AllVersionsAndLevels(int version, ECCLevel level)
+    [Test]
+    [MethodDataSource(nameof(AllVersionLevelCombinations))]
+    public async Task InterleaveCodewords_MatchesReference_AllVersionsAndLevels(int version, ECCLevel level)
     {
         var eccInfo = GetEccInfo(version, level);
-        AssertMatchesReference(version, eccInfo);
+        await AssertMatchesReference(version, eccInfo);
     }
 
-    [Fact]
-    public void InterleaveCodewords_MatchesReference_NonStandardPatterns()
+    [Test]
+    public async Task InterleaveCodewords_MatchesReference_NonStandardPatterns()
     {
         // Patterns outside the real capacity table exercise the general path's
         // structural edges: equal block lengths across groups, single blocks per
@@ -52,18 +49,18 @@ public class BinaryInterleaverParityTest
 
         foreach (var (version, eccInfo) in patterns)
         {
-            AssertMatchesReference(version, eccInfo);
+            await AssertMatchesReference(version, eccInfo);
         }
     }
 
-    [Theory]
-    [InlineData(5, ECCLevel.Q)]  // multi-block (2+2), version with 7 remainder bits
-    [InlineData(5, ECCLevel.L)]  // single-block fast path, 7 remainder bits
-    [InlineData(1, ECCLevel.L)]  // single-block fast path, 0 remainder bits (no tail)
-    public void InterleaveCodewords_DirtyOutputBuffer_RemainderTailIsZeroed(int version, ECCLevel level)
+    [Test]
+    [Arguments(5, ECCLevel.Q)]  // multi-block (2+2), version with 7 remainder bits
+    [Arguments(5, ECCLevel.L)]  // single-block fast path, 7 remainder bits
+    [Arguments(1, ECCLevel.L)]  // single-block fast path, 0 remainder bits (no tail)
+    public async Task InterleaveCodewords_DirtyOutputBuffer_RemainderTailIsZeroed(int version, ECCLevel level)
     {
         // The remainder-bits byte is placed into the matrix by PlaceDataWords and must
-        // be 0 per ISO/IEC 18004 — the function must not rely on the caller handing
+        // be 0 per ISO/IEC 18004 窶・the function must not rely on the caller handing
         // over a pre-zeroed buffer (SkipLocalsInit stackalloc, pooled arrays).
         var eccInfo = GetEccInfo(version, level);
         var dataLen = eccInfo.TotalDataCodewords;
@@ -82,12 +79,12 @@ public class BinaryInterleaverParityTest
 
         for (var i = dataLen + eccLen; i < outputSize; i++)
         {
-            Assert.Equal(0, output[i]);
+            await Assert.That(output[i]).IsEqualTo((byte)0);
         }
     }
 
-    [Fact]
-    public void InterleaveCodewords_UndersizedDataBuffer_Throws()
+    [Test]
+    public async Task InterleaveCodewords_UndersizedDataBuffer_Throws()
     {
         var eccInfo = GetEccInfo(5, ECCLevel.Q);
         Assert.Throws<ArgumentException>(() =>
@@ -99,8 +96,8 @@ public class BinaryInterleaverParityTest
         });
     }
 
-    [Fact]
-    public void InterleaveCodewords_UndersizedEccBuffer_Throws()
+    [Test]
+    public async Task InterleaveCodewords_UndersizedEccBuffer_Throws()
     {
         var eccInfo = GetEccInfo(5, ECCLevel.Q);
         Assert.Throws<ArgumentException>(() =>
@@ -112,8 +109,8 @@ public class BinaryInterleaverParityTest
         });
     }
 
-    [Fact]
-    public void InterleaveCodewords_UndersizedOutputBuffer_Throws()
+    [Test]
+    public async Task InterleaveCodewords_UndersizedOutputBuffer_Throws()
     {
         var eccInfo = GetEccInfo(5, ECCLevel.Q);
         Assert.Throws<ArgumentException>(() =>
@@ -125,7 +122,7 @@ public class BinaryInterleaverParityTest
         });
     }
 
-    private static void AssertMatchesReference(int version, in ECCInfo eccInfo)
+    private static async Task AssertMatchesReference(int version, ECCInfo eccInfo)
     {
         var dataLen = eccInfo.BlocksInGroup1 * eccInfo.CodewordsInGroup1
                     + eccInfo.BlocksInGroup2 * eccInfo.CodewordsInGroup2;
@@ -145,7 +142,7 @@ public class BinaryInterleaverParityTest
             var actual = new byte[outputSize];
             BinaryInterleaver.InterleaveCodewords(data, ecc, actual, version, eccInfo);
 
-            Assert.Equal(expected, actual);
+            await Assert.That(actual).IsEquivalentTo(expected);
         }
     }
 

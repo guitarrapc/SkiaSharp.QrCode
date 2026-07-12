@@ -1,13 +1,12 @@
 using SkiaSharp.QrCode.Internals;
-using Xunit;
 using Rectangle = SkiaSharp.QrCode.Internals.Rectangle;
 
 namespace SkiaSharp.QrCode.Tests;
 
 public class ModulePlacerBinaryUnitTest
 {
-    [Fact]
-    public void PlaceDataWords_Binary_MatchesStringBased()
+    [Test]
+    public async Task PlaceDataWords_Binary_MatchesStringBased()
     {
         // Arrange
         var version = 1;
@@ -16,7 +15,7 @@ public class ModulePlacerBinaryUnitTest
 
         // Get core size and buffer (21 for version 1)
         var coreSize = qrCodeBinary.GetCoreSize();
-        Assert.Equal(21, coreSize);
+        await Assert.That(coreSize).IsEquivalentTo(21);
 
         // Get core data buffer
         Span<byte> binaryBuffer = stackalloc byte[coreSize * coreSize];
@@ -61,15 +60,15 @@ public class ModulePlacerBinaryUnitTest
         {
             for (int col = 0; col < qrCodeBinary.Size; col++)
             {
-                Assert.Equal(qrCodeString[row, col], qrCodeBinary[row, col]);
+                await Assert.That(qrCodeBinary[row, col]).IsEquivalentTo(qrCodeString[row, col]);
             }
         }
     }
 
-    [Theory]
-    [InlineData(1, new byte[] { 0x12, 0x34, 0x56 })]
-    [InlineData(5, new byte[] { 0xFF, 0x00, 0xAA, 0x55 })]
-    public void PlaceDataWords_Binary_PlacesDataCorrectly(int version, byte[] data)
+    [Test]
+    [Arguments(1, new byte[] { 0x12, 0x34, 0x56 })]
+    [Arguments(5, new byte[] { 0xFF, 0x00, 0xAA, 0x55 })]
+    public async Task PlaceDataWords_Binary_PlacesDataCorrectly(int version, byte[] data)
     {
         // Arrange
         var qrCode = CreateEmptyQRCodeData(version);
@@ -107,8 +106,8 @@ public class ModulePlacerBinaryUnitTest
             }
         }
 
-        Assert.True(darkCount > 0);
-        Assert.True(lightCount > 0);
+        await Assert.That(darkCount > 0).IsTrue();
+        await Assert.That(lightCount > 0).IsTrue();
     }
 
     private static QRCodeData CreateEmptyQRCodeData(int version)

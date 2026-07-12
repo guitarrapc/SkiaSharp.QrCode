@@ -1,6 +1,5 @@
 using SkiaSharp.QrCode.Internals;
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -15,22 +14,22 @@ public class EccBinaryEncoderKernelParityTest
     // (dataLength, eccCount) pairs covering QR extremes and boundary conditions:
     // smallest/largest real blocks, the 16/17 register-width split, eccCount 1,
     // data shorter than one 4-byte quad, and data not a multiple of 4.
-    public static TheoryData<int, int> Combos => new()
-    {
-        { 1, 1 },
-        { 1, 7 },
-        { 3, 10 },
-        { 16, 10 },   // version 1-M block
-        { 19, 16 },   // eccCount at the 128-bit register boundary
-        { 20, 17 },   // eccCount just above the boundary
-        { 34, 28 },
-        { 119, 30 },  // version 40-L block
-        { 2956, 30 }, // far beyond any single QR block (large-data safety)
-    };
+    public static IEnumerable<(int DataLength, int EccCount)> Combos =>
+    [
+        (1, 1),
+        (1, 7),
+        (3, 10),
+        (16, 10),   // version 1-M block
+        (19, 16),   // eccCount at the 128-bit register boundary
+        (20, 17),   // eccCount just above the boundary
+        (34, 28),
+        (119, 30),  // version 40-L block
+        (2956, 30), // far beyond any single QR block (large-data safety)
+    ];
 
-    [Theory]
-    [MemberData(nameof(Combos))]
-    public void CalculateECC_MatchesNaiveReference(int dataLength, int eccCount)
+    [Test]
+    [MethodDataSource(nameof(Combos))]
+    public async Task CalculateECC_MatchesNaiveReference(int dataLength, int eccCount)
     {
         foreach (var data in EnumerateInputs(dataLength))
         {
@@ -40,13 +39,13 @@ public class EccBinaryEncoderKernelParityTest
             var actual = new byte[eccCount];
             EccBinaryEncoder.CalculateECC(data, actual, eccCount);
 
-            Assert.Equal(expected, actual);
+            await Assert.That(actual).IsEquivalentTo(expected);
         }
     }
 
-    [Theory]
-    [MemberData(nameof(Combos))]
-    public void ScalarKernel_MatchesNaiveReference(int dataLength, int eccCount)
+    [Test]
+    [MethodDataSource(nameof(Combos))]
+    public async Task ScalarKernel_MatchesNaiveReference(int dataLength, int eccCount)
     {
         foreach (var data in EnumerateInputs(dataLength))
         {
@@ -56,15 +55,19 @@ public class EccBinaryEncoderKernelParityTest
             var actual = new byte[eccCount];
             EccBinaryEncoder.CalculateEccScalar(data, actual, eccCount);
 
-            Assert.Equal(expected, actual);
+            await Assert.That(actual).IsEquivalentTo(expected);
         }
     }
 
-    [Theory]
-    [MemberData(nameof(Combos))]
-    public void Ssse3Kernel_MatchesNaiveReference(int dataLength, int eccCount)
+    [Test]
+    [MethodDataSource(nameof(Combos))]
+    public async Task Ssse3Kernel_MatchesNaiveReference(int dataLength, int eccCount)
     {
-        Assert.SkipUnless(System.Runtime.Intrinsics.X86.Ssse3.IsSupported, "SSSE3 not supported on this machine");
+        if (!System.Runtime.Intrinsics.X86.Ssse3.IsSupported)
+        {
+            Skip.Test("SSSE3 not supported on this machine");
+            return;
+        }
 
         foreach (var data in EnumerateInputs(dataLength))
         {
@@ -74,15 +77,19 @@ public class EccBinaryEncoderKernelParityTest
             var actual = new byte[eccCount];
             EccBinaryEncoder.CalculateEccSsse3(data, actual, eccCount);
 
-            Assert.Equal(expected, actual);
+            await Assert.That(actual).IsEquivalentTo(expected);
         }
     }
 
-    [Theory]
-    [MemberData(nameof(Combos))]
-    public void AdvSimdKernel_MatchesNaiveReference(int dataLength, int eccCount)
+    [Test]
+    [MethodDataSource(nameof(Combos))]
+    public async Task AdvSimdKernel_MatchesNaiveReference(int dataLength, int eccCount)
     {
-        Assert.SkipUnless(System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported, "AdvSimd (ARM64 NEON) not supported on this machine");
+        if (!System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+        {
+            Skip.Test("AdvSimd (ARM64 NEON) not supported on this machine");
+            return;
+        }
 
         foreach (var data in EnumerateInputs(dataLength))
         {
@@ -92,16 +99,20 @@ public class EccBinaryEncoderKernelParityTest
             var actual = new byte[eccCount];
             EccBinaryEncoder.CalculateEccAdvSimd(data, actual, eccCount);
 
-            Assert.Equal(expected, actual);
+            await Assert.That(actual).IsEquivalentTo(expected);
         }
     }
 
 #if NET10_0_OR_GREATER
-    [Theory]
-    [MemberData(nameof(Combos))]
-    public void GfniKernel_MatchesNaiveReference(int dataLength, int eccCount)
+    [Test]
+    [MethodDataSource(nameof(Combos))]
+    public async Task GfniKernel_MatchesNaiveReference(int dataLength, int eccCount)
     {
-        Assert.SkipUnless(System.Runtime.Intrinsics.X86.Gfni.IsSupported, "GFNI not supported on this machine");
+        if (!System.Runtime.Intrinsics.X86.Gfni.IsSupported)
+        {
+            Skip.Test("GFNI not supported on this machine");
+            return;
+        }
 
         foreach (var data in EnumerateInputs(dataLength))
         {
@@ -111,19 +122,19 @@ public class EccBinaryEncoderKernelParityTest
             var actual = new byte[eccCount];
             EccBinaryEncoder.CalculateEccGfni(data, actual, eccCount);
 
-            Assert.Equal(expected, actual);
+             await Assert.That(actual).IsEquivalentTo(expected);
         }
     }
 
-    [Fact]
-    public void GfniMatrixTable_MatchesGaloisFieldMultiply()
+    [Test]
+    public async Task GfniMatrixTable_MatchesGaloisFieldMultiply()
     {
         // EccBinaryEncoder.GfniMatrix is baked into the assembly as constant data;
         // this recomputes every entry from GaloisField.Multiply so the constant can
         // never drift from the field definition. gf2p8affineqb convention: qword
-        // byte (7-i) = matrix row for result bit i, row bit k = bit i of f·2^k.
-        var table = EccBinaryEncoder.GfniMatrix;
-        Assert.Equal(256, table.Length);
+        // byte (7-i) = matrix row for result bit i, row bit k = bit i of f繝ｻ繧托ｽｽ・ｷ2^k.
+        var table = EccBinaryEncoder.GfniMatrix.ToArray();
+         await Assert.That(table.Length).IsEqualTo(256);
 
         for (var f = 0; f < 256; f++)
         {
@@ -139,13 +150,14 @@ public class EccBinaryEncoderKernelParityTest
                 expected |= (ulong)row << ((7 - i) * 8);
             }
 
-            Assert.Equal(expected, table[(int)f]);
+            var actual = table[(int)f];
+            await Assert.That(actual).IsEquivalentTo(expected);
         }
     }
 #endif
 
-    [Fact]
-    public void CalculateECC_EccCountAboveVectorLimit_UsesScalarPath()
+    [Test]
+    public async Task CalculateECC_EccCountAboveVectorLimit_UsesScalarPath()
     {
         // eccCount > 32 bypasses the vector kernels; verify the dispatch stays correct.
         var data = new byte[50];
@@ -158,13 +170,13 @@ public class EccBinaryEncoderKernelParityTest
         var actual = new byte[eccCount];
         EccBinaryEncoder.CalculateECC(data, actual, eccCount);
 
-        Assert.Equal(expected, actual);
+        await Assert.That(actual).IsEquivalentTo(expected);
     }
 
-    [Theory]
-    [InlineData(254)] // largest eccCount whose generator is log-domain representable
-    [InlineData(255)] // generator degenerates to x^255 + 1 (zero coefficients) — naive fallback
-    public void CalculateECC_MaxEccCounts_MatchesNaiveReference(int eccCount)
+    [Test]
+    [Arguments(254)] // largest eccCount whose generator is log-domain representable
+    [Arguments(255)] // generator degenerates to x^255 + 1 (zero coefficients) 驕ｯ・ｶ郢晢ｽｻnaive fallback
+    public async Task CalculateECC_MaxEccCounts_MatchesNaiveReference(int eccCount)
     {
         // eccCount == 255 is the only count whose generator polynomial has zero
         // coefficients (all others are all-nonzero by the MDS property), so it cannot
@@ -176,11 +188,11 @@ public class EccBinaryEncoderKernelParityTest
 
             var viaPublicApi = new byte[eccCount];
             EccBinaryEncoder.CalculateECC(data, viaPublicApi, eccCount);
-            Assert.Equal(expected, viaPublicApi);
+            await Assert.That(viaPublicApi).IsEquivalentTo(expected);
 
             var viaScalarKernel = new byte[eccCount];
             EccBinaryEncoder.CalculateEccScalar(data, viaScalarKernel, eccCount);
-            Assert.Equal(expected, viaScalarKernel);
+            await Assert.That(viaScalarKernel).IsEquivalentTo(expected);
         }
     }
 
@@ -211,7 +223,7 @@ public class EccBinaryEncoderKernelParityTest
     /// </summary>
     private static void NaiveReferenceECC(ReadOnlySpan<byte> data, Span<byte> ecc, int eccCount)
     {
-        // Generator polynomial (x - α^0)(x - α^1)...(x - α^(eccCount-1))
+        // Generator polynomial (x - 繝ｻ雜｣・ｽ・ｱ^0)(x - 繝ｻ雜｣・ｽ・ｱ^1)...(x - 繝ｻ雜｣・ｽ・ｱ^(eccCount-1))
         var generator = new byte[eccCount + 1];
         generator[0] = 1;
         var temp = new byte[generator.Length];

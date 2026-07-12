@@ -1,38 +1,46 @@
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
-using Xunit;
 
 namespace SkiaSharp.QrCode.Tests;
 
 public class BitReaderUnitTests
 {
-    [Fact]
-    public void ReadBits_Singlebyte_CorrectPlacement()
+    [Test]
+    public async Task ReadBits_Singlebyte_CorrectPlacement()
     {
         Span<byte> data = [0b_10101011];
         var reader = new BitReader(data);
 
-        Assert.True(reader.Read());   // 1
-        Assert.False(reader.Read());  // 0
-        Assert.True(reader.Read());   // 1
-        Assert.False(reader.Read());  // 0
-        Assert.True(reader.Read());   // 1
-        Assert.False(reader.Read());  // 0
-        Assert.True(reader.Read());   // 1
-        Assert.True(reader.Read());   // 1
+        var bits = new bool[8];
+        for (var i = 0; i < bits.Length; i++)
+        {
+            bits[i] = reader.Read();
+        }
+
+        await Assert.That(bits[0]).IsTrue();
+        await Assert.That(bits[1]).IsFalse();
+        await Assert.That(bits[2]).IsTrue();
+        await Assert.That(bits[3]).IsFalse();
+        await Assert.That(bits[4]).IsTrue();
+        await Assert.That(bits[5]).IsFalse();
+        await Assert.That(bits[6]).IsTrue();
+        await Assert.That(bits[7]).IsTrue();
     }
 
-    [Fact]
-    public void ReadBits_AccessByteBoundary_CorrectPlacement()
+    [Test]
+    public async Task ReadBits_AccessByteBoundary_CorrectPlacement()
     {
         Span<byte> data = [0b11110010];
         var reader = new BitReader(data);
 
-        Assert.Equal(0b_1111, reader.Reads(4));
-        Assert.Equal(0b_0010, reader.Reads(4));
+        var first = reader.Reads(4);
+        var second = reader.Reads(4);
+
+        await Assert.That(first).IsEquivalentTo(0b_1111);
+        await Assert.That(second).IsEquivalentTo(0b_0010);
     }
 
-    [Fact]
-    public void RoundTrip_WriteAndRead_IdenticalData()
+    [Test]
+    public async Task RoundTrip_WriteAndRead_IdenticalData()
     {
         Span<byte> buffer = stackalloc byte[10];
         var writer = new BitWriter(buffer);
@@ -42,18 +50,21 @@ public class BitReaderUnitTests
         writer.Write(0b_1111, 4);
 
         var reader = new BitReader(writer.GetData());
+        var first = reader.Reads(4);
+        var second = reader.Reads(4);
+        var third = reader.Reads(4);
 
-        Assert.Equal(0b_1010, reader.Reads(4));
-        Assert.Equal(0b_1100, reader.Reads(4));
-        Assert.Equal(0b_1111, reader.Reads(4));
+        await Assert.That(first).IsEquivalentTo(0b_1010);
+        await Assert.That(second).IsEquivalentTo(0b_1100);
+        await Assert.That(third).IsEquivalentTo(0b_1111);
     }
 
     // parameter check
-    [Theory]
-    [InlineData(0)]    // bitCount = 0
-    [InlineData(-1)]   // bitCount < 0
-    [InlineData(33)]   // bitCount > 32
-    public void Reads_InvalidBitCount_ThrowsArgumentOutOfRangeException(int bitCount)
+    [Test]
+    [Arguments(0)]    // bitCount = 0
+    [Arguments(-1)]   // bitCount < 0
+    [Arguments(33)]   // bitCount > 32
+    public async Task Reads_InvalidBitCount_ThrowsArgumentOutOfRangeException(int bitCount)
     {
         var data = new byte[] { 0xFF };
 
@@ -62,30 +73,28 @@ public class BitReaderUnitTests
             var reader = new BitReader(data);
             reader.Reads(bitCount);
         });
-        Assert.Equal(nameof(bitCount), exception.ParamName);
+        await Assert.That(exception.ParamName).IsEquivalentTo(nameof(bitCount));
     }
 
     // 32-bit checks
-    [Fact]
-    public void Reads_32Bits_ReturnsCorrectValue()
+    [Test]
+    public async Task Reads_32Bits_ReturnsCorrectValue()
     {
         ReadOnlySpan<byte> data = [0xFF, 0xFF, 0xFF, 0xFF]; // all 1s
         var reader = new BitReader(data);
-
         var result = reader.Reads(32);
 
-        Assert.Equal(-1, result); // 0xFFFFFFFF as signed int
+        await Assert.That(result).IsEquivalentTo(-1); // 0xFFFFFFFF as signed int
     }
 
     // hasBits
-    [Fact]
-    public void Reads_1Bit_ReturnsCorrectValue()
+    [Test]
+    public async Task Reads_1Bit_ReturnsCorrectValue()
     {
         ReadOnlySpan<byte> data = [0b10000000];
         var reader = new BitReader(data);
-
         var result = reader.Reads(1);
 
-        Assert.Equal(1, result);
+        await Assert.That(result).IsEquivalentTo(1);
     }
 }
