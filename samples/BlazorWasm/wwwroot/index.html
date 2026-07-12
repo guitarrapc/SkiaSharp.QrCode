@@ -29,11 +29,14 @@
     </div>
     <script>
         // Client-side file download helper used by the Download PNG/SVG buttons.
-        window.downloadFile = (fileName, contentType, base64) => {
+        window.downloadFile = (fileName, contentType, bytes) => {
+            const blob = new Blob([bytes], { type: contentType });
+            const url = URL.createObjectURL(blob);
             const anchor = document.createElement('a');
-            anchor.href = `data:${contentType};base64,${base64}`;
+            anchor.href = url;
             anchor.download = fileName;
             anchor.click();
+            URL.revokeObjectURL(url);
         };
     </script>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>

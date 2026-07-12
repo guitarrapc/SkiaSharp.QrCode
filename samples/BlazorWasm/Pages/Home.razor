@@ -253,7 +253,7 @@
         {
             var data = QrImageFactory.CreateQrData(Options);
             var bytes = QrImageFactory.CreateBuilder(Options, data, customLogo).ToByteArray();
-            await JS.InvokeVoidAsync("downloadFile", "qrcode.png", "image/png", Convert.ToBase64String(bytes));
+            await JS.InvokeVoidAsync("downloadFile", "qrcode.png", "image/png", bytes);
             errorMessage = null;
         }
         catch (Exception ex)
@@ -269,7 +269,7 @@
             var data = QrImageFactory.CreateQrData(Options);
             using var stream = new MemoryStream();
             QrImageFactory.CreateBuilder(Options, data, customLogo).SaveToSvg(stream);
-            await JS.InvokeVoidAsync("downloadFile", "qrcode.svg", "image/svg+xml", Convert.ToBase64String(stream.ToArray()));
+            await JS.InvokeVoidAsync("downloadFile", "qrcode.svg", "image/svg+xml", stream.ToArray());
             errorMessage = null;
         }
         catch (Exception ex)
@@ -286,7 +286,8 @@
             using var memory = new MemoryStream();
             await stream.CopyToAsync(memory);
 
-            var bitmap = SKBitmap.Decode(memory.ToArray())
+            memory.Position = 0;
+            var bitmap = SKBitmap.Decode(memory)
                 ?? throw new ArgumentException("Could not decode the image. Use PNG, JPEG or WebP.");
             customLogo?.Dispose();
             customLogo = bitmap;
