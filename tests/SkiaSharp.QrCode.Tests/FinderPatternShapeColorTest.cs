@@ -39,11 +39,11 @@ public class FinderPatternShapeColorTest
         await Assert.That(centerPixel).IsEquivalentTo(codeColor);
     }
 
-    public static IEnumerable<FinderPatternShape> GetFinderPatternShapes()
+    public static IEnumerable<Func<FinderPatternShape>> GetFinderPatternShapes()
     {
-        yield return RectangleFinderPatternShape.Default;
-        yield return CircleFinderPatternShape.Default;
-        yield return RoundedRectangleFinderPatternShape.Default;
-        yield return RoundedRectangleCircleFinderPatternShape.Default;
+        yield return () => RectangleFinderPatternShape.Default;
+        yield return () => CircleFinderPatternShape.Default;
+        yield return () => RoundedRectangleFinderPatternShape.Default;
+        yield return () => RoundedRectangleCircleFinderPatternShape.Default;
     }
 }

@@ -212,7 +212,7 @@ public class QRCodeVisualCompatibilityTest
         {
             // First run: save as sample
             SavePixelData(samplePath, actualPixels, qr.Size);
-            await Assert.That(true).IsTrue().Because($"Sample file created: {samplePath}");
+            await Assert.That(File.Exists(samplePath)).IsTrue().Because($"Sample file created: {samplePath}");
         }
         else
         {

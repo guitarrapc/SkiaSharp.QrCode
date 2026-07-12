@@ -27,25 +27,23 @@ public class FinderPatternFinderParityTest
             (56, 8, 0),
         };
 
+        var simd = new FinderPattern[3];
+        var scalar = new FinderPattern[3];
+
         foreach (var seed in new[] { 1, 7, 42, 1234, 20260712 })
         {
             foreach (var (dimension, ppm, finderCount) in configs)
             {
-                Span<FinderPattern> simd = stackalloc FinderPattern[3];
-                Span<FinderPattern> scalar = stackalloc FinderPattern[3];
-
                 var scene = BuildQrScene(dimension, ppm, finderCount, seed, out var width, out var height);
                 var simdFound = FinderPatternFinder.TryFind(scene, width, height, Threshold, simd);
                 var scalarFound = FinderPatternFinder.TryFindScalar(scene, width, height, Threshold, scalar);
-                var simdPatterns = simd.ToArray();
-                var scalarPatterns = scalar.ToArray();
 
                 await Assert.That(simdFound == scalarFound).IsTrue().Because($"found mismatch (seed={seed}, dim={dimension}, finders={finderCount}): simd={simdFound}, scalar={scalarFound}");
                 if (simdFound)
                 {
                     for (var i = 0; i < 3; i++)
                     {
-                        await Assert.That(simdPatterns[i].X == scalarPatterns[i].X && simdPatterns[i].Y == scalarPatterns[i].Y && simdPatterns[i].ModuleSize == scalarPatterns[i].ModuleSize).IsTrue().Because($"pattern {i} mismatch (seed={seed}, dim={dimension}): simd=({simdPatterns[i].X},{simdPatterns[i].Y},{simdPatterns[i].ModuleSize}), scalar=({scalarPatterns[i].X},{scalarPatterns[i].Y},{scalarPatterns[i].ModuleSize})");
+                        await Assert.That(simd[i].X == scalar[i].X && simd[i].Y == scalar[i].Y && simd[i].ModuleSize == scalar[i].ModuleSize).IsTrue().Because($"pattern {i} mismatch (seed={seed}, dim={dimension}): simd=({simd[i].X},{simd[i].Y},{simd[i].ModuleSize}), scalar=({scalar[i].X},{scalar[i].Y},{scalar[i].ModuleSize})");
                     }
                 }
 

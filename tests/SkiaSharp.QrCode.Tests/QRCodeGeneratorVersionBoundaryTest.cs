@@ -312,7 +312,7 @@ public class QRCodeGeneratorVersionBoundaryTest
 
         var output = results.ToString();
         System.IO.File.WriteAllText("actual_qr_capacities.md", output);
-        await Assert.That(true).IsTrue().Because("Capacity report written to actual_qr_capacities.md");
+        await Assert.That(File.Exists("actual_qr_capacities.md")).IsTrue().Because("Capacity report written to actual_qr_capacities.md");
     }
 
     private static int FindMaxCapacity(int targetVersion, ECCLevel eccLevel, char fillChar)
