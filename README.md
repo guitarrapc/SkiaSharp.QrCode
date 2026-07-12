@@ -8,7 +8,7 @@
 
 [Migration](docs/migration.md) | [Data Capacity](docs/data-capacity.md)
 
-SkiaSharp.QrCode provides high-performance QR code generation with [SkiaSharp](https://github.com/mono/SkiaSharp) integration.
+SkiaSharp.QrCode provides high-performance QR code generation/read with [SkiaSharp](https://github.com/mono/SkiaSharp) integration.
 
 ![Performance Benchmark](src/SkiaSharp.QrCode.Benchmark/image_net10.0.png)
 
