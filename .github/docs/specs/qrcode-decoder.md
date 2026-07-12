@@ -204,8 +204,7 @@ out of scope; the API docs point such users to ZXing.Net.
 
 ### Performance
 
-Kernel-level tuning follows the micro-benchmark protocol in the private MicroBenchmarks
-repository; end-to-end numbers live in `src/SkiaSharp.QrCode.Benchmark`
+End-to-end numbers live in `src/SkiaSharp.QrCode.Benchmark`
 (`QrCodeDecodeEndToEnd`), with matrix scenarios mirroring the encode scenarios for
 direct comparison.
 
@@ -227,14 +226,13 @@ direct comparison.
   so out-of-order execution hides division latency (halving the division count
   measured no gain); the cost was scalar conversion/clamp/branch overhead. Sampling is
   ~0.8% of a typical (version 4) image decode — the win matters for large symbols
-  only (`MICRO_OPTIMIZATION_PerspectiveSample`).
+  only.
 - **Alignment search is failure-path-dominated.** The expanding window sweep
   (4→8→16 modules) runs to completion when no pattern exists, up to 4× per failed
   decode (secondary dimension × inversion) — baseline ~40% of an image decode. An
   AVX2 kernel (32-px SIMD dark-mask classification + tzcnt run walk × a
   ⌊moduleSize/2⌋ row stride) achieved 23× on the not-found sweep; the vertical
-  cross-check recenters exactly, so striding is result-identical
-  (`MICRO_OPTIMIZATION_AlignmentFind` in the MicroBenchmarks repository).
+  cross-check recenters exactly, so striding is result-identical.
 - **Finder scan striding must be envelope-safe, not module-size-based.** The finder
   scan reuses the same SIMD mask-walk kernel shape, but its row stride cannot come
   from the module size — the module size is unknown before detection. The bound
@@ -247,8 +245,7 @@ direct comparison.
   regression, in the scalar variant). The best-3 selection before that fallback must
   run on a copy: it compacts and sorts the candidate list in place. Combined result
   9.6–11.4× on the scan, image E2E (`Image_Url_M`) 309 µs → 132 µs (−57%); the
-  SIMD walk alone is bit-identical to the scalar walk and parity-tested
-  (`MICRO_OPTIMIZATION_FinderScan` in the MicroBenchmarks repository).
+  SIMD walk alone is bit-identical to the scalar walk and parity-tested.
 - **Otsu histogram fill favors run aggregation over per-pixel increments.** On
   QR-like images (long runs of two values), `histogram[value]++` serializes on
   store-forwarding when consecutive pixels hit the same bin — measured ~8× slower
@@ -260,5 +257,4 @@ direct comparison.
   (`OtsuThresholdParityTest`). Accepted trade-off: uniform random noise — never-
   uniform groups, the adversarial floor that even real photos don't hit — pays up to
   ~1.3×. Image E2E (`Image_Url_M`) 132 µs → 38 µs; with the finder scan work,
-  309 → 38 µs (8.0×) total (`MICRO_OPTIMIZATION_OtsuHistogram` in the
-  MicroBenchmarks repository).
+  309 → 38 µs (8.0×) total.
