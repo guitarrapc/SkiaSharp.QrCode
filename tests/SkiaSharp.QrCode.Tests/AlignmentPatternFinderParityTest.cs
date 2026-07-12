@@ -23,7 +23,7 @@ public class AlignmentPatternFinderParityTest
             {
                 foreach (var include in new[] { true, false })
                 {
-                    var scene = BuildScene(Ppm, include, Math.Abs(offset), seed, out var size, out var expectedX, out var expectedY);
+                    var scene = BuildScene(Ppm, include, offset, seed, out var size, out var expectedX, out var expectedY);
 
                     var (simdFound, simdX, simdY) = Sweep(scene, size, expectedX, expectedY, forceScalar: false);
                     var (scalarFound, scalarX, scalarY) = Sweep(scene, size, expectedX, expectedY, forceScalar: true);
