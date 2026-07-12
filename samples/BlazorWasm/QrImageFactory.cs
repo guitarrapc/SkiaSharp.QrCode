@@ -87,7 +87,7 @@ public static class QrImageFactory
         return IconData.FromImage(
             bitmap,
             iconSizePercent: Math.Clamp(options.LogoSizePercent, 1, 40),
-            iconBorderWidth: Math.Clamp(options.LogoBorderWidth, 0, 64));
+            iconBorderWidth: Math.Clamp(options.LogoBorderWidth, 0, 24));
     }
 
     private static SKColor ParseColor(string value, SKColor fallback)
