@@ -417,6 +417,55 @@ public static class QRCodeGenerator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteQRMatrix(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> interleavedData, ECCLevel eccLevel)
     {
+        byte[]? rentedBlockedMask = null;
+
+        try
+        {
+            // Place function patterns and build the blocked-module bitmask
+            var maskSize = (size * size + 7) / 8;
+            Span<byte> blockedMask = maskSize <= 1024
+                ? stackalloc byte[maskSize]
+                : (rentedBlockedMask = ArrayPool<byte>.Shared.Rent(maskSize)).AsSpan(0, maskSize);
+            PlaceFunctionModules(buffer, size, version, blockedMask);
+
+            // Place data
+            ModulePlacer.PlaceDataWords(buffer, size, interleavedData, blockedMask);
+
+            // Apply mask and format
+            var maskVersion = ModulePlacer.MaskCode(buffer, size, version, blockedMask, eccLevel);
+            var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
+            ModulePlacer.PlaceFormat(buffer, size, formatBit);
+
+            // Place version information (version 7+)
+            if (version >= 7)
+            {
+                var versionBits = QRCodeConstants.GetVersionBits(version);
+                ModulePlacer.PlaceVersion(buffer, size, versionBits);
+            }
+        }
+        finally
+        {
+            if (rentedBlockedMask is not null)
+                ArrayPool<byte>.Shared.Return(rentedBlockedMask, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// Places all function patterns (finder, separators, alignment, timing, dark module)
+    /// into <paramref name="buffer"/> and builds the blocked-module bitmask covering them
+    /// plus the reserved format/version areas.
+    /// </summary>
+    /// <remarks>
+    /// Shared by the encoder (module placement) and the decoder (identifying which
+    /// modules are function patterns vs. data), so both sides always agree on the
+    /// exact blocked region layout.
+    /// </remarks>
+    /// <param name="buffer">Core matrix buffer (size × size bytes) to place patterns into.</param>
+    /// <param name="size">Matrix size in modules (no quiet zone).</param>
+    /// <param name="version">QR code version (1-40).</param>
+    /// <param name="blockedMask">Output bitmask buffer of at least (size*size+7)/8 bytes; cleared and rebuilt.</param>
+    internal static void PlaceFunctionModules(Span<byte> buffer, int size, int version, Span<byte> blockedMask)
+    {
         // Version 1-16: stack allocation (covers 95%+ use cases)
         // Version 17+: heap allocation (large/rare QR codes)
         const int StackAllocThreshold = 16;
@@ -426,7 +475,6 @@ public static class QRCodeGenerator
         // Version 7:  approximately 27
         // Version 40: approximately 57
         Rectangle[]? rentedBlockedModules = null;
-        byte[]? rentedBlockedMask = null;
 
         try
         {
@@ -447,34 +495,13 @@ public static class QRCodeGenerator
             ModulePlacer.ReserveVersionAreas(size, version, blockedModulesBuffer, ref blockedCount);
 
             // Generate BitMask
-            var maskSize = (size * size + 7) / 8;
-            Span<byte> blockedMask = maskSize <= 1024
-                ? stackalloc byte[maskSize]
-                : (rentedBlockedMask = ArrayPool<byte>.Shared.Rent(maskSize)).AsSpan(0, maskSize);
             blockedMask.Clear();
             BuildBlockedMask(blockedMask, size, blockedModulesBuffer.Slice(0, blockedCount));
-
-            // Place data
-            ModulePlacer.PlaceDataWords(buffer, size, interleavedData, blockedMask);
-
-            // Apply mask and format
-            var maskVersion = ModulePlacer.MaskCode(buffer, size, version, blockedMask, eccLevel);
-            var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
-            ModulePlacer.PlaceFormat(buffer, size, formatBit);
-
-            // Place version information (version 7+)
-            if (version >= 7)
-            {
-                var versionBits = QRCodeConstants.GetVersionBits(version);
-                ModulePlacer.PlaceVersion(buffer, size, versionBits);
-            }
         }
         finally
         {
             if (rentedBlockedModules is not null)
                 ArrayPool<Rectangle>.Shared.Return(rentedBlockedModules, clearArray: false);
-            if (rentedBlockedMask is not null)
-                ArrayPool<byte>.Shared.Return(rentedBlockedMask, clearArray: false);
         }
     }
 

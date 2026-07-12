@@ -168,6 +168,9 @@ const downloadBtn = document.getElementById('download-btn');
 const downloadSvgBtn = document.getElementById('download-svg-btn');
 const copyImageBtn = document.getElementById('copy-image-btn');
 const permalinkBtn = document.getElementById('permalink-btn');
+const decodeFileEl = document.getElementById('decode-file');
+const decodeResultEl = document.getElementById('decode-result');
+const decodeVerifyEl = document.getElementById('decode-verify');
 const benchModeSelect = document.getElementById('bench-mode-select');
 const benchCountSelect = document.getElementById('bench-count-select');
 const benchRunBtn = document.getElementById('bench-run-btn');
@@ -575,7 +578,94 @@ function generate() {
   } catch {
     statsEl.textContent = '';
   }
+
+  scheduleVerifyDecode(bytes, state.content);
 }
+
+/* ─── Decode (self-verify + image upload) ─── */
+
+// Self-verify runs the library's own decoder over the freshly generated PNG.
+// Debounced independently of generation so slider drags do not pay the decode cost.
+const VERIFY_DEBOUNCE_MS = 250;
+let verifyTimer = null;
+let pendingVerify = null;
+
+function scheduleVerifyDecode(pngBytes, expectedText) {
+  // Clear immediately so the line never describes a previous image
+  if (decodeVerifyEl) decodeVerifyEl.textContent = '';
+  pendingVerify = { pngBytes, expectedText };
+  if (verifyTimer !== null) return;
+  verifyTimer = window.setTimeout(() => {
+    verifyTimer = null;
+    const job = pendingVerify;
+    pendingVerify = null;
+    if (job) runVerifyDecode(job.pngBytes, job.expectedText);
+  }, VERIFY_DEBOUNCE_MS);
+}
+
+function runVerifyDecode(pngBytes, expectedText) {
+  if (!runtimeAlive || !runtimeReady || !exports || !decodeVerifyEl) return;
+  const result = callDecode(pngBytes);
+  if (!result || result.error) {
+    decodeVerifyEl.textContent = '';
+    return;
+  }
+  if (result.ok && result.text === expectedText) {
+    const corrected = result.errorsCorrected > 0 ? ` · ${result.errorsCorrected} codewords corrected` : '';
+    decodeVerifyEl.textContent = `✓ Decodes back to the input (self-check${corrected} · ${result.totalMs} ms)`;
+  } else if (result.ok) {
+    decodeVerifyEl.textContent = '⚠ Self-check decoded different text — please test-scan this code.';
+  } else {
+    decodeVerifyEl.textContent =
+      `Self-check: ${result.status} — the built-in decoder could not read this styling; a camera app may still scan it.`;
+  }
+}
+
+/** Calls the WASM decoder; returns the parsed result, or null when the runtime died. */
+function callDecode(bytes) {
+  try {
+    return JSON.parse(exports.SkiaSharp.QrCode.Playground.QrInterop.Decode(bytes));
+  } catch (err) {
+    if (isRuntimeDeadError(err)) {
+      handleRuntimeDeath();
+      return null;
+    }
+    return { error: err?.message ?? String(err) };
+  }
+}
+
+decodeFileEl.addEventListener('change', async () => {
+  const file = decodeFileEl.files?.[0];
+  if (!file) return;
+
+  let bytes;
+  try {
+    bytes = new Uint8Array(await file.arrayBuffer());
+  } catch (e) {
+    decodeResultEl.textContent = `Could not read the file: ${e?.message ?? e}`;
+    return;
+  }
+
+  if (!runtimeAlive || !runtimeReady || !exports) {
+    decodeResultEl.textContent = 'The WebAssembly runtime is still loading — try again in a moment.';
+    return;
+  }
+
+  const result = callDecode(bytes);
+  if (!result) return;
+  if (result.error) {
+    decodeResultEl.textContent = `Decode failed: ${result.error}`;
+    return;
+  }
+  if (!result.ok) {
+    decodeResultEl.textContent =
+      `No QR code decoded (${result.status}). The built-in decoder targets clean, screen-rendered images.`;
+    return;
+  }
+  decodeResultEl.textContent =
+    `“${result.text}” · QR version ${result.qrVersion} · ECC ${result.ecc} · mask ${result.maskPattern}`
+    + ` · ${result.errorsCorrected} codewords corrected · ${result.totalMs} ms`;
+});
 
 /** Shows an inline error while keeping the last good image visible. */
 function showGenerateError(message) {

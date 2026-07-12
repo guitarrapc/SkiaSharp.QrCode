@@ -111,6 +111,52 @@ public static partial class QrInterop
         }
     }
 
+    /// <summary>
+    /// Decodes a QR code from encoded image bytes (PNG/JPEG/WebP) and returns the
+    /// result as a JSON string:
+    /// <c>{"ok":true,"text":"...","qrVersion":N,"ecc":"M","maskPattern":N,"errorsCorrected":N,"totalMs":N}</c>
+    /// on success, <c>{"ok":false,"status":"NotDetected","totalMs":N}</c> when no QR
+    /// decodes, or <c>{"error":"..."}</c> on unexpected failure.
+    /// <para>
+    /// Uses the library's built-in image decoder: clean, screen-rendered images
+    /// (arbitrary rotation, mirroring and mild perspective included). Heavily stylized codes
+    /// (low-contrast colors, inverted palettes, strong decoration) may report
+    /// NotDetected even when a computer-vision grade phone scanner reads them.
+    /// </para>
+    /// </summary>
+    /// <param name="imageBytes">Encoded image file bytes.</param>
+    [JSExport]
+    public static string Decode(byte[] imageBytes)
+    {
+        try
+        {
+            if (imageBytes.Length == 0)
+                throw new ArgumentException("Image is empty.");
+
+            var stopwatch = Stopwatch.StartNew();
+            using var bitmap = SKBitmap.Decode(imageBytes)
+                ?? throw new ArgumentException("The file is not a decodable image (PNG/JPEG/WebP).");
+
+            var success = QRCodeDecoder.TryDecode(bitmap, out var text, out var info);
+            stopwatch.Stop();
+
+            var payload = new DecodePayload(
+                Ok: success,
+                Text: success ? text : null,
+                Status: info.Status.ToString(),
+                QrVersion: info.Version,
+                Ecc: success ? info.EccLevel.ToString() : null,
+                MaskPattern: info.MaskPattern,
+                ErrorsCorrected: info.ErrorsCorrected,
+                TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1));
+            return JsonSerializer.Serialize(payload, PlaygroundJsonContext.Default.DecodePayload);
+        }
+        catch (Exception ex)
+        {
+            return JsonSerializer.Serialize(new ErrorPayload(ex.GetBaseException().Message), PlaygroundJsonContext.Default.ErrorPayload);
+        }
+    }
+
     private static byte[] GenerateCore(QrRequest request, byte[] customLogo)
     {
         if (string.IsNullOrWhiteSpace(request.Content))
@@ -451,7 +497,19 @@ public sealed record LogoDto
 
 public sealed record ErrorPayload(string Error);
 
-[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+/// <summary>Result of a <see cref="QrInterop.Decode"/> call, serialized to the page script.</summary>
+public sealed record DecodePayload(
+    bool Ok,
+    string? Text,
+    string Status,
+    int QrVersion,
+    string? Ecc,
+    int MaskPattern,
+    int ErrorsCorrected,
+    double TotalMs);
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(QrRequest))]
 [JsonSerializable(typeof(ErrorPayload))]
+[JsonSerializable(typeof(DecodePayload))]
 internal sealed partial class PlaygroundJsonContext : JsonSerializerContext;
