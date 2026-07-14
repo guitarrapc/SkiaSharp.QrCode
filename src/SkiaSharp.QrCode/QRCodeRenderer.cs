@@ -91,6 +91,13 @@ public static class QRCodeRenderer
         // Draw finder patterns
         if (finderPatternShape is not null)
         {
+            // Curved finder shapes (circles, rounded rectangles) require antialiasing
+            // regardless of the module shape's setting. Enabling it here ensures the
+            // outer ring and inner background ring are both rasterized consistently,
+            // preventing dark / black artifacts on GPU-accelerated surfaces (e.g. MAUI).
+            if (finderPatternShape.RequiresAntialiasing)
+                darkPaint.IsAntialias = true;
+
             // total 3 finder patterns
             for (var i = 0; i < 3; i++)
             {

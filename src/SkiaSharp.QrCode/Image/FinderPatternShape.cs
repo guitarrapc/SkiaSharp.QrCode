@@ -6,6 +6,13 @@ namespace SkiaSharp.QrCode.Image;
 public abstract class FinderPatternShape
 {
     /// <summary>
+    /// Gets whether this shape requires antialiasing for smooth rendering.
+    /// Curved shapes such as circles and rounded rectangles should return <see langword="true"/>;
+    /// straight-edged shapes such as rectangles can return <see langword="false"/>.
+    /// </summary>
+    public abstract bool RequiresAntialiasing { get; }
+
+    /// <summary>
     /// Draw a finder pattern at the specified location.
     /// </summary>
     /// <param name="canvas">The canvas to render on.</param>
@@ -39,6 +46,11 @@ public sealed class RectangleFinderPatternShape : FinderPatternShape
     // Enforce singleton pattern
     private RectangleFinderPatternShape() { }
 
+    /// <summary>
+    /// Antialiasing disabled; straight-edged rectangles render cleanly without it.
+    /// </summary>
+    public override bool RequiresAntialiasing => false;
+
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
     {
@@ -54,7 +66,7 @@ public sealed class RectangleFinderPatternShape : FinderPatternShape
         canvas.DrawRect(rect, paint);
 
         // Draw ring (5×5)
-        using var ringPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
+        using var ringPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill, IsAntialias = paint.IsAntialias };
         var innerRect = SKRect.Create(
             rect.Left + moduleSize,
             rect.Top + moduleSize,
@@ -85,6 +97,11 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
     // Enforce singleton pattern
     private CircleFinderPatternShape() { }
 
+    /// <summary>
+    /// Requires antialiasing to prevent jagged edges on curves.
+    /// </summary>
+    public override bool RequiresAntialiasing => true;
+
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
     {
@@ -101,7 +118,7 @@ public sealed class CircleFinderPatternShape : FinderPatternShape
         canvas.DrawCircle(center, radius, paint);
 
         // Draw ring (5x5)
-        using var ringPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
+        using var ringPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill, IsAntialias = paint.IsAntialias };
         canvas.DrawCircle(center, radius * (5f / 7f), ringPaint);
 
         // Draw black center (3x3)
@@ -134,6 +151,11 @@ public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
         _cornerRadiusPercent = cornerRadiusPercent;
     }
 
+    /// <summary>
+    /// Requires antialiasing to prevent jagged edges on curves.
+    /// </summary>
+    public override bool RequiresAntialiasing => true;
+
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
     {
@@ -150,7 +172,7 @@ public sealed class RoundedRectangleFinderPatternShape : FinderPatternShape
         canvas.DrawRoundRect(rect, radius, radius, paint);
 
         // Draw ring (5×5)
-        using var ringPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
+        using var ringPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill, IsAntialias = paint.IsAntialias };
         var innerRect = SKRect.Create(
             rect.Left + moduleSize,
             rect.Top + moduleSize,
@@ -193,6 +215,11 @@ public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShap
         _cornerRadiusPercent = cornerRadiusPercent;
     }
 
+    /// <summary>
+    /// Requires antialiasing to prevent jagged edges on curves.
+    /// </summary>
+    public override bool RequiresAntialiasing => true;
+
     /// <inheritdoc/>
     public override void Draw(SKCanvas canvas, SKRect rect, SKPaint paint)
     {
@@ -215,7 +242,7 @@ public sealed class RoundedRectangleCircleFinderPatternShape : FinderPatternShap
         canvas.DrawRoundRect(rect, cornerRadius, cornerRadius, paint);
 
         // Draw ring (5×5)
-        using var ringPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill };
+        using var ringPaint = new SKPaint { Color = backgroundColor, Style = SKPaintStyle.Fill, IsAntialias = paint.IsAntialias };
         var innerRect = SKRect.Create(
             rect.Left + moduleSize,
             rect.Top + moduleSize,
