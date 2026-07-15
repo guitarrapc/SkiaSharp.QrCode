@@ -54,10 +54,8 @@ public static class QRCodeRenderer
         var shape = moduleShape ?? RectangleModuleShape.Default;
 
         // Draw the background at once
-        using (var lightPaint = new SKPaint() { Color = bgColor, Style = SKPaintStyle.Fill })
-        {
-            canvas.DrawRect(area, lightPaint);
-        }
+        using var lightPaint = new SKPaint() { Color = bgColor, Style = SKPaintStyle.Fill };
+        canvas.DrawRect(area, lightPaint);
 
         // Create paint with gradient or solid color
         // disable antialiasing as it causes gray border around each module.
@@ -91,11 +89,20 @@ public static class QRCodeRenderer
         // Draw finder patterns
         if (finderPatternShape is not null)
         {
+            // Curved finder shapes require antialiasing independently from module shapes.
+            // Apply the same setting to both paints so their shared edges are rasterized
+            // consistently.
+            if (finderPatternShape.RequiresAntialiasing)
+            {
+                darkPaint.IsAntialias = true;
+                lightPaint.IsAntialias = true;
+            }
+
             // total 3 finder patterns
             for (var i = 0; i < 3; i++)
             {
                 var finderRect = GetFinderPatternRect(data, i, area);
-                finderPatternShape.Draw(canvas, finderRect, darkPaint, bgColor);
+                finderPatternShape.Draw(canvas, finderRect, darkPaint, lightPaint);
             }
         }
 
