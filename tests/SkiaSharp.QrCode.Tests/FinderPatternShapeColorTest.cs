@@ -87,9 +87,8 @@ public class FinderPatternShapeColorTest
     [MethodDataSource(nameof(GetFinderPatternShapes))]
     public async Task CustomFinderPatternShape_WithAntialiasedModuleShape_UsesBackgroundColorForInnerRing(FinderPatternShape finderPatternShape)
     {
-        // Regression: when the module shape requires antialiasing (e.g., circles),
-        // the finder pattern ring must still use the configured backgroundColor,
-        // not show as black due to missing IsAntialias on the ring paint.
+        // Regression: even when modules are rendered with antialiasing (e.g., circles),
+        // finder pattern light areas must still use the configured background color.
         var backgroundColor = new SKColor(0xEA, 0xFB, 0x00, 0xFF);
         var codeColor = SKColors.Green;
         var qr = QRCodeGenerator.CreateQrCode("finder-shape-antialias-test", ECCLevel.M);
