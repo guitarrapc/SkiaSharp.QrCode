@@ -136,7 +136,7 @@ public class FinderPatternShapeColorTest
             .WithModuleShape(CircleModuleShape.Default, 0.9f)
             .ToByteArray();
 
-        using var bitmap = SKBitmap.Decode(pngBytes);
+        using var bitmap = SKBitmap.Decode(pngBytes) ?? throw new InvalidOperationException("Failed to decode generated PNG.");
         var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.H);
         var finderRect = QRCodeRenderer.GetFinderPatternRect(
             qr,
