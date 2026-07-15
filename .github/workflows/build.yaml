@@ -41,6 +41,9 @@ jobs:
       - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
         with:
           restore-wasm-workload: true
+          dotnet-version: |
+            10.0.x
+            8.0.x
       - name: Build
         run: dotnet build -c Release
       - name: Test
