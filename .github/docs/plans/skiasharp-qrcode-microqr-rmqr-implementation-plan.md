@@ -206,6 +206,60 @@ Exit: decoder MVT image-level rows satisfied; degradation matrix green.
 | MicroQr_Byte_M4_Encode (Span) | 645 ns | **0 B** |
 | StandardQr_Numeric_V1_Encode (Span), same payload, for scale | 2,336 ns | 0 B |
 
+### Phase 2 follow-up — placement pipeline optimization, completed 2026-07-17
+
+**Done**
+
+- Ported the Standard QR ModulePlacer techniques to Micro QR placement as a fused
+  fast path `MicroQrModulePlacer.PlaceSymbol` (new partial file
+  `MicroQrModulePlacer.PlaceSymbol.cs`); the per-module stage methods remain as
+  the readable reference. `MicroQrCodeGenerator.WriteCoreModules` now makes one
+  placer call. Kernel-level result (private micro-benchmark loop, 14 variants,
+  4 rounds): 3.1-4.0x over the per-module pipeline, zero allocations.
+- Design: <= 192-bit stream prepacked into 3 ulongs; closed-form column-pair
+  segments (no per-module function predicate, no remaining-bits guard — stream
+  length == free modules by the ISO tables, validated up front); mask scoring
+  via bit-packed edges + static per-(size, mask) tables; sizes 13/15/17 run
+  entirely on packed rows (one ulong per row) with a single SWAR unpack, size 11
+  stays byte-domain with the per-module mask apply (the unpack pass never
+  amortizes on a 121-byte matrix — measured, not assumed).
+- Tests: `MicroQrModulePlacerParityTest` (fused vs naive reference, byte-identical
+  matrix + mask, all 8 version/ECC combos x {all-zero, all-0xFF, 3 random seeds},
+  plus argument-validation negative cases). Full suite green: 2,776 tests
+  (net8.0 + net10.0), 0 failed.
+- Spec map updated (`specs/microqr-spec-map.md`): PlaceSymbol rows + parity test
+  references.
+
+**Lessons learned**
+
+- Mask scoring — not data placement — dominated the original pipeline (4 masks x
+  2 edges x a mask-condition switch per module): packing the two scored edges
+  into ulongs was the single biggest step at every size.
+- Refs/`Unsafe` bounds-check elimination, worth ~15% on Standard QR, was WITHIN
+  NOISE here: 121-289-byte matrices are fully L1-resident, so checked byte
+  stores never sat on the critical path. The safe span version shipped.
+- Representation choice is size-dependent: packed rows win at 13/15/17, byte
+  domain wins at 11. Prepack fixed costs that amortize at 192 bits regress 37%
+  at 36 bits — never trust a prepack win measured only on large inputs.
+- At 60-200 ns/op, cross-method code layout noise is 4-7% (measured with a
+  byte-identical canary variant) — accept/refute decisions need same-run ratios
+  plus cross-run consistency.
+
+**Benchmark delta (MicroQrEncode E2E, net10.0 Release, 12 iterations; before =
+78405fc, after = this change; StandardQr control unchanged at ~2.6 us)**
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| MicroQr_Numeric_M2_Encode (Span) | 475.2 ns | 181.2 ns | -62% (2.6x) |
+| MicroQr_Alphanumeric_M3_Encode (Span) | 627.7 ns | 258.6 ns | -59% (2.4x) |
+| MicroQr_Byte_M4_Encode (Span) | 752.0 ns | 305.2 ns | -59% (2.5x) |
+| MicroQr_Numeric_M2_Encode | 565.8 ns | 294.3 ns | -48% |
+| MicroQr_Alphanumeric_M3_Encode | 680.1 ns | 368.8 ns | -46% |
+| MicroQr_Byte_M4_Encode | 835.7 ns | 421.7 ns | -50% |
+
+Allocations unchanged (Span paths 0 B; class paths allocate the result object
+only).
+
 ## Risks Beyond the Test Strategy Document
 
 - Renderer assumptions: `IconShape`/finder styling assume three finder patterns; rectangular output changes image sizing APIs. Audit in Phase 0.

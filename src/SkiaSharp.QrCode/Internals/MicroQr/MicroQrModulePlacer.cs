@@ -13,8 +13,10 @@ namespace SkiaSharp.QrCode.Internals.MicroQr;
 /// modules adjacent to the finder. The entire function region reduces to the
 /// predicate <c>row == 0 || col == 0 || (row &lt;= 8 &amp;&amp; col &lt;= 8)</c>:
 /// no alignment patterns, no dark module, no version information.
+/// The fused fast-path pipeline lives in MicroQrModulePlacer.PlaceSymbol.cs;
+/// the per-module implementations in this file are the readable reference.
 /// </remarks>
-internal static class MicroQrModulePlacer
+internal static partial class MicroQrModulePlacer
 {
     /// <summary>True when (row, col) belongs to a function pattern or reserved area.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

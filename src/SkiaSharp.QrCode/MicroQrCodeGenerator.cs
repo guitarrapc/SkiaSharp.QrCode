@@ -209,11 +209,7 @@ public static class MicroQrCodeGenerator
         Span<byte> eccCodewords = stackalloc byte[14]; // max ECC codewords (M4-Q)
         EccBinaryEncoder.CalculateECC(dataCodewords.Slice(0, dataCount), eccCodewords, eccCount);
 
-        MicroQrModulePlacer.PlaceFunctionModules(core, size);
-        MicroQrModulePlacer.PlaceDataCodewords(core, size, dataCodewords.Slice(0, dataCount), eccCodewords.Slice(0, eccCount), dataBitCount);
-        var mask = MicroQrModulePlacer.SelectAndApplyMask(core, size);
-        var formatBits = MicroQrConstants.GetFormatBits(config.Version, config.EccLevel, mask);
-        MicroQrModulePlacer.PlaceFormat(core, size, formatBits);
+        MicroQrModulePlacer.PlaceSymbol(core, size, dataCodewords.Slice(0, dataCount), eccCodewords.Slice(0, eccCount), dataBitCount, config.Version, config.EccLevel);
     }
 
     private readonly record struct MicroQrConfiguration(MicroQrVersion Version, MicroQrEccLevel EccLevel, EncodingMode Mode);
