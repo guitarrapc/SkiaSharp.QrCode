@@ -7,66 +7,6 @@ namespace SkiaSharp.QrCode.Tests;
 public class ModulePlacerBinaryUnitTest
 {
     [Test]
-    public async Task PlaceDataWords_Binary_MatchesStringBased()
-    {
-        // Arrange
-        var version = 1;
-        var qrCodeBinary = CreateEmptyQRCodeData(version);
-        var qrCodeString = CreateEmptyQRCodeData(version);
-
-        // Get core size and buffer (21 for version 1)
-        var coreSize = qrCodeBinary.GetCoreSize();
-        await Assert.That(coreSize).IsEquivalentTo(21);
-
-        // Get core data buffer
-        Span<byte> binaryBuffer = stackalloc byte[coreSize * coreSize];
-        Span<byte> stringBuffer = stackalloc byte[coreSize * coreSize];
-        binaryBuffer.Clear();
-        stringBuffer.Clear();
-
-        Span<Rectangle> blockedModulesBinary = stackalloc Rectangle[30];
-        Span<Rectangle> blockedModulesString = stackalloc Rectangle[30];
-        var blockedCountBinary = 0;
-        var blockedCountString = 0;
-
-        // Prepare patterns (same for both)
-        ModulePlacer.PlaceFinderPatterns(binaryBuffer, coreSize, blockedModulesBinary, ref blockedCountBinary);
-        ModulePlacer.PlaceFinderPatterns(stringBuffer, coreSize, blockedModulesString, ref blockedCountString);
-
-        // Binary data: 0xAB 0xCD = 10101011 11001101
-        ReadOnlySpan<byte> binaryData = [0xAB, 0xCD];
-
-        // String data: equivalent bit string
-        var stringData = "1010101111001101";
-
-        // Build blocked mask
-        var maskSize = (coreSize * coreSize + 7) / 8;
-        Span<byte> blockedMask = stackalloc byte[maskSize];
-        blockedMask.Clear();
-        QRCodeGenerator.BuildBlockedMask(blockedMask, coreSize, blockedModulesBinary.Slice(0, blockedCountBinary));
-
-        // Act
-        ModulePlacer.PlaceDataWords(binaryBuffer, coreSize, binaryData, blockedMask);
-        ModulePlacer.PlaceDataWords(stringBuffer, coreSize, stringData, blockedMask);
-
-        qrCodeBinary.SetCoreData(binaryBuffer);
-        qrCodeString.SetCoreData(stringBuffer);
-
-        //// Debug
-        //Console.WriteLine(string.Join(",", binaryBuffer.ToArray()));
-        //Console.WriteLine(string.Join(",", stringBuffer.ToArray()));
-
-        // Assert - Compare matrices
-        for (int row = 0; row < qrCodeBinary.Size; row++)
-        {
-            for (int col = 0; col < qrCodeBinary.Size; col++)
-            {
-                await Assert.That(qrCodeBinary[row, col]).IsEquivalentTo(qrCodeString[row, col]);
-            }
-        }
-    }
-
-    [Test]
     [Arguments(1, new byte[] { 0x12, 0x34, 0x56 })]
     [Arguments(5, new byte[] { 0xFF, 0x00, 0xAA, 0x55 })]
     public async Task PlaceDataWords_Binary_PlacesDataCorrectly(int version, byte[] data)

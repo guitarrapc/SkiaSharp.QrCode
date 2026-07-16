@@ -173,52 +173,6 @@ internal static partial class ModulePlacer
         return true;
     }
 
-    // TODO: Text API, will be removed when text mode is deprecated
-    /// <summary>
-    /// Places data words into the QR code buffer using string-based interleaved data.
-    /// </summary>
-    /// <param name="buffer">Target buffer (CoreData size, no quiet zone).</param>
-    /// <param name="size">Matrix size (CoreData size, e.g., 25 for Version 2).</param>
-    /// <param name="interleavedData">Interleaved data as binary string (e.g., "11010011...").</param>
-    /// <param name="blockedMask">Bitmask indicating blocked modules.</param>
-    public static void PlaceDataWords(Span<byte> buffer, int size, string interleavedData, ReadOnlySpan<byte> blockedMask)
-    {
-        var bitPos = 0;
-        var totalBits = interleavedData.Length; // String length = bit count (each char is '0' or '1')
-        var up = true;
-
-        for (var x = size - 1; x >= 0; x -= 2)
-        {
-            // Skip timing pattern column
-            if (x == 6)
-                x--;
-
-            // Process each row in zigzag pattern
-            for (var yMod = 1; yMod <= size; yMod++)
-            {
-                // zigzag direction
-                var y = up ? size - yMod : yMod - 1;
-
-                // Process 2 columns (x and x-1)
-                for (var xOffset = 0; xOffset < 2; xOffset++)
-                {
-                    var xModule = x - xOffset;
-                    var bitIndex = y * size + xModule;
-
-                    if (!IsModuleBlocked(blockedMask, bitIndex) && bitPos < totalBits)
-                    {
-                        // Text API: Direct character comparison ('1' = dark, '0' = light)
-                        buffer[bitIndex] = interleavedData[bitPos] == '1' ? (byte)1 : (byte)0;
-                        bitPos++;
-                    }
-                }
-            }
-
-            // Alternate direction
-            up = !up;
-        }
-    }
-
     /// <summary>
     /// Reserves separator areas (white borders) around finder patterns.
     /// 1-module wide white border separates finder patterns from data area.
