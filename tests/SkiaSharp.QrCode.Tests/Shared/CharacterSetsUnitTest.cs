@@ -1,9 +1,8 @@
-using SkiaSharp.QrCode.Internals.StandardQr;
 using SkiaSharp.QrCode.Internals;
 
 namespace SkiaSharp.QrCode.Tests;
 
-public class QRCodeConstantsUnitTest
+public class CharacterSetsUnitTest
 {
     [Test]
     [Arguments('0', true)]
