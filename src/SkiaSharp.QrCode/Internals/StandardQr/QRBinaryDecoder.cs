@@ -2,7 +2,7 @@ using System.Buffers;
 using System.Text;
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
 
-namespace SkiaSharp.QrCode.Internals.BinaryDecoders;
+namespace SkiaSharp.QrCode.Internals.StandardQr;
 
 /// <summary>
 /// Decodes the QR data bitstream (mode segments) back into text.
@@ -40,7 +40,7 @@ internal static class QRBinaryDecoder
     private const int EciAscii = 27;      // US-ASCII (subset of ISO-8859-1)
 
     // Value → character table for alphanumeric mode (ISO/IEC 18004 Table 5),
-    // the inverse of QRCodeConstants.GetAlphanumericValue.
+    // the inverse of CharacterSets.GetAlphanumericValue.
     private const string AlphanumericChars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
 
     private enum ByteCharset

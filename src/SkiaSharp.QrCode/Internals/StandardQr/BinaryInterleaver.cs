@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
+namespace SkiaSharp.QrCode.Internals.StandardQr;
 
 internal static class BinaryInterleaver
 {

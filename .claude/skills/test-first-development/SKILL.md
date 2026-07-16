@@ -94,6 +94,7 @@ If the implementation changes observable behavior or adds new functionality, upd
 
 - Encoder / ISO spec map → `.github/docs/specs/qrcode-specs.md`
 - Decoder design and scope → `.github/docs/specs/qrcode-decoder.md`
+- Decoder design and scope → `.github/docs/specs/standardqr-decoder.md`
 - Public API or migration notes → `docs/migration.md`
 - Capacity tables → `docs/data-capacity.md`
 

@@ -1,3 +1,4 @@
+using SkiaSharp.QrCode.Internals.StandardQr;
 using SkiaSharp.QrCode.Internals;
 using Rectangle = SkiaSharp.QrCode.Internals.Rectangle;
 

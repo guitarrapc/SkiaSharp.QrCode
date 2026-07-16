@@ -1,4 +1,4 @@
-namespace SkiaSharp.QrCode.Internals.BinaryDecoders;
+namespace SkiaSharp.QrCode.Internals.StandardQr;
 
 /// <summary>
 /// Decodes the 15-bit format information (ECC level + mask pattern).

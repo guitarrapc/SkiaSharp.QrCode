@@ -221,7 +221,7 @@ public class QRCodeDecoderRoundTripTest
             {
                 for (var mask = 0; mask < 8; mask++)
                 {
-                    var candidate = Internals.QRCodeConstants.GetFormatBits((ECCLevel)level, mask);
+                    var candidate = Internals.StandardQr.QRCodeConstants.GetFormatBits((ECCLevel)level, mask);
                     var distance = CountBits((ushort)(pattern ^ candidate));
                     if (distance < minDistance)
                         minDistance = distance;

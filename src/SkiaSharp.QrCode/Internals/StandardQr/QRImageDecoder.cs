@@ -5,9 +5,10 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 #endif
 
-using SkiaSharp.QrCode.Internals.BinaryDecoders;
 
-namespace SkiaSharp.QrCode.Internals.ImageDecoders;
+using SkiaSharp.QrCode.Internals.ImageDecoders;
+
+namespace SkiaSharp.QrCode.Internals.StandardQr;
 
 /// <summary>
 /// Decodes a QR code from a grayscale image: clean, well-lit, screen-rendered or

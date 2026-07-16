@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 #endif
 
-namespace SkiaSharp.QrCode.Internals.ImageDecoders;
+namespace SkiaSharp.QrCode.Internals.StandardQr;
 
 /// <summary>
 /// A detected finder pattern candidate (center in pixel coordinates).
