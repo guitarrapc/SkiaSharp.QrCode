@@ -46,6 +46,18 @@ SkiaSharp.QrCode is a modern, high-performance QR code generation library built 
 - **NativeAOT Ready**: Full support for .NET Native AOT compilation
 - **Modern .NET**: .NET Standard 2.0, 2.1, .NET 8+
 
+## Supported Symbologies
+
+SkiaSharp.QrCode implements the Standard QR Code symbology. Everything in this README — generation, decoding, styling, and the specification tables — refers to Standard QR.
+
+| Symbology | Standard | Generate (Encode) | Decode |
+|---|---|---|---|
+| Standard QR (versions 1–40) | ISO/IEC 18004 | ✅ | ✅ |
+| Micro QR (M1–M4) | ISO/IEC 18004 | NO | NO |
+| rMQR (R7x43–R17x139) | ISO/IEC 23941 | NO | NO |
+
+See the [FAQ](#does-it-support-micro-qr-or-rmqr) for the Micro QR / rMQR status.
+
 ## Installation
 
 Visit [SkiaSharp.QrCode on NuGet.org](https://www.nuget.org/packages/SkiaSharp.QrCode)
@@ -405,6 +417,10 @@ No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package — no additio
 
 Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#qrcodedecoder-decoding)). Image decoding intentionally targets clean inputs: screenshots, rendered QR codes, and scans, including rotated and mirrored ones. Robust decoding of real-world photos (perspective distortion, uneven lighting, blur) is a computer-vision problem outside this library's scope — use a dedicated reader such as ZXing.Net for camera captures.
 
+### Does it support Micro QR or rMQR?
+
+No. This library implements the Standard QR Code symbology only (ISO/IEC 18004, versions 1–40).
+
 ### What QR code style provides the best scan reliability?
 
 For optimal scan reliability, we recommend:
@@ -444,7 +460,7 @@ Following shows how to display a QRCode inside a LINQPad Results pane.
 Bitmap.FromStream(new MemoryStream(QRCodeImageBuilder.GetPngBytes("WIFI:T:WPA;S:mynetwork;P:mypass;;"))).Dump();
 ```
 
-## QR code Specifications
+## Standard QR Specifications
 
 ### ECC Level (Error Correction Levels)
 
