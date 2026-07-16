@@ -1,0 +1,17 @@
+{
+  "id": "byte-utf8-japanese-h",
+  "generator": "zxing-net",
+  "generatorVersion": "0.16.11\u002Ba334de0239ee1cbd2aadef3396929fa031d2292b",
+  "symbolType": "StandardQR",
+  "version": 6,
+  "width": 41,
+  "height": 41,
+  "errorCorrectionLevel": "H",
+  "mode": "Byte",
+  "maskPattern": 3,
+  "payloadText": "\u3053\u3093\u306B\u3061\u306F\u4E16\u754C\u3001QR\u30B3\u30FC\u30C9\u306E\u30C6\u30B9\u30C8\u3067\u3059\u3002",
+  "payloadUtf8Hex": "E38193E38293E381ABE381A1E381AFE4B896E7958CE380815152E382B3E383BCE38389E381AEE38386E382B9E38388E381A7E38199E38082",
+  "eciCharset": "UTF-8",
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8
+}

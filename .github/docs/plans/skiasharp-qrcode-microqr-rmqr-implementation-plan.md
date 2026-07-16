@@ -128,6 +128,44 @@ Exit: decoder MVT image-level rows satisfied; degradation matrix green.
 - Each phase updates the relevant `specs/` docs with lessons learned (project rule).
 - Playground (WASM) gains Micro QR / rMQR generation after Phase 2/4 as the living demo; NativeAOT/WASM CI must cover the new paths.
 - Benchmarks: new symbology paths get end-to-end benchmarks; Standard QR benchmarks guard against regression at every phase.
+- Progress logging (mandatory): when a phase completes, append an entry to the Progress log below recording what was done, lessons learned, and benchmark deltas — or an explicit statement of why benchmarks are not applicable (e.g. no `src/` change).
+
+## Progress log
+
+### Phase 0 — completed 2026-07-16
+
+**Done**
+
+- Symbology architecture spec: `specs/qrcode-symbologies.md` (shared vs per-symbology inventory, dependency rules, API/data-model direction, Kanji deferral).
+- `src` reorganized: Standard-QR-specific internals moved to `Internals/StandardQr` (12 files); `EncodingModeExtensions` split out of the shared `EncodingMode`; character-class predicates extracted from `QRCodeConstants` into shared `CharacterSets`.
+- Tests reorganized symbology-first in the single assembly: `Shared/` (9), `StandardQr/` (21), `Rendering/` (10); `QrCodeConstantsUnitTest` renamed to `Shared/CharacterSetsUnitTest`.
+- Specs renamed symbology-first (`standardqr-spec-map.md`, `standardqr-decoder.md`), `docs_authoring_guidelines.md` created (doc-type templates, naming, linking policy), documentation index added at `.github/docs/README.md`, README gained Supported Symbologies + Micro QR/rMQR FAQ.
+
+**Lessons learned**
+
+- The namespace dependency rule immediately surfaced two hidden couplings: shared `TextAnalyzer` depended on character predicates living inside the Standard QR constants class, and `GetCountIndicatorLength` looked shared but encodes Standard QR version thresholds. Both recorded in `qrcode-symbologies.md`.
+- The pre-existing `QrCodeConstantsUnitTest` turned out to test only the (now shared) character sets — test names drift from their subjects unless reorganizations re-check them.
+
+**Benchmarks**
+
+- Not run: changes were mechanical moves (namespace/type relocation of static members with identical bodies and inlining attributes); no signature or algorithm change. Full suite 2,370 tests green on net8.0 + net10.0 before and after.
+
+### Phase 1 — completed 2026-07-16
+
+**Done**
+
+- `tools/QrInteropFixtures`: fixture generator with a plug-in `IFixtureGenerator` interface; first generator is ZXing.Net 0.16.11 in-process (via `ZXing.QrCode.Internal.Encoder` for the core matrix plus version/mode/mask metadata). Regeneration is one command: `dotnet run --project tools/QrInteropFixtures -- regenerate`.
+- Committed Standard QR corpus: 21 deterministic cases (all modes × all ECC levels, v1-L alphanumeric capacity boundary, v10/v15/v25 mid sizes, v40-L at exactly 7089 digits, UTF-8/ECI Japanese + emoji), 63 files ≈ 178 KB.
+- Fixture test infrastructure: `FixtureLoader` (manifest schema + matrix parser) and `StandardQrFixtureTest` decoding every fixture through both the matrix path and the PNG image path, asserting payload, version, ECC, and mask pattern (86 tests across both TFMs). Full suite: 2,456 green.
+- Oracle capability matrix researched and recorded in `specs/qrcode-test-fixtures.md` (zxing-cpp reads Micro QR + rMQR; Zint and Rust qrtool encode them; ZXing.Net/zxing-cpp counted as one lineage).
+
+**Lessons learned**
+
+- Recorded in `specs/qrcode-test-fixtures.md`: ZXing's internal encoder exposes the chosen mask pattern, enabling mask-exact decode assertions; cross-encoder matrix equality is not a valid conformance test (mask/segmentation freedom), so committed fixtures assert the decode direction; the public `QRCodeWriter` path is lossy for matrix extraction.
+
+**Benchmarks**
+
+- Not applicable: no `src/` (production) code changed — Phase 1 added a tool, test infrastructure, and committed fixtures only. Verified by full suite runs on both TFMs.
 
 ## Risks Beyond the Test Strategy Document
 

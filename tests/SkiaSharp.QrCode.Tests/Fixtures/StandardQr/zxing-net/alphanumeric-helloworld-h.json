@@ -1,0 +1,17 @@
+{
+  "id": "alphanumeric-helloworld-h",
+  "generator": "zxing-net",
+  "generatorVersion": "0.16.11\u002Ba334de0239ee1cbd2aadef3396929fa031d2292b",
+  "symbolType": "StandardQR",
+  "version": 2,
+  "width": 25,
+  "height": 25,
+  "errorCorrectionLevel": "H",
+  "mode": "Alphanumeric",
+  "maskPattern": 5,
+  "payloadText": "HELLO WORLD",
+  "payloadUtf8Hex": "48454C4C4F20574F524C44",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8
+}

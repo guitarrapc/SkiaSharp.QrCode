@@ -1,0 +1,17 @@
+{
+  "id": "alphanumeric-fullset-m",
+  "generator": "zxing-net",
+  "generatorVersion": "0.16.11\u002Ba334de0239ee1cbd2aadef3396929fa031d2292b",
+  "symbolType": "StandardQR",
+  "version": 3,
+  "width": 29,
+  "height": 29,
+  "errorCorrectionLevel": "M",
+  "mode": "Alphanumeric",
+  "maskPattern": 0,
+  "payloadText": "ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*\u002B-./:0123456789",
+  "payloadUtf8Hex": "4142434445464748494A4B4C4D4E4F505152535455565758595A2024252A2B2D2E2F3A30313233343536373839",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8
+}
