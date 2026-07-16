@@ -1,6 +1,6 @@
-# QR Code Decoder
+# Standard QR Decoder
 
-Design record for the decode feature (`QRCodeDecoder`): what it does, why it is scoped the way it is, and what was learned during implementation. Implementation details live in code comments next to the code (see the [spec-to-code map](qrcode-specs.md)).
+Design record for the Standard QR decode feature (`QRCodeDecoder`): what it does, why it is scoped the way it is, and what was learned during implementation. Implementation details live in code comments next to the code (see the [spec-to-code map](standardqr-spec-map.md)). Micro QR and rMQR decoders get their own design records as they are implemented — see [QR Symbology Architecture](qrcode-symbologies.md).
 
 ---
 

@@ -6,7 +6,7 @@
 
 # SkiaSharp.QrCode
 
-[Migration](docs/migration.md) | [Data Capacity](docs/data-capacity.md)
+[Migration](docs/migration.md) | [Data Capacity](docs/data-capacity.md) | [Design Docs](.github/docs)
 
 SkiaSharp.QrCode provides high-performance QR code generation/read with [SkiaSharp](https://github.com/mono/SkiaSharp) integration.
 
@@ -228,7 +228,7 @@ Decodes QR codes back into text — the inverse of `QRCodeGenerator`. Works at t
 - **Matrix level**: from `QRCodeData` or a byte-per-module span (the same format the zero-allocation generator produces). Full Reed-Solomon error correction included.
 - **Image level**: from `SKBitmap` or a grayscale luminance span. Detects the QR code (arbitrary rotation, mirroring, inverted light-on-dark palettes and mild perspective supported), samples the grid, then decodes.
 
-**Scope**: image decoding targets *clean* inputs — screenshots, rendered QR codes, and scans. Real-world photos with strong perspective, uneven lighting, or blur are out of scope; use a computer-vision grade reader such as ZXing.Net for those. See [QR Code Decoder](.github/docs/specs/qrcode-decoder.md) for design details.
+**Scope**: image decoding targets *clean* inputs — screenshots, rendered QR codes, and scans. Real-world photos with strong perspective, uneven lighting, or blur are out of scope; use a computer-vision grade reader such as ZXing.Net for those. See [Standard QR Decoder](.github/docs/specs/standardqr-decoder.md) for design details.
 
 ```csharp
 // From QRCodeData (e.g. round-trip validation)
@@ -342,7 +342,7 @@ Benchmark results show SkiaSharp.QrCode outperforming other popular .NET QR code
 - **Lowest Memory Usage**: Minimal allocations reduce GC overhead
 - **Consistent Performance**: Predictable performance across different QR code sizes and complexity
 
-For detailed benchmark code and results, see the [samples/Benchmark](samples/Benchmark) directory.
+For detailed benchmark code and results, see the [src/SkiaSharp.QrCode.Benchmark](src/SkiaSharp.QrCode.Benchmark) directory.
 
 ## FAQ
 
