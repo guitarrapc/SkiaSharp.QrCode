@@ -1,6 +1,7 @@
 using System.Buffers;
+using SkiaSharp.QrCode.Internals.BinaryDecoders;
 
-namespace SkiaSharp.QrCode.Internals.BinaryDecoders;
+namespace SkiaSharp.QrCode.Internals.StandardQr;
 
 /// <summary>
 /// Decodes a QR module matrix (one byte per module, no quiet zone) back into text.

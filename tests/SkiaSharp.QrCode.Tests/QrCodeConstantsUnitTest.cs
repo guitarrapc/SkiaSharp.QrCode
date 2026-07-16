@@ -1,3 +1,4 @@
+using SkiaSharp.QrCode.Internals.StandardQr;
 using SkiaSharp.QrCode.Internals;
 
 namespace SkiaSharp.QrCode.Tests;
@@ -19,7 +20,7 @@ public class QRCodeConstantsUnitTest
     [Arguments('#', false)]
     public async Task IsNumericTest(char c, bool expected)
     {
-        var result = QRCodeConstants.IsNumeric(c);
+        var result = CharacterSets.IsNumeric(c);
         await Assert.That(result).IsEquivalentTo(expected);
     }
 
@@ -43,7 +44,7 @@ public class QRCodeConstantsUnitTest
     [Arguments('#', false)]
     public async Task IsAlphanumericTest(char c, bool expected)
     {
-        var result = QRCodeConstants.IsAlphanumeric(c);
+        var result = CharacterSets.IsAlphanumeric(c);
         await Assert.That(result).IsEquivalentTo(expected);
     }
 
@@ -67,7 +68,7 @@ public class QRCodeConstantsUnitTest
     [Arguments('#', -1)]
     public async Task GetAlphanumericValueTest(char c, int expected)
     {
-        var success = QRCodeConstants.TryGetAlphanumericValue(c, out var result);
+        var success = CharacterSets.TryGetAlphanumericValue(c, out var result);
         if (expected == -1)
         {
             await Assert.That(success).IsFalse();

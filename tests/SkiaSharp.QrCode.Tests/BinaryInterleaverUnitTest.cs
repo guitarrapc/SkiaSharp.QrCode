@@ -1,6 +1,7 @@
+using SkiaSharp.QrCode.Internals.StandardQr;
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
 using SkiaSharp.QrCode.Internals;
-using static SkiaSharp.QrCode.Internals.QRCodeConstants;
+using static SkiaSharp.QrCode.Internals.StandardQr.QRCodeConstants;
 
 namespace SkiaSharp.QrCode.Tests;
 

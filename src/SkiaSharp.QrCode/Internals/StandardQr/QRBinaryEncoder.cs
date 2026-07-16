@@ -2,7 +2,9 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Text;
 
-namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
+using SkiaSharp.QrCode.Internals.BinaryEncoders;
+
+namespace SkiaSharp.QrCode.Internals.StandardQr;
 
 internal ref struct QRBinaryEncoder
 {
@@ -220,8 +222,8 @@ internal ref struct QRBinaryEncoder
         // Process 2 characters at a time
         while (i + 1 < length)
         {
-            var value = QRCodeConstants.GetAlphanumericValue(chars[i]) * 45
-                + QRCodeConstants.GetAlphanumericValue(chars[i + 1]);
+            var value = CharacterSets.GetAlphanumericValue(chars[i]) * 45
+                + CharacterSets.GetAlphanumericValue(chars[i + 1]);
             _writer.Write(value, 11);
             i += 2;
         }
@@ -229,7 +231,7 @@ internal ref struct QRBinaryEncoder
         // Process remaining 1 character
         if (i < length)
         {
-            var value = QRCodeConstants.GetAlphanumericValue(chars[i]);
+            var value = CharacterSets.GetAlphanumericValue(chars[i]);
             _writer.Write(value, 6);
         }
     }

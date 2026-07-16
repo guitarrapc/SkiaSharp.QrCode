@@ -152,10 +152,10 @@ internal static class TextAnalyzer
             if (!hasNonIso88591 && c > 255)
                 hasNonIso88591 = true;
 
-            if ((!hasNonNumeric && !QRCodeConstants.IsNumeric(c)))
+            if ((!hasNonNumeric && !CharacterSets.IsNumeric(c)))
                 hasNonNumeric = true;
 
-            if (!hasNonAlphanumeric && !QRCodeConstants.IsAlphanumeric(c))
+            if (!hasNonAlphanumeric && !CharacterSets.IsAlphanumeric(c))
                 hasNonAlphanumeric = true;
 
             if (hasNonNumeric && hasNonAlphanumeric && hasNonIso88591)
@@ -310,10 +310,10 @@ internal static class TextAnalyzer
             if (!hasNonIso88591 && c > 255)
                 hasNonIso88591 = true;
 
-            if ((!hasNonNumeric && !QRCodeConstants.IsNumeric(c)))
+            if ((!hasNonNumeric && !CharacterSets.IsNumeric(c)))
                 hasNonNumeric = true;
 
-            if (!hasNonAlphanumeric && !QRCodeConstants.IsAlphanumeric(c))
+            if (!hasNonAlphanumeric && !CharacterSets.IsAlphanumeric(c))
                 hasNonAlphanumeric = true;
 
             if (hasNonNumeric && hasNonAlphanumeric && hasNonIso88591)
@@ -400,10 +400,10 @@ internal static class TextAnalyzer
             if (!hasNonIso88591 && c > 255)
                 hasNonIso88591 = true;
 
-            if (!hasNonNumeric && !QRCodeConstants.IsNumeric(c))
+            if (!hasNonNumeric && !CharacterSets.IsNumeric(c))
                 hasNonNumeric = true;
 
-            if (!hasNonAlphanumeric && !QRCodeConstants.IsAlphanumeric(c))
+            if (!hasNonAlphanumeric && !CharacterSets.IsAlphanumeric(c))
                 hasNonAlphanumeric = true;
 
             // Early exit if all types are found
@@ -464,7 +464,7 @@ internal static class TextAnalyzer
         // ISO-8859-x encoding based on ECI mode
         return eciMode switch
         {
-            EciMode.Default => QRCodeConstants.IsValidISO88591(input)
+            EciMode.Default => CharacterSets.IsValidISO88591(input)
                 ? Iso88591Encoding.GetByteCount(input)
                 : Encoding.UTF8.GetByteCount(input),
             EciMode.Iso8859_1 => Iso88591Encoding.GetByteCount(input),

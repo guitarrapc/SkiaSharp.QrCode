@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 #endif
 
-namespace SkiaSharp.QrCode.Internals.ImageDecoders;
+namespace SkiaSharp.QrCode.Internals.StandardQr;
 
 /// <summary>
 /// Locates the bottom-right alignment pattern (5×5: dark ring, light ring, dark

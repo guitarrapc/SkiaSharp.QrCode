@@ -3,7 +3,7 @@ using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SkiaSharp.QrCode.Internals;
+namespace SkiaSharp.QrCode.Internals.StandardQr;
 
 /// <summary>
 /// Bit-packed mask pattern selection.

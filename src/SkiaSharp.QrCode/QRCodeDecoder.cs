@@ -1,6 +1,6 @@
 using System.Buffers;
-using SkiaSharp.QrCode.Internals.BinaryDecoders;
 using SkiaSharp.QrCode.Internals.ImageDecoders;
+using SkiaSharp.QrCode.Internals.StandardQr;
 
 namespace SkiaSharp.QrCode;
 
