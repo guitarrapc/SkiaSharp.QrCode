@@ -62,14 +62,16 @@ Status meaning — **verified**: exercised in this repository; **documented**: c
 |---|---|---|---|---|---|
 | ZXing.Net 0.16.11 (NuGet, pinned) | encode + decode | — | — | verified | Fixture generator + `QRCodeDecoderZXingCrossTest`; in-process, no toolchain |
 | [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) (via [ZXingCpp](https://www.nuget.org/packages/ZXingCpp) 0.5.2, pinned) | read + write | read | read | verified | Micro QR reading exercised by `tools/QrInteropFixtures -- spot-check-microqr` against this library's encoder (all versions × ECC, UTF-8). The official .NET wrapper bundles native binaries, so no external toolchain is needed |
-| [Zint](https://zint.org.uk/) | encode | encode | encode | documented | CLI encoder; encode-only (no decoder). Not in the scoop repos — acquire via vcpkg or the official installer when Phase 3 fixtures need it, or evaluate zxing-cpp's zint-backed writer in ZXingCpp's `BarcodeCreator` |
-| [qrcode2 / qrtool (Rust)](https://docs.rs/qrcode2) | encode | encode | encode | documented | `qrtool` CLI exposes `--variant micro` / `--variant rmqr`; fork of kennytm/qrcode |
+| [Zint](https://zint.org.uk/) (libzint via ZXingCpp `BarcodeCreator`) | encode | encode | encode | verified | zxing-cpp's writer is libzint compiled into the same pinned native binary; `tools/QrInteropFixtures -- probe-creator` confirmed Micro QR and rMQR creation with reader round-trips. No CLI or extra toolchain needed — as an ENCODER lineage this counts as zint, independent of both this library and the Rust crates |
+| [qrcode2 / qrtool (Rust)](https://docs.rs/qrcode2) | encode | encode | encode | documented | `qrtool` CLI exposes `--variant micro` / `--variant rmqr`; fork of kennytm/qrcode. Ships prebuilt release binaries (pin by version + checksum), so no Rust toolchain is required either — the preferred second external encoder lineage for Phase 3 fixtures |
 | rmqrcode-python | — | — | encode | claimed | Capability not independently confirmed yet — verify before relying on it |
 | BoofCV (Java) | decode | decode | — | claimed | Candidate additional decode oracle; not evaluated |
 
-Independence caveat: ZXing.Net and zxing-cpp descend from the same ZXing lineage — count them as one independent implementation family, not two. Zint and the Rust crates are separate lineages.
+Independence caveat: ZXing.Net and zxing-cpp descend from the same ZXing lineage — count them as one independent implementation family, not two. Zint and the Rust crates are separate lineages. Note that zxing-cpp's READER and the libzint WRITER ship in one native binary but are algorithmically independent codebases; a created-then-read round-trip within that binary still exercises two lineages.
 
-Local toolchain availability (this dev machine, 2026-07): Docker and Python present; Zint, Rust/cargo absent. Container-pinned generators (Zint, qrtool, zxing-cpp) are planned for the Micro QR phase and require explicit tool installation or image pulls — deferred until then.
+Oracle scarcity, decode direction: zxing-cpp is the only maintained OSS decoder for Micro QR and rMQR (ZXing Java/.NET, rqrr (Rust) and gozxing (Go) do not read them; BoofCV (Java) reads Micro QR only). Encoder verification therefore rests on one external decode lineage plus specification-derived vectors and the in-repo extraction tests — this is a structural limit, not a tooling gap. The decode direction has no such limit: multiple independent encoder lineages (zint, Rust qrcode2) generate the fixture corpus that exercises our decoder.
+
+Toolchain policy: oracles must be pinned and acquirable without fragile environment-dependent builds — NuGet packages and prebuilt static binaries qualify; building C++/Python toolchains on dev machines or CI does not. Rust tools qualify via prebuilt release binaries. Under this policy the fixture generators for Phase 3 are libzint (via the pinned ZXingCpp package) and qrtool (prebuilt binary, pinned by version + checksum); Docker-pinned builds remain a fallback.
 
 ## Why
 

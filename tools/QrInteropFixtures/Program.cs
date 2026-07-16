@@ -13,6 +13,11 @@ if (command == "spot-check-microqr")
     // Decodes SkiaSharp.QrCode-generated Micro QR symbols with zxing-cpp.
     return MicroQrSpotCheck.Run();
 }
+if (command == "probe-creator")
+{
+    // Checks whether the pinned ZXingCpp native build can create Micro QR / rMQR.
+    return CreatorProbe.Run();
+}
 if (command != "regenerate")
 {
     Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QrInteropFixtures -- [regenerate|spot-check-microqr]");
