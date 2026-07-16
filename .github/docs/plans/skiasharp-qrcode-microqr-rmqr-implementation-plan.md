@@ -1,0 +1,137 @@
+# Micro QR / rMQR Implementation Plan for SkiaSharp.QrCode
+
+## Purpose
+
+This document defines the implementation order for adding Micro QR Code (ISO/IEC 18004) and rMQR Code (ISO/IEC 23941) support.
+
+It builds on the test strategy in `skiasharp-qrcode-microqr-rmqr-test-strategy.md`, which defines HOW each piece is verified. This document defines WHAT is built, in WHICH order, and WHY that order.
+
+## Guiding Decisions
+
+### Separate entry points per symbology
+
+The existing `QRCodeGenerator.CreateQrCode` surface does not extend cleanly:
+
+- `requestedVersion` is an `int` in 1-40; Micro QR versions are M1-M4 and rMQR versions are R7x43-R17x139 (32 rectangular sizes).
+- `ECCLevel` (L/M/Q/H) does not map: Micro QR M1 has error detection only, M2/M3 allow L/M, M4 allows L/M/Q; rMQR allows only M/H.
+- Auto version selection, capacity tables, and mode restrictions differ per symbology.
+
+Therefore each symbology gets its own generator entry (e.g. `MicroQrCodeGenerator`, `RmQrCodeGenerator`, or new method families on `QRCodeGenerator` — decided in Phase 0) with symbology-typed version and ECC parameters. `QRCodeGenerator.CreateQrCode` stays byte-for-byte unchanged.
+
+### Split Standard-QR-specific classes from generic ones
+
+Reusable as-is (leaf primitives, all symbologies share GF(256) with polynomial 0x11D):
+
+- `GaloisField`, `EccBinaryEncoder` / `EccBinaryDecoder` (Reed-Solomon, incl. SIMD kernels)
+- `BitWriter` / `BitReader`
+- `LuminanceConverter`, Otsu threshold, `PerspectiveTransform`
+- Rendering infrastructure (with rectangular-aware changes)
+
+Symbology-specific (new code, must NOT be forced into the Standard QR pipeline):
+
+- Capacity / ECC / interleaving tables
+- Format information (Micro QR: one 15-bit copy, 4 mask patterns, different mask scoring; rMQR: 18-bit, two copies, version embedded in format)
+- Mode / character-count indicator widths (Micro QR mode indicator is 0-3 bits depending on version)
+- Function pattern layout and data placement (Micro QR: single finder; rMQR: finder + sub-finder, edge timing patterns, rectangular zigzag)
+- Symbol detection in images
+
+Structural approach: keep the Standard QR pipeline untouched (it is heavily perf-tuned and zero-alloc); add sibling internal namespaces (e.g. `Internals/MicroQr`, `Internals/RmQr`) that reuse the leaf primitives. Do not introduce a polymorphic abstraction over the hot path. Blast-radius check: existing Standard QR tests and benchmarks must stay green and flat through every phase.
+
+### Data model must be generalized once, up front
+
+`QRCodeData` is square-only, versions 1-40, and its "QRR" serialization rejects sizes below 21 — Micro QR (11-17 modules) and rMQR (rectangular) cannot reuse it. Phase 0 decides the shape (sibling types vs. a common symbol-data abstraction, serialization header v2 with symbol type + width + height). This decision is made once, anticipating rectangles, even though Micro QR alone would not need them.
+
+### External oracle reality
+
+- ZXing.Net (used in current in-CI cross tests) cannot decode Micro QR or rMQR. In-CI cross-verification is unavailable for the new symbologies.
+- Committed fixtures from external encoders are therefore the primary conformance oracle in PR CI, exactly as the test strategy prescribes.
+- Candidate oracles: zxing-cpp (decode: Micro QR + rMQR; the only broadly available OSS decoder), Zint (encode-only), qrcode rust crates (encode Micro QR), rmqrcode-python (encode rMQR), BoofCV (decode Micro QR). Phase 1 produces a verified capability matrix (which tool encodes/decodes which symbology, pinned versions) before any fixture is trusted.
+
+## Implementation Order
+
+Vertical slices per symbology: encoder first (releasable on its own), matrix decoder immediately after (validates the same tables independently and installs a round-trip regression net), image detection deferred to the end (hardest, riskiest, lowest initial value).
+
+Micro QR before rMQR: square and small (4 versions, single finder), best oracle coverage, and it flushes out the data-model and serialization changes with the smaller step. rMQR then starts from a validated foundation and only adds the rectangular concerns.
+
+### Phase 0 — API and data model spec
+
+- Write `specs/` design doc: symbology model, generator entry points, decoder entry points (symbology restriction flags so Standard QR scanning perf is unaffected by default), data type shape, serialization format v2, Kanji-mode scoping decision (recommend: defer Kanji, document why).
+- Mechanical prep refactor only if the spec demands it; zero behavior change, verified by existing tests + benchmark flatness.
+
+Exit: spec reviewed; existing suite green; no benchmark regression.
+
+### Phase 1 — Fixture infrastructure, proven on Standard QR
+
+- `tools/` fixture generator producing `case.json` + `case.matrix.txt` + `case.png` per the test strategy, with pinned tool versions (container-based for reproducibility).
+- Oracle capability matrix verified and recorded.
+- Generate a Standard QR corpus first and assert the EXISTING implementation against it. This validates the harness itself against a trusted implementation before it is used to judge new code.
+- Fixture-driven test infrastructure (loader, matrix comparer, manifest schema) lands in the test project.
+
+Exit: Standard QR fixture tests green in PR CI; regeneration is one documented command.
+
+### Phase 2 — Micro QR encoder
+
+- Tables (capacity, ECC, format), M1-M4 encoding pipeline reusing BitWriter/RS kernels, new data type, square rendering support, QRR-v2 serialization.
+- Matrix conformance tests against Phase 1 fixtures (all versions × legal ECC × Numeric/Alphanumeric/Byte, capacity boundaries, illegal-combination rejection).
+- Spot-check: zxing-cpp decodes generated symbols (manual or interop CI, not PR CI).
+
+Exit: test strategy §14 encoder MVT satisfied for Micro QR. Releasable.
+
+### Phase 3 — Micro QR matrix decoder
+
+- Module matrix → payload: format parsing, unmasking, codeword extraction, RS correction, bitstream decoding. Same internal boundary as `QRMatrixDecoder`.
+- External-encoder fixtures (Zint / rust) as decoder input; error-correction flip tests; negative tests (Micro presented as Standard and vice versa).
+
+Exit: decoder MVT (matrix-level rows) satisfied; round-trip regression net in place.
+
+### Phase 4 — rMQR encoder
+
+- Rectangular tables (32 sizes, ECC M/H), 18-bit format info, finder + sub-finder + edge timing placement, rectangular rendering, version auto-fit strategy (width-first / height-first preference exposed in API).
+- Matrix conformance against fixtures (all 32 sizes at least once; boundary payloads).
+
+Exit: encoder MVT satisfied for rMQR. Releasable.
+
+### Phase 5 — rMQR matrix decoder
+
+- As Phase 3, for rectangular matrices (width/height API).
+
+Exit: decoder MVT (matrix-level) satisfied for rMQR.
+
+### Phase 6 — Image detection and sampling
+
+- 6a: Micro QR detection (single finder — different search strategy from three-finder Standard QR), sampling, clean + degraded PNG fixtures.
+- 6b: rMQR detection (finder + sub-finder, extreme aspect ratios), sampling.
+- Deterministic degradation tests per test strategy §7, representative subset only.
+- Decoder entry defaults keep Standard QR-only scanning at current performance; new symbologies are opt-in or explicitly-typed.
+
+Exit: decoder MVT image-level rows satisfied; degradation matrix green.
+
+### Phase 7 — Interop CI (parallel track, starts after Phase 2)
+
+- Scheduled/manual workflow: pinned zxing-cpp + encoders, live round-trips both directions, committed-fixture drift detection.
+
+### Phase 8 — Physical device acceptance
+
+- Per test strategy §11, as release acceptance for the combined feature set.
+
+## Cross-cutting
+
+- Test layout (decided in Phase 0): the single test assembly is organized
+  symbology-first, mirroring `src` — `Shared/`, `StandardQr/`, `Rendering/`, with
+  `MicroQr/`, `RmQr/`, and `Fixtures/` added by their phases. No per-symbology test
+  projects: `InternalsVisibleTo` targets one assembly, the suite runs in ~20s, and
+  TUnit filters select by class name regardless of folders. The one planned exception
+  is live interop tests with external native dependencies (zxing-cpp etc.), which get
+  their own project excluded from PR CI; committed-fixture tests stay in the main
+  assembly.
+- Test-first development applies to every phase (project rule).
+- Each phase updates the relevant `specs/` docs with lessons learned (project rule).
+- Playground (WASM) gains Micro QR / rMQR generation after Phase 2/4 as the living demo; NativeAOT/WASM CI must cover the new paths.
+- Benchmarks: new symbology paths get end-to-end benchmarks; Standard QR benchmarks guard against regression at every phase.
+
+## Risks Beyond the Test Strategy Document
+
+- Renderer assumptions: `IconShape`/finder styling assume three finder patterns; rectangular output changes image sizing APIs. Audit in Phase 0.
+- Serialization compatibility: QRR v1 streams must keep round-tripping forever; v2 header must be rejected cleanly by old readers.
+- Oracle gaps: if an rMQR encode oracle disagrees with zxing-cpp decode, specification examples arbitrate (ISO/IEC 23941 Annex examples).
+- Scope creep via Kanji mode: Micro QR M3/M4 and rMQR support Kanji; deferring it is fine but capacity tables and auto-version selection must be written with the mode column present.
