@@ -1,8 +1,6 @@
 # QR Code Decoder
 
-Design record for the decode feature (`QRCodeDecoder`): what it does, why it is scoped
-the way it is, and what was learned during implementation. Implementation details live
-in code comments next to the code (see the [spec-to-code map](qrcode-specs.md)).
+Design record for the decode feature (`QRCodeDecoder`): what it does, why it is scoped the way it is, and what was learned during implementation. Implementation details live in code comments next to the code (see the [spec-to-code map](qrcode-specs.md)).
 
 ---
 
@@ -12,28 +10,19 @@ in code comments next to the code (see the [spec-to-code map](qrcode-specs.md)).
 
 ### Matrix level
 
-Input: `QRCodeData` or a byte-per-module span (the same format
-`QRCodeGenerator.CreateQrCode(Span<byte>)` produces).
+Input: `QRCodeData` or a byte-per-module span (the same format `QRCodeGenerator.CreateQrCode(Span<byte>)` produces).
 
-Behavior: runs the full inverse pipeline — format info → unmask → codeword extraction →
-deinterleave → Reed-Solomon correction → bit stream parsing. The `Span<char>` overloads
-complete allocation-free in steady state.
+Behavior: runs the full inverse pipeline — format info → unmask → codeword extraction → deinterleave → Reed-Solomon correction → bit stream parsing. The `Span<char>` overloads complete allocation-free in steady state.
 
 ### Image level
 
 Input: `SKBitmap` or a grayscale luminance span.
 
-Behavior: adds binarization (Otsu), finder pattern detection, orientation resolution,
-bottom-right alignment pattern search (version 2+), and projective grid sampling
-(4-point perspective transform) in front of the matrix pipeline. Version 14+ symbols
-additionally build a piecewise-bilinear mesh over the full alignment-pattern lattice
-(wavefront detection with iterated homography refinement). A partially-detected mesh
-falls back to the global transform, so the mesh can never decode worse than it.
+Behavior: adds binarization (Otsu), finder pattern detection, orientation resolution, bottom-right alignment pattern search (version 2+), and projective grid sampling (4-point perspective transform) in front of the matrix pipeline. Version 14+ symbols additionally build a piecewise-bilinear mesh over the full alignment-pattern lattice (wavefront detection with iterated homography refinement). A partially-detected mesh falls back to the global transform, so the mesh can never decode worse than it.
 
 ### Support tiers
 
-"Tier" is this project's own shorthand for image-input difficulty — it is not standard
-QR terminology. The tiers staged the implementation and now name the scope line:
+"Tier" is this project's own shorthand for image-input difficulty — it is not standard QR terminology. The tiers staged the implementation and now name the scope line:
 
 | Tier | Input class | Status |
 |---|---|---|
@@ -41,8 +30,7 @@ QR terminology. The tiers staged the implementation and now name the scope line:
 | Tier 2 | Tier-1-clean images with mild perspective (keystone): global 4-point homography, plus the piecewise mesh for version 14+ | Supported within the measured envelope — see [Input envelope](#input-envelope) |
 | Tier 3 | Real-world camera photos: strong perspective, uneven lighting, blur, heavily damaged symbols | Out of scope by design — use ZXing.Net (see [Why](#why)) |
 
-Matrix-level decoding takes an exact module matrix as input, so the tiers apply only
-to the image level.
+Matrix-level decoding takes an exact module matrix as input, so the tiers apply only to the image level.
 
 ### Supported
 
@@ -67,9 +55,7 @@ The following are detected and reported; they are never misdecoded:
 
 ### Input envelope
 
-Image support targets clean inputs: screenshots, rendered QR codes, scans — with
-arbitrary rotation, mirroring, reflectance reversal (light-on-dark, one inverted
-retry), and mild perspective.
+Image support targets clean inputs: screenshots, rendered QR codes, scans — with arbitrary rotation, mirroring, reflectance reversal (light-on-dark, one inverted retry), and mild perspective.
 
 Measured keystone envelope (Tier 2):
 
@@ -80,51 +66,26 @@ Measured keystone envelope (Tier 2):
 | 10–15 | ~6–10% |
 | 14–25 | ~8% via the mesh (content-marginal around version 20) |
 
-Real-world photo robustness (strong perspective, uneven lighting, blur) is deliberately
-out of scope; the API docs point such users to ZXing.Net.
+Real-world photo robustness (strong perspective, uneven lighting, blur) is deliberately out of scope; the API docs point such users to ZXing.Net.
 
 ---
 
 ## Why
 
-- **Tier-1/2 scope by design.** Image support targets clean inputs rather than
-  unconstrained camera photos. Real-world photo robustness is a computer-vision problem
-  that ZXing spent years on. Keeping this library dependency-free and auditable requires
-  drawing the line here.
-- **Encoder-decoder parity by construction.** The decoder reuses the encoder's own
-  function-pattern placement (`QRCodeGenerator.PlaceFunctionModules`) to build its
-  blocked-module map, and the format-information decoder matches against patterns
-  generated by the encoder's own `GetFormatBits`. The two sides cannot drift apart.
-- **Round-trip testing strengthens the encoder.** Every `CreateQrCode` output is
-  verifiable in-process (`encode → decode == input`), independent of ZXing. Combined
-  with the existing ZXing-decodes-our-output tests and the ours-decodes-ZXing-output
-  tests, both directions are cross-validated against an independent implementation.
-- **Fail closed.** Reed-Solomon correction re-verifies syndromes after applying
-  corrections, and format decoding requires Hamming distance ≤ 3 (the BCH(15,5)
-  correction bound). A wrong decode is strictly worse than a failed decode.
-- **Zero allocation in steady state.** Matrix decoding uses stackalloc below 512
-  working bytes and `ArrayPool` above; the per-version blocked-module masks are
-  cached (≤ 3.9 KB × versions actually used). The `Span<char>` overloads complete
-  without any heap allocation (verified by a Release-only test).
+- **Tier-1/2 scope by design.** Image support targets clean inputs rather than unconstrained camera photos. Real-world photo robustness is a computer-vision problem that ZXing spent years on. Keeping this library dependency-free and auditable requires drawing the line here.
+- **Encoder-decoder parity by construction.** The decoder reuses the encoder's own function-pattern placement (`QRCodeGenerator.PlaceFunctionModules`) to build its blocked-module map, and the format-information decoder matches against patterns generated by the encoder's own `GetFormatBits`. The two sides cannot drift apart.
+- **Round-trip testing strengthens the encoder.** Every `CreateQrCode` output is verifiable in-process (`encode → decode == input`), independent of ZXing. Combined with the existing ZXing-decodes-our-output tests and the ours-decodes-ZXing-output tests, both directions are cross-validated against an independent implementation.
+- **Fail closed.** Reed-Solomon correction re-verifies syndromes after applying corrections, and format decoding requires Hamming distance ≤ 3 (the BCH(15,5) correction bound). A wrong decode is strictly worse than a failed decode.
+- **Zero allocation in steady state.** Matrix decoding uses stackalloc below 512 working bytes and `ArrayPool` above; the per-version blocked-module masks are cached (≤ 3.9 KB × versions actually used). The `Span<char>` overloads complete without any heap allocation (verified by a Release-only test).
 
 ---
 
 ## Decisions
 
-- **Version comes from the matrix size, not the version information blocks.** At the
-  matrix level the size is exact; at the image level the dimension estimate is snapped
-  to the nearest valid size. Reading the v7+ version info blocks would only matter for
-  heavily damaged symbols, which are Tier-3 inputs (out of scope).
-- **Format decoding by exhaustive Hamming match, not BCH syndrome decoding.** There
-  are only 32 valid patterns; comparing against all of them is simpler, branch-free,
-  and naturally yields the minimum-distance decision.
-- **Byte-mode charset heuristic.** Without an ECI header the spec default is
-  ISO-8859-1, but UTF-8 payloads are common in the wild. The decoder validates the
-  payload as UTF-8 (strict RFC 3629) and falls back to ISO-8859-1 — ASCII decodes
-  identically either way, so the heuristic can only affect high-byte payloads.
-- **Kanji mode is rejected, not decoded.** Shift-JIS conversion needs
-  `System.Text.Encoding.CodePages` on modern TFMs — a new dependency for a mode our
-  encoder never produces. Revisit only on concrete demand.
+- **Version comes from the matrix size, not the version information blocks.** At the matrix level the size is exact; at the image level the dimension estimate is snapped to the nearest valid size. Reading the v7+ version info blocks would only matter for heavily damaged symbols, which are Tier-3 inputs (out of scope).
+- **Format decoding by exhaustive Hamming match, not BCH syndrome decoding.** There are only 32 valid patterns; comparing against all of them is simpler, branch-free, and naturally yields the minimum-distance decision.
+- **Byte-mode charset heuristic.** Without an ECI header the spec default is ISO-8859-1, but UTF-8 payloads are common in the wild. The decoder validates the payload as UTF-8 (strict RFC 3629) and falls back to ISO-8859-1 — ASCII decodes identically either way, so the heuristic can only affect high-byte payloads.
+- **Kanji mode is rejected, not decoded.** Shift-JIS conversion needs `System.Text.Encoding.CodePages` on modern TFMs — a new dependency for a mode our encoder never produces. Revisit only on concrete demand.
 
 ---
 
@@ -132,129 +93,29 @@ out of scope; the API docs point such users to ZXing.Net.
 
 ### Image detection and sampling
 
-- **Horizontal-scan module size breaks under rotation.** The finder detector's run
-  widths are measured along image rows; at 45° they inflate by √2 and the dimension
-  estimate misses by an entire version step (first implementation returned
-  `NotDetected` for every 45° input). Module size must be measured along the actual
-  finder-to-finder lines (dark-light-dark runs through the pattern centers), which is
-  rotation-invariant. The scan-derived value survives only as a fallback when those
-  runs leave the image.
-- **The light-dark-light alignment signature matches every isolated dark data
-  module.** A single dark module with light neighbors on all four sides — extremely
-  common in data areas — passes both the horizontal triple and the vertical
-  cross-check, and one false positive shears the whole sampling transform into
-  ~50% mis-sampled garbage. Only the 5×5 dark border ring distinguishes the real
-  pattern: all eight ring samples at ±2 modules must be dark.
-- **Ring validation must follow the grid axes, not the image axes.** With
-  image-axis offsets the ±2-module ring corners land outside a rotated pattern and
-  reject the true alignment pattern — the fix that rescued keystone-only inputs
-  broke rotation+keystone combinations until the ring samples were taken along the
-  finder-derived grid axis vectors.
-- **Coordinate-6 lattice lines lie on the timing patterns** — their perfect
-  1-module alternation floods the light-dark-light alignment signature with false
-  candidates, so edge lattice nodes are never searched, only derived.
-- **Pixel-quantized module-size measurement biases the dimension estimate one whole
-  version low.** The dark-light-dark runs walk in 1-pixel steps and originally
-  returned the position of the first light pixel — the boundary rounded *up*, a
-  systematic +0.07..+0.25 px overestimate of the module size. Divided into the
-  finder distance, that undershoots the module count by several modules at small
-  pixels-per-module: a fixed 512 px canvas read version 14 (6.32 px/module) as
-  version 13, and versions 17+ as one lower, while 15/16 (near-integer px/module)
-  happened to survive — a *non-monotonic* failure pattern that looked style-dependent
-  but reproduced with plain black-and-white renders. Fixes: report run boundaries at
-  step − 0.5 (centers the quantization error), and keep the second-nearest valid
-  dimension as a one-shot retry when the primary fails. Regression-tested by
-  decoding versions 12–25 on a fixed 512 px canvas.
+- **Horizontal-scan module size breaks under rotation.** The finder detector's run widths are measured along image rows; at 45° they inflate by √2 and the dimension estimate misses by an entire version step (first implementation returned `NotDetected` for every 45° input). Module size must be measured along the actual finder-to-finder lines (dark-light-dark runs through the pattern centers), which is rotation-invariant. The scan-derived value survives only as a fallback when those runs leave the image.
+- **The light-dark-light alignment signature matches every isolated dark data module.** A single dark module with light neighbors on all four sides — extremely common in data areas — passes both the horizontal triple and the vertical cross-check, and one false positive shears the whole sampling transform into ~50% mis-sampled garbage. Only the 5×5 dark border ring distinguishes the real pattern: all eight ring samples at ±2 modules must be dark.
+- **Ring validation must follow the grid axes, not the image axes.** With image-axis offsets the ±2-module ring corners land outside a rotated pattern and reject the true alignment pattern — the fix that rescued keystone-only inputs broke rotation+keystone combinations until the ring samples were taken along the finder-derived grid axis vectors.
+- **Coordinate-6 lattice lines lie on the timing patterns** — their perfect 1-module alternation floods the light-dark-light alignment signature with false candidates, so edge lattice nodes are never searched, only derived.
+- **Pixel-quantized module-size measurement biases the dimension estimate one whole version low.** The dark-light-dark runs walk in 1-pixel steps and originally returned the position of the first light pixel — the boundary rounded *up*, a systematic +0.07..+0.25 px overestimate of the module size. Divided into the finder distance, that undershoots the module count by several modules at small pixels-per-module: a fixed 512 px canvas read version 14 (6.32 px/module) as version 13, and versions 17+ as one lower, while 15/16 (near-integer px/module) happened to survive — a *non-monotonic* failure pattern that looked style-dependent but reproduced with plain black-and-white renders. Fixes: report run boundaries at step − 0.5 (centers the quantization error), and keep the second-nearest valid dimension as a one-shot retry when the primary fails. Regression-tested by decoding versions 12–25 on a fixed 512 px canvas.
 
 ### Piecewise mesh (version 14+)
 
-- **The piecewise mesh must not trust any single upstream estimate.** Every naive
-  seeding strategy failed in a measured way before the shipped design emerged:
-  (a) predicting all lattice nodes through the *global transform* fails exactly when
-  the mesh is needed — its fourth anchor carries the parallelogram error
-  (≈ 2·keystone-shrink, ~9 modules at v20/4%); (b) a *finder-only affine* seed
-  drifts up to ~1.5 modules mid-edge because projective foreshortening makes lattice
-  spacing non-uniform; (c) *linear* extrapolation of the prediction-only edge nodes
-  fails for the same reason (lattice points are collinear but their spacing along
-  the line is projective — measured 12 px off where quadratic Lagrange left 1 px);
-  (d) *wide search windows* turn data-area false positives into cascading mesh
-  corruption, because the wavefront propagates every accepted node into downstream
-  predictions. The shipped combination: wavefront parallelogram prediction from
-  processed neighbors, tight (2.5-module) windows with a wider window only for
-  starters, iterated homography refinement anchored on the farthest detected node,
-  quadratic edge extrapolation, and an unconditional global-transform fallback on
-  decode failure so the mesh can never regress below the single homography.
+- **The piecewise mesh must not trust any single upstream estimate.** Every naive seeding strategy failed in a measured way before the shipped design emerged: (a) predicting all lattice nodes through the *global transform* fails exactly when the mesh is needed — its fourth anchor carries the parallelogram error (≈ 2·keystone-shrink, ~9 modules at v20/4%); (b) a *finder-only affine* seed drifts up to ~1.5 modules mid-edge because projective foreshortening makes lattice spacing non-uniform; (c) *linear* extrapolation of the prediction-only edge nodes fails for the same reason (lattice points are collinear but their spacing along the line is projective — measured 12 px off where quadratic Lagrange left 1 px); (d) *wide search windows* turn data-area false positives into cascading mesh corruption, because the wavefront propagates every accepted node into downstream predictions. The shipped combination: wavefront parallelogram prediction from processed neighbors, tight (2.5-module) windows with a wider window only for starters, iterated homography refinement anchored on the farthest detected node, quadratic edge extrapolation, and an unconditional global-transform fallback on decode failure so the mesh can never regress below the single homography.
 
 ### Matrix and format decoding
 
-- **A mirrored matrix does not reliably fail at the format stage.** The transposed
-  format bit sequence can land within BCH correction distance of a *different* valid
-  format pattern, so a mirrored image can surface as `DataUncorrectable` (wrong mask
-  garbles everything downstream) instead of `FormatInformationInvalid`. The mirror
-  retry (transpose + re-decode) must therefore trigger on any failure, not just on
-  format errors.
-- **Testing "corrupted format info" needs care for the same reason.** Flipping all 15
-  format bits produces the complement, which may be close to another valid codeword.
-  The negative test searches for a pattern with distance > 3 from all 32 candidates
-  instead of assuming any corruption is rejected.
-- **The RS decoder's convention must be read off the encoder, not assumed.** QR uses
-  generator roots α^0..α^(n-1) (b = 0), which puts an X_k factor in the Forney
-  formula that b = 1 conventions omit. Deriving it from `EccBinaryEncoder`'s
-  documented generator polynomial made the round-trip pass on the first run.
+- **A mirrored matrix does not reliably fail at the format stage.** The transposed format bit sequence can land within BCH correction distance of a *different* valid format pattern, so a mirrored image can surface as `DataUncorrectable` (wrong mask garbles everything downstream) instead of `FormatInformationInvalid`. The mirror retry (transpose + re-decode) must therefore trigger on any failure, not just on format errors.
+- **Testing "corrupted format info" needs care for the same reason.** Flipping all 15 format bits produces the complement, which may be close to another valid codeword. The negative test searches for a pattern with distance > 3 from all 32 candidates instead of assuming any corruption is rejected.
+- **The RS decoder's convention must be read off the encoder, not assumed.** QR uses generator roots α^0..α^(n-1) (b = 0), which puts an X_k factor in the Forney formula that b = 1 conventions omit. Deriving it from `EccBinaryEncoder`'s documented generator polynomial made the round-trip pass on the first run.
 
 ### Performance
 
-End-to-end numbers live in `src/SkiaSharp.QrCode.Benchmark`
-(`QrCodeDecodeEndToEnd`), with matrix scenarios mirroring the encode scenarios for
-direct comparison.
+End-to-end numbers live in `src/SkiaSharp.QrCode.Benchmark` (`QrCodeDecodeEndToEnd`), with matrix scenarios mirroring the encode scenarios for direct comparison.
 
-- **Syndrome pass dominates steady-state cost.** The syndrome pass is the cost every
-  decode pays (clean blocks exit early after it); Berlekamp-Massey/Chien/Forney run
-  only on blocks that actually contain errors. A GFNI kernel (net10.0+ x64,
-  `EccBinaryDecoder.Simd.cs`) measured ~284× per version-40 block; end-to-end
-  version-40 matrix decode dropped 369 µs → 131 µs — decode is now faster than
-  encode.
-- **Isomorphism root choice matters.** β = 0x03 as the isomorphism root makes φ its
-  own inverse, so one matrix constant serves both directions. Unrolling beyond ×4
-  stalls — the loop moves from latency-bound (accumulator chain) to GFNI-port
-  throughput-bound. Pre-mapping the whole codeword to remove the in-loop affine
-  measured *slower*: that affine was off the carried dependency chain, so removing it
-  saved nothing while the extra pass cost real time.
-- **Perspective sampling SIMD is a large-symbol win only.** An AVX2 kernel (net8.0+)
-  achieved 2.7× at version 40 (79 µs → 29 µs), scalar row-hoisted fallback
-  elsewhere. The loop is *not* division-bound — module computations are independent,
-  so out-of-order execution hides division latency (halving the division count
-  measured no gain); the cost was scalar conversion/clamp/branch overhead. Sampling is
-  ~0.8% of a typical (version 4) image decode — the win matters for large symbols
-  only.
-- **Alignment search is failure-path-dominated.** The expanding window sweep
-  (4→8→16 modules) runs to completion when no pattern exists, up to 4× per failed
-  decode (secondary dimension × inversion) — baseline ~40% of an image decode. An
-  AVX2 kernel (32-px SIMD dark-mask classification + tzcnt run walk × a
-  ⌊moduleSize/2⌋ row stride) achieved 23× on the not-found sweep; the vertical
-  cross-check recenters exactly, so striding is result-identical.
-- **Finder scan striding must be envelope-safe, not module-size-based.** The finder
-  scan reuses the same SIMD mask-walk kernel shape, but its row stride cannot come
-  from the module size — the module size is unknown before detection. The bound
-  comes from the worst case instead: the 1:1:3:1:1 band is 3 modules tall and a
-  version-40 symbol filling the frame has the smallest possible modules, so stride
-  3·height/(4·177) still hits every supported symbol's band several times. A failed
-  stride pass rescans *only the skipped rows*, keeping its candidates — the union
-  covers exactly the rows of a full scan for exactly one sweep of total work, so
-  detection can never regress (a naive full-rescan fallback measured 0.87×, i.e. a
-  regression, in the scalar variant). The best-3 selection before that fallback must
-  run on a copy: it compacts and sorts the candidate list in place. Combined result
-  9.6–11.4× on the scan, image E2E (`Image_Url_M`) 309 µs → 132 µs (−57%); the
-  SIMD walk alone is bit-identical to the scalar walk and parity-tested.
-- **Otsu histogram fill favors run aggregation over per-pixel increments.** On
-  QR-like images (long runs of two values), `histogram[value]++` serializes on
-  store-forwarding when consecutive pixels hit the same bin — measured ~8× slower
-  per pixel than random input. Reading 8 pixels as one ulong and folding uniform
-  groups (`v == ror(v, 8)`) into a single `+= 8` is 8–10× on QR-like input; the
-  textbook multi-lane fix managed only ~2.4× here because two hot bins keep
-  colliding even across four lanes. The winner is pure scalar C#, so every TFM gets
-  it (no SIMD, no `#if`), and the threshold is byte-identical
-  (`OtsuThresholdParityTest`). Accepted trade-off: uniform random noise — never-
-  uniform groups, the adversarial floor that even real photos don't hit — pays up to
-  ~1.3×. Image E2E (`Image_Url_M`) 132 µs → 38 µs; with the finder scan work,
-  309 → 38 µs (8.0×) total.
+- **Syndrome pass dominates steady-state cost.** The syndrome pass is the cost every decode pays (clean blocks exit early after it); Berlekamp-Massey/Chien/Forney run only on blocks that actually contain errors. A GFNI kernel (net10.0+ x64, `EccBinaryDecoder.Simd.cs`) measured ~284× per version-40 block; end-to-end version-40 matrix decode dropped 369 µs → 131 µs — decode is now faster than encode.
+- **Isomorphism root choice matters.** β = 0x03 as the isomorphism root makes φ its own inverse, so one matrix constant serves both directions. Unrolling beyond ×4 stalls — the loop moves from latency-bound (accumulator chain) to GFNI-port throughput-bound. Pre-mapping the whole codeword to remove the in-loop affine measured *slower*: that affine was off the carried dependency chain, so removing it saved nothing while the extra pass cost real time.
+- **Perspective sampling SIMD is a large-symbol win only.** An AVX2 kernel (net8.0+) achieved 2.7× at version 40 (79 µs → 29 µs), scalar row-hoisted fallback elsewhere. The loop is *not* division-bound — module computations are independent, so out-of-order execution hides division latency (halving the division count measured no gain); the cost was scalar conversion/clamp/branch overhead. Sampling is ~0.8% of a typical (version 4) image decode — the win matters for large symbols only.
+- **Alignment search is failure-path-dominated.** The expanding window sweep (4→8→16 modules) runs to completion when no pattern exists, up to 4× per failed decode (secondary dimension × inversion) — baseline ~40% of an image decode. An AVX2 kernel (32-px SIMD dark-mask classification + tzcnt run walk × a ⌊moduleSize/2⌋ row stride) achieved 23× on the not-found sweep; the vertical cross-check recenters exactly, so striding is result-identical.
+- **Finder scan striding must be envelope-safe, not module-size-based.** The finder scan reuses the same SIMD mask-walk kernel shape, but its row stride cannot come from the module size — the module size is unknown before detection. The bound comes from the worst case instead: the 1:1:3:1:1 band is 3 modules tall and a version-40 symbol filling the frame has the smallest possible modules, so stride 3·height/(4·177) still hits every supported symbol's band several times. A failed stride pass rescans *only the skipped rows*, keeping its candidates — the union covers exactly the rows of a full scan for exactly one sweep of total work, so detection can never regress (a naive full-rescan fallback measured 0.87×, i.e. a regression, in the scalar variant). The best-3 selection before that fallback must run on a copy: it compacts and sorts the candidate list in place. Combined result 9.6–11.4× on the scan, image E2E (`Image_Url_M`) 309 µs → 132 µs (−57%); the SIMD walk alone is bit-identical to the scalar walk and parity-tested.
+- **Otsu histogram fill favors run aggregation over per-pixel increments.** On QR-like images (long runs of two values), `histogram[value]++` serializes on store-forwarding when consecutive pixels hit the same bin — measured ~8× slower per pixel than random input. Reading 8 pixels as one ulong and folding uniform groups (`v == ror(v, 8)`) into a single `+= 8` is 8–10× on QR-like input; the textbook multi-lane fix managed only ~2.4× here because two hot bins keep colliding even across four lanes. The winner is pure scalar C#, so every TFM gets it (no SIMD, no `#if`), and the threshold is byte-identical (`OtsuThresholdParityTest`). Accepted trade-off: uniform random noise — never-uniform groups, the adversarial floor that even real photos don't hit — pays up to ~1.3×. Image E2E (`Image_Url_M`) 132 µs → 38 µs; with the finder scan work, 309 → 38 µs (8.0×) total.
