@@ -1,17 +1,22 @@
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+#if NET8_0_OR_GREATER
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
+#endif
 
 namespace SkiaSharp.QrCode.Internals.MicroQr;
 
 /// <summary>
 /// Fused fast-path placement pipeline for Micro QR
 /// (<see cref="PlaceSymbol"/>): function patterns, data placement, mask
-/// selection/application and format information in one pass.
+/// selection/application and format information in one pass over bit-packed
+/// rows, unpacked to the byte matrix once at the end.
 ///
 /// Produces matrices byte-identical to the per-module reference methods in
 /// MicroQrModulePlacer.cs (guarded by MicroQrModulePlacerParityTest).
-/// Measured 3.1-4.0x over the reference across M1-M4, zero allocations
+/// Measured 3.6-5.8x over the reference across M1-M4, zero allocations
 /// (see the micro-optimization findings log):
 /// <list type="bullet">
 /// <item>The transmission stream is at most 192 bits (M4), so it is packed once
@@ -19,22 +24,24 @@ namespace SkiaSharp.QrCode.Internals.MicroQr;
 /// of per-bit indexed loads with a data/ecc branch.</item>
 /// <item>Column pairs are (even, odd) and never straddle the finder boundary:
 /// <c>right &gt;= 10</c> frees rows 1..size-1, <c>right &lt;= 8</c> frees rows
-/// 9..size-1. Placement runs 2 bits per row with no per-module function-region
-/// predicate; the stream fills the free modules exactly (ISO capacity tables,
-/// validated up front), so no remaining-bits guard is needed either.</item>
-/// <item>Mask scoring reads only the two symbol edges (ISO 7.8.3): both edges
-/// are packed into one ulong each and every candidate's SUM1/SUM2 is one XOR +
-/// popcount against a static per-(size, mask) edge table — the dominant cost of
-/// the reference pipeline (4 patterns x 2 edges x a mask switch per module).</item>
-/// <item>Sizes 13/15/17 run the whole pipeline on bit-packed rows (one ulong
-/// per row, the ModulePlacer.Masking representation): function pattern = static
-/// packed constants, placement = shift+or, mask apply = one XOR per row via
-/// 12-row templates, format = bit pokes, then one SWAR unpack pass to the byte
-/// matrix. Size 11 stays byte-domain — the unpack pass never amortizes on a
-/// 121-byte matrix, and the per-module mask apply wins there (measured).</item>
-/// <item>Pure scalar ulong arithmetic: identical on every TFM and
-/// NativeAOT/trimming-safe; all tables are small static arrays built by
-/// ordinary code from the reference implementations.</item>
+/// 9..size-1 — no per-module function-region predicate, and the stream fills
+/// the free modules exactly (ISO capacity tables, validated up front) so no
+/// remaining-bits guard is needed. Every segment's row count is even for all
+/// four sizes, so placement runs 2 rows (4 stream bits) per iteration.</item>
+/// <item>Mask scoring reads only the two symbol edges (ISO 7.8.3), taken
+/// straight from the packed rows; every candidate's SUM1/SUM2 is one XOR +
+/// popcount against a static per-(size, mask) edge table.</item>
+/// <item>The mask apply (a 12-row-periodic template AND the data-region mask)
+/// is fused into the unpack pass instead of a separate XOR pass over the rows;
+/// format bits are poked into the packed rows beforehand and live entirely
+/// outside the data-region mask, so the fused XOR cannot touch them.</item>
+/// <item>The unpack expands 16 modules per step with the SSSE3
+/// broadcast/shuffle/compare idiom when available, falling back to scalar SWAR
+/// spreads (8 modules per step) otherwise; a single code path serves all four
+/// sizes (the scalar phase's size-11 byte-domain dispatch lost its advantage
+/// once the unpack was vectorized and the placement unrolled — measured).</item>
+/// <item>All tables are small static arrays built by ordinary code from the
+/// reference implementations (NativeAOT/trimming-safe).</item>
 /// </list>
 /// </summary>
 internal static partial class MicroQrModulePlacer
@@ -57,9 +64,40 @@ internal static partial class MicroQrModulePlacer
     /// <param name="eccLevel">ECC level (drives the format information).</param>
     public static int PlaceSymbol(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQrVersion version, MicroQrEccLevel eccLevel)
     {
+        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
+
+        Span<ulong> stream = stackalloc ulong[3];
+        PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
+
+#if NET8_0_OR_GREATER
+        if (Ssse3.IsSupported)
+        {
+            return PlaceCoreVector(matrix, size, stream, version, eccLevel);
+        }
+#endif
+        return PlaceCoreScalar(matrix, size, stream, version, eccLevel);
+    }
+
+    /// <summary>
+    /// Scalar-unpack variant of <see cref="PlaceSymbol"/> — the code path taken
+    /// at runtime when SSSE3 is unavailable, exposed as a named entry point so
+    /// parity tests exercise it on SIMD-capable machines too.
+    /// </summary>
+    internal static int PlaceSymbolScalar(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQrVersion version, MicroQrEccLevel eccLevel)
+    {
+        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
+
+        Span<ulong> stream = stackalloc ulong[3];
+        PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
+
+        return PlaceCoreScalar(matrix, size, stream, version, eccLevel);
+    }
+
+    private static void ValidateArguments(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount)
+    {
         // The fast paths below index by arithmetic the JIT cannot bounds-prove
-        // (flat zigzag indices, 8-byte unaligned unpack writes), so the whole
-        // traversal domain is validated here instead of per access.
+        // (flat zigzag indices, 8/16-byte unaligned unpack writes), so the
+        // whole traversal domain is validated here instead of per access.
         if (MicroQrConstants.VersionFromSize(size) == 0)
             throw new ArgumentOutOfRangeException(nameof(size), $"size must be a Micro QR size (11/13/15/17), got {size}");
         if (matrix.Length < size * size)
@@ -74,13 +112,6 @@ internal static partial class MicroQrModulePlacer
         var freeModules = size * size - 2 * size - 63;
         if (totalBits != freeModules)
             throw new ArgumentException($"stream length mismatch: {totalBits} bits for {freeModules} free modules (size {size})", nameof(eccCodewords));
-
-        Span<ulong> stream = stackalloc ulong[3];
-        PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
-
-        return size == 11
-            ? PlaceSymbolBytes(matrix, size, stream, version, eccLevel)
-            : PlaceSymbolPacked(matrix, size, stream, version, eccLevel);
     }
 
     /// <summary>
@@ -116,34 +147,37 @@ internal static partial class MicroQrModulePlacer
     }
 
     // ---------------------------------------------------------------
-    // Byte-domain path (size 11)
+    // Packed pipeline (all sizes)
     // ---------------------------------------------------------------
 
-    private static int PlaceSymbolBytes(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQrVersion version, MicroQrEccLevel eccLevel)
+    /// <summary>
+    /// Runs placement, scoring, format poking on packed rows and returns the
+    /// selected mask; the caller-selected unpack pass then materializes the
+    /// byte matrix with the mask template XORed in on the fly.
+    /// </summary>
+    private static int BuildPackedRows(Span<ulong> rows, int size, ReadOnlySpan<ulong> stream, MicroQrVersion version, MicroQrEccLevel eccLevel)
     {
-        // Function patterns: rows 0..8 are a per-size constant block; below it
-        // only the column-0 timing modules (dark at even rows) remain.
-        FuncTopRows(size).CopyTo(matrix);
-        for (var i = 10; i < size; i += 2)
-        {
-            matrix[i * size] = 1;
-        }
+        FuncPackedRows(size).CopyTo(rows);
 
-        // Data placement: 2 stream bits per free row of each column pair.
         var acc = stream[0];
         var w1 = stream[1];
         var w2 = stream[2];
         var accBits = 64;
-        var upward = true;
 
+        // Data placement, 2 rows (4 stream bits) per iteration: bits land at
+        // columns (right, right-1) of two consecutive rows. Segment row counts
+        // (size-1 and size-9) are even for every Micro QR size, and 64 % 4 == 0
+        // keeps the refill boundary exact.
+        var upward = true;
         for (var right = size - 1; right >= 2; right -= 2)
         {
             var rowStart = right >= 10 ? 1 : 9;
-            var rows = size - rowStart;
-            var b = upward ? (size - 1) * size + right : rowStart * size + right;
-            var bStep = upward ? -size : size;
+            var pairs = (size - rowStart) >> 1;
+            var row = upward ? size - 1 : rowStart;
+            var step = upward ? -1 : 1;
+            var shift = right - 1;
 
-            for (var i = 0; i < rows; i++, b += bStep)
+            for (var i = 0; i < pairs; i++)
             {
                 if (accBits == 0)
                 {
@@ -151,44 +185,165 @@ internal static partial class MicroQrModulePlacer
                     w1 = w2;
                     accBits = 64;
                 }
-                matrix[b] = (byte)(acc >> 63);
-                matrix[b - 1] = (byte)((acc >> 62) & 1);
-                acc <<= 2;
-                accBits -= 2;
+                var quad = (acc >> 60) & 0xF;
+                rows[row] |= (quad >> 2) << shift;
+                rows[row + step] |= (quad & 3) << shift;
+                acc <<= 4;
+                accBits -= 4;
+                row += 2 * step;
             }
             upward = !upward;
         }
 
-        // Score from the packed edges, then apply per module: at size 11 the
-        // ~36 data modules cost less than the template/unpack machinery of the
-        // packed path (measured).
+        // Scoring: edges straight out of the packed rows (bit 0 = the column-0
+        // function module, excluded from both edge sums).
         var last = size - 1;
-        var lastRowOffset = last * size;
         ulong colDark = 0;
-        ulong rowDark = 0;
         for (var i = 1; i < size; i++)
         {
-            colDark |= (ulong)matrix[i * size + last] << i;
-            rowDark |= (ulong)matrix[lastRowOffset + i] << i;
+            colDark |= ((rows[i] >> last) & 1) << i;
         }
+        var rowDark = rows[last] & ~1ul;
+
         var mask = SelectMaskFromEdges(colDark, rowDark, size);
 
-        for (var row = 1; row < size; row++)
+        // Format information: row 8 cols 1..8 carry bits 14..7, col 8 rows 7..1
+        // carry bits 6..0 (same coordinates as PlaceFormat). These modules lie
+        // outside the data-region mask, so the fused apply cannot flip them.
+        var formatBits = MicroQrConstants.GetFormatBits(version, eccLevel, mask);
+        var r8 = rows[8];
+        for (var col = 1; col <= 8; col++)
         {
-            var rowOffset = row * size;
-            var colStart = row <= 8 ? 9 : 1;
-            for (var col = colStart; col < size; col++)
+            var bit = (ulong)((formatBits >> (15 - col)) & 1);
+            r8 = (r8 & ~(1ul << col)) | (bit << col);
+        }
+        rows[8] = r8;
+        for (var row = 7; row >= 1; row--)
+        {
+            var bit = (ulong)((formatBits >> (row - 1)) & 1);
+            rows[row] = (rows[row] & ~(1ul << 8)) | (bit << 8);
+        }
+
+        return mask;
+    }
+
+    /// <summary>Masked mask-template row for the fused apply: zero for row 0.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong MaskDelta(int mask, int row, int size)
+    {
+        if (row == 0)
+        {
+            return 0;
+        }
+        var colStart = row <= 8 ? 9 : 1;
+        var allowed = ((1ul << size) - 1) & ~((1ul << colStart) - 1);
+        var tplRow = row < 12 ? row : row - 12;
+        return _maskTemplates12[mask * 12 + tplRow] & allowed;
+    }
+
+    private static int PlaceCoreScalar(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQrVersion version, MicroQrEccLevel eccLevel)
+    {
+        Span<ulong> rows = stackalloc ulong[17];
+        rows = rows.Slice(0, size);
+        var mask = BuildPackedRows(rows, size, stream, version, eccLevel);
+
+        // Unpack with the mask applied on the fly: full 8-byte write steps; a
+        // tail of >= 4 bytes becomes one overlapped spread ending at the row
+        // edge (write-mode overlap is idempotent, unlike XOR), a tail of <= 3
+        // bytes is cheaper as scalar stores. ValidateArguments guaranteed
+        // matrix.Length >= size*size, so every write stays inside the matrix.
+        ref var buf = ref MemoryMarshal.GetReference(matrix);
+        var rowOffset = 0;
+        for (var y = 0; y < size; y++, rowOffset += size)
+        {
+            var bits = rows[y] ^ MaskDelta(mask, y, size);
+            var c = 0;
+            for (; c + 8 <= size; c += 8)
             {
-                if (GetMaskBit(mask, row, col))
+                WriteSpread8(ref Unsafe.Add(ref buf, rowOffset + c), bits >> c);
+            }
+            if (size - c >= 4)
+            {
+                var c2 = size - 8;
+                WriteSpread8(ref Unsafe.Add(ref buf, rowOffset + c2), bits >> c2);
+            }
+            else
+            {
+                for (; c < size; c++)
                 {
-                    matrix[rowOffset + col] ^= 1;
+                    matrix[rowOffset + c] = (byte)((bits >> c) & 1);
                 }
             }
         }
 
-        PlaceFormat(matrix, size, MicroQrConstants.GetFormatBits(version, eccLevel, mask));
         return mask;
     }
+
+#if NET8_0_OR_GREATER
+    private static int PlaceCoreVector(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQrVersion version, MicroQrEccLevel eccLevel)
+    {
+        Span<ulong> rows = stackalloc ulong[17];
+        rows = rows.Slice(0, size);
+        var mask = BuildPackedRows(rows, size, stream, version, eccLevel);
+
+        // Unpack with the mask applied on the fly, 16 modules per SSSE3 step.
+        // Rows 0..size-2 may overrun into the following row: bits >= size are
+        // zero and rows unpack in ascending order, so the overwritten zeros are
+        // immediately replaced by that row's own unpack. The last row (buffer
+        // edge) uses the scalar-safe tail instead.
+        ref var buf = ref MemoryMarshal.GetReference(matrix);
+        var last = size - 1;
+        var rowOffset = 0;
+        for (var y = 0; y < last; y++, rowOffset += size)
+        {
+            var bits = rows[y] ^ MaskDelta(mask, y, size);
+            for (var c = 0; c < size; c += 16)
+            {
+                WriteExpand16(ref Unsafe.Add(ref buf, rowOffset + c), (uint)((bits >> c) & 0xFFFF));
+            }
+        }
+        {
+            var bits = rows[last] ^ MaskDelta(mask, last, size);
+            var c = 0;
+            for (; c + 8 <= size; c += 8)
+            {
+                WriteSpread8(ref Unsafe.Add(ref buf, rowOffset + c), bits >> c);
+            }
+            if (size - c >= 4)
+            {
+                var c2 = size - 8;
+                WriteSpread8(ref Unsafe.Add(ref buf, rowOffset + c2), bits >> c2);
+            }
+            else
+            {
+                for (; c < size; c++)
+                {
+                    matrix[rowOffset + c] = (byte)((bits >> c) & 1);
+                }
+            }
+        }
+
+        return mask;
+    }
+
+    /// <summary>
+    /// Expands 16 bits to 16 (0/1) module bytes: broadcast the 16-bit lane,
+    /// shuffle byte 0/1 across the halves, AND with per-lane bit masks and
+    /// compare-equal (byte k = 1 iff bit k set). Beat the GFNI bit-expand in
+    /// the micro-benchmark loop — GFNI's matrix-operand preparation outweighs
+    /// its single-instruction expand.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void WriteExpand16(ref byte p, uint bits16)
+    {
+        var src = Vector128.Create((ushort)bits16).AsByte();
+        var sel = Vector128.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
+        var bitm = Vector128.Create((byte)1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);
+        var m = Ssse3.Shuffle(src, sel) & bitm;
+        var ones = Vector128.Equals(m, bitm) & Vector128.Create((byte)1);
+        ones.StoreUnsafe(ref p);
+    }
+#endif
 
     /// <summary>
     /// Scores the four mask patterns from the packed symbol edges
@@ -219,117 +374,6 @@ internal static partial class MicroQrModulePlacer
         return bestMask;
     }
 
-    // ---------------------------------------------------------------
-    // Packed-row path (sizes 13/15/17)
-    // ---------------------------------------------------------------
-
-    private static int PlaceSymbolPacked(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQrVersion version, MicroQrEccLevel eccLevel)
-    {
-        var acc = stream[0];
-        var w1 = stream[1];
-        var w2 = stream[2];
-        var accBits = 64;
-
-        // One ulong per row, bit c = column c; seeded with the function pattern.
-        Span<ulong> rows = stackalloc ulong[17];
-        rows = rows.Slice(0, size);
-        FuncPackedRows(size).CopyTo(rows);
-
-        // Data placement: the pair's 2 bits land at columns (right, right-1).
-        var upward = true;
-        for (var right = size - 1; right >= 2; right -= 2)
-        {
-            var rowStart = right >= 10 ? 1 : 9;
-            var row = upward ? size - 1 : rowStart;
-            var rowEnd = upward ? rowStart - 1 : size;
-            var step = upward ? -1 : 1;
-
-            for (; row != rowEnd; row += step)
-            {
-                if (accBits == 0)
-                {
-                    acc = w1;
-                    w1 = w2;
-                    accBits = 64;
-                }
-                rows[row] |= ((acc >> 62) & 3) << (right - 1);
-                acc <<= 2;
-                accBits -= 2;
-            }
-            upward = !upward;
-        }
-
-        // Scoring: edges straight out of the packed rows (bit 0 = the column-0
-        // function module, excluded from both edge sums).
-        var last = size - 1;
-        ulong colDark = 0;
-        for (var i = 1; i < size; i++)
-        {
-            colDark |= ((rows[i] >> last) & 1) << i;
-        }
-        var rowDark = rows[last] & ~1ul;
-
-        var mask = SelectMaskFromEdges(colDark, rowDark, size);
-
-        // Apply: one template XOR per row, masked to the data region.
-        var rowMask = (1ul << size) - 1;
-        var tplBase = mask * 12;
-        for (var row = 1; row < size; row++)
-        {
-            var colStart = row <= 8 ? 9 : 1;
-            var allowed = rowMask & ~((1ul << colStart) - 1);
-            var tplRow = row < 12 ? row : row - 12;
-            rows[row] ^= _maskTemplates12[tplBase + tplRow] & allowed;
-        }
-
-        // Format information: row 8 cols 1..8 carry bits 14..7, col 8 rows 7..1
-        // carry bits 6..0 (same coordinates as PlaceFormat).
-        var formatBits = MicroQrConstants.GetFormatBits(version, eccLevel, mask);
-        var r8 = rows[8];
-        for (var col = 1; col <= 8; col++)
-        {
-            var bit = (ulong)((formatBits >> (15 - col)) & 1);
-            r8 = (r8 & ~(1ul << col)) | (bit << col);
-        }
-        rows[8] = r8;
-        for (var row = 7; row >= 1; row--)
-        {
-            var bit = (ulong)((formatBits >> (row - 1)) & 1);
-            rows[row] = (rows[row] & ~(1ul << 8)) | (bit << 8);
-        }
-
-        // Unpack every row to bytes: full 8-byte write steps; a tail of >= 4
-        // bytes becomes one overlapped spread ending at the row edge (write-mode
-        // overlap is idempotent, unlike XOR), a tail of <= 3 bytes is cheaper as
-        // scalar stores. PlaceSymbol validated matrix.Length >= size*size, so
-        // every 8-byte write here stays inside the matrix.
-        ref var buf = ref MemoryMarshal.GetReference(matrix);
-        var rowOffset = 0;
-        for (var y = 0; y < size; y++, rowOffset += size)
-        {
-            var bits = rows[y];
-            var c = 0;
-            for (; c + 8 <= size; c += 8)
-            {
-                WriteSpread8(ref Unsafe.Add(ref buf, rowOffset + c), bits >> c);
-            }
-            if (size - c >= 4)
-            {
-                var c2 = size - 8;
-                WriteSpread8(ref Unsafe.Add(ref buf, rowOffset + c2), bits >> c2);
-            }
-            else
-            {
-                for (; c < size; c++)
-                {
-                    matrix[rowOffset + c] = (byte)((bits >> c) & 1);
-                }
-            }
-        }
-
-        return mask;
-    }
-
     /// <summary>
     /// Writes 8 modules at once: byte k = bit k of the low byte of
     /// <paramref name="bits"/> (multiply-replicate to the per-byte diagonal,
@@ -351,31 +395,10 @@ internal static partial class MicroQrModulePlacer
     // implementations in MicroQrModulePlacer.cs — NativeAOT/trimming-safe)
     // ---------------------------------------------------------------
 
-    /// <summary>
-    /// Function pattern rows 0..8 as byte blocks, [sizeIndex] with
-    /// sizeIndex = (size - 11) / 2. Rows below 8 carry only column-0 timing.
-    /// </summary>
-    private static readonly byte[][] _funcTopRows = BuildFuncTopRows();
-
     /// <summary>Full function pattern as packed rows, [sizeIndex][row].</summary>
     private static readonly ulong[][] _funcPackedRows = BuildFuncPackedRows();
 
-    private static ReadOnlySpan<byte> FuncTopRows(int size) => _funcTopRows[(size - 11) >> 1];
-
     private static ReadOnlySpan<ulong> FuncPackedRows(int size) => _funcPackedRows[(size - 11) >> 1];
-
-    private static byte[][] BuildFuncTopRows()
-    {
-        var tables = new byte[4][];
-        for (var sizeIndex = 0; sizeIndex < 4; sizeIndex++)
-        {
-            var size = 11 + 2 * sizeIndex;
-            var matrix = new byte[size * size];
-            PlaceFunctionModules(matrix, size);
-            tables[sizeIndex] = matrix.AsSpan(0, 9 * size).ToArray();
-        }
-        return tables;
-    }
 
     private static ulong[][] BuildFuncPackedRows()
     {

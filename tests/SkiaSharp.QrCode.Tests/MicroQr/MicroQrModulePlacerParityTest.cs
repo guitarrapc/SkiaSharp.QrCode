@@ -79,6 +79,46 @@ public class MicroQrModulePlacerParityTest
         await Assert.That(actual).IsEquivalentTo(expected);
     }
 
+    /// <summary>
+    /// The scalar-unpack fallback (taken at runtime when SSSE3 is unavailable)
+    /// must match the reference too — on SIMD-capable test machines it is
+    /// exercised through this named internal entry point.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(AllCombinationsAndSeeds))]
+    public async Task PlaceSymbolScalar_MatchesNaiveReference(MicroQrVersion version, MicroQrEccLevel ecc, int seed)
+    {
+        var size = MicroQrConstants.SizeFromVersion(version);
+        var dataCount = MicroQrConstants.GetDataCodewordCount(version, ecc);
+        var eccCount = MicroQrConstants.GetEccCodewordCount(version, ecc);
+        var dataBitCount = MicroQrConstants.GetDataBitCapacity(version, ecc);
+
+        var data = new byte[dataCount];
+        var eccBytes = new byte[eccCount];
+        switch (seed)
+        {
+            case -1:
+                break;
+            case -2:
+                Array.Fill(data, (byte)0xFF);
+                Array.Fill(eccBytes, (byte)0xFF);
+                break;
+            default:
+                new Random(seed).NextBytes(data);
+                new Random(seed + 100).NextBytes(eccBytes);
+                break;
+        }
+
+        var expected = new byte[size * size];
+        var expectedMask = ReferencePlace(expected, size, data, eccBytes, dataBitCount, version, ecc);
+
+        var actual = new byte[size * size];
+        var actualMask = MicroQrModulePlacer.PlaceSymbolScalar(actual, size, data, eccBytes, dataBitCount, version, ecc);
+
+        await Assert.That(actualMask).IsEqualTo(expectedMask);
+        await Assert.That(actual).IsEquivalentTo(expected);
+    }
+
     [Test]
     public async Task PlaceSymbol_InvalidSize_Throws()
     {

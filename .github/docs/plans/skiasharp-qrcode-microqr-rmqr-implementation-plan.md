@@ -260,6 +260,53 @@ Exit: decoder MVT image-level rows satisfied; degradation matrix green.
 Allocations unchanged (Span paths 0 B; class paths allocate the result object
 only).
 
+### Phase 2 follow-up (2) — placement SIMD phase, completed 2026-07-17
+
+**Done**
+
+- Reopened the micro-benchmark loop with SIMD/CPU-instruction variants (rounds
+  5-7, 25 variants total; the scalar-only constraint applied to the initial
+  Micro QR implementation, not to optimization). Kernel result vs the
+  per-module baseline: 3.6-5.8x (M4-M 680 -> 118 ns), vs the scalar fast path
+  another 16-27%.
+- Ship shape (`MicroQrModulePlacer.PlaceSymbol`, single code path for ALL
+  sizes — the size-11 byte-domain dispatch was deleted): bulk stream pack,
+  2-row-unrolled placement (all segment row counts are even), packed-edge
+  scoring, mask apply fused into the unpack, SSSE3 16-module expand with a
+  scalar SWAR fallback selected at runtime (`Ssse3.IsSupported`, net8.0+;
+  netstandard TFMs compile the scalar path only).
+- Tests: parity suite doubled — the scalar fallback is exercised explicitly via
+  the internal `PlaceSymbolScalar` entry point on SIMD-capable machines. Full
+  suite green: 2,854 tests (net8.0 + net10.0), 0 failed.
+
+**Lessons learned**
+
+- SSSE3 broadcast+shuffle+cmpeq beat the GFNI one-instruction bit-expand for
+  16-module unpack on Zen 4: GFNI's expand is free but preparing its matrix
+  operand (replicating data bytes) is not. Judge SIMD tricks by operand-prep
+  cost, not the headline instruction.
+- Fixing the biggest term moves the wall: after vectorizing the unpack, the
+  serial placement loop dominated and a plain 2-row unroll was worth more
+  (-14..-22%) than the SIMD step itself; independently-winning changes stopped
+  composing once the critical path moved.
+- Micro-architecture wins erase structural dispatch: the size-11 byte path won
+  by 25% in the scalar phase, tied after the vector unpack, lost after the
+  unroll. Re-test every dispatch boundary after each representation change.
+- Convergence was declared when two variants running the IDENTICAL inner
+  method measured 13% apart in the same run — candidate deltas below the
+  identical-code layout spread are unattributable.
+
+**Benchmark delta (MicroQrEncode E2E, net10.0 Release, Span API; before =
+78405fc, scalar = first follow-up, SIMD = this change; two launches averaged)**
+
+| Benchmark | Before | Scalar port | SIMD port | Total |
+|---|---|---|---|---|
+| MicroQr_Numeric_M2 (Span) | 475.2 ns | 181.2 ns | ~179 ns | 2.7x |
+| MicroQr_Alphanumeric_M3 (Span) | 627.7 ns | 258.6 ns | ~228 ns | 2.8x |
+| MicroQr_Byte_M4 (Span) | 752.0 ns | 305.2 ns | ~279 ns | 2.7x |
+
+Allocations unchanged (Span paths 0 B). StandardQr control stable across runs.
+
 ## Risks Beyond the Test Strategy Document
 
 - Renderer assumptions: `IconShape`/finder styling assume three finder patterns; rectangular output changes image sizing APIs. Audit in Phase 0.
