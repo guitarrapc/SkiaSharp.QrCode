@@ -9,6 +9,11 @@
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
     <PackageReference Include="ZXing.Net" />
+    <PackageReference Include="ZXingCpp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SkiaSharp.QrCode\SkiaSharp.QrCode.csproj" />
   </ItemGroup>
 
 </Project>

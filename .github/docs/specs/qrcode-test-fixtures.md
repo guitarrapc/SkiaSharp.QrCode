@@ -61,8 +61,8 @@ Status meaning — **verified**: exercised in this repository; **documented**: c
 | Oracle | Standard QR | Micro QR | rMQR | Status | Notes |
 |---|---|---|---|---|---|
 | ZXing.Net 0.16.11 (NuGet, pinned) | encode + decode | — | — | verified | Fixture generator + `QRCodeDecoderZXingCrossTest`; in-process, no toolchain |
-| [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) | read + write | read | read | documented | The practical OSS *decode* oracle for Micro QR / rMQR; writing them requires the experimental zint-backed writer (`ZXING_WRITERS=NEW`) |
-| [Zint](https://zint.org.uk/) | encode | encode | encode | documented | CLI encoder; encode-only (no decoder) |
+| [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) (via [ZXingCpp](https://www.nuget.org/packages/ZXingCpp) 0.5.2, pinned) | read + write | read | read | verified | Micro QR reading exercised by `tools/QrInteropFixtures -- spot-check-microqr` against this library's encoder (all versions × ECC, UTF-8). The official .NET wrapper bundles native binaries, so no external toolchain is needed |
+| [Zint](https://zint.org.uk/) | encode | encode | encode | documented | CLI encoder; encode-only (no decoder). Not in the scoop repos — acquire via vcpkg or the official installer when Phase 3 fixtures need it, or evaluate zxing-cpp's zint-backed writer in ZXingCpp's `BarcodeCreator` |
 | [qrcode2 / qrtool (Rust)](https://docs.rs/qrcode2) | encode | encode | encode | documented | `qrtool` CLI exposes `--variant micro` / `--variant rmqr`; fork of kennytm/qrcode |
 | rmqrcode-python | — | — | encode | claimed | Capability not independently confirmed yet — verify before relying on it |
 | BoofCV (Java) | decode | decode | — | claimed | Candidate additional decode oracle; not evaluated |

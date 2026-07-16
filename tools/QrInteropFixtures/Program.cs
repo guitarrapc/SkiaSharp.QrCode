@@ -8,9 +8,14 @@ using QrInteropFixtures;
 // Usage: dotnet run --project tools/QrInteropFixtures -- regenerate
 
 var command = args.Length == 0 ? "regenerate" : args[0];
+if (command == "spot-check-microqr")
+{
+    // Decodes SkiaSharp.QrCode-generated Micro QR symbols with zxing-cpp.
+    return MicroQrSpotCheck.Run();
+}
 if (command != "regenerate")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QrInteropFixtures -- regenerate");
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QrInteropFixtures -- [regenerate|spot-check-microqr]");
     return 1;
 }
 
