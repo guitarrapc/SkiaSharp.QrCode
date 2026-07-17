@@ -49,9 +49,11 @@ Structural approach: keep the Standard QR pipeline untouched (it is heavily perf
 
 ## Implementation Order
 
-Vertical slices per symbology: encoder first (releasable on its own), matrix decoder immediately after (validates the same tables independently and installs a round-trip regression net), image detection deferred to the end (hardest, riskiest, lowest initial value).
+Vertical slices per symbology: encoder first, matrix decoder immediately after (validates the same tables independently and installs a round-trip regression net), then image support (rendering + detection) to complete the symbology.
 
 Micro QR before rMQR: square and small (4 versions, single finder), best oracle coverage, and it flushes out the data-model and serialization changes with the smaller step. rMQR then starts from a validated foundation and only adds the rectangular concerns.
+
+Micro QR is completed END-TO-END (encode, render, matrix decode, image decode) before any rMQR phase starts: Micro QR ships as a stand-alone release — rMQR is not part of that release set, so nothing rMQR-shaped may gate it. Image detection within each symbology still comes last (hardest, riskiest), but Micro QR's no longer waits behind the rMQR encoder/decoder phases.
 
 ### Phase 0 — API and data model spec
 
@@ -86,35 +88,43 @@ Exit: test strategy §14 encoder MVT satisfied for Micro QR. Releasable.
 
 Exit: decoder MVT (matrix-level rows) satisfied; round-trip regression net in place.
 
-### Phase 4 — rMQR encoder
+### Phase 4 — Micro QR image support (rendering + image detection)
+
+Completes the Micro QR feature set so it can ship without waiting for rMQR. Two sub-parts, rendering first (smaller, and it is the release-blocking Image API):
+
+- 4a — Rendering integration (the Phase 2 deferral): the image-building surface (`QRCodeImageBuilder` / renderer / extension entry points) accepts `MicroQrCodeData`. Micro QR-correct defaults and restrictions per the Phase 2 lesson: 2-module quiet zone (not 4), no icon overlay / finder-styling options that assume three finder patterns or H-level masking headroom. Playground (WASM) gains Micro QR generation as the living demo; NativeAOT/WASM CI covers the path.
+- 4b — Image detection (moved up from the former Phase 6a): single-finder search strategy (different from three-finder Standard QR), sampling, `MicroQrCodeDecoder` image overloads mirroring the Standard QR image path. Clean + degraded PNG fixtures; deterministic degradation tests per test strategy §7, representative subset only. Decoder entry defaults keep Standard QR-only scanning at current performance; Micro QR scanning is opt-in or explicitly-typed.
+
+Exit: Micro QR is feature-complete (encode, render, matrix decode, image decode); decoder MVT image-level rows and degradation matrix green for Micro QR; Standard QR rendering/decoding benchmarks flat. **Micro QR releasable as a stand-alone release** (physical device acceptance per test strategy §11 runs for the Micro QR subset as release acceptance).
+
+### Phase 5 — rMQR encoder
 
 - Rectangular tables (32 sizes, ECC M/H), 18-bit format info, finder + sub-finder + edge timing placement, rectangular rendering, version auto-fit strategy (width-first / height-first preference exposed in API).
 - Matrix conformance against fixtures (all 32 sizes at least once; boundary payloads).
 
-Exit: encoder MVT satisfied for rMQR. Releasable.
+Exit: encoder MVT satisfied for rMQR.
 
-### Phase 5 — rMQR matrix decoder
+### Phase 6 — rMQR matrix decoder
 
 - As Phase 3, for rectangular matrices (width/height API).
 
 Exit: decoder MVT (matrix-level) satisfied for rMQR.
 
-### Phase 6 — Image detection and sampling
+### Phase 7 — rMQR image detection and sampling
 
-- 6a: Micro QR detection (single finder — different search strategy from three-finder Standard QR), sampling, clean + degraded PNG fixtures.
-- 6b: rMQR detection (finder + sub-finder, extreme aspect ratios), sampling.
+- rMQR detection (finder + sub-finder, extreme aspect ratios), sampling; rectangular rendering integration in the image-building surface if not already landed with Phase 5.
 - Deterministic degradation tests per test strategy §7, representative subset only.
-- Decoder entry defaults keep Standard QR-only scanning at current performance; new symbologies are opt-in or explicitly-typed.
+- Decoder entry defaults keep Standard QR-only scanning at current performance; rMQR is opt-in or explicitly-typed.
 
-Exit: decoder MVT image-level rows satisfied; degradation matrix green.
+Exit: decoder MVT image-level rows satisfied; degradation matrix green for rMQR.
 
-### Phase 7 — Interop CI (parallel track, starts after Phase 2)
+### Phase 8 — Interop CI (parallel track, starts after Phase 2)
 
 - Scheduled/manual workflow: pinned zxing-cpp + encoders, live round-trips both directions, committed-fixture drift detection.
 
-### Phase 8 — Physical device acceptance
+### Phase 9 — Physical device acceptance
 
-- Per test strategy §11, as release acceptance for the combined feature set.
+- Per test strategy §11, run per release: the Micro QR subset gates the Micro QR stand-alone release (Phase 4 exit); the rMQR / combined set gates the rMQR release (after Phase 7).
 
 ## Cross-cutting
 
@@ -128,7 +138,7 @@ Exit: decoder MVT image-level rows satisfied; degradation matrix green.
   assembly.
 - Test-first development applies to every phase (project rule).
 - Each phase updates the relevant `specs/` docs with lessons learned (project rule).
-- Playground (WASM) gains Micro QR / rMQR generation after Phase 2/4 as the living demo; NativeAOT/WASM CI must cover the new paths.
+- Playground (WASM) gains Micro QR generation in Phase 4a and rMQR generation after Phase 5 as the living demo; NativeAOT/WASM CI must cover the new paths.
 - Benchmarks: new symbology paths get end-to-end benchmarks; Standard QR benchmarks guard against regression at every phase.
 - Progress logging (mandatory): when a phase completes, append an entry to the Progress log below recording what was done, lessons learned, and benchmark deltas — or an explicit statement of why benchmarks are not applicable (e.g. no `src/` change).
 
@@ -185,7 +195,7 @@ Exit: decoder MVT image-level rows satisfied; degradation matrix green.
 
 **Deferred within Phase 2**
 
-- Rendering integration (`QRCodeImageBuilder` accepting Micro QR): not started; consumers use the module matrix directly. Scheduled as its own follow-up.
+- Rendering integration (`QRCodeImageBuilder` accepting Micro QR): not started; consumers use the module matrix directly. Now scheduled as Phase 4a.
 
 **Lessons learned**
 

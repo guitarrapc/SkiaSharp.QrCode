@@ -18,7 +18,7 @@ Micro QR has a single Reed-Solomon block and no codeword interleaving; the inter
 Matrix ──> Version from size ──> Format info ──> Unmask + extract ──> RS correction ──> Bitstream ──> Text
 ```
 
-Same internal boundary as the Standard QR `QRMatrixDecoder`; image detection is implementation plan Phase 6. Public entry: [MicroQrCodeDecoder](../../../src/SkiaSharp.QrCode/MicroQrCodeDecoder.cs) (`MicroQrCodeData` / module-matrix / zero-allocation span overloads, uniform quiet-zone stripping), diagnostics in [MicroQrCodeDecodeInfo](../../../src/SkiaSharp.QrCode/MicroQrCodeDecodeInfo.cs).
+Same internal boundary as the Standard QR `QRMatrixDecoder`; image detection is implementation plan Phase 4b. Public entry: [MicroQrCodeDecoder](../../../src/SkiaSharp.QrCode/MicroQrCodeDecoder.cs) (`MicroQrCodeData` / module-matrix / zero-allocation span overloads, uniform quiet-zone stripping), diagnostics in [MicroQrCodeDecodeInfo](../../../src/SkiaSharp.QrCode/MicroQrCodeDecodeInfo.cs).
 
 | Spec reference | Topic | Implementation |
 |---|---|---|

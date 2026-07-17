@@ -53,7 +53,7 @@ Every version × legal ECC combination (M1 detection-only, M2/M3 L+M, M4 L+M+Q),
 
 ### Consuming tests
 
-`StandardQrFixtureTest` decodes every fixture twice — matrix path (`TryDecode(modules, size, …)`) and image path (`TryDecode(SKBitmap, …)`) — asserting payload, version, ECC level, and (matrix path) the generator's mask pattern. `MicroQrFixtureTest` exercises the matrix path only (Micro QR image detection is implementation plan Phase 6; the committed PNGs await it) and additionally asserts zero corrected errors and the reader-sourced mask pattern.
+`StandardQrFixtureTest` decodes every fixture twice — matrix path (`TryDecode(modules, size, …)`) and image path (`TryDecode(SKBitmap, …)`) — asserting payload, version, ECC level, and (matrix path) the generator's mask pattern. `MicroQrFixtureTest` exercises the matrix path only (Micro QR image detection is implementation plan Phase 4b; the committed PNGs await it) and additionally asserts zero corrected errors and the reader-sourced mask pattern.
 
 ### Regeneration
 
