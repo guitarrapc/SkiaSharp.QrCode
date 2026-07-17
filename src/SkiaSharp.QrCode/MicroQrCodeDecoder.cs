@@ -1,0 +1,243 @@
+using System.Buffers;
+using SkiaSharp.QrCode.Internals.MicroQr;
+
+namespace SkiaSharp.QrCode;
+
+/// <summary>
+/// Micro QR code decoder based on ISO/IEC 18004.
+/// Decodes Micro QR module matrices back into text, including Reed-Solomon error correction.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Supported content: Numeric, Alphanumeric and Byte mode segments (ISO-8859-1 and
+/// UTF-8), all versions M1-M4 and all legal ECC levels. Kanji mode is detected and
+/// reported as <see cref="QRCodeDecodeStatus.UnsupportedContent"/>. Micro QR has no
+/// ECI mode; byte segments use UTF-8 when the payload validates as UTF-8 and
+/// ISO-8859-1 otherwise (matching this library's encoder).
+/// </para>
+/// <para>
+/// Image detection is not part of this decoder (implementation plan Phase 6);
+/// inputs are module matrices — either <see cref="MicroQrCodeData"/> or byte-per-module
+/// buffers as produced by <see cref="MicroQrCodeGenerator"/>. A uniform light quiet
+/// zone border is detected and skipped automatically.
+/// </para>
+/// </remarks>
+public static class MicroQrCodeDecoder
+{
+    /// <summary>
+    /// Decodes the text content from Micro QR code data.
+    /// </summary>
+    /// <param name="data">The Micro QR code data to decode.</param>
+    /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
+    /// <returns>True when decoding succeeded.</returns>
+    /// <exception cref="ArgumentNullException"></exception>
+    public static bool TryDecode(MicroQrCodeData data, out string text)
+        => TryDecode(data, out text, out _);
+
+    /// <summary>
+    /// Decodes the text content from Micro QR code data, with diagnostic information.
+    /// </summary>
+    /// <param name="data">The Micro QR code data to decode.</param>
+    /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
+    /// <param name="info">Diagnostic information (status, version, ECC level, mask pattern, corrected errors).</param>
+    /// <returns>True when decoding succeeded.</returns>
+    /// <exception cref="ArgumentNullException"></exception>
+    public static bool TryDecode(MicroQrCodeData data, out string text, out MicroQrCodeDecodeInfo info)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+
+        var size = data.GetCoreSize();
+        var rented = ArrayPool<byte>.Shared.Rent(size * size);
+        try
+        {
+            var modules = rented.AsSpan(0, size * size);
+            data.GetCoreData(modules);
+            return TryDecodeCore(modules, size, out text, out info);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// Decodes the text content from a module matrix.
+    /// </summary>
+    /// <param name="modules">
+    /// Module matrix, one byte per module (0 = light, non-zero = dark), flat row-major
+    /// order — the format produced by <see cref="MicroQrCodeGenerator.CreateMicroQrCode(ReadOnlySpan{char}, MicroQrEccLevel, Span{byte}, MicroQrVersion?, int)"/>.
+    /// A uniform light quiet zone border is detected and skipped automatically.
+    /// </param>
+    /// <param name="size">Matrix size in modules per side (including quiet zone if present).</param>
+    /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
+    /// <param name="info">Diagnostic information (status, version, ECC level, mask pattern, corrected errors).</param>
+    /// <returns>True when decoding succeeded.</returns>
+    /// <exception cref="ArgumentException"></exception>
+    public static bool TryDecode(ReadOnlySpan<byte> modules, int size, out string text, out MicroQrCodeDecodeInfo info)
+    {
+        // long arithmetic: size is caller-controlled and size² overflows int at 46341
+        if (size < 1 || modules.Length < (long)size * size)
+            throw new ArgumentException($"Module buffer too small: required {(long)size * size}, got {modules.Length}", nameof(modules));
+
+        if (!TryLocateCore(modules, size, out var origin, out var coreSize))
+        {
+            text = string.Empty;
+            info = new MicroQrCodeDecodeInfo(QRCodeDecodeStatus.InvalidMatrix, 0, default, -1, 0);
+            return false;
+        }
+
+        if (origin == 0 && coreSize == size)
+            return TryDecodeCore(modules.Slice(0, size * size), coreSize, out text, out info);
+
+        var rented = ArrayPool<byte>.Shared.Rent(coreSize * coreSize);
+        try
+        {
+            var core = rented.AsSpan(0, coreSize * coreSize);
+            CopyCoreWindow(modules, size, origin, coreSize, core);
+            return TryDecodeCore(core, coreSize, out text, out info);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// Decodes the text content from a module matrix into a caller-provided buffer
+    /// without heap allocation.
+    /// </summary>
+    /// <param name="modules">
+    /// Module matrix, one byte per module (0 = light, non-zero = dark), flat row-major order.
+    /// A uniform light quiet zone border is detected and skipped automatically.
+    /// </param>
+    /// <param name="size">Matrix size in modules per side (including quiet zone if present).</param>
+    /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
+    /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
+    /// <param name="info">Diagnostic information (status, version, ECC level, mask pattern, corrected errors).</param>
+    /// <returns>True when decoding succeeded.</returns>
+    /// <exception cref="ArgumentException"></exception>
+    public static bool TryDecode(ReadOnlySpan<byte> modules, int size, Span<char> destination, out int charsWritten, out MicroQrCodeDecodeInfo info)
+    {
+        // long arithmetic: size is caller-controlled and size² overflows int at 46341
+        if (size < 1 || modules.Length < (long)size * size)
+            throw new ArgumentException($"Module buffer too small: required {(long)size * size}, got {modules.Length}", nameof(modules));
+
+        if (!TryLocateCore(modules, size, out var origin, out var coreSize))
+        {
+            charsWritten = 0;
+            info = new MicroQrCodeDecodeInfo(QRCodeDecodeStatus.InvalidMatrix, 0, default, -1, 0);
+            return false;
+        }
+
+        if (origin == 0 && coreSize == size)
+            return MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), coreSize, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
+
+        // Micro QR cores are at most 17×17 = 289 modules — small enough for the stack.
+        Span<byte> core = stackalloc byte[17 * 17].Slice(0, coreSize * coreSize);
+        CopyCoreWindow(modules, size, origin, coreSize, core);
+        return MicroQrMatrixDecoder.DecodeMatrix(core, coreSize, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
+    }
+
+    /// <summary>
+    /// Calculates the maximum possible decoded character count for a Micro QR version,
+    /// across all ECC levels and encoding modes. Use to size the destination buffer
+    /// for the allocation-free <see cref="TryDecode(ReadOnlySpan{byte}, int, Span{char}, out int, out MicroQrCodeDecodeInfo)"/> overload.
+    /// </summary>
+    /// <param name="version">Micro QR version (M1-M4).</param>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public static int GetMaxDecodedLength(MicroQrVersion version)
+    {
+        if ((uint)((int)version - 1) > 3)
+            throw new ArgumentOutOfRangeException(nameof(version), $"Invalid Micro QR version: {version}");
+
+        return MicroQrMatrixDecoder.GetMaxCharCount(version);
+    }
+
+    private static bool TryDecodeCore(ReadOnlySpan<byte> core, int coreSize, out string text, out MicroQrCodeDecodeInfo info)
+    {
+        char[]? rentedChars = null;
+        try
+        {
+            var version = MicroQrConstants.VersionFromSize(coreSize);
+            var maxChars = version == 0 ? 0 : MicroQrMatrixDecoder.GetMaxCharCount(version);
+
+            Span<char> chars = maxChars == 0
+                ? default
+                : (rentedChars = ArrayPool<char>.Shared.Rent(maxChars)).AsSpan(0, maxChars);
+
+            var status = MicroQrMatrixDecoder.DecodeMatrix(core, coreSize, chars, out var charsWritten, out info);
+            text = status == QRCodeDecodeStatus.Success ? chars.Slice(0, charsWritten).ToString() : string.Empty;
+            return status == QRCodeDecodeStatus.Success;
+        }
+        finally
+        {
+            if (rentedChars is not null)
+                ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// Locates the core matrix inside an input that may carry a light quiet zone
+    /// border. Micro QR has a single finder pattern, so unlike Standard QR the
+    /// right/bottom edges carry data and are not guaranteed dark — the dark
+    /// bounding box cannot size the core. Instead the top-left dark module is the
+    /// finder corner (core origin); a uniform border implies
+    /// <c>coreSize = size − 2·origin</c>.
+    /// </summary>
+    private static bool TryLocateCore(ReadOnlySpan<byte> modules, int size, out int origin, out int coreSize)
+    {
+        origin = -1;
+        coreSize = 0;
+
+        // First row containing a dark module, and the minimum dark column.
+        // Until the first dark module is found, left == size, so the full row is
+        // scanned; afterwards only columns left of the current minimum matter.
+        var top = -1;
+        var left = size;
+        for (var y = 0; y < size; y++)
+        {
+            var row = modules.Slice(y * size, size);
+            for (var x = 0; x < left; x++)
+            {
+                if (row[x] != 0)
+                {
+                    if (top < 0)
+                        top = y;
+                    left = x;
+                    break;
+                }
+            }
+            if (left == 0 && top >= 0)
+                break; // origin cannot get smaller
+        }
+
+        if (top < 0)
+            return false; // all light
+
+        // Core row 0 / column 0 are timing patterns starting dark at the finder
+        // corner, so the first dark row and column meet at the core origin.
+        if (top != left)
+            return false;
+
+        var candidate = size - 2 * top;
+        if (MicroQrConstants.VersionFromSize(candidate) == 0)
+            return false;
+
+        origin = top;
+        coreSize = candidate;
+        return true;
+    }
+
+    /// <summary>
+    /// Copies the core window (rows are not contiguous inside the bordered input)
+    /// into a contiguous buffer the matrix decoder can walk.
+    /// </summary>
+    private static void CopyCoreWindow(ReadOnlySpan<byte> modules, int size, int origin, int coreSize, Span<byte> destination)
+    {
+        for (var y = 0; y < coreSize; y++)
+        {
+            modules.Slice((origin + y) * size + origin, coreSize).CopyTo(destination.Slice(y * coreSize, coreSize));
+        }
+    }
+}

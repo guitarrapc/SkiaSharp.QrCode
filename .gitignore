@@ -403,3 +403,6 @@ FodyWeavers.xsd
 # custom
 output/
 .references/
+
+# External oracle binaries for fixture generation (pinned; fetch with tools/QrInteropFixtures/get-qrtool.ps1)
+tools/QrInteropFixtures/external/

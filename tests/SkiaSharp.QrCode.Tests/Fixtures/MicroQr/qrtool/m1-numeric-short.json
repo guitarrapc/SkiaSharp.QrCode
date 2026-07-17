@@ -1,0 +1,17 @@
+{
+  "id": "m1-numeric-short",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "MicroQR",
+  "version": 1,
+  "width": 11,
+  "height": 11,
+  "errorCorrectionLevel": "ErrorDetectionOnly",
+  "mode": "Numeric",
+  "maskPattern": 0,
+  "payloadText": "1",
+  "payloadUtf8Hex": "31",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

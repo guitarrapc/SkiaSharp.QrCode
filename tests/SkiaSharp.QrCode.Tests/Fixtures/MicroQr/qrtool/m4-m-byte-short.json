@@ -1,0 +1,17 @@
+{
+  "id": "m4-m-byte-short",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "MicroQR",
+  "version": 4,
+  "width": 17,
+  "height": 17,
+  "errorCorrectionLevel": "M",
+  "mode": "Byte",
+  "maskPattern": 0,
+  "payloadText": "m4 pads",
+  "payloadUtf8Hex": "6D342070616473",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

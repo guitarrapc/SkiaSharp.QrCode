@@ -182,6 +182,22 @@ public class MicroQrCodeData
     }
 
     /// <summary>
+    /// Unpacks the core matrix into a byte-per-module buffer (0 = light, 1 = dark),
+    /// the format consumed by <see cref="MicroQrCodeDecoder"/>.
+    /// </summary>
+    internal void GetCoreData(Span<byte> destination)
+    {
+        var totalModules = _baseSize * _baseSize;
+        if (destination.Length < totalModules)
+            throw new ArgumentException($"Destination span too small: required {totalModules} bytes, got {destination.Length}", nameof(destination));
+
+        for (var m = 0; m < totalModules; m++)
+        {
+            destination[m] = (byte)((_bits[m >> 3] >> (7 - (m & 7))) & 1);
+        }
+    }
+
+    /// <summary>
     /// Packs a byte-per-module core matrix (0 = light, non-zero = dark) into the
     /// internal bit representation.
     /// </summary>

@@ -48,12 +48,12 @@ SkiaSharp.QrCode is a modern, high-performance QR code generation library built 
 
 ## Supported Symbologies
 
-SkiaSharp.QrCode implements the Standard QR Code symbology and Micro QR generation. Unless a section says otherwise, this README — generation, decoding, styling, and the specification tables — refers to Standard QR; Micro QR generation is available via `MicroQrCodeGenerator`.
+SkiaSharp.QrCode implements the Standard QR Code symbology and Micro QR generation/decoding. Unless a section says otherwise, this README — generation, decoding, styling, and the specification tables — refers to Standard QR; Micro QR is available via `MicroQrCodeGenerator` / `MicroQrCodeDecoder`.
 
 | Symbology | Standard | Generate (Encode) | Decode |
 |---|---|---|---|
 | Standard QR (versions 1–40) | ISO/IEC 18004 | ✅ | ✅ |
-| Micro QR (M1–M4) | ISO/IEC 18004 | ✅ | NO |
+| Micro QR (M1–M4) | ISO/IEC 18004 | ✅ | ✅ (matrix; image detection planned) |
 | rMQR (R7x43–R17x139) | ISO/IEC 23941 | NO | NO |
 
 See the [FAQ](#does-it-support-micro-qr-or-rmqr) for the Micro QR / rMQR status.
@@ -267,6 +267,16 @@ if (QRCodeDecoder.TryDecode(moduleSpan, size, destination, out var written, out 
 
 On failure, `QRCodeDecodeInfo.Status` explains why (`NotDetected`, `FormatInformationInvalid`, `DataUncorrectable`, `UnsupportedContent`, ...). Supported content: Numeric / Alphanumeric / Byte modes, ISO-8859-1 and UTF-8 (with or without ECI), versions 1-40, all ECC levels. Kanji mode, FNC1 and Structured Append are detected and reported as unsupported rather than misdecoded.
 
+Micro QR symbols have their own decoder with the same shape (`MicroQrCodeData` / matrix / zero-allocation span overloads) at the matrix level:
+
+```csharp
+var micro = MicroQrCodeGenerator.CreateMicroQrCode("01234567", MicroQrEccLevel.L);
+if (MicroQrCodeDecoder.TryDecode(micro, out var text, out var info))
+{
+    Console.WriteLine($"{text} ({info.Version}, ECC {info.EccLevel})"); // 01234567 (M2, ECC L)
+}
+```
+
 ## Platform-Specific Considerations
 
 ### Linux Support
@@ -419,14 +429,18 @@ Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see 
 
 ### Does it support Micro QR or rMQR?
 
-Micro QR generation is supported (M1–M4, Numeric/Alphanumeric/Byte, all legal ECC levels):
+Micro QR generation and matrix decoding are supported (M1–M4, Numeric/Alphanumeric/Byte, all legal ECC levels):
 
 ```csharp
 // Auto-selects the smallest version that fits (here: M2-L, 13x13 modules)
 var data = MicroQrCodeGenerator.CreateMicroQrCode("01234567", MicroQrEccLevel.L);
+
+// Decode it back (module matrix; ISO Table 9 error correction included)
+var ok = MicroQrCodeDecoder.TryDecode(data, out var text, out var info);
+// ok == true, text == "01234567", info.Version == MicroQrVersion.M2
 ```
 
-Version constraints are enforced rather than silently degraded (M1: numeric + error detection only; ECC Q: M4 only; no ECI; Kanji not implemented). Micro QR decoding, rendering via `QRCodeImageBuilder`, and rMQR (ISO/IEC 23941) are not supported yet — `QRCodeDecoder` reports such symbols as not detected rather than misreading them.
+Version constraints are enforced rather than silently degraded (M1: numeric + error detection only; ECC Q: M4 only; no ECI; Kanji not implemented). Decoding follows the spec's misdecode protection: error correction is capped at ISO/IEC 18004 Table 9 capacity per version/ECC, and M1 symbols are error-detection only. Micro QR image detection (scanning a photo/bitmap), rendering via `QRCodeImageBuilder`, and rMQR (ISO/IEC 23941) are not supported yet — `QRCodeDecoder` reports such symbols as not detected rather than misreading them, and the symbology-specific decoders reject each other's matrices.
 
 ### What QR code style provides the best scan reliability?
 

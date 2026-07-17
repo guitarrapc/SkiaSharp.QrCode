@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace SkiaSharp.QrCode.Internals.MicroQr;
@@ -54,6 +55,18 @@ internal static class MicroQrConstants
         0, 8, 10, 14,
     ];
 
+    // Error correction capacity t in codewords (ISO/IEC 18004 Table 9): the ECC
+    // codeword count includes p misdecode-protection codewords (2t + p = ecc;
+    // M1 p=2, M2-L p=3, M2-M/M3-L/M4-L p=2, others p=0), so a decoder must not
+    // correct more than t errors even where the Reed-Solomon code itself could.
+    private static ReadOnlySpan<byte> errorCorrectionCapacities =>
+    [
+        0, 0, 0, 0,
+        0, 1, 2, 0,
+        0, 2, 4, 0,
+        0, 3, 5, 7,
+    ];
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int TableIndex(MicroQrVersion version, MicroQrEccLevel eccLevel)
         => ((int)version - 1) * 4 + (int)eccLevel;
@@ -77,6 +90,35 @@ internal static class MicroQrConstants
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetEccCodewordCount(MicroQrVersion version, MicroQrEccLevel eccLevel)
         => eccCodewordCounts[TableIndex(version, eccLevel)];
+
+    /// <summary>
+    /// Maximum number of codeword errors a decoder may correct (ISO/IEC 18004
+    /// Table 9); 0 for M1 (error detection only).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetErrorCorrectionCapacity(MicroQrVersion version, MicroQrEccLevel eccLevel)
+        => errorCorrectionCapacities[TableIndex(version, eccLevel)];
+
+    /// <summary>
+    /// Inverse of <see cref="GetSymbolNumber"/>: maps the 3-bit format information
+    /// symbol number (0-7) back to its version/ECC combination.
+    /// </summary>
+    public static void GetVersionAndEccFromSymbolNumber(int symbolNumber, out MicroQrVersion version, out MicroQrEccLevel eccLevel)
+    {
+        Debug.Assert(symbolNumber is >= 0 and <= 7, "symbol number is a 3-bit field");
+        // Symbol numbers enumerate the 8 valid combinations in version-major order.
+        (version, eccLevel) = symbolNumber switch
+        {
+            0 => (MicroQrVersion.M1, MicroQrEccLevel.ErrorDetectionOnly),
+            1 => (MicroQrVersion.M2, MicroQrEccLevel.L),
+            2 => (MicroQrVersion.M2, MicroQrEccLevel.M),
+            3 => (MicroQrVersion.M3, MicroQrEccLevel.L),
+            4 => (MicroQrVersion.M3, MicroQrEccLevel.M),
+            5 => (MicroQrVersion.M4, MicroQrEccLevel.L),
+            6 => (MicroQrVersion.M4, MicroQrEccLevel.M),
+            _ => (MicroQrVersion.M4, MicroQrEccLevel.Q),
+        };
+    }
 
     /// <summary>Symbol side length in modules: 11/13/15/17 for M1-M4.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

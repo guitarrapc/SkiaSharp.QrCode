@@ -1,0 +1,17 @@
+{
+  "id": "m4-l-numeric-max",
+  "generator": "zint-libzint",
+  "generatorVersion": "ZXingCpp 0.5.2 bundled libzint",
+  "symbolType": "MicroQR",
+  "version": 4,
+  "width": 17,
+  "height": 17,
+  "errorCorrectionLevel": "L",
+  "mode": "Numeric",
+  "maskPattern": 0,
+  "payloadText": "99999999999999999999999999999999999",
+  "payloadUtf8Hex": "3939393939393939393939393939393939393939393939393939393939393939393939",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

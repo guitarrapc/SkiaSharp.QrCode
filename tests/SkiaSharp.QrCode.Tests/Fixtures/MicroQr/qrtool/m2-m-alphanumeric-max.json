@@ -1,0 +1,17 @@
+{
+  "id": "m2-m-alphanumeric-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "MicroQR",
+  "version": 2,
+  "width": 13,
+  "height": 13,
+  "errorCorrectionLevel": "M",
+  "mode": "Alphanumeric",
+  "maskPattern": 3,
+  "payloadText": "HELLO",
+  "payloadUtf8Hex": "48454C4C4F",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

@@ -1,0 +1,17 @@
+{
+  "id": "m1-numeric-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "MicroQR",
+  "version": 1,
+  "width": 11,
+  "height": 11,
+  "errorCorrectionLevel": "ErrorDetectionOnly",
+  "mode": "Numeric",
+  "maskPattern": 2,
+  "payloadText": "12345",
+  "payloadUtf8Hex": "3132333435",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

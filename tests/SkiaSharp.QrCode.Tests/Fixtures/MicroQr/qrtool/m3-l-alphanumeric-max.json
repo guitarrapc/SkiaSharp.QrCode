@@ -1,0 +1,17 @@
+{
+  "id": "m3-l-alphanumeric-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "MicroQR",
+  "version": 3,
+  "width": 15,
+  "height": 15,
+  "errorCorrectionLevel": "L",
+  "mode": "Alphanumeric",
+  "maskPattern": 0,
+  "payloadText": "HELLO WORLD 14",
+  "payloadUtf8Hex": "48454C4C4F20574F524C44203134",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

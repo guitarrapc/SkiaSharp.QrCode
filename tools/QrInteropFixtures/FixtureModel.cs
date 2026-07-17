@@ -49,6 +49,7 @@ public interface IFixtureGenerator
 public static class FixtureWriter
 {
     public const int QuietZoneModules = 4;
+    public const int MicroQrQuietZoneModules = 2; // ISO/IEC 18004: Micro QR quiet zone is 2 modules
     public const int PixelsPerModule = 8;
 
     private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
@@ -59,7 +60,7 @@ public static class FixtureWriter
 
         File.WriteAllText(basePath + ".json", JsonSerializer.Serialize(fixture.Manifest, jsonOptions) + "\n");
         File.WriteAllText(basePath + ".matrix.txt", RenderMatrixText(fixture));
-        File.WriteAllBytes(basePath + ".png", PngRenderer.Render(fixture.Modules, fixture.Manifest.Width, QuietZoneModules, PixelsPerModule));
+        File.WriteAllBytes(basePath + ".png", PngRenderer.Render(fixture.Modules, fixture.Manifest.Width, fixture.Manifest.QuietZoneModules, fixture.Manifest.PixelsPerModule));
     }
 
     private static string RenderMatrixText(GeneratedFixture fixture)
