@@ -25,7 +25,7 @@ Micro QR has a single Reed-Solomon block and no codeword interleaving; the inter
 | Table 2 | Terminator (3/5/7/9 zero bits, shortened at capacity) and pad codewords (0xEC/0x11, final 4-bit pad = 0000) | [MicroQrBinaryEncoder.EncodeDataCodewords](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrBinaryEncoder.cs) |
 | — | Mode availability per version (M1: Numeric; M2: +Alphanumeric; M3/M4: +Byte; Kanji not implemented) | [MicroQrConstants.IsModeSupported](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrConstants.cs) |
 
-Reference tests: [MicroQrBinaryEncoderUnitTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrBinaryEncoderUnitTest.cs) (M1 golden vectors, the ISO "01234567" M2-L example, naive bit-string references for alphanumeric/byte/half-codeword padding).
+Reference tests: [MicroQrBinaryEncoderUnitTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrBinaryEncoderUnitTest.cs) (M1 golden vectors, the ISO "01234567" M2-L example, naive bit-string references for alphanumeric/byte/half-codeword padding), [MicroQrBinaryEncoderParityTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrBinaryEncoderParityTest.cs) (optimized encoder vs an independent naive reference across all 8 version/ECC combinations, every supported mode and length, full Latin-1 range, and UTF-8 fallbacks including surrogate-pair / lone-surrogate handling).
 
 ## Capacity and Symbol Tables
 
