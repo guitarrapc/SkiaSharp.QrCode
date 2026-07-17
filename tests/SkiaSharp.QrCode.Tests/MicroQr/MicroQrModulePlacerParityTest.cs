@@ -119,6 +119,107 @@ public class MicroQrModulePlacerParityTest
         await Assert.That(actual).IsEquivalentTo(expected);
     }
 
+    /// <summary>
+    /// The BMI2+AVX2 kernel (PEXT/PDEP placement permutation, AVX2 32-module
+    /// unpack) must match the reference on machines that support it.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(AllCombinationsAndSeeds))]
+    public async Task PlaceSymbolBmi2_MatchesNaiveReference(MicroQrVersion version, MicroQrEccLevel ecc, int seed)
+    {
+#if NET8_0_OR_GREATER
+        if (!System.Runtime.Intrinsics.X86.Bmi2.X64.IsSupported || !System.Runtime.Intrinsics.X86.Avx2.IsSupported)
+        {
+            Skip.Test("BMI2/AVX2 not supported on this machine.");
+            return;
+        }
+
+        var size = MicroQrConstants.SizeFromVersion(version);
+        var dataCount = MicroQrConstants.GetDataCodewordCount(version, ecc);
+        var eccCount = MicroQrConstants.GetEccCodewordCount(version, ecc);
+        var dataBitCount = MicroQrConstants.GetDataBitCapacity(version, ecc);
+
+        var data = new byte[dataCount];
+        var eccBytes = new byte[eccCount];
+        switch (seed)
+        {
+            case -1:
+                break;
+            case -2:
+                Array.Fill(data, (byte)0xFF);
+                Array.Fill(eccBytes, (byte)0xFF);
+                break;
+            default:
+                new Random(seed).NextBytes(data);
+                new Random(seed + 100).NextBytes(eccBytes);
+                break;
+        }
+
+        var expected = new byte[size * size];
+        var expectedMask = ReferencePlace(expected, size, data, eccBytes, dataBitCount, version, ecc);
+
+        var actual = new byte[size * size];
+        var actualMask = MicroQrModulePlacer.PlaceSymbolBmi2(actual, size, data, eccBytes, dataBitCount, version, ecc);
+
+        await Assert.That(actualMask).IsEqualTo(expectedMask);
+        await Assert.That(actual).IsEquivalentTo(expected);
+#else
+        Skip.Test("BMI2 kernel requires net8.0+.");
+        await Task.CompletedTask;
+#endif
+    }
+
+    /// <summary>
+    /// The SSSE3 mid-tier kernel (taken at runtime when BMI2/AVX2 are absent
+    /// but SSSE3 is present) must stay covered on machines whose PlaceSymbol
+    /// dispatch prefers the BMI2 kernel.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(AllCombinationsAndSeeds))]
+    public async Task PlaceSymbolSsse3_MatchesNaiveReference(MicroQrVersion version, MicroQrEccLevel ecc, int seed)
+    {
+#if NET8_0_OR_GREATER
+        if (!System.Runtime.Intrinsics.X86.Ssse3.IsSupported)
+        {
+            Skip.Test("SSSE3 not supported on this machine.");
+            return;
+        }
+
+        var size = MicroQrConstants.SizeFromVersion(version);
+        var dataCount = MicroQrConstants.GetDataCodewordCount(version, ecc);
+        var eccCount = MicroQrConstants.GetEccCodewordCount(version, ecc);
+        var dataBitCount = MicroQrConstants.GetDataBitCapacity(version, ecc);
+
+        var data = new byte[dataCount];
+        var eccBytes = new byte[eccCount];
+        switch (seed)
+        {
+            case -1:
+                break;
+            case -2:
+                Array.Fill(data, (byte)0xFF);
+                Array.Fill(eccBytes, (byte)0xFF);
+                break;
+            default:
+                new Random(seed).NextBytes(data);
+                new Random(seed + 100).NextBytes(eccBytes);
+                break;
+        }
+
+        var expected = new byte[size * size];
+        var expectedMask = ReferencePlace(expected, size, data, eccBytes, dataBitCount, version, ecc);
+
+        var actual = new byte[size * size];
+        var actualMask = MicroQrModulePlacer.PlaceSymbolSsse3(actual, size, data, eccBytes, dataBitCount, version, ecc);
+
+        await Assert.That(actualMask).IsEqualTo(expectedMask);
+        await Assert.That(actual).IsEquivalentTo(expected);
+#else
+        Skip.Test("SSSE3 kernel requires net8.0+.");
+        await Task.CompletedTask;
+#endif
+    }
+
     [Test]
     public async Task PlaceSymbol_InvalidSize_Throws()
     {
