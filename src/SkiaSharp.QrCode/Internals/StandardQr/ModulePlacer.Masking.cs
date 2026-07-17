@@ -51,6 +51,14 @@ internal static partial class ModulePlacer
         {
             return MaskCodeSimd(buffer, size, version, blockedMask, eccLevel);
         }
+        // ARM64 NEON port of the same tiers (Vector128 lane-per-row scorer),
+        // see ModulePlacer.Masking.Simd.Arm.cs. Measured 2.4-3x (versions 1-11)
+        // and 1.15-1.2x (12-40) over the scalar paths below on Apple M2
+        // (MaskCodeArm findings log).
+        if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+        {
+            return MaskCodeAdvSimd(buffer, size, version, blockedMask, eccLevel);
+        }
 #endif
         // Versions 1-11 (size <= 61) fit a whole row in one ulong.
         return size <= 64
