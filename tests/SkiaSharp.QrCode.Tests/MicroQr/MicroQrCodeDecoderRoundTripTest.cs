@@ -67,16 +67,56 @@ public class MicroQrCodeDecoderRoundTripTest
     [MethodDataSource(nameof(RoundTripCases))]
     public async Task RoundTrip_SpanDestination_MatchesStringOverload(string text, MicroQrEccLevel ecc, MicroQrVersion version)
     {
-        var calculated = MicroQrCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, quietZoneSize: 0);
-        var modules = new byte[calculated.BufferSize];
-        MicroQrCodeGenerator.CreateMicroQrCode(text.AsSpan(), ecc, modules, quietZoneSize: 0);
+        // Quiet zone 0 exercises the in-place fast path, 2 the core-copy branch.
+        foreach (var quietZone in (int[])[0, 2])
+        {
+            var calculated = MicroQrCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, quietZoneSize: quietZone);
+            var modules = new byte[calculated.BufferSize];
+            MicroQrCodeGenerator.CreateMicroQrCode(text.AsSpan(), ecc, modules, quietZoneSize: quietZone);
 
-        var destination = new char[MicroQrCodeDecoder.GetMaxDecodedLength(version)];
-        var success = MicroQrCodeDecoder.TryDecode(modules, calculated.QrSize, destination, out var charsWritten, out var info);
+            var destination = new char[MicroQrCodeDecoder.GetMaxDecodedLength(version)];
+            var success = MicroQrCodeDecoder.TryDecode(modules, calculated.QrSize, destination, out var charsWritten, out var info);
 
-        await Assert.That(success).IsTrue();
-        await Assert.That(new string(destination, 0, charsWritten)).IsEqualTo(text);
-        await Assert.That(info.Version).IsEqualTo(version);
+            await Assert.That(success).IsTrue();
+            await Assert.That(new string(destination, 0, charsWritten)).IsEqualTo(text);
+            await Assert.That(info.Version).IsEqualTo(version);
+        }
+    }
+
+    [Test]
+    public async Task TryDecode_AsymmetricBorder_ReportsInvalidMatrix()
+    {
+        // A valid M1 core placed at row 1, column 0 of a 13×13 buffer: the first
+        // dark row (1) and the minimum dark column (0) disagree, so this is not a
+        // uniform quiet zone and must be rejected rather than misread.
+        var calculated = MicroQrCodeGenerator.GetRequiredBufferSize("12345".AsSpan(), MicroQrEccLevel.ErrorDetectionOnly, quietZoneSize: 0);
+        var core = new byte[calculated.BufferSize];
+        MicroQrCodeGenerator.CreateMicroQrCode("12345".AsSpan(), MicroQrEccLevel.ErrorDetectionOnly, core, quietZoneSize: 0);
+
+        const int size = 13;
+        var modules = new byte[size * size];
+        for (var row = 0; row < calculated.QrSize; row++)
+        {
+            core.AsSpan(row * calculated.QrSize, calculated.QrSize).CopyTo(modules.AsSpan((row + 1) * size));
+        }
+
+        var success = MicroQrCodeDecoder.TryDecode(modules, size, out _, out var info);
+
+        await Assert.That(success).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.InvalidMatrix);
+    }
+
+    [Test]
+    public async Task TryDecode_NullData_Throws()
+    {
+        await Assert.That(() => MicroQrCodeDecoder.TryDecode((MicroQrCodeData)null!, out _)).Throws<ArgumentNullException>();
+    }
+
+    [Test]
+    public async Task GetMaxDecodedLength_InvalidVersion_Throws()
+    {
+        await Assert.That(() => MicroQrCodeDecoder.GetMaxDecodedLength((MicroQrVersion)0)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => MicroQrCodeDecoder.GetMaxDecodedLength((MicroQrVersion)5)).Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]

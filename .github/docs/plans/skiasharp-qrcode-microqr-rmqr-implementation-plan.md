@@ -387,7 +387,7 @@ Allocations unchanged (Span paths 0 B). StandardQr control stable across runs.
   (decode + version/ECC cross-check) before being written; the gate's reader supplies
   the manifest mask pattern (`Extra("DataMask")`) — externally sourced, and our decoder
   agrees with it on all 35 fixtures.
-- Tests (+344, total 3,354 on net8.0 + net10.0, 0 failed, 20 pre-existing
+- Tests (+350, total 3,360 on net8.0 + net10.0, 0 failed, 20 pre-existing
   environment-conditional skips): format decoder exhaustively vs a naive
   nearest-candidate reference over the full 15-bit space; bitstream golden vectors
   (M1 hand-derived, ISO "01234567" M2-L) + encoder round-trips + malformed-stream
