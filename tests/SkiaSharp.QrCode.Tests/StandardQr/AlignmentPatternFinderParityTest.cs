@@ -6,10 +6,12 @@ namespace SkiaSharp.QrCode.Tests;
 /// <summary>
 /// Parity test for the alignment-pattern row-scan kernels: the SIMD mask walk
 /// (net8.0+; AVX2, NEON, or any 128-bit acceleration) must agree with the scalar
-/// walk — found flag and center within 0.01px — across synthetic QR-like scenes
-/// (random data modules with isolated dark modules as false candidates, pattern
-/// present/absent, offset sweep) plus noise sweeps over window lengths crossing
-/// every mask-build block boundary and threshold extremes.
+/// walk across synthetic QR-like scenes (random data modules with isolated dark
+/// modules as false candidates, pattern present/absent, offset sweep; center
+/// within 0.01px) plus noise sweeps over window lengths crossing every
+/// mask-build block boundary and threshold extremes (center bit-identical: both
+/// kernels derive it from the same integer run boundaries via the same
+/// cross-check, so exact equality is the property under test).
 /// </summary>
 public class AlignmentPatternFinderParityTest
 {
