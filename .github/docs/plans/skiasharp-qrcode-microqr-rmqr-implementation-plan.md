@@ -357,6 +357,65 @@ Allocations unchanged (Span paths 0 B). StandardQr control stable across runs.
 | MicroQr_Byte_M4_Encode (Span) | ~293 ns | 0 B |
 | StandardQr_Numeric_V1_Encode (Span), control | ~2.1 µs | 0 B |
 
+### Phase 2 follow-up (4) — placement PEXT/PDEP phase, completed 2026-07-17
+
+**Done**
+
+- Reopened the placement micro-benchmark loop (rounds 8-11, variants V26-V37 in
+  the private findings log). The round-7 audit's "the placement recurrence is
+  genuinely serial" was wrong one level up: the zigzag is a FIXED bit
+  permutation per size, so each row's data bits are 3x (PEXT gather + PDEP
+  scatter) from static per-(size, row) masks — branch-free, no cross-row
+  dependency. Composed with a per-size stream word count dispatch (M1 = 1 word,
+  M2 = 2), a 32-module AVX2 unpack, a bit-reversal-table format-row insert and
+  a 32-entry format word table. Kernel same-run result vs the SSSE3 pipeline:
+  M1 -5%, M2 -10%, M3 -22%, M4 -29% (M4-M 117.5 -> 86.1 ns; vs the per-module
+  baseline 8.4x). Refuted along the way: SIMD edge extraction (V28), bulk-shift
+  ECC merge (V29 and again as V35's enabler), cross-row tail-window store (V35).
+- Ship shape: a new top runtime tier `PlaceCoreBmi2` above the vector pipeline,
+  selected by `Avx2.IsSupported && Bmi2.X64.IsSupported` plus a one-time CPUID
+  vendor/family check (PDEP/PEXT are microcoded on AMD before Zen 3 — family
+  0x19 gate; Intel always fast). The mid tier (`PlaceCoreVector`) now serves
+  both SSSE3 and ARM64 NEON (`AdvSimd.Arm64`) with a shared pipeline — only
+  the 16-module bit-expand idiom differs (NEON kernel vs scalar on ARM64:
+  -21..-24%, 4.8-5.9x vs the per-module baseline). The vector and scalar tiers
+  also gained the format word table + reversal-table row-8 insert (shared
+  BuildPackedRows).
+- Tests: parity suite extended with named-entry coverage for every tier
+  (`PlaceSymbolBmi2`, `PlaceSymbolSsse3`, `PlaceSymbolAdvSimd`,
+  `PlaceSymbolScalar`); full suite green on net8.0 + net10.0 (1,746/1,758
+  passed, rest skipped-by-design); zxing-cpp spot-check re-run with the BMI2
+  kernel active: 9/9 decoded.
+
+**Lessons learned**
+
+- "The recurrence is serial" must be scoped: the DEPENDENCE was in the
+  incumbent walk, not the data flow — a static permutation table dissolved it
+  (M4 placement -39% in one variant). Ask which claim the audit actually proved.
+- Guaranteed-zero PEXT/PDEP pairs are not free (loads + BMI ops still issue):
+  per-size word specialization recovered -14% at M1.
+- Flag-parameterized shared cores poison attribution both ways (specialization
+  tax vs dead-branch tax); in-family flag toggles are the only layout-free
+  reads, specialized copies the only fair cross-variant reads.
+- Cross-run layout swings reached 19% on a 50 ns kernel and ±11% on the 2 µs
+  E2E control — same-run ratios and ABBA-ordered E2E runs are mandatory at
+  this scale.
+- De-fusing a fused pass to enable a downstream trick can cost more than the
+  trick saves (V35): price the enabling plumbing, not just the headline change.
+
+**Benchmark delta (MicroQrEncode E2E, net10.0 Release, Span API; ABBA-ordered
+runs x (3 launches x 15 iterations), before/after averaged over 2 runs each)**
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| MicroQr_Numeric_M2 (Span) | ~155 ns | ~155 ns | ±0% |
+| MicroQr_Alphanumeric_M3 (Span) | ~211 ns | ~183 ns | -13% |
+| MicroQr_Byte_M4 (Span) | ~309 ns | ~200 ns | -35% |
+
+Allocations unchanged (Span paths 0 B). The StandardQr control swung ±11%
+across all four runs (machine-level noise floor); the M3/M4 wins exceed that
+spread in every pairing, M2's placer share is too small to surface.
+
 ### Phase 3 — completed 2026-07-17
 
 **Done**
