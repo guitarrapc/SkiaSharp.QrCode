@@ -43,6 +43,37 @@ public class SampleGridParityTest
 #endif
     }
 
+    [Test]
+    public async Task Simd128AndScalarSampling_AreByteIdentical()
+    {
+#if NET8_0_OR_GREATER
+        if (!System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+        {
+            Skip.Test("Vector128 not accelerated on this machine");
+            return;
+        }
+
+        foreach (var seed in new[] { 1, 42, 1234 })
+        {
+            foreach (var dimension in new[] { 21, 33, 77, 177 })
+            {
+                foreach (var projective in new[] { true, false })
+                {
+                    var (luminance, width, transform) = BuildScene(dimension, projective, seed);
+
+                    var scalar = new byte[dimension * dimension];
+                    QRImageDecoder.SampleGridScalar(luminance, width, width, Threshold, transform, dimension, scalar);
+
+                    var simd = new byte[dimension * dimension];
+                    QRImageDecoder.SampleGridSimd128(luminance, width, width, Threshold, transform, dimension, simd);
+
+                    await Assert.That(simd.AsSpan().SequenceEqual(scalar)).IsTrue().Because($"SIMD128/scalar sampling mismatch (seed={seed}, dim={dimension}, projective={projective})");
+                }
+            }
+        }
+#endif
+    }
+
     private static (byte[] Luminance, int Width, PerspectiveTransform Transform) BuildScene(int dimension, bool projective, int seed)
     {
         const int Ppm = 8;
