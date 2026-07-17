@@ -180,9 +180,11 @@ internal static partial class MicroQrModulePlacer
     /// <summary>
     /// Micro QR mask conditions (ISO/IEC 18004 Table 10; they correspond to
     /// Standard QR patterns 1, 4, 6 and 7 respectively). True = flip the module.
+    /// Shared with the decoder (<see cref="MicroQrMatrixDecoder"/>) so both sides
+    /// always agree on the mask templates.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool GetMaskBit(int mask, int row, int col) => mask switch
+    internal static bool GetMaskBit(int mask, int row, int col) => mask switch
     {
         0 => row % 2 == 0,
         1 => (row / 2 + col / 3) % 2 == 0,

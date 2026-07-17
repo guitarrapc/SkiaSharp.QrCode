@@ -1,0 +1,17 @@
+{
+  "id": "m4-m-alphanumeric-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "MicroQR",
+  "version": 4,
+  "width": 17,
+  "height": 17,
+  "errorCorrectionLevel": "M",
+  "mode": "Alphanumeric",
+  "maskPattern": 0,
+  "payloadText": "HELLO MICRO QR 18C",
+  "payloadUtf8Hex": "48454C4C4F204D4943524F20515220313843",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

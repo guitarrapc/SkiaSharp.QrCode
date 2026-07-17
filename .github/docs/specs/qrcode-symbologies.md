@@ -16,7 +16,7 @@ code; the implementation order lives in
 | Symbology | Standard | Encode | Matrix decode | Image decode |
 |---|---|---|---|---|
 | Standard QR (versions 1–40) | ISO/IEC 18004 | Shipped | Shipped | Shipped (Tier 1–2) |
-| Micro QR (M1–M4) | ISO/IEC 18004 | Shipped | Planned | Planned |
+| Micro QR (M1–M4) | ISO/IEC 18004 | Shipped | Shipped | Planned |
 | rMQR (R7x43–R17x139) | ISO/IEC 23941 | Planned | Planned | Planned |
 
 ### Document set
@@ -39,6 +39,7 @@ Internals are split into shared primitives and per-symbology pipelines.
 | `BitWriter`, `BitReader` | Bit-stream packing is symbology-independent |
 | `ECCInfo` | RS block structure (data codewords, ECC per block, up to two block groups) describes all three symbologies |
 | `EncodingMode`, `TextAnalyzer`, `CharacterSets` | Mode alphabet definitions (Numeric / Alphanumeric / Byte character classes, alphanumeric encoding values) are shared; only indicator widths and legality differ per symbology |
+| `SegmentDecoders` | Segment payload bit groups (numeric 10/7/4, alphanumeric 11/6, byte 8·count) and the byte-charset heuristics (UTF-8 validation, BOM, Latin-1 widening) are identical across symbologies; the mode/count indicator framing that differs stays in each symbology's bitstream decoder (lifted out of `QRBinaryDecoder` in Phase 3 when the second consumer appeared) |
 | `LuminanceConverter`, `PerspectiveTransform` | Image preprocessing and geometry are symbology-independent |
 | `Point`, `Rectangle` | Plain geometry types |
 

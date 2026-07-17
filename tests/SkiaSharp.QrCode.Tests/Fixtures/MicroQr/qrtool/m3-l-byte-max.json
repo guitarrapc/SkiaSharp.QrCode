@@ -1,0 +1,17 @@
+{
+  "id": "m3-l-byte-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "MicroQR",
+  "version": 3,
+  "width": 15,
+  "height": 15,
+  "errorCorrectionLevel": "L",
+  "mode": "Byte",
+  "maskPattern": 2,
+  "payloadText": "bytes m3l",
+  "payloadUtf8Hex": "6279746573206D336C",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

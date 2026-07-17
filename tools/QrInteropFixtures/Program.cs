@@ -25,14 +25,14 @@ if (command != "regenerate")
 }
 
 var repoRoot = FindRepoRoot();
-var fixtureRoot = Path.Combine(repoRoot, "tests", "SkiaSharp.QrCode.Tests", "Fixtures", "StandardQr");
+var fixturesBase = Path.Combine(repoRoot, "tests", "SkiaSharp.QrCode.Tests", "Fixtures");
+var standardQrRoot = Path.Combine(fixturesBase, "StandardQr");
 
 var generators = new IFixtureGenerator[]
 {
     new ZXingNetFixtureGenerator(),
-    // Future generators (zint CLI, qrcode rust crates, zxing-cpp) plug in here.
-    // They require external toolchains; see the oracle matrix in
-    // .github/docs/specs/qrcode-test-fixtures.md before adding one.
+    // Future generators plug in here. They require external toolchains; see the
+    // oracle matrix in .github/docs/specs/qrcode-test-fixtures.md before adding one.
 };
 
 var corpus = StandardQrCorpus.Cases;
@@ -46,7 +46,7 @@ foreach (var generator in generators)
         continue;
     }
 
-    var generatorDir = Path.Combine(fixtureRoot, generator.Name);
+    var generatorDir = Path.Combine(standardQrRoot, generator.Name);
     if (Directory.Exists(generatorDir))
         Directory.Delete(generatorDir, recursive: true);
     Directory.CreateDirectory(generatorDir);
@@ -60,7 +60,49 @@ foreach (var generator in generators)
     }
 }
 
-Console.WriteLine($"done: {total} fixtures under {fixtureRoot}");
+// Micro QR corpus: two independent external encoder lineages (libzint via the
+// pinned ZXingCpp package, and the pinned qrtool prebuilt binary). Every fixture
+// passes the zxing-cpp sanity gate (decode + metadata cross-check) before it is
+// written, and the gate's reader supplies the manifest mask pattern.
+var microQrRoot = Path.Combine(fixturesBase, "MicroQr");
+var microGenerators = new IMicroQrFixtureGenerator[]
+{
+    new ZintMicroQrFixtureGenerator(),
+    new QrtoolMicroQrFixtureGenerator(repoRoot),
+};
+
+foreach (var generator in microGenerators)
+{
+    if (!generator.IsAvailable)
+    {
+        Console.WriteLine($"skip: {generator.Name} (not available on this machine; see tools/QrInteropFixtures/get-qrtool.ps1 for the qrtool binary)");
+        continue;
+    }
+
+    var generatorDir = Path.Combine(microQrRoot, generator.Name);
+    if (Directory.Exists(generatorDir))
+        Directory.Delete(generatorDir, recursive: true);
+    Directory.CreateDirectory(generatorDir);
+
+    foreach (var caseDefinition in MicroQrCorpus.Cases)
+    {
+        if (!generator.SupportsCase(caseDefinition))
+        {
+            Console.WriteLine($"skip: {generator.Name}/{caseDefinition.Id} (unsupported by this generator)");
+            continue;
+        }
+
+        var fixture = generator.Generate(caseDefinition);
+        var mask = MicroQrSanityGate.VerifyAndGetMask(fixture);
+        fixture = fixture with { Manifest = fixture.Manifest with { MaskPattern = mask } };
+
+        FixtureWriter.Write(generatorDir, fixture);
+        total++;
+        Console.WriteLine($"wrote: {generator.Name}/{fixture.Manifest.Id} (M{fixture.Manifest.Version}, {fixture.Manifest.ErrorCorrectionLevel}, {fixture.Manifest.Mode}, mask {mask})");
+    }
+}
+
+Console.WriteLine($"done: {total} fixtures under {fixturesBase}");
 return 0;
 
 static string FindRepoRoot()

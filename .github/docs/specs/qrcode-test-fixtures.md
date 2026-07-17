@@ -14,11 +14,14 @@ The corpus is a set of symbols produced by encoders **other than SkiaSharp.QrCod
 
 ```
 tests/SkiaSharp.QrCode.Tests/Fixtures/
-└── StandardQr/                 (later: MicroQr/, RmQr/)
-    └── zxing-net/              (one directory per generator)
-        ├── case-name.json       manifest
-        ├── case-name.matrix.txt core module matrix, '1' dark / '0' light, row-major, LF, no quiet zone
-        └── case-name.png        clean black-on-white render (quiet zone 4, 8 px/module)
+├── StandardQr/                 (later: RmQr/)
+│   └── zxing-net/              (one directory per generator)
+│       ├── case-name.json       manifest
+│       ├── case-name.matrix.txt core module matrix, '1' dark / '0' light, row-major, LF, no quiet zone
+│       └── case-name.png        clean black-on-white render (quiet zone 4, 8 px/module)
+└── MicroQr/
+    ├── zint-libzint/           (same three files; PNG quiet zone 2 per the Micro QR spec)
+    └── qrtool/
 ```
 
 ### Manifest schema (case-name.json, camelCase)
@@ -42,13 +45,22 @@ The loader (`FixtureLoader` in the test project) mirrors this schema; the two mu
 
 Every mode (Numeric / Alphanumeric / Byte) × every ECC level at small versions, plus: version 1-L alphanumeric capacity boundary (25 chars), mid (v10/v15/v25), maximum (v40-L at exactly 7089 digits), full alphanumeric charset, and UTF-8/ECI payloads (Japanese, emoji). All payloads are fixed literals or fixed repetitions — no randomness or timestamps, so regeneration is byte-reproducible for a given generator version.
 
+### Corpus contents (Micro QR, 18 cases × 2 lineages)
+
+Every version × legal ECC combination (M1 detection-only, M2/M3 L+M, M4 L+M+Q), every supported mode, capacity-boundary payloads (padding-free) plus short payloads (terminator + pad paths), and a UTF-8 byte-mode case (qrtool lineage only — libzint rejects UTF-8 input). Both lineages share the case list (`MicroQrCorpus`): 17 fixtures from zint-libzint, 18 from qrtool. Version and ECC are pinned per case; the mask pattern in the manifest comes from the zxing-cpp READER during the sanity gate, so it is externally sourced.
+
+**Sanity gate**: every generated Micro QR fixture is rendered and decoded with the pinned zxing-cpp reader before it is written — payload, version and ECC level must match the manifest — so a broken generator cannot poison the committed corpus.
+
 ### Consuming tests
 
-`StandardQrFixtureTest` decodes every fixture twice — matrix path (`TryDecode(modules, size, …)`) and image path (`TryDecode(SKBitmap, …)`) — asserting payload, version, ECC level, and (matrix path) the generator's mask pattern.
+`StandardQrFixtureTest` decodes every fixture twice — matrix path (`TryDecode(modules, size, …)`) and image path (`TryDecode(SKBitmap, …)`) — asserting payload, version, ECC level, and (matrix path) the generator's mask pattern. `MicroQrFixtureTest` exercises the matrix path only (Micro QR image detection is implementation plan Phase 6; the committed PNGs await it) and additionally asserts zero corrected errors and the reader-sourced mask pattern.
 
 ### Regeneration
 
 ```bash
+# qrtool binary (pinned version + SHA-256), one-time per machine:
+pwsh tools/QrInteropFixtures/get-qrtool.ps1
+
 dotnet run --project tools/QrInteropFixtures -- regenerate
 ```
 
@@ -61,9 +73,9 @@ Status meaning — **verified**: exercised in this repository; **documented**: c
 | Oracle | Standard QR | Micro QR | rMQR | Status | Notes |
 |---|---|---|---|---|---|
 | ZXing.Net 0.16.11 (NuGet, pinned) | encode + decode | — | — | verified | Fixture generator + `QRCodeDecoderZXingCrossTest`; in-process, no toolchain |
-| [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) (via [ZXingCpp](https://www.nuget.org/packages/ZXingCpp) 0.5.2, pinned) | read + write | read | read | verified | Micro QR reading exercised by `tools/QrInteropFixtures -- spot-check-microqr` against this library's encoder (all versions × ECC, UTF-8). The official .NET wrapper bundles native binaries, so no external toolchain is needed |
-| [Zint](https://zint.org.uk/) (libzint via ZXingCpp `BarcodeCreator`) | encode | encode | encode | verified | zxing-cpp's writer is libzint compiled into the same pinned native binary; `tools/QrInteropFixtures -- probe-creator` confirmed Micro QR and rMQR creation with reader round-trips. No CLI or extra toolchain needed — as an ENCODER lineage this counts as zint, independent of both this library and the Rust crates |
-| [qrcode2 / qrtool (Rust)](https://docs.rs/qrcode2) | encode | encode | encode | documented | `qrtool` CLI exposes `--variant micro` / `--variant rmqr`; fork of kennytm/qrcode. Ships prebuilt release binaries (pin by version + checksum), so no Rust toolchain is required either — the preferred second external encoder lineage for Phase 3 fixtures |
+| [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) (via [ZXingCpp](https://www.nuget.org/packages/ZXingCpp) 0.5.2, pinned) | read + write | read | read | verified | Micro QR reading exercised by `tools/QrInteropFixtures -- spot-check-microqr` against this library's encoder (all versions × ECC, UTF-8) and as the fixture sanity gate. Its reader exposes `Extra("Version"/"EcLevel"/"DataMask")`, which supplies externally-sourced metadata for the Micro QR manifests (note: reports M1's implicit level as "L"). The official .NET wrapper bundles native binaries, so no external toolchain is needed |
+| [Zint](https://zint.org.uk/) (libzint via ZXingCpp `BarcodeCreator`) | encode | encode | encode | verified | zxing-cpp's writer is libzint compiled into the same pinned native binary; Micro QR encoding exercised as a fixture lineage (`Options = "version=N,ecLevel=X"` honored; `ToImage(Scale=1, AddQuietZones=false)` is module-exact). Limits found: rejects UTF-8 Micro QR input ("Invalid UTF-8 in input"), and a Latin-1 payload with diacritics round-tripped transliterated — keep zint-lineage payloads ASCII. As an ENCODER lineage this counts as zint, independent of both this library and the Rust crates |
+| [qrcode2 / qrtool (Rust)](https://docs.rs/qrcode2) | encode | encode | encode | verified | `qrtool` 0.13.2 prebuilt binary pinned by version + SHA-256 (`get-qrtool.ps1`); Micro QR encoding exercised as a fixture lineage (all versions × ECC × modes incl. UTF-8, `--variant micro` with pinned `--symbol-version`/`--error-correction-level`/`--mode`). The `--type ascii` output is module-exact, so no image parsing is involved. M1's detection-only level is requested as `l` (the qrcode crate models it as L) |
 | rmqrcode-python | — | — | encode | claimed | Capability not independently confirmed yet — verify before relying on it |
 | BoofCV (Java) | decode | decode | — | claimed | Candidate additional decode oracle; not evaluated |
 
@@ -90,5 +102,8 @@ PR CI stays self-contained and deterministic (no Rust/C++/Python toolchains), an
 ## Lessons learned
 
 - ZXing.Net's `ZXing.QrCode.Internal.Encoder` (rather than the public `BarcodeWriter`) returns the core `ByteMatrix` plus version, mode, and **mask pattern** — the mask metadata lets fixture tests assert that our format-information decode reproduces the generator's mask choice exactly, a much stronger check than payload equality alone.
+- For Micro QR the equivalent mask metadata comes from the zxing-cpp READER during the sanity gate (`Extra("DataMask")`), not from the encoders — neither libzint (through the wrapper) nor qrtool reports its mask choice. Reader-sourced metadata is equally external and additionally proves the value is on the wire.
+- qrtool's `--type ascii` output (two characters per module) makes the fixture matrix extraction exact and image-free, but trailing light modules are trimmed from each line — pad when parsing. `--mode` requires an explicit `--symbol-version`.
+- Regenerating fixtures on Windows rewrites working-copy files with LF endings; when content is unchanged the only diff is EOL churn (`git diff --ignore-cr-at-eol` is empty) — restore rather than commit such no-op rewrites.
 - The public `QRCodeWriter.encode` path scales and pads to a requested pixel size; extracting the core matrix from it is lossy. Generating from the internal encoder and rendering PNGs ourselves keeps the matrix and the image pixel-exact for a known quiet zone and module size.
 - Requested ECC is honored (never downgraded) by ZXing's encoder, so the manifest can record the requested level as the expected decode result without reading it back from the symbol.

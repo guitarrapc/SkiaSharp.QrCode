@@ -1,0 +1,17 @@
+{
+  "id": "m4-q-byte-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "MicroQR",
+  "version": 4,
+  "width": 17,
+  "height": 17,
+  "errorCorrectionLevel": "Q",
+  "mode": "Byte",
+  "maskPattern": 0,
+  "payloadText": "bytes!!!!",
+  "payloadUtf8Hex": "627974657321212121",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

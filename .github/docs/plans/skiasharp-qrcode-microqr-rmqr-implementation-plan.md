@@ -357,6 +357,90 @@ Allocations unchanged (Span paths 0 B). StandardQr control stable across runs.
 | MicroQr_Byte_M4_Encode (Span) | ~293 ns | 0 B |
 | StandardQr_Numeric_V1_Encode (Span), control | ~2.1 µs | 0 B |
 
+### Phase 3 — completed 2026-07-17
+
+**Done**
+
+- Public API: `MicroQrCodeDecoder` (`MicroQrCodeData` / module-matrix / zero-allocation
+  span overloads plus `GetMaxDecodedLength`), `MicroQrCodeDecodeInfo` (status shared
+  with Standard QR, Micro-typed version/ECC, mask 0-3, corrected-error count).
+  Uniform quiet-zone stripping via the finder corner (the Standard QR dark-bounding-box
+  trick does not work — see lessons).
+- Pipeline in `Internals/MicroQr`, same internal boundary as `QRMatrixDecoder`:
+  `MicroQrFormatInformationDecoder` (single 15-bit copy, 32-candidate Hamming match,
+  ≤ 3 bit errors, format-version × matrix-size cross-check),
+  `MicroQrMatrixDecoder` (inverse zigzag + on-the-fly unmask reusing the encoder's own
+  `IsFunctionModule`/`GetMaskBit`, single RS block — no deinterleave, stackalloc-only),
+  `MicroQrBinaryDecoder` (mode/count framing, terminator = zero-count Numeric segment,
+  stream bounded by dataBitCount for the M1/M3 half codeword, Kanji → UnsupportedContent),
+  and a new `MicroQrConstants` ISO Table 9 error-correction-capacity table (2t + p = ecc)
+  enforced after RS correction. Segment payload decoding (numeric/alphanumeric/byte
+  groups, UTF-8/Latin-1 heuristics) extracted from `QRBinaryDecoder` into shared
+  `Internals/BinaryDecoders/SegmentDecoders` — the only Standard QR file touched,
+  mechanically, verified flat by benchmark.
+- External-encoder fixtures, two independent lineages, exactly as planned:
+  `Fixtures/MicroQr/zint-libzint/` (17 cases; pinned ZXingCpp `BarcodeCreator`,
+  `version=`/`ecLevel=` options honored, module-exact `ToImage(Scale=1, AddQuietZones=false)`)
+  and `Fixtures/MicroQr/qrtool/` (18 cases; qrtool 0.13.2 prebuilt binary pinned by
+  version + SHA-256 via `tools/QrInteropFixtures/get-qrtool.ps1`, module-exact
+  `--type ascii` output). Every fixture passed the zxing-cpp sanity gate
+  (decode + version/ECC cross-check) before being written; the gate's reader supplies
+  the manifest mask pattern (`Extra("DataMask")`) — externally sourced, and our decoder
+  agrees with it on all 35 fixtures.
+- Tests (+350, total 3,360 on net8.0 + net10.0, 0 failed, 20 pre-existing
+  environment-conditional skips): format decoder exhaustively vs a naive
+  nearest-candidate reference over the full 15-bit space; bitstream golden vectors
+  (M1 hand-derived, ISO "01234567" M2-L) + encoder round-trips + malformed-stream
+  negatives; public-API round trips (all versions × ECC × modes × quiet zones, span
+  parity); damage tests per equivalence class of the capacity check — within t,
+  the t < errors ≤ ⌊ecc/2⌋ misdecode-protection class (RS could correct, spec says
+  reject), beyond RS range, M1 detection-only, format damage within/beyond BCH
+  distance, format-vs-size contradiction; cross-symbology rejection both directions;
+  committed-fixture corpus decode.
+- Docs: microqr-spec-map decoding section + lessons, fixture record (corpus, sanity
+  gate, oracle matrix: qrtool now verified, libzint UTF-8 limits), symbology status
+  table, README (decoder example + FAQ).
+
+**Lessons learned**
+
+- The ECC codeword counts hide misdecode-protection codewords p (ISO Table 9): a
+  decoder wired to full RS strength silently corrects ⌊ecc/2⌋ errors where the spec
+  allows t (2 vs 1 on M2-L). The capacity cap must be an explicit post-correction
+  check, and its false-positive class (RS succeeds, spec forbids) needs its own tests —
+  a naive port of the Standard QR decode loop would have shipped this wrong.
+- The Micro QR terminator is exactly a Numeric mode indicator plus an all-zero count
+  field ((v−1) + (v+2) = 2v+1 bits), so "zero-count Numeric segment ends the stream"
+  decodes terminators — including capacity-truncated ones — with no special scanning.
+- Quiet-zone stripping cannot reuse the Standard QR dark-bounding-box trick: with a
+  single finder the right/bottom edges are data modules with no darkness guarantee
+  (mask scoring only prefers dark edges). The top-left dark module is the finder
+  corner; a uniform border gives the core size from there.
+- Encoder oracles constrain payload freedom in surprising ways: libzint (via the
+  ZXingCpp wrapper) hard-rejects UTF-8 Micro QR input and transliterated a Latin-1
+  "naïve café" round trip to "naive cafe" — the per-fixture decode gate caught this
+  before it could poison the corpus, which is precisely why the gate exists. UTF-8
+  coverage rides the qrtool lineage.
+- zxing-cpp's reader exposes `Extra("Version"/"EcLevel"/"DataMask")`: fixture manifests
+  can carry externally-sourced mask metadata even when the producing encoder reports
+  nothing — and reader-sourced values additionally prove the bits are on the wire.
+
+**Benchmark delta** — new decode path (MicroQrDecode E2E, net10.0 Release, 8 iterations;
+encode numbers for the same payloads shown for comparison):
+
+| Benchmark | Decode | Encode (same payload) | Allocated |
+|---|---|---|---|
+| MicroQr_Numeric_M2 (Span) | 374 ns | ~175 ns | 0 B |
+| MicroQr_Alphanumeric_M3 (Span) | 511 ns | ~230 ns | 0 B |
+| MicroQr_Byte_M4 (Span) | 684 ns | ~293 ns | 0 B |
+| MicroQr_Numeric_M2 (string) | 382 ns | — | 48 B (result string) |
+| StandardQr_Numeric_V1_Decode (Span), control | 1,148 ns | — | 0 B |
+
+Standard QR decode guard (QrCodeDecodeEndToEnd, before = 359c304 via worktree,
+after = this change): all scenarios within noise or faster (Matrix_Short_M
+1.247 → 1.281 µs at 15 iterations, +2.7% with overlapping StdDev; Url/Long_L/Long_H/Image
+all measured faster on the after run), allocations 0 B on both sides — the
+`SegmentDecoders` extraction did not regress the Standard QR path.
+
 ## Risks Beyond the Test Strategy Document
 
 - Renderer assumptions: `IconShape`/finder styling assume three finder patterns; rectangular output changes image sizing APIs. Audit in Phase 0.

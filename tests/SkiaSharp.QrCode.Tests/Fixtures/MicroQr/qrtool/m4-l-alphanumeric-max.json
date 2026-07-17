@@ -1,0 +1,17 @@
+{
+  "id": "m4-l-alphanumeric-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "MicroQR",
+  "version": 4,
+  "width": 17,
+  "height": 17,
+  "errorCorrectionLevel": "L",
+  "mode": "Alphanumeric",
+  "maskPattern": 0,
+  "payloadText": "HELLO WORLD PLUS 21ST",
+  "payloadUtf8Hex": "48454C4C4F20574F524C4420504C55532032315354",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

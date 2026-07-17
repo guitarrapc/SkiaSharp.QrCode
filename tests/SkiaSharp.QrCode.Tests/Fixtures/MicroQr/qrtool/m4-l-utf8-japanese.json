@@ -1,0 +1,17 @@
+{
+  "id": "m4-l-utf8-japanese",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "MicroQR",
+  "version": 4,
+  "width": 17,
+  "height": 17,
+  "errorCorrectionLevel": "L",
+  "mode": "Byte",
+  "maskPattern": 1,
+  "payloadText": "\u3053\u3093\u306B\u3061\u306F",
+  "payloadUtf8Hex": "E38193E38293E381ABE381A1E381AF",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

@@ -1,0 +1,17 @@
+{
+  "id": "m2-l-alphanumeric-max",
+  "generator": "zint-libzint",
+  "generatorVersion": "ZXingCpp 0.5.2 bundled libzint",
+  "symbolType": "MicroQR",
+  "version": 2,
+  "width": 13,
+  "height": 13,
+  "errorCorrectionLevel": "L",
+  "mode": "Alphanumeric",
+  "maskPattern": 0,
+  "payloadText": "ABCDEF",
+  "payloadUtf8Hex": "414243444546",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

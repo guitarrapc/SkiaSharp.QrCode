@@ -4,8 +4,6 @@ An index of where each part of the Micro QR symbology specification (ISO/IEC 180
 
 This document is intentionally a **map, not a spec copy**. The normative details — bit layouts, formulas, edge-case constraints, and the reasoning behind implementation choices — live in code comments next to the implementation, where they stay in sync with the code.
 
-Decoding is not implemented yet (implementation plan Phase 3); this map covers the encoding pipeline.
-
 ## Encoding Pipeline Overview
 
 ```
@@ -13,6 +11,26 @@ Text ──> Mode analysis ──> Data encoding ──> ECC ──> Module plac
 ```
 
 Micro QR has a single Reed-Solomon block and no codeword interleaving; the interleaving stage of the Standard QR pipeline has no Micro QR counterpart.
+
+## Decoding Pipeline Overview (matrix level)
+
+```
+Matrix ──> Version from size ──> Format info ──> Unmask + extract ──> RS correction ──> Bitstream ──> Text
+```
+
+Same internal boundary as the Standard QR `QRMatrixDecoder`; image detection is implementation plan Phase 6. Public entry: [MicroQrCodeDecoder](../../../src/SkiaSharp.QrCode/MicroQrCodeDecoder.cs) (`MicroQrCodeData` / module-matrix / zero-allocation span overloads, uniform quiet-zone stripping), diagnostics in [MicroQrCodeDecodeInfo](../../../src/SkiaSharp.QrCode/MicroQrCodeDecodeInfo.cs).
+
+| Spec reference | Topic | Implementation |
+|---|---|---|
+| — | Matrix → payload orchestration (version from size 11/13/15/17, single RS block, no deinterleaving) | [MicroQrMatrixDecoder](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrMatrixDecoder.cs) |
+| — | Format information decode: single 15-bit copy matched against all 32 valid patterns, ≤ 3 bit errors correctable (BCH(15,5) min distance 7); format version must agree with the physical matrix size | [MicroQrFormatInformationDecoder](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrFormatInformationDecoder.cs), cross-check in [MicroQrMatrixDecoder](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrMatrixDecoder.cs) |
+| Table 9 | Error correction capacity t (2t + p = ecc codewords; M1 p=2 detection-only, M2-L p=3, M2-M/M3-L/M4-L p=2): the decoder must reject corrections beyond t even where Reed-Solomon could correct more | [MicroQrConstants.GetErrorCorrectionCapacity](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrConstants.cs), enforced in [MicroQrMatrixDecoder](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrMatrixDecoder.cs) |
+| Section 7.7.3 | Inverse zigzag codeword extraction with on-the-fly unmasking (reuses the encoder's own `IsFunctionModule` / `GetMaskBit`, so both sides always agree) | [MicroQrMatrixDecoder.ExtractCodewords](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrMatrixDecoder.cs) |
+| Table 2/3 | Bitstream decode: mode indicator (version − 1 bits, M1 implicit Numeric), count indicators, terminator = Numeric mode with zero count (possibly truncated at capacity), stream bounded by the bit capacity (M1/M3 half codeword), Kanji reported as UnsupportedContent | [MicroQrBinaryDecoder](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrBinaryDecoder.cs) |
+| Section 7.4.3-7.4.5 | Segment payload decoding (numeric 10/7/4-bit groups, alphanumeric 11/6, byte with UTF-8/Latin-1 heuristic) — shared with the Standard QR decoder | [SegmentDecoders](../../../src/SkiaSharp.QrCode/Internals/BinaryDecoders/SegmentDecoders.cs) |
+| Section 8.5 | Reed-Solomon correction | [EccBinaryDecoder](../../../src/SkiaSharp.QrCode/Internals/BinaryDecoders/EccBinaryDecoder.cs) — shared across symbologies |
+
+Reference tests: [MicroQrFormatInformationDecoderUnitTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrFormatInformationDecoderUnitTest.cs) (exhaustive 15-bit space vs a naive nearest-candidate reference, ISO Table 9 capacities), [MicroQrBinaryDecoderUnitTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrBinaryDecoderUnitTest.cs) (M1 golden vectors, the ISO "01234567" M2-L example, encoder round-trips, malformed-stream negatives), [MicroQrCodeDecoderRoundTripTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrCodeDecoderRoundTripTest.cs) (all versions × ECC × modes, quiet zones, span parity), [MicroQrCodeDecoderRobustnessTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrCodeDecoderRobustnessTest.cs) (per-equivalence-class damage: within t, the t&lt;errors≤⌊ecc/2⌋ misdecode-protection class, beyond RS range, M1 detection-only, format damage, cross-symbology rejection), [MicroQrFixtureTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrFixtureTest.cs) (committed external-encoder corpus, two lineages).
 
 ## Text Analysis and Encoding Modes
 
@@ -85,5 +103,12 @@ Reference tests: [MicroQrCodeDataUnitTest](../../../tests/SkiaSharp.QrCode.Tests
 ## Maintenance Notes
 
 - When adding or moving a spec-referenced implementation, update this map — but keep the detailed explanation (bit layouts, formulas, constraints) in the code comment next to the implementation, not here.
-- Until the Micro QR decoder ships (Phase 3), [MicroQrMatrixExtractionTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrMatrixExtractionTest.cs) is the whole-pipeline consistency guard: it reads the matrix back with independent extraction code and recomputes the ECC. External-decoder verification is tracked in the [fixture record](qrcode-test-fixtures.md).
+- [MicroQrMatrixExtractionTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrMatrixExtractionTest.cs) remains as an encoder-side consistency guard with its own independent extraction code (it predates the decoder and does not depend on it). External-encoder fixtures and the oracle matrix are tracked in the [fixture record](qrcode-test-fixtures.md).
 - Components marked "shared across symbologies" live outside `Internals/MicroQr`; the split is defined in [QR Symbology Architecture](qrcode-symbologies.md).
+
+## Lessons Learned (decoder)
+
+- The Micro QR terminator is structurally a Numeric mode indicator followed by an all-zero count field (mode bits (v−1) + numeric count bits (v+2) = 2v+1 terminator bits) — decoding it as "zero-count Numeric segment ends the stream" needs no special terminator scanning and handles capacity-truncated terminators for free.
+- The ECC codeword counts include misdecode-protection codewords p (ISO Table 9): a decoder wired directly to full Reed-Solomon strength would silently correct ⌊ecc/2⌋ errors where the spec allows only t (e.g. 2 vs 1 for M2-L). The capacity cap is enforced after correction and is covered by its own equivalence-class tests.
+- Quiet-zone stripping cannot reuse the Standard QR dark-bounding-box trick: Micro QR has a single finder, so the right/bottom edges are data modules with no darkness guarantee. The top-left dark module is the finder corner, and a uniform border gives the core size.
+- libzint (via the ZXingCpp wrapper) rejects UTF-8 Micro QR payloads outright ("Invalid UTF-8 in input"), and a Latin-1 payload with diacritics came back from the round-trip transliterated ("naïve café" → "naive cafe") — UTF-8 fixture coverage comes from the qrtool lineage only, and the sanity gate's payload comparison is what catches such silent drift before a fixture is committed.
