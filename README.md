@@ -48,12 +48,12 @@ SkiaSharp.QrCode is a modern, high-performance QR code generation library built 
 
 ## Supported Symbologies
 
-SkiaSharp.QrCode implements the Standard QR Code symbology. Everything in this README — generation, decoding, styling, and the specification tables — refers to Standard QR.
+SkiaSharp.QrCode implements the Standard QR Code symbology and Micro QR generation. Unless a section says otherwise, this README — generation, decoding, styling, and the specification tables — refers to Standard QR; Micro QR generation is available via `MicroQrCodeGenerator`.
 
 | Symbology | Standard | Generate (Encode) | Decode |
 |---|---|---|---|
 | Standard QR (versions 1–40) | ISO/IEC 18004 | ✅ | ✅ |
-| Micro QR (M1–M4) | ISO/IEC 18004 | NO | NO |
+| Micro QR (M1–M4) | ISO/IEC 18004 | ✅ | NO |
 | rMQR (R7x43–R17x139) | ISO/IEC 23941 | NO | NO |
 
 See the [FAQ](#does-it-support-micro-qr-or-rmqr) for the Micro QR / rMQR status.
@@ -419,7 +419,14 @@ Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see 
 
 ### Does it support Micro QR or rMQR?
 
-No. This library implements the Standard QR Code symbology only (ISO/IEC 18004, versions 1–40).
+Micro QR generation is supported (M1–M4, Numeric/Alphanumeric/Byte, all legal ECC levels):
+
+```csharp
+// Auto-selects the smallest version that fits (here: M2-L, 13x13 modules)
+var data = MicroQrCodeGenerator.CreateMicroQrCode("01234567", MicroQrEccLevel.L);
+```
+
+Version constraints are enforced rather than silently degraded (M1: numeric + error detection only; ECC Q: M4 only; no ECI; Kanji not implemented). Micro QR decoding, rendering via `QRCodeImageBuilder`, and rMQR (ISO/IEC 23941) are not supported yet — `QRCodeDecoder` reports such symbols as not detected rather than misreading them.
 
 ### What QR code style provides the best scan reliability?
 

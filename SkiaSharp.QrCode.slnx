@@ -19,4 +19,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/SkiaSharp.QrCode.Tests/SkiaSharp.QrCode.Tests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/QrInteropFixtures/QrInteropFixtures.csproj" />
+  </Folder>
 </Solution>

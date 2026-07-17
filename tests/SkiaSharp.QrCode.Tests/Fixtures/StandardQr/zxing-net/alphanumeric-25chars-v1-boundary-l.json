@@ -1,0 +1,17 @@
+{
+  "id": "alphanumeric-25chars-v1-boundary-l",
+  "generator": "zxing-net",
+  "generatorVersion": "0.16.11\u002Ba334de0239ee1cbd2aadef3396929fa031d2292b",
+  "symbolType": "StandardQR",
+  "version": 1,
+  "width": 21,
+  "height": 21,
+  "errorCorrectionLevel": "L",
+  "mode": "Alphanumeric",
+  "maskPattern": 4,
+  "payloadText": "HELLO WORLD 0123456789 :A",
+  "payloadUtf8Hex": "48454C4C4F20574F524C442030313233343536373839203A41",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8
+}

@@ -1,0 +1,17 @@
+{
+  "id": "byte-utf8-emoji-m",
+  "generator": "zxing-net",
+  "generatorVersion": "0.16.11\u002Ba334de0239ee1cbd2aadef3396929fa031d2292b",
+  "symbolType": "StandardQR",
+  "version": 2,
+  "width": 25,
+  "height": 25,
+  "errorCorrectionLevel": "M",
+  "mode": "Byte",
+  "maskPattern": 2,
+  "payloadText": "Emoji \uD83C\uDF8C test \u2705 done",
+  "payloadUtf8Hex": "456D6F6A6920F09F8E8C207465737420E29C8520646F6E65",
+  "eciCharset": "UTF-8",
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8
+}

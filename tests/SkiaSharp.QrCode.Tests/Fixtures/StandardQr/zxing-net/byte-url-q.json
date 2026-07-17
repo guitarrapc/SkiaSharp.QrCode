@@ -1,0 +1,17 @@
+{
+  "id": "byte-url-q",
+  "generator": "zxing-net",
+  "generatorVersion": "0.16.11\u002Ba334de0239ee1cbd2aadef3396929fa031d2292b",
+  "symbolType": "StandardQR",
+  "version": 4,
+  "width": 33,
+  "height": 33,
+  "errorCorrectionLevel": "Q",
+  "mode": "Byte",
+  "maskPattern": 2,
+  "payloadText": "https://example.com/path?query=value\u0026lang=en",
+  "payloadUtf8Hex": "68747470733A2F2F6578616D706C652E636F6D2F706174683F71756572793D76616C7565266C616E673D656E",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8
+}

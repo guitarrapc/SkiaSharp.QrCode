@@ -30,5 +30,7 @@
     <!-- Tests -->
     <PackageVersion Include="Microsoft.SourceLink.GitHub" Version="8.0.0" />
     <PackageVersion Include="TUnit" Version="1.12.111" />
+    <!-- Tools (interop oracles; keep pinned — see .github/docs/specs/qrcode-test-fixtures.md) -->
+    <PackageVersion Include="ZXingCpp" Version="0.5.2" />
   </ItemGroup>
 </Project>

@@ -92,8 +92,8 @@ Relevant benchmarks by change area:
 
 If the implementation changes observable behavior or adds new functionality, update the relevant specification:
 
-- Encoder / ISO spec map → `.github/docs/specs/qrcode-specs.md`
-- Decoder design and scope → `.github/docs/specs/qrcode-decoder.md`
+- Symbology architecture, shared components, document index → `.github/docs/specs/qrcode-symbologies.md`
+- Spec-to-code map (per symbology) → `.github/docs/specs/standardqr-spec-map.md` (later `microqr-*.md`, `rmqr-*.md`)
 - Decoder design and scope → `.github/docs/specs/standardqr-decoder.md`
 - Public API or migration notes → `docs/migration.md`
 - Capacity tables → `docs/data-capacity.md`

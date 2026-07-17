@@ -1,0 +1,17 @@
+{
+  "id": "numeric-10digits-m",
+  "generator": "zxing-net",
+  "generatorVersion": "0.16.11\u002Ba334de0239ee1cbd2aadef3396929fa031d2292b",
+  "symbolType": "StandardQR",
+  "version": 1,
+  "width": 21,
+  "height": 21,
+  "errorCorrectionLevel": "M",
+  "mode": "Numeric",
+  "maskPattern": 2,
+  "payloadText": "1234567890",
+  "payloadUtf8Hex": "31323334353637383930",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8
+}

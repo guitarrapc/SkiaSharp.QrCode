@@ -1,8 +1,10 @@
 # Data Capacity Reference
 
-The actual capacity depends on the encoding mode, ECC level, and version. Below are **practical capacities** including overhead (based on test data using 'あ' for UTF-8 multi-byte characters):
+The actual capacity depends on the QR code type, encoding mode, ECC level, and version. Below are **practical capacities** including overhead (based on test data using 'あ' for UTF-8 multi-byte characters).
 
-## Quick Reference (Version 10, Common Use Cases)
+## Standard QR Code (Versions 1-40)
+
+### Quick Reference (Version 10, Common Use Cases)
 
 | ECC Level | Numeric | Alphanumeric | Byte (ASCII) | Byte (UTF-8 Multi-byte*) |
 |-----------|---------|--------------|--------------|--------------------------|
@@ -13,11 +15,11 @@ The actual capacity depends on the encoding mode, ECC level, and version. Below 
 
 > UTF-8 multi-byte: Japanese hiragana 'あ' (3 bytes/char). For ASCII text (1 byte/char), the capacity is approximately 3× the values shown.
 
-**Full capacity tables** for all versions (1-40) and ECC levels are available in the [Data Capacity Tables](#data-capacity-tables) section below.
+**Full capacity tables** for all Standard QR Code versions (1-40) and ECC levels are available in the [Data Capacity Tables](#data-capacity-tables) section below.
 
-## Data Capacity Tables
+### Data Capacity Tables
 
-Full capacity tables for all QR code versions and ECC Levels.
+Full capacity tables for all Standard QR Code versions and ECC levels.
 
 **Test Characters:**
 - Numeric: `'1'` (digit)
@@ -32,7 +34,7 @@ Full capacity tables for all QR code versions and ECC Levels.
   - For ASCII characters (1 byte each), multiply the byte value by ~3
   - For theoretical byte capacity, refer to ISO/IEC 18004 Table 7
 
-### ECC Level: L
+#### ECC Level: L
 
 <details><summary>Click to expand full capacity tables</summary>
 
@@ -81,7 +83,7 @@ Full capacity tables for all QR code versions and ECC Levels.
 
 </details>
 
-### ECC Level: M
+#### ECC Level: M
 
 <details>
 <summary>Click to expand full capacity tables</summary>
@@ -131,7 +133,7 @@ Full capacity tables for all QR code versions and ECC Levels.
 
 </details>
 
-### ECC Level: Q
+#### ECC Level: Q
 
 <details>
 <summary>Click to expand full capacity tables</summary>
@@ -181,7 +183,7 @@ Full capacity tables for all QR code versions and ECC Levels.
 
 </details>
 
-### ECC Level: H
+#### ECC Level: H
 
 <details>
 <summary>Click to expand full capacity tables</summary>
@@ -230,3 +232,20 @@ Full capacity tables for all QR code versions and ECC Levels.
 | 40 |    3057 |         1852 |  424 |
 
 </details>
+
+## Micro QR Code (M1-M4)
+
+Character capacities per version and ECC level (ISO/IEC 18004 Table 7; `—` = mode or ECC level not available on that version):
+
+| Version | ECC | Numeric | Alphanumeric | Byte |
+|---------|-----|---------|--------------|------|
+| M1 (11×11) | Detection only | 5 | — | — |
+| M2 (13×13) | L | 10 | 6 | — |
+| M2 (13×13) | M | 8 | 5 | — |
+| M3 (15×15) | L | 23 | 14 | 9 |
+| M3 (15×15) | M | 18 | 11 | 7 |
+| M4 (17×17) | L | 35 | 21 | 15 |
+| M4 (17×17) | M | 30 | 18 | 13 |
+| M4 (17×17) | Q | 21 | 13 | 9 |
+
+Byte capacities are encoded byte counts: ISO-8859-1 text costs 1 byte per character, UTF-8 multi-byte text costs its UTF-8 length (e.g. 'あ' = 3 bytes).
