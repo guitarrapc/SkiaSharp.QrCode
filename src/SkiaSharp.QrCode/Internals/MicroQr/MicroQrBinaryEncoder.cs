@@ -1,6 +1,11 @@
+using System.Buffers.Binary;
 using System.Diagnostics;
-using System.Text;
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+#if NET8_0_OR_GREATER
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
+#endif
 
 namespace SkiaSharp.QrCode.Internals.MicroQr;
 
@@ -20,17 +25,21 @@ namespace SkiaSharp.QrCode.Internals.MicroQr;
 /// stored in the byte's high nibble with a forced-zero low nibble, and a final
 /// 4-bit pad codeword is 0000 (never part of the 0xEC/0x11 cycle).</item>
 /// </list>
-/// Reed-Solomon ECC is computed by the shared <see cref="EccBinaryEncoder"/> over
+/// Reed-Solomon ECC is computed by the shared <see cref="BinaryEncoders.EccBinaryEncoder"/> over
 /// the returned codeword bytes as-is (the half codeword participates as its
 /// high-nibble byte value).
+///
+/// Performance design: Micro QR data codewords top out at 16 bytes (M4-L), so
+/// the whole bit stream is accumulated MSB-first in two ulong registers
+/// (hi = output bytes 0-7, lo = bytes 8-15) with no intermediate buffer. The
+/// UTF-8 fallback runs as a fully separate cold function because sharing the
+/// accumulator by ref with a non-inlined callee would address-expose it and
+/// force every hot-path append through the stack. Terminator/alignment zeros
+/// are position arithmetic only, and the 0xEC/0x11 pad run is OR-ed in from a
+/// phase-selected 128-bit constant.
 /// </remarks>
 internal static class MicroQrBinaryEncoder
 {
-    // M4-L has the largest data section: 16 codewords. The work buffer adds slack
-    // because BitWriter stores 32-bit words ahead of the logical position.
-    private const int MaxDataCodewords = 16;
-    private const int WorkBufferSize = MaxDataCodewords + 8;
-
     /// <summary>
     /// Encodes <paramref name="text"/> into data codewords (padding included) and
     /// writes them to <paramref name="destination"/>.
@@ -39,7 +48,9 @@ internal static class MicroQrBinaryEncoder
     /// <param name="version">Micro QR version (M1-M4).</param>
     /// <param name="eccLevel">Error correction level (valid for the version).</param>
     /// <param name="mode">Data encoding mode (Numeric / Alphanumeric / Byte).</param>
-    /// <param name="destination">Destination for the data codewords.</param>
+    /// <param name="destination">Destination for the data codewords. When at least 16 bytes long
+    /// the full accumulator is stored (bytes beyond the returned count are zero); shorter
+    /// destinations receive exactly the codeword bytes.</param>
     /// <returns>Number of codeword bytes written (= data codeword count for the version/ECC).</returns>
     public static int EncodeDataCodewords(ReadOnlySpan<char> text, MicroQrVersion version, MicroQrEccLevel eccLevel, EncodingMode mode, Span<byte> destination)
     {
@@ -47,135 +58,487 @@ internal static class MicroQrBinaryEncoder
         var codewordCount = MicroQrConstants.GetDataCodewordCount(version, eccLevel);
         Debug.Assert(capacityBits > 0, "invalid version/ECC combination must be rejected by the caller");
 
-        Span<byte> work = stackalloc byte[WorkBufferSize];
-        var writer = new BitWriter(work);
+        // Pipeline:
+        //   1. mode + count header  ->  2. mode-specific data bits
+        //   -> (128-bit accumulator hi/lo)
+        //   -> 3. terminator position adjustment -> 4. 0xEC/0x11 padding by mask
+        //   -> 5. big-endian store
+        // (steps 3-5 live in FinishAndStore)
 
-        // 1. Mode indicator (version - 1 bits; M1 carries numeric implicitly).
-        var modeBits = MicroQrConstants.GetModeIndicatorLength(version);
-        if (modeBits > 0)
-        {
-            writer.Write(MicroQrConstants.GetModeIndicatorValue(mode), modeBits);
-        }
-
-        // 2. Character count indicator + 3. data bits.
+        // 1. Mode indicator (version - 1 bits; M1 carries numeric implicitly),
+        //    fused with the character count indicator into a single append.
         var countBits = MicroQrConstants.GetCountIndicatorLength(version, mode);
+        var headerBits = (int)version - 1 + countBits;
+        var modeValue = MicroQrConstants.GetModeIndicatorValue(mode) << countBits;
+
+        // 128-bit fixed accumulator: Micro QR data codewords top out at 16 bytes
+        // (M4-L), so the whole bit stream fits in two registers, MSB-first:
+        //   hi = output bytes 0-7, lo = bytes 8-15,
+        //   pos = bits written from the start of the stream.
+        // Both words start at zero, so all-zero fields are never written — the
+        // terminator, byte alignment, the forced-zero low nibble of the M1/M3
+        // half codeword, and unused tail bytes fall out by advancing pos only
+        // (where the previous BitWriter design issued explicit Write(0, n) calls).
+        ulong hi = 0, lo = 0;
+        var pos = 0;
+
+        // 2. Character count indicator + data bits.
         switch (mode)
         {
             case EncodingMode.Numeric:
-                writer.Write(text.Length, countBits);
-                WriteNumericData(ref writer, text);
+                Append(ref hi, ref lo, ref pos, modeValue | text.Length, headerBits);
+                WriteNumericData(ref hi, ref lo, ref pos, text);
                 break;
+
             case EncodingMode.Alphanumeric:
-                writer.Write(text.Length, countBits);
-                WriteAlphanumericData(ref writer, text);
+                Append(ref hi, ref lo, ref pos, modeValue | text.Length, headerBits);
+                WriteAlphanumericData(ref hi, ref lo, ref pos, text);
                 break;
+
             case EncodingMode.Byte:
-                WriteByteSegment(ref writer, text, countBits);
+            {
+                // Latin-1 validity, branch-free: if every char is <= 0x00FF the
+                // OR of all code units stays <= 0xFF; any char with high bits
+                // pushes it above. The loop only ORs and the compare happens once
+                // at the end — no per-char `if (text[i] > 0xFF)` branch. Trade-off:
+                // no early exit, so a non-Latin-1 char up front still scans the
+                // whole text; Micro QR inputs are <= 15 chars, so avoiding the
+                // data-dependent branch wins over bailing out early.
+                var acc = 0;
+                for (var i = 0; i < text.Length; i++)
+                {
+                    acc |= text[i];
+                }
+                if (acc > 0xFF)
+                {
+                    return EncodeUtf8Codewords(text, version, capacityBits, codewordCount, modeValue, headerBits, destination);
+                }
+
+                // Byte mode: the count indicator counts encoded BYTES; on the
+                // Latin-1 path every char narrows to one byte, so count = length.
+                Append(ref hi, ref lo, ref pos, modeValue | text.Length, headerBits);
+                var j = 0;
+#if NET8_0_OR_GREATER
+                if (Sse2.IsSupported && text.Length >= 8)
+                {
+                    // Narrow 8 chars -> 8 bytes, appended as one 64-bit batch.
+                    // PackUnsignedSaturate narrows 16-bit lanes to 8-bit; passing
+                    // the same vector twice duplicates the result into both
+                    // halves, and ToScalar() takes the low 64 bits we need.
+                    // Saturation cannot corrupt data: the Latin-1 check above
+                    // guarantees every lane is <= 0xFF. ReverseEndianness aligns
+                    // conventions — the pack result read as a ulong puts the
+                    // FIRST char in the LOWEST byte, while Append64 emits the
+                    // HIGHEST byte first.
+                    for (; j + 8 <= text.Length; j += 8)
+                    {
+                        var chars = Vector128.LoadUnsafe(in Unsafe.As<char, ushort>(ref Unsafe.AsRef(in text[j])));
+                        var packed = Sse2.PackUnsignedSaturate(chars.AsInt16(), chars.AsInt16()).AsUInt64().ToScalar();
+                        Append64(ref hi, ref lo, ref pos, BinaryPrimitives.ReverseEndianness(packed));
+                    }
+                }
+#endif
+                for (; j < text.Length; j++)
+                {
+                    Append(ref hi, ref lo, ref pos, (byte)text[j], 8);
+                }
                 break;
+            }
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by Micro QR.");
         }
 
-        Debug.Assert(writer.BitPosition <= capacityBits, "capacity must be validated by the caller");
+        Debug.Assert(pos <= capacityBits, "capacity must be validated by the caller");
 
-        // 4. Terminator (all-zero, shortened when the data reaches capacity).
-        var terminatorBits = Math.Min(MicroQrConstants.GetTerminatorLength(version), capacityBits - writer.BitPosition);
-        if (terminatorBits > 0)
-        {
-            writer.Write(0, terminatorBits);
-        }
-
-        // 5. Zero-fill the current byte. This also zeroes the forced-zero low
-        // nibble when the data already reached into the final half codeword.
-        var alignmentBits = (8 - writer.BitPosition % 8) % 8;
-        if (alignmentBits > 0)
-        {
-            writer.Write(0, alignmentBits);
-        }
-
-        // 6. Alternating full pad codewords up to the last full data codeword.
-        var fullCodewordBits = capacityBits / 8 * 8;
-        var padIndex = 0;
-        while (writer.BitPosition < fullCodewordBits)
-        {
-            writer.Write(padIndex++ % 2 == 0 ? 0xEC : 0x11, 8);
-        }
-
-        // 7. M1/M3: final 4-bit pad codeword is 0000 (high nibble; low nibble is
-        // the forced zero filler), i.e. one full zero byte.
-        while (writer.BitPosition < codewordCount * 8)
-        {
-            writer.Write(0, 8);
-        }
-
-        writer.Flush();
-        work.Slice(0, codewordCount).CopyTo(destination);
+        FinishAndStore(hi, lo, pos, version, capacityBits, codewordCount, destination);
         return codewordCount;
     }
 
-    /// <summary>Numeric segment: 10/7/4 bits per 3/2/1 digits (ISO/IEC 18004 7.4.3).</summary>
-    private static void WriteNumericData(ref BitWriter writer, ReadOnlySpan<char> digits)
+    /// <summary>
+    /// Numeric segment: 10/7/4 bits per 3/2/1 digits (ISO/IEC 18004 7.4.3).
+    /// </summary>
+    /// <remarks>
+    /// The spec writes one 10-bit field per 3-digit group. Here three groups
+    /// (9 digits) are combined into a single 30-bit append:
+    /// <code>
+    /// "123456789"  ->  123 / 456 / 789 (10 bits each)
+    ///              ->  [group0: 10 bits][group1: 10 bits][group2: 10 bits]
+    ///              ->  (123 &lt;&lt; 20) | (456 &lt;&lt; 10) | 789
+    /// </code>
+    /// Group values come from <see cref="SwarGroup"/>, whose 8-byte load covers
+    /// 4 chars for a 3-digit group — so every SWAR grain needs one readable char
+    /// beyond it (hence the i+9 / i+3 guards); tails without that headroom use
+    /// scalar group math with the '0' bias folded into one constant.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void WriteNumericData(ref ulong hi, ref ulong lo, ref int pos, ReadOnlySpan<char> digits)
     {
+        // contract: digits must be '0'-'9' only (validated upstream). SWAR/scalar
+        // group math produces a wrong — but memory-safe — stream otherwise.
+        Debug.Assert(AllNumeric(digits), "caller must validate the numeric alphabet");
+
+        ref var c = ref MemoryMarshal.GetReference(digits);
+        var length = digits.Length;
         var i = 0;
-        for (; i + 2 < digits.Length; i += 3)
+        // 9 digits -> one 30-bit append; the SWAR load at i+6 reads chars
+        // i+6..i+9, so a 10th char must exist: i + 9 < length
+        for (; i + 9 < length; i += 9)
         {
-            writer.Write((digits[i] - '0') * 100 + (digits[i + 1] - '0') * 10 + (digits[i + 2] - '0'), 10);
+            var g = (SwarGroup(ref c, i) << 20) | (SwarGroup(ref c, i + 3) << 10) | SwarGroup(ref c, i + 6);
+            Append(ref hi, ref lo, ref pos, g, 30);
         }
-        if (i + 1 < digits.Length)
+        // 3 digits per append while a 4th readable char exists
+        for (; i + 3 < length; i += 3)
         {
-            writer.Write((digits[i] - '0') * 10 + (digits[i + 1] - '0'), 7);
+            Append(ref hi, ref lo, ref pos, SwarGroup(ref c, i), 10);
         }
-        else if (i < digits.Length)
+        // scalar tail: 0-3 digits left, no headroom for an 8-byte load
+        if (i + 2 < length)
         {
-            writer.Write(digits[i] - '0', 4);
+            Append(ref hi, ref lo, ref pos, digits[i] * 100 + digits[i + 1] * 10 + digits[i + 2] - 5328, 10); // 5328 = '0' * 111
+            i += 3;
+        }
+        if (i + 1 < length)
+        {
+            Append(ref hi, ref lo, ref pos, digits[i] * 10 + digits[i + 1] - 528, 7); // 528 = '0' * 11
+        }
+        else if (i < length)
+        {
+            Append(ref hi, ref lo, ref pos, digits[i] - '0', 4);
         }
     }
 
-    /// <summary>Alphanumeric segment: 11 bits per pair, 6 bits for a trailing odd character.</summary>
-    private static void WriteAlphanumericData(ref BitWriter writer, ReadOnlySpan<char> chars)
+    // SWAR (SIMD Within A Register): one ulong holds four 16-bit UTF-16 lanes,
+    // turning a 3-digit group into its numeric value with a single 64-bit
+    // multiply instead of per-digit subtracts and multiplies.
+    //
+    //   chunk = 4 chars, unaligned 8-byte read; "1234" lays out little-endian as
+    //           lanes  '1' | '2' | '3' | '4'
+    //   chunk - SwarDigitBias   subtracts '0' from every lane:
+    //           lanes   1  |  2  |  3  |  4
+    //   * SwarGroupMagic (100<<32 | 10<<16 | 1): the partial products
+    //           d0*100<<32, d1*10<<32, d2*1<<32
+    //   all land in bit window [32..47], so that window holds d0*100 + d1*10 + d2.
+    //   The group value is <= 999 < 2^10 (mask 0x3FF); lower lanes cannot carry
+    //   into the window, and every product of the 4th lane lands at bit 48+ or
+    //   overflows out of the 64-bit register, so its value never matters.
+    //
+    // Only 3 digits contribute, but the 8-byte load spans 4 chars — callers must
+    // guarantee one readable char beyond each group (see the loop guards above).
+    // Debug-only contract checks (evaluated solely inside Debug.Assert).
+    private static bool AllNumeric(ReadOnlySpan<char> chars)
     {
-        var i = 0;
-        for (; i + 1 < chars.Length; i += 2)
+        foreach (var c in chars)
         {
-            writer.Write(CharacterSets.GetAlphanumericValue(chars[i]) * 45 + CharacterSets.GetAlphanumericValue(chars[i + 1]), 11);
+            if (!CharacterSets.IsNumeric(c)) return false;
+        }
+        return true;
+    }
+
+    private static bool AllAlphanumeric(ReadOnlySpan<char> chars)
+    {
+        foreach (var c in chars)
+        {
+            if (!CharacterSets.IsAlphanumeric(c)) return false;
+        }
+        return true;
+    }
+
+    private const ulong SwarDigitBias = 0x0030_0030_0030_0030UL;
+    private const ulong SwarGroupMagic = (100UL << 32) | (10UL << 16) | 1UL;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int SwarGroup(ref char c, int i)
+    {
+        var chunk = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref c, i)));
+        return (int)(((chunk - SwarDigitBias) * SwarGroupMagic) >> 32) & 0x3FF;
+    }
+
+    // Direct value table replacing the per-char CharacterSets.GetAlphanumericValue
+    // call (and its two compare+throw branches). QR alphanumeric values are 0-44,
+    // so byte entries suffice; invalid slots hold 0 and are never read because the
+    // caller validates the alphabet. Lookups index as AlnumValues[c & 0x7F]: the
+    // 7-bit mask keeps ANY UTF-16 char inside 0-127, so the access is memory-safe
+    // without a bounds check even for out-of-alphabet input.
+    private static ReadOnlySpan<byte> AlnumValues =>
+    [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        36, 0, 0, 0, 37, 38, 0, 0, 0, 0, 39, 40, 0, 41, 42, 43,
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 44, 0, 0, 0, 0, 0,
+        0, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+        25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+
+    /// <summary>
+    /// Alphanumeric segment: 11 bits per pair (value0 * 45 + value1),
+    /// 6 bits for a trailing odd character (ISO/IEC 18004 7.4.4).
+    /// </summary>
+    /// <remarks>
+    /// Two pairs (4 chars) are combined into a single 22-bit append:
+    /// <code>
+    /// [pair0: 11 bits][pair1: 11 bits]  ->  (p0 &lt;&lt; 11) | p1
+    /// </code>
+    /// Like the numeric 9-digit batch, the point is fewer Append calls — each
+    /// one is a variable-shift OR into the 128-bit accumulator, so halving the
+    /// call count halves that work.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void WriteAlphanumericData(ref ulong hi, ref ulong lo, ref int pos, ReadOnlySpan<char> chars)
+    {
+        // contract: the & 0x7F mask below guarantees MEMORY safety for any input,
+        // but it does not sanitize: out-of-alphabet chars silently encode wrong
+        // values. Alphabet validation is the caller's job (internal-only method).
+        Debug.Assert(AllAlphanumeric(chars), "caller must validate the alphanumeric alphabet");
+
+        var i = 0;
+        // 4 chars = 2 pairs -> one 22-bit append
+        for (; i + 3 < chars.Length; i += 4)
+        {
+            var p0 = AlnumValues[chars[i] & 0x7F] * 45 + AlnumValues[chars[i + 1] & 0x7F];
+            var p1 = AlnumValues[chars[i + 2] & 0x7F] * 45 + AlnumValues[chars[i + 3] & 0x7F];
+            Append(ref hi, ref lo, ref pos, (p0 << 11) | p1, 22);
+        }
+        // remaining full pair, then a trailing odd character
+        if (i + 1 < chars.Length)
+        {
+            var v = AlnumValues[chars[i] & 0x7F] * 45 + AlnumValues[chars[i + 1] & 0x7F];
+            Append(ref hi, ref lo, ref pos, v, 11);
+            i += 2;
         }
         if (i < chars.Length)
         {
-            writer.Write(CharacterSets.GetAlphanumericValue(chars[i]), 6);
+            Append(ref hi, ref lo, ref pos, AlnumValues[chars[i] & 0x7F], 6);
         }
     }
 
     /// <summary>
-    /// Byte segment: count indicator counts encoded BYTES, then 8 bits per byte.
-    /// Latin-1-representable text is narrowed per char; anything else is UTF-8.
+    /// Byte segment for non-Latin-1 text: full encode on a private accumulator.
+    /// The count indicator counts encoded BYTES. Not inlined by design — see the
+    /// class remarks on address exposure.
     /// </summary>
-    private static void WriteByteSegment(ref BitWriter writer, ReadOnlySpan<char> text, int countBits)
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int EncodeUtf8Codewords(ReadOnlySpan<char> text, MicroQrVersion version, int capacityBits, int codewordCount, int modeValue, int headerBits, Span<byte> destination)
     {
-        if (CharacterSets.IsValidISO88591(text))
+        ulong hi = 0, lo = 0;
+        var pos = 0;
+
+        // Contract: the caller has validated the ENCODED length against the
+        // capacity, which tops out at 15 bytes (M4-L). Every char yields at
+        // least one byte, so text.Length <= 15 follows, and the worst-case
+        // expansion (3 bytes per char: non-ASCII BMP or lone surrogates) stays
+        // within 45 <= 64 buffer bytes. If the contract is ever violated the
+        // Span bounds check in EncodeUtf8 throws — the stack buffer cannot be
+        // overrun.
+        Debug.Assert(text.Length <= 15, "byte payloads beyond any Micro QR capacity must be rejected by the caller");
+        Span<byte> utf8 = stackalloc byte[64];
+        var n = EncodeUtf8(text, utf8);
+
+        Append(ref hi, ref lo, ref pos, modeValue | n, headerBits);
+        var i = 0;
+        for (; i + 8 <= n; i += 8)
         {
-            writer.Write(text.Length, countBits);
-            for (var i = 0; i < text.Length; i++)
-            {
-                writer.Write((byte)text[i], 8);
-            }
-            return;
+            Append64(ref hi, ref lo, ref pos, BinaryPrimitives.ReadUInt64BigEndian(utf8.Slice(i)));
+        }
+        for (; i < n; i++)
+        {
+            Append(ref hi, ref lo, ref pos, utf8[i], 8);
         }
 
-        // Micro QR byte capacity tops out at 15 bytes (M4-L), so the UTF-8 buffer
-        // is always tiny; the caller has already validated the encoded length.
-        Debug.Assert(text.Length <= 64, "byte payloads beyond any Micro QR capacity must be rejected by the caller");
-        Span<byte> utf8 = stackalloc byte[256];
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        var byteCount = Encoding.UTF8.GetBytes(text, utf8);
-#else
-        var encoded = Encoding.UTF8.GetBytes(text.ToString());
-        encoded.CopyTo(utf8);
-        var byteCount = encoded.Length;
-#endif
-        writer.Write(byteCount, countBits);
-        for (var i = 0; i < byteCount; i++)
+        FinishAndStore(hi, lo, pos, version, capacityBits, codewordCount, destination);
+        return codewordCount;
+    }
+
+    /// <summary>
+    /// Hand-rolled UTF-8 encoder matching Encoding.UTF8.GetBytes semantics,
+    /// including U+FFFD replacement for lone surrogates. Payloads are tiny (≤ 15
+    /// encoded bytes), where Encoding's fixed dispatch cost dominates. This also
+    /// replaces the old netstandard2.0 path — <c>Encoding.UTF8.GetBytes(text.ToString())</c> —
+    /// which allocated both a string and a byte array per call; this loop allocates nothing.
+    /// </summary>
+    private static int EncodeUtf8(ReadOnlySpan<char> text, Span<byte> utf8)
+    {
+        var n = 0;
+        for (var i = 0; i < text.Length; i++)
         {
-            writer.Write(utf8[i], 8);
+            int c = text[i];
+            if (c < 0x80)
+            {
+                // ASCII -> 1 byte
+                utf8[n++] = (byte)c;
+            }
+            else if (c < 0x800)
+            {
+                // U+0080..U+07FF -> 2 bytes
+                utf8[n++] = (byte)(0xC0 | (c >> 6));
+                utf8[n++] = (byte)(0x80 | (c & 0x3F));
+            }
+            else if (c is >= 0xD800 and <= 0xDFFF)
+            {
+                // surrogate range: a valid high+low pair encodes a supplementary
+                // code point (U+10000..U+10FFFF) as 4 bytes
+                if (c <= 0xDBFF && i + 1 < text.Length && text[i + 1] is >= (char)0xDC00 and <= (char)0xDFFF)
+                {
+                    var cp = 0x10000 + ((c - 0xD800) << 10) + (text[i + 1] - 0xDC00);
+                    i++;
+                    utf8[n++] = (byte)(0xF0 | (cp >> 18));
+                    utf8[n++] = (byte)(0x80 | ((cp >> 12) & 0x3F));
+                    utf8[n++] = (byte)(0x80 | ((cp >> 6) & 0x3F));
+                    utf8[n++] = (byte)(0x80 | (cp & 0x3F));
+                }
+                else
+                {
+                    // lone surrogate -> U+FFFD, matching Encoding.UTF8 replacement
+                    utf8[n++] = 0xEF;
+                    utf8[n++] = 0xBF;
+                    utf8[n++] = 0xBD;
+                }
+            }
+            else
+            {
+                // remaining BMP chars (U+0800..U+FFFF outside surrogates) -> 3 bytes
+                utf8[n++] = (byte)(0xE0 | (c >> 12));
+                utf8[n++] = (byte)(0x80 | ((c >> 6) & 0x3F));
+                utf8[n++] = (byte)(0x80 | (c & 0x3F));
+            }
+        }
+        return n;
+    }
+
+    // ---------------------------------------------------------------
+    // 128-bit register accumulator (MSB-first: hi = output bytes 0-7,
+    // lo = bytes 8-15).
+    // ---------------------------------------------------------------
+
+    /// <summary>
+    /// Appends the low <paramref name="bitCount"/> bits of
+    /// <paramref name="value"/> (1-32 bits) at the current position.
+    /// Internal (not private) so boundary tests can drive it directly.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void Append(ref ulong hi, ref ulong lo, ref int pos, int value, int bitCount)
+    {
+        Debug.Assert(bitCount >= 1 && bitCount <= 32, "bitCount must be between 1 and 32");
+        Debug.Assert(pos + bitCount <= 128, "the stream never exceeds 16 codeword bytes");
+
+        var v = (ulong)(uint)value & ((1UL << bitCount) - 1);
+        var end = pos + bitCount;
+        if (end <= 64)
+        {
+            hi |= v << (64 - end);
+        }
+        else if (pos >= 64)
+        {
+            lo |= v << (128 - end);
+        }
+        else
+        {
+            hi |= v >> (end - 64);
+            lo |= v << (128 - end);
+        }
+        pos = end;
+    }
+
+    /// <summary>Appends 64 bits (MSB-first). Valid only while pos ≤ 64.
+    /// Internal (not private) so boundary tests can drive it directly.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void Append64(ref ulong hi, ref ulong lo, ref int pos, ulong value)
+    {
+        Debug.Assert(pos <= 64, "a 64-bit append must fit the remaining stream");
+
+        if (pos < 64)
+        {
+            hi |= value >> pos;
+            // two-step shift avoids the &63 wrap at pos == 0
+            lo |= (value << 1) << (63 - pos);
+        }
+        else
+        {
+            lo |= value;
+        }
+        pos += 64;
+    }
+
+    // Prefix masks over whole bytes: entry n = first n bytes of the 16-byte
+    // stream set to FF (hi covers bytes 0-7, lo covers bytes 8-15):
+    //
+    //   n = 0:   hi = 00 00 00 00 00 00 00 00   lo = 00 ...
+    //   n = 3:   hi = FF FF FF 00 00 00 00 00   lo = 00 ...
+    //   n = 8:   hi = FF FF FF FF FF FF FF FF   lo = 00 ...
+    //   n = 10:  hi = FF FF FF FF FF FF FF FF   lo = FF FF 00 00 00 00 00 00
+    //
+    // Two prefixes combine into any byte range:
+    //   prefixMask[end] & ~prefixMask[start]  ==  [0, end) - [0, start)  ==  [start, end)
+    private static readonly ulong[] prefixMaskHi = BuildPrefixMasks(highWord: true);
+    private static readonly ulong[] prefixMaskLo = BuildPrefixMasks(highWord: false);
+
+    private static ulong[] BuildPrefixMasks(bool highWord)
+    {
+        var table = new ulong[17];
+        for (var n = 0; n <= 16; n++)
+        {
+            var bits = n * 8;
+            table[n] = highWord
+                ? bits == 0 ? 0UL : bits >= 64 ? ulong.MaxValue : ulong.MaxValue << (64 - bits)
+                : bits <= 64 ? 0UL : bits >= 128 ? ulong.MaxValue : ulong.MaxValue << (128 - bits);
+        }
+        return table;
+    }
+
+    /// <summary>
+    /// Terminator + byte alignment (all zero bits: position arithmetic
+    /// only), alternating 0xEC/0x11 pad codewords via a phase-selected constant,
+    /// then the store. The M1/M3 final 4-bit pad codeword and any trailing zero
+    /// fill are already zeros in the accumulator.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void FinishAndStore(ulong hi, ulong lo, int pos, MicroQrVersion version, int capacityBits, int codewordCount, Span<byte> destination)
+    {
+        // 3. Terminator (all-zero, shortened when the data reaches capacity) and
+        //    zero-fill to the byte boundary: the accumulator already holds zeros
+        //    there, so only the position advances.
+        pos += Math.Min(MicroQrConstants.GetTerminatorLength(version), capacityBits - pos);
+
+        // 4. Alternating full pad codewords (0xEC, 0x11, ...) up to the last
+        //    full data codeword. The old design looped one codeword at a time;
+        //    here the whole run lands in at most two 64-bit ORs:
+        //    - phase: the pattern constant is picked by the pad start's byte
+        //      parity so that byte i gets 0xEC when (i - padStartByte) is even —
+        //      even start: EC 11 EC 11 ...,  odd start: 11 EC 11 EC ...
+        //    - range: prefixMask[end] & ~prefixMask[start] masks the pattern to
+        //      exactly [padStartByte, padEndByte) (see the table comment).
+        var padStartByte = (pos + 7) >> 3;
+        var padEndByte = capacityBits >> 3;
+        if (padStartByte < padEndByte)
+        {
+            var pattern = (padStartByte & 1) == 0 ? 0xEC11EC11EC11EC11UL : 0x11EC11EC11EC11ECUL;
+            hi |= pattern & (prefixMaskHi[padEndByte] & ~prefixMaskHi[padStartByte]);
+            lo |= pattern & (prefixMaskLo[padEndByte] & ~prefixMaskLo[padStartByte]);
+        }
+
+        // M1/M3 tails need no writes at all: the old design zero-filled to
+        // codewordCount * 8 with explicit Write(0, 8) calls, but the accumulator
+        // starts at zero and the pad pattern is masked to end at the last FULL
+        // codeword (padEndByte), so the final 4-bit pad codeword and the
+        // forced-zero low nibble stay zero by construction — the half-codeword
+        // handling is expressed by NOT writing, not by a special case.
+
+        // 5. Store big-endian: hi = codeword bytes 0-7, lo = bytes 8-15.
+        Debug.Assert(destination.Length >= codewordCount, "destination must hold at least the data codewords");
+        if (destination.Length >= 16)
+        {
+            BinaryPrimitives.WriteUInt64BigEndian(destination, hi);
+            BinaryPrimitives.WriteUInt64BigEndian(destination.Slice(8), lo);
+        }
+        else
+        {
+            Span<byte> tmp = stackalloc byte[16];
+            BinaryPrimitives.WriteUInt64BigEndian(tmp, hi);
+            BinaryPrimitives.WriteUInt64BigEndian(tmp.Slice(8), lo);
+            tmp.Slice(0, codewordCount).CopyTo(destination);
         }
     }
 }
