@@ -562,8 +562,10 @@ internal static class MicroQrBinaryEncoder
     /// <summary>
     /// Appends the low <paramref name="bitCount"/> bits (1-56) of an
     /// already-masked ulong — Append generalized past 32 bits for the NEON byte
-    /// tail (up to 7 bytes in one call). The caller masks because
-    /// <c>(1UL &lt;&lt; 64) - 1</c> would wrap at bitCount = 64.
+    /// tail (up to 7 bytes in one call). Unlike Append this does not mask
+    /// internally: the caller needs the mask anyway to strip the overlap bytes
+    /// of its tail load, so re-masking here would be a redundant AND — the
+    /// pre-masked contract is asserted instead.
     /// Internal (not private) so boundary tests can drive it directly.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
