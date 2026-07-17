@@ -330,6 +330,8 @@ internal static class MicroQrImageDecoder
     {
         ReadOnlySpan<float> centerOffsets = stackalloc float[] { 0f, -0.5f, 0.5f };
         ReadOnlySpan<float> factors = stackalloc float[] { 0.94f, 0.97f, 1f, 1.03f, 1.06f };
+        var uSize = (float)Math.Sqrt(uX * uX + uY * uY);
+        var vSize = (float)Math.Sqrt(vX * vX + vY * vY);
         foreach (var centerYOffset in centerOffsets)
         {
             foreach (var centerXOffset in centerOffsets)
@@ -349,6 +351,9 @@ internal static class MicroQrImageDecoder
                         var centerY = candidate.Y + centerYOffset;
                         var originX = centerX - 3.5f * (scaledUX + scaledVX);
                         var originY = centerY - 3.5f * (scaledUY + scaledVY);
+                        var samplingSlack = Math.Max(uSize * uFactor, vSize * vFactor);
+                        if (!SymbolFitsImage(originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, width, height, samplingSlack))
+                            continue;
 
                         SampleGrid(luminance, width, height, threshold, originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, modules);
                         var status = MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
