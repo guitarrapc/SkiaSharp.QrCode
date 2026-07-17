@@ -1,4 +1,5 @@
 using SkiaSharp.QrCode.Image;
+using SkiaSharp.QrCode.Internals;
 
 namespace SkiaSharp.QrCode;
 
@@ -79,11 +80,11 @@ public static class QRCodeRenderer
         var skipFinderPatterns = finderPatternShape is not null;
         if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
         {
-            DrawModuleRuns(canvas, data, area, darkPaint, skipFinderPatterns);
+            DrawModuleRuns(canvas, new StandardQrMatrixView(data), area, darkPaint, skipFinderPatterns);
         }
         else
         {
-            DrawModules(canvas, data, area, darkPaint, shape, moduleSizePercent, skipFinderPatterns);
+            DrawModules(canvas, new StandardQrMatrixView(data), area, darkPaint, shape, moduleSizePercent, skipFinderPatterns);
         }
 
         // Draw finder patterns
@@ -111,6 +112,73 @@ public static class QRCodeRenderer
         {
             var (iconRect, borderRect) = GetIconRects(data, area, iconData);
             iconData.Icon.Draw(canvas, iconRect, borderRect, bgColor);
+        }
+    }
+
+    /// <summary>
+    /// Render the specified Micro QR data into the given area of the target canvas.
+    /// </summary>
+    /// <remarks>
+    /// Micro QR has a single finder pattern and no error-correction headroom for
+    /// overlays, so the Standard QR options for icons and custom finder pattern
+    /// shapes are intentionally not available. See <see cref="Render(SKCanvas, SKRect, QRCodeData, SKColor?, SKColor?, IconData?, ModuleShape?, float, GradientOptions?, FinderPatternShape?)"/>
+    /// for the module-run merge behavior shared with Standard QR.
+    /// </remarks>
+    /// <param name="canvas">The canvas to render the Micro QR code on.</param>
+    /// <param name="area">The rectangular area where the Micro QR code will be rendered.</param>
+    /// <param name="data">The Micro QR code data to render.</param>
+    /// <param name="codeColor">The color of the modules. If null, black is used.</param>
+    /// <param name="backgroundColor">The background color. If null, white is used.</param>
+    /// <param name="moduleShape">The shape to use for drawing modules. If null, rectangles are used.</param>
+    /// <param name="moduleSizePercent">The size of each module as a percentage of the cell size (0.0 to 1.0). Default is 1.0 (no gap).</param>
+    /// <param name="gradientOptions">Optional gradient options for the modules.</param>
+    /// <exception cref="ArgumentNullException"></exception>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public static void Render(
+        SKCanvas canvas,
+        SKRect area,
+        MicroQrCodeData data,
+        SKColor? codeColor,
+        SKColor? backgroundColor,
+        ModuleShape? moduleShape = null,
+        float moduleSizePercent = 1.0f,
+        GradientOptions? gradientOptions = null)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        if (moduleSizePercent is < 0f or > 1.0f)
+            throw new ArgumentOutOfRangeException(nameof(moduleSizePercent), "Module size percent must be between 0.0 and 1.0.");
+
+        var bgColor = backgroundColor ?? SKColors.White;
+        var fgColor = codeColor ?? SKColors.Black;
+        var shape = moduleShape ?? RectangleModuleShape.Default;
+
+        // Draw the background at once
+        using var lightPaint = new SKPaint() { Color = bgColor, Style = SKPaintStyle.Fill };
+        canvas.DrawRect(area, lightPaint);
+
+        // disable antialiasing as it causes gray border around each module.
+        using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
+
+        // Apply gradient if specified. The shader wrapper must be disposed here;
+        // disposing the paint alone leaves the SKShader to the finalizer.
+        using var gradientShader = CreateGradientShader(area, gradientOptions);
+        if (gradientShader is not null)
+        {
+            darkPaint.Shader = gradientShader;
+        }
+        else
+        {
+            darkPaint.Color = fgColor;
+        }
+
+        if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
+        {
+            DrawModuleRuns(canvas, new MicroQrMatrixView(data), area, darkPaint, skipFinderPatterns: false);
+        }
+        else
+        {
+            DrawModules(canvas, new MicroQrMatrixView(data), area, darkPaint, shape, moduleSizePercent, skipFinderPatterns: false);
         }
     }
 
@@ -281,10 +349,11 @@ public static class QRCodeRenderer
     /// non-axis-aligned rasterization, which affects per-module drawing between
     /// adjacent modules just the same.
     /// </summary>
-    private static void DrawModuleRuns(SKCanvas canvas, QRCodeData data, SKRect area, SKPaint paint, bool skipFinderPatterns)
+    private static void DrawModuleRuns<TView>(SKCanvas canvas, TView data, SKRect area, SKPaint paint, bool skipFinderPatterns)
+        where TView : struct, IModuleMatrixView
     {
         var size = data.Size;
-        var coreSize = data.GetCoreSize();
+        var coreSize = data.CoreSize;
         var cellWidth = area.Width / size;
         var cellHeight = area.Height / size;
         var quietZone = (size - coreSize) / 2;
@@ -322,10 +391,11 @@ public static class QRCodeRenderer
     /// Draws dark modules one by one through the module shape.
     /// Used for custom shapes and for module sizes below 100% (gaps between modules).
     /// </summary>
-    private static void DrawModules(SKCanvas canvas, QRCodeData data, SKRect area, SKPaint paint, ModuleShape shape, float moduleSizePercent, bool skipFinderPatterns)
+    private static void DrawModules<TView>(SKCanvas canvas, TView data, SKRect area, SKPaint paint, ModuleShape shape, float moduleSizePercent, bool skipFinderPatterns)
+        where TView : struct, IModuleMatrixView
     {
         var size = data.Size;
-        var coreSize = data.GetCoreSize();
+        var coreSize = data.CoreSize;
         var cellWidth = area.Width / size;
         var cellHeight = area.Height / size;
         var quietZone = (size - coreSize) / 2;

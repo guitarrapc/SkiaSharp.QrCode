@@ -88,12 +88,16 @@
           <summary>QR parameters</summary>
           <div class="panel__grid">
             <label class="field">
+              <span class="field__label">Symbology</span>
+              <select id="symbology-select"
+                title="Standard QR (versions 1-40) or Micro QR (M1-M4, tiny symbols with a single finder pattern)">
+                <option value="qr">QR Code</option>
+                <option value="microqr">Micro QR</option>
+              </select>
+            </label>
+            <label class="field">
               <span class="field__label">Error correction</span>
               <select id="ecc-select" title="Higher levels survive more damage or overlay — H is recommended with a logo">
-                <option value="L">L — 7%</option>
-                <option value="M">M — 15%</option>
-                <option value="Q">Q — 25%</option>
-                <option value="H">H — 30%</option>
               </select>
             </label>
             <label class="field">
@@ -122,7 +126,7 @@
                 <option value="rounded">Rounded rectangle</option>
               </select>
             </label>
-            <label class="field">
+            <label class="field" id="finder-row">
               <span class="field__label">Finder pattern</span>
               <select id="finder-select" title="The three large squares in the corners">
                 <option value="auto">Auto (follow module shape)</option>
@@ -186,7 +190,7 @@
           </div>
         </details>
 
-        <details class="panel" open>
+        <details class="panel" open id="logo-panel">
           <summary>Logo</summary>
           <div class="panel__grid">
             <label class="field">

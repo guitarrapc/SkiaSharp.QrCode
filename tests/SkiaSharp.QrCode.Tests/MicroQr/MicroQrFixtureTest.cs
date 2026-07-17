@@ -9,8 +9,8 @@ namespace SkiaSharp.QrCode.Tests;
 /// <c>dotnet run --project tools/QrInteropFixtures -- regenerate</c>
 /// (the qrtool binary comes from <c>tools/QrInteropFixtures/get-qrtool.ps1</c>).
 /// <para>
-/// Only the matrix path is exercised here — Micro QR image detection is
-/// implementation plan Phase 6; the committed PNGs await it.
+/// Both the matrix path and the PNG image path (Phase 4b image detection) are
+/// exercised against every fixture.
 /// </para>
 /// </summary>
 public class MicroQrFixtureTest
@@ -47,5 +47,23 @@ public class MicroQrFixtureTest
         {
             await Assert.That(info.MaskPattern).IsEqualTo(manifest.MaskPattern);
         }
+    }
+
+    [Test]
+    [MethodDataSource(nameof(FixtureIds))]
+    public async Task Decode_PngFixture_PayloadAndMetadataMatch(string fixtureId)
+    {
+        var fixture = FixtureLoader.Load("MicroQr", fixtureId);
+        var manifest = fixture.Manifest;
+
+        using var bitmap = SKBitmap.Decode(fixture.PngPath);
+        await Assert.That(bitmap).IsNotNull();
+
+        var success = MicroQrCodeDecoder.TryDecode(bitmap, out var text, out var info);
+
+        await Assert.That(success).IsTrue();
+        await Assert.That(text).IsEqualTo(manifest.PayloadText);
+        await Assert.That((int)info.Version).IsEqualTo(manifest.Version);
+        await Assert.That(info.EccLevel).IsEqualTo(Enum.Parse<MicroQrEccLevel>(manifest.ErrorCorrectionLevel));
     }
 }

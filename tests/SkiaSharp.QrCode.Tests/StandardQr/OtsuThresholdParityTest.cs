@@ -5,7 +5,7 @@ namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
 /// Parity test for the run-aggregated Otsu histogram fill: the wide-load walk in
-/// <see cref="QRImageDecoder.ComputeOtsuThreshold"/> (8 pixels per ulong, uniform
+/// <see cref="Binarizer.ComputeOtsuThreshold"/> (8 pixels per ulong, uniform
 /// groups folded into a single += 8) must return a byte-identical threshold to a
 /// naive per-pixel reference across QR-like scenes, noise, gradients, constants,
 /// and ragged lengths (tail handling).
@@ -39,7 +39,7 @@ public class OtsuThresholdParityTest
         foreach (var input in inputs)
         {
             var expected = NaiveOtsuThreshold(input);
-            var actual = QRImageDecoder.ComputeOtsuThreshold(input);
+            var actual = Binarizer.ComputeOtsuThreshold(input);
             await Assert.That(expected == actual).IsTrue().Because($"threshold mismatch on length={input.Length}: wide={actual}, naive={expected}");
         }
     }

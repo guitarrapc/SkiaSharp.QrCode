@@ -28,8 +28,15 @@ dotnet serve -d publish/playground/wwwroot   # or: python -m http.server -d publ
 works on hosts without import-map rewriting (GitHub Pages, plain static servers).
 
 Publish to a **clean output directory** (delete it between publishes). Re-publishing into the
-same `-o` directory leaves the previous build's fingerprinted files behind, and the
-`_CopyDotnetJsFallback` target then fails with MSB3094 because two `dotnet.*.js` entry files match.
+same `-o` directory leaves the previous build's fingerprinted files behind; the
+`_CopyDotnetJsFallback` target detects this and fails with an explicit "publish to a clean
+directory" error (two `dotnet.*.js` entry files cannot both be the fallback).
+
+After deleting `obj/` (or on a fresh clone), the **first** publish can emit BOTH the build-phase
+and the relinked publish-phase native bundles — two `dotnet.native.*.wasm` files — and the
+`dotnet.js` fallback may bind the non-relinked one, which fails at runtime with
+`DllNotFoundException: libSkiaSharp`. Delete the output directory and publish a second time
+(warm `obj/`): the output converges to the single relinked bundle.
 
 The production build adds AOT + full trimming:
 

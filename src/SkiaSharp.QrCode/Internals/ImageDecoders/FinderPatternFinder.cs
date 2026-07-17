@@ -6,7 +6,7 @@ using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.Arm;
 #endif
 
-namespace SkiaSharp.QrCode.Internals.StandardQr;
+namespace SkiaSharp.QrCode.Internals.ImageDecoders;
 
 /// <summary>
 /// A detected finder pattern candidate (center in pixel coordinates).
@@ -64,6 +64,27 @@ internal static class FinderPatternFinder
     /// <summary>Scalar-kernel entry for parity tests; behavior-identical to <see cref="TryFind"/>.</summary>
     internal static bool TryFindScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> patterns)
         => TryFindCore(luminance, width, height, threshold, forceScalar: true, patterns);
+
+    /// <summary>
+    /// Collects every cross-checked finder pattern candidate from a full row sweep,
+    /// without the three-pattern selection. Used by the Micro QR image decoder,
+    /// where a symbol carries a single finder pattern; the Micro QR-sized inputs
+    /// make a strideless sweep affordable.
+    /// </summary>
+    /// <param name="candidates">Receives merged candidates; <see cref="MaxFinderCandidates"/> entries suffice.</param>
+    /// <returns>The number of candidates written.</returns>
+    internal static int FindCandidates(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates)
+    {
+        var candidateCount = 0;
+        for (var y = 0; y < height; y++)
+        {
+            ScanRow(luminance, width, height, threshold, y, forceScalar: false, candidates, ref candidateCount);
+        }
+        return candidateCount;
+    }
+
+    /// <summary>Capacity to provide for <see cref="FindCandidates"/>'s candidate buffer.</summary>
+    internal const int MaxFinderCandidates = MaxCandidates;
 
     private static bool TryFindCore(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, bool forceScalar, Span<FinderPattern> patterns)
     {

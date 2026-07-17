@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Text;
 
 namespace SkiaSharp.QrCode.Image;
 
@@ -17,37 +16,33 @@ namespace SkiaSharp.QrCode.Image;
 /// </para>
 /// <para>
 /// <b>Advanced Configuration (Fluent API):</b><br/>
-/// Chain methods like <see cref="WithSize(int, int)"/>, <see cref="WithModulePixelSize(int)"/>, <see cref="WithColors(SKColor?, SKColor?, SKColor?)"/>,
-/// <see cref="WithModuleShape(ModuleShape?, float)"/>, <see cref="WithGradient(GradientOptions?)"/>,
-/// and <see cref="WithIcon(IconData?)"/> to customize QR code appearance.
+/// Chain the shared options (<see cref="QrCodeImageBuilderBase{TSelf}.WithSize(int, int)"/>,
+/// <see cref="QrCodeImageBuilderBase{TSelf}.WithModulePixelSize(int)"/>,
+/// <see cref="QrCodeImageBuilderBase{TSelf}.WithColors(SKColor?, SKColor?, SKColor?)"/>,
+/// <see cref="QrCodeImageBuilderBase{TSelf}.WithModuleShape(ModuleShape?, float)"/>,
+/// <see cref="QrCodeImageBuilderBase{TSelf}.WithGradient(GradientOptions?)"/>)
+/// with the Standard QR-specific options (<see cref="WithErrorCorrection(ECCLevel)"/>,
+/// <see cref="WithVersion(int)"/>, <see cref="WithIcon(IconData?)"/>,
+/// <see cref="WithFinderPatternShape(FinderPatternShape?)"/>) to customize appearance.
 /// </para>
 /// </remarks>
 /// <seealso cref="QRCodeGenerator"/>
 /// <seealso cref="QRCodeRenderer"/>
-public class QRCodeImageBuilder
+/// <seealso cref="MicroQrCodeImageBuilder"/>
+public class QRCodeImageBuilder : QrCodeImageBuilderBase<QRCodeImageBuilder>
 {
     private readonly string? _content;
     private readonly QRCodeData? _qrCodeData;
-    private Vector2Slim? _explicitSize;
-    private SKEncodedImageFormat _format = SKEncodedImageFormat.Png;
-    private int _quality = 100;
     private ECCLevel _eccLevel = ECCLevel.M;
     private EciMode _eciMode = EciMode.Default;
     private int _requestedVersion = -1;
-    private int _quietZoneSize = 4;
-    private int? _modulePixelSize;
 
-    // rendering
-    private SKColor? _codeColor;
-    private SKColor? _backgroundColor;
-    private SKColor? _clearColor;
-    private ModuleShape? _moduleShape;
-    private float _moduleSizePercent = 1.0f;
+    // rendering (Standard QR-only options; Micro QR has a single finder pattern
+    // and no ECC headroom for overlays)
     private FinderPatternShape? _finderPatternShape;
-    private GradientOptions? _gradientOptions;
     private IconData? _iconData;
 
-    public QRCodeImageBuilder(string content)
+    public QRCodeImageBuilder(string content) : base(defaultQuietZoneSize: 4)
     {
         if (string.IsNullOrWhiteSpace(content))
             throw new ArgumentException("Content cannot be empty", nameof(content));
@@ -55,7 +50,7 @@ public class QRCodeImageBuilder
         _content = content;
     }
 
-    public QRCodeImageBuilder(QRCodeData qrCodeData)
+    public QRCodeImageBuilder(QRCodeData qrCodeData) : base(defaultQuietZoneSize: 4)
     {
         if (qrCodeData is null)
             throw new ArgumentNullException(nameof(qrCodeData));
@@ -323,80 +318,7 @@ public class QRCodeImageBuilder
             .SaveTo(writer);
     }
 
-    // builder methods
-
-    /// <summary>
-    /// Configure the output image size in absolute pixels.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Used alone, this sets an exact canvas size. Module pixel size then becomes
-    /// <c>imageSize / QRCodeData.Size</c>, which may be fractional and can change when QR version changes.
-    /// </para>
-    /// <para>
-    /// Used with <see cref="WithModulePixelSize(int)"/>, this sets the canvas size while module pixels
-    /// define the QR content size (<c>QRCodeData.Size * modulePixelSize</c>).
-    /// The canvas must be at least as large as the content on both sides; extra space is padded and
-    /// the QR content is centered. Padding uses <c>clearColor</c> from <see cref="WithColors"/>.
-    /// </para>
-    /// </remarks>
-    /// <param name="width">Width in pixels (must be positive).</param>
-    /// <param name="height">Height in pixels (must be positive).</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
-    public QRCodeImageBuilder WithSize(int width, int height)
-    {
-        if (width <= 0)
-            throw new ArgumentOutOfRangeException(nameof(width), "Width must be positive");
-        if (height <= 0)
-            throw new ArgumentOutOfRangeException(nameof(height), "Height must be positive");
-
-        _explicitSize = new Vector2Slim(width, height);
-        return this;
-    }
-
-    /// <summary>
-    /// Configure QR content size from pixels-per-module.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Sets each QR module to an exact integer pixel size. Content side length is
-    /// <c>QRCodeData.Size * modulePixelSize</c>.
-    /// </para>
-    /// <para>
-    /// Used alone, the output image matches the content size.
-    /// Used with <see cref="WithSize(int, int)"/>, the content is centered on the larger canvas
-    /// and padded with <c>clearColor</c>. If the canvas is smaller than the content, rendering throws.
-    /// </para>
-    /// </remarks>
-    /// <param name="modulePixelSize">Pixel size per QR module (must be positive).</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
-    public QRCodeImageBuilder WithModulePixelSize(int modulePixelSize)
-    {
-        if (modulePixelSize <= 0)
-            throw new ArgumentOutOfRangeException(nameof(modulePixelSize), "Module pixel size must be positive");
-
-        _modulePixelSize = modulePixelSize;
-        return this;
-    }
-
-    /// <summary>
-    /// Configure the output image format and quality.
-    /// </summary>
-    /// <param name="format">The image format to use.</param>
-    /// <param name="quality">The image quality (0-100).</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
-    public QRCodeImageBuilder WithFormat(SKEncodedImageFormat format, int quality = 100)
-    {
-        if (quality is < 0 or > 100)
-            throw new ArgumentOutOfRangeException(nameof(quality), "Quality must be between 0 and 100");
-
-        _format = format;
-        _quality = quality;
-        return this;
-    }
+    // Standard QR-specific builder methods
 
     /// <summary>
     /// Configure the error correction level for the QR code.
@@ -439,66 +361,6 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Configure the quiet zone size (white border) around the QR code.
-    /// </summary>
-    /// <param name="size">Quiet zone size in modules (0-10). Recommended is 4.</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
-    public QRCodeImageBuilder WithQuietZone(int size = 4)
-    {
-        if (size is < 0 or > 10)
-            throw new ArgumentOutOfRangeException(nameof(size), "Quiet zone size must be between 0 and 10");
-        _quietZoneSize = size;
-        return this;
-    }
-
-    /// <summary>
-    /// Configure the colors used in the QR code image.
-    /// </summary>
-    /// <param name="codeColor">Color of QR code modules. If null, uses black.</param>
-    /// <param name="backgroundColor">Background color. If null, uses white.</param>
-    /// <param name="clearColor">Canvas clear color. If null, uses transparent.</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    public QRCodeImageBuilder WithColors(SKColor? codeColor = null, SKColor? backgroundColor = null, SKColor? clearColor = null)
-    {
-        _codeColor = codeColor;
-        _backgroundColor = backgroundColor;
-        _clearColor = clearColor;
-        return this;
-    }
-
-    /// <summary>
-    /// Configure the shape of the QR code modules.
-    /// </summary>
-    /// <remarks>
-    /// Note: Custom module shapes affect finder patterns unless a custom finder pattern shape is explicitly set via <see cref="WithFinderPatternShape"/>.
-    /// </remarks>
-    /// <param name="moduleShape">Shape to use for modules. If null, uses rectangles.</param>
-    /// <param name="sizePercent">Module size as a percentage of cell size (0.5-1.0). Values below 0.8 may affect readability. Default is 1.0 (no gaps).</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"></exception>
-    public QRCodeImageBuilder WithModuleShape(ModuleShape? moduleShape, float sizePercent = 1.0f)
-    {
-        if (sizePercent is < 0.5f or > 1.0f)
-            throw new ArgumentOutOfRangeException(nameof(sizePercent), "Module size percent must be between 0.5 and 1.0.");
-
-        _moduleShape = moduleShape;
-        _moduleSizePercent = sizePercent;
-        return this;
-    }
-
-    /// <summary>
-    /// Configure gradient options for the QR code modules.
-    /// </summary>
-    /// <param name="gradientOptions">Gradient configuration. If null, uses solid color.</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    public QRCodeImageBuilder WithGradient(GradientOptions? gradientOptions)
-    {
-        _gradientOptions = gradientOptions;
-        return this;
-    }
-
-    /// <summary>
     /// Configure an icon to overlay on the center of the QR code.
     /// </summary>
     /// <param name="iconData">Icon configuration. If null, no icon is displayed.</param>
@@ -520,294 +382,27 @@ public class QRCodeImageBuilder
         return this;
     }
 
-    /// <summary>
-    /// Generate QR code and save to stream
-    /// </summary>
-    /// <param name="output">The output stream (must be writable).</param>
-    /// <exception cref="ArgumentNullException"></exception>
-    /// <exception cref="ArgumentException"></exception>
-    public void SaveTo(Stream output)
+    // symbology hooks
+
+    private protected override object ResolveSymbol(out int matrixSize)
     {
-        if (output is null)
-            throw new ArgumentNullException(nameof(output));
-        if (!output.CanWrite)
-            throw new ArgumentException("Output stream must be writable", nameof(output));
+        var qrCodeData = _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, requestedVersion: _requestedVersion, quietZoneSize: _quietZoneSize);
+        matrixSize = qrCodeData.Size;
+        return qrCodeData;
+    }
 
-        using var image = GenerateImage();
-        using var data = image.Encode(_format, _quality);
-
-        // write to stream
-        data.SaveTo(output);
+    private protected override void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect)
+    {
+        QRCodeRenderer.Render(canvas, contentRect, (QRCodeData)symbol, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
     }
 
     /// <summary>
-    /// Generate QR code and write to an IBufferWriter.
-    /// This is more efficient than SaveTo(Stream) as it avoids intermediate buffering.
+    /// Custom finder shapes require antialiasing; built-in icon shapes only draw
+    /// rectangles, bitmaps, and text, none of which degrade under crispEdges.
     /// </summary>
-    /// <param name="writer">The buffer writer</param>
-    /// <exception cref="ArgumentNullException"></exception>
-    public void SaveTo(IBufferWriter<byte> writer)
+    private protected override bool UseCrispEdgesCore()
     {
-        if (writer is null)
-            throw new ArgumentNullException(nameof(writer));
-
-        using var image = GenerateImage();
-        using var data = image.Encode(_format, _quality);
-
-        // Write in writer-provided segments; a single GetSpan for the whole payload
-        // would force segmented writers (e.g. PipeWriter) into one contiguous buffer.
-        writer.Write(data.AsSpan());
-    }
-
-    /// <summary>
-    /// Generate QR code and save as SVG document to stream.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The QR code is drawn as vector shapes via <see cref="SKSvgCanvas"/>, so the output scales
-    /// without quality loss. All builder options apply: colors, module shapes, gradients, finder
-    /// pattern shapes, and icons (icon images are embedded as base64 data URIs).
-    /// </para>
-    /// <para>
-    /// The root element carries a <c>viewBox</c>, so the document scales its content when
-    /// embedded at a different size (img element, CSS). For plain rectangular modules,
-    /// <c>shape-rendering="crispEdges"</c> is added to avoid antialiasing seams between modules;
-    /// custom shapes keep antialiasing for smooth curves.
-    /// </para>
-    /// <para>
-    /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> is ignored — SVG is a vector format,
-    /// not an <see cref="SKEncodedImageFormat"/>. Size options (<see cref="WithSize(int, int)"/>,
-    /// <see cref="WithModulePixelSize(int)"/>) define the SVG viewport in units.
-    /// The stream is left open after writing.
-    /// </para>
-    /// </remarks>
-    /// <param name="output">The output stream (must be writable).</param>
-    /// <exception cref="ArgumentNullException"></exception>
-    /// <exception cref="ArgumentException"></exception>
-    public void SaveToSvg(Stream output)
-    {
-        if (output is null)
-            throw new ArgumentNullException(nameof(output));
-        if (!output.CanWrite)
-            throw new ArgumentException("Output stream must be writable", nameof(output));
-
-        RenderSvg(output);
-    }
-
-    /// <summary>
-    /// Generate QR code and write as SVG document to an IBufferWriter.
-    /// </summary>
-    /// <remarks>
-    /// See <see cref="SaveToSvg(Stream)"/> for rendering behavior. Data is written in
-    /// writer-provided segments, so segmented writers (e.g. PipeWriter) work without
-    /// a single contiguous buffer for the whole document.
-    /// </remarks>
-    /// <param name="writer">The buffer writer to write to.</param>
-    /// <exception cref="ArgumentNullException"></exception>
-    public void SaveToSvg(IBufferWriter<byte> writer)
-    {
-        if (writer is null)
-            throw new ArgumentNullException(nameof(writer));
-
-        using var stream = new BufferWriterStream(writer);
-        RenderSvg(stream);
-    }
-
-    /// <summary>
-    /// Generate QR code and return as SVG document string.
-    /// </summary>
-    /// <remarks>
-    /// See <see cref="SaveToSvg(Stream)"/> for rendering behavior.
-    /// </remarks>
-    /// <returns>SVG document.</returns>
-    public string ToSvgString()
-    {
-        using var stream = new MemoryStream();
-        SaveToSvg(stream);
-        return Encoding.UTF8.GetString(stream.GetBuffer(), 0, (int)stream.Length);
-    }
-
-    /// <summary>
-    /// Renders the SVG document to the output stream, injecting root element attributes
-    /// (<c>viewBox</c>, optional <c>shape-rendering</c>) while streaming.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="SKSvgCanvas"/> writes <c>width</c>/<c>height</c> on the root element but no
-    /// <c>viewBox</c>. Without a viewBox, an SVG embedded at a different size (img element, CSS)
-    /// keeps its content at the original coordinates instead of scaling — the main reason to use
-    /// SVG in the first place. <see cref="SvgRootAttributeInjectorStream"/> inserts the attributes
-    /// right after the <c>&lt;svg </c> marker while the canvas streams to the output, so the
-    /// document is never buffered as a whole; if the marker is not found (unexpected upstream
-    /// format change), the document passes through unpatched.
-    /// </remarks>
-    private void RenderSvg(Stream output)
-    {
-        var qrCodeData = ResolveQrCodeData();
-        var (info, contentRect) = CreateLayout(qrCodeData);
-
-        var viewBox = $"viewBox=\"0 0 {info.Width} {info.Height}\" ";
-        var rootAttributes = UseCrispEdges() ? viewBox + "shape-rendering=\"crispEdges\" " : viewBox;
-
-        using var injector = new SvgRootAttributeInjectorStream(output, rootAttributes);
-        // SKSvgCanvas flushes the SVG document when the canvas is disposed, so dispose
-        // it before the injector (which then flushes any pending header bytes).
-        // The output stream itself stays open.
-        using (var canvas = SKSvgCanvas.Create(SKRect.Create(0, 0, info.Width, info.Height), injector))
-        {
-            RenderContent(canvas, qrCodeData, info, contentRect);
-        }
-    }
-
-    /// <summary>
-    /// Antialiasing between adjacent vector shapes produces visible hairline seams when the SVG
-    /// is scaled to non-integer sizes. For plain rectangular modules crispEdges removes the seams;
-    /// for custom shapes (circles, rounded rects, custom finder patterns or icons) antialiasing
-    /// is kept for smooth curves. Built-in icon shapes only draw rectangles, bitmaps, and text,
-    /// none of which degrade under crispEdges.
-    /// </summary>
-    private bool UseCrispEdges()
-    {
-        return (_moduleShape is null || _moduleShape is RectangleModuleShape)
-            && _moduleSizePercent == 1.0f
-            && _finderPatternShape is null
+        return _finderPatternShape is null
             && (_iconData?.Icon is null or ImageIconShape or ImageTextIconShape);
-    }
-
-    /// <summary>
-    /// Generate QR code and return as byte array.
-    /// </summary>
-    /// <returns>Encoded image as byte array.</returns>
-    public byte[] ToByteArray()
-    {
-        using var image = GenerateImage();
-        using var data = image.Encode(_format, _quality);
-        return data.ToArray();
-    }
-
-    /// <summary>
-    /// Generate QR code and return as SKImage.
-    /// </summary>
-    /// <returns>SKImage instance (caller must dispose).</returns>
-    public SKImage ToImage()
-    {
-        return GenerateImage();
-    }
-
-    /// <summary>
-    /// Generate QR code and return as SKBitmap.
-    /// </summary>
-    /// <returns>SKBitmap instance (caller must dispose).</returns>
-    public SKBitmap ToBitmap()
-    {
-        using var image = GenerateImage();
-        return SKBitmap.FromImage(image);
-    }
-
-    /// <summary>
-    /// Generate the QRCodeData from builder input.
-    /// </summary>
-    private QRCodeData ResolveQrCodeData()
-    {
-        return _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, requestedVersion: _requestedVersion, quietZoneSize: _quietZoneSize);
-    }
-
-    /// <summary>
-    /// Generate the SKImage from QR code data.
-    /// </summary>
-    private SKImage GenerateImage()
-    {
-        // Generate QR Data
-        var qrCodeData = ResolveQrCodeData();
-
-        var (info, contentRect) = CreateLayout(qrCodeData);
-
-        var clearColor = _clearColor ?? SKColors.Transparent;
-        var contentCoversCanvas = ContentCoversCanvas(contentRect, info);
-        var backgroundIsOpaque = (_backgroundColor ?? SKColors.White).Alpha == byte.MaxValue;
-        var clearIsOpaque = clearColor.Alpha == byte.MaxValue;
-
-        // When the base layer (QR background fill, or the cleared canvas) is opaque
-        // everywhere, anything drawn over it stays opaque, so the whole image is
-        // opaque no matter what modules/icons/gradients are painted on top.
-        // An opaque surface lets encoders skip the alpha channel and the unpremul
-        // pass — PNG output becomes RGB: smaller and faster to encode.
-        var isOpaque = contentCoversCanvas
-            ? backgroundIsOpaque || clearIsOpaque
-            : clearIsOpaque;
-        if (isOpaque)
-        {
-            info = info.WithAlphaType(SKAlphaType.Opaque);
-        }
-
-        using var surface = SKSurface.Create(info);
-        RenderContent(surface.Canvas, qrCodeData, info, contentRect);
-
-        return surface.Snapshot();
-    }
-
-    /// <summary>
-    /// Draws the configured QR code onto the canvas. Shared by the raster
-    /// (<see cref="GenerateImage"/>) and SVG (<see cref="SaveToSvg(Stream)"/>) paths.
-    /// </summary>
-    private void RenderContent(SKCanvas canvas, QRCodeData qrCodeData, SKImageInfo info, SKRect contentRect)
-    {
-        var clearColor = _clearColor ?? SKColors.Transparent;
-        var contentCoversCanvas = ContentCoversCanvas(contentRect, info);
-        var backgroundIsOpaque = (_backgroundColor ?? SKColors.White).Alpha == byte.MaxValue;
-
-        // Clear the canvas with clearColor, then draw QR into contentRect; extra
-        // canvas area (pad) keeps clearColor. The clear is skipped when it cannot
-        // remain visible: a fresh canvas is already fully transparent, and an
-        // opaque QR background covering the whole canvas overwrites it anyway.
-        if (clearColor.Alpha != 0 && !(contentCoversCanvas && backgroundIsOpaque))
-        {
-            canvas.Clear(clearColor);
-        }
-
-        QRCodeRenderer.Render(canvas, contentRect, qrCodeData, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
-    }
-
-    private static bool ContentCoversCanvas(SKRect contentRect, SKImageInfo info)
-    {
-        return contentRect.Left <= 0 && contentRect.Top <= 0
-            && contentRect.Right >= info.Width && contentRect.Bottom >= info.Height;
-    }
-
-    private (SKImageInfo info, SKRect contentRect) CreateLayout(QRCodeData qrCodeData)
-    {
-        if (_modulePixelSize is null)
-        {
-            var size = _explicitSize ?? new Vector2Slim(512, 512);
-            return (new SKImageInfo(size.X, size.Y), SKRect.Create(0, 0, size.X, size.Y));
-        }
-
-        int contentSide;
-        try
-        {
-            contentSide = checked(qrCodeData.Size * _modulePixelSize.Value);
-        }
-        catch (OverflowException ex)
-        {
-            throw new InvalidOperationException("Calculated image size overflowed. Reduce module pixel size or QR version.", ex);
-        }
-
-        if (_explicitSize is null)
-            return (new SKImageInfo(contentSide, contentSide), SKRect.Create(0, 0, contentSide, contentSide));
-
-        var canvasWidth = _explicitSize.Value.X;
-        var canvasHeight = _explicitSize.Value.Y;
-        if (canvasWidth < contentSide || canvasHeight < contentSide)
-        {
-            throw new InvalidOperationException(
-                $"Canvas size {canvasWidth}x{canvasHeight} is smaller than QR content size {contentSide}x{contentSide} " +
-                $"(QR matrix size {qrCodeData.Size} * module pixel size {_modulePixelSize.Value}).");
-        }
-
-        // Use integer offsets so content stays on whole pixels (odd padding may be 1px asymmetric).
-        var left = (canvasWidth - contentSide) / 2;
-        var top = (canvasHeight - contentSide) / 2;
-        return (
-            new SKImageInfo(canvasWidth, canvasHeight),
-            SKRect.Create(left, top, contentSide, contentSide));
     }
 }

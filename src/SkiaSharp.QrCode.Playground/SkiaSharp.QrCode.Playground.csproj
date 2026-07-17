@@ -64,8 +64,13 @@
   <Target Name="_CopyDotnetJsFallback" AfterTargets="Publish" Condition="'$(PlaygroundSoftFingerprint)' == 'true'">
     <ItemGroup>
       <_DotnetEntryJs Include="$(PublishDir)wwwroot/_framework/dotnet.*.js"
-                      Exclude="$(PublishDir)wwwroot/_framework/dotnet.native.*.js;$(PublishDir)wwwroot/_framework/dotnet.runtime.*.js" />
+                      Exclude="$(PublishDir)wwwroot/_framework/dotnet.js;$(PublishDir)wwwroot/_framework/dotnet.native.*.js;$(PublishDir)wwwroot/_framework/dotnet.runtime.*.js" />
     </ItemGroup>
+    <!-- Stale-output guard: a previous publish into the same -o directory leaves its
+         fingerprinted files behind (this affects every fingerprinted asset, not just
+         dotnet.js), so fail with an actionable message instead of a cryptic MSB3094. -->
+    <Error Condition="@(_DotnetEntryJs->Count()) &gt; 1"
+           Text="Publish output '$(PublishDir)' contains dotnet entry JS from a previous build (@(_DotnetEntryJs->'%(Filename)%(Extension)', ', ')). Publish to a clean directory: delete '$(PublishDir)' and run dotnet publish again." />
     <Copy SourceFiles="@(_DotnetEntryJs)" DestinationFiles="$(PublishDir)wwwroot/_framework/dotnet.js" />
   </Target>
 

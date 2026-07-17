@@ -181,17 +181,17 @@ public static class QRCodeDecoder
 
         var width = bitmap.Width;
         var height = bitmap.Height;
-        if (width < 21 || height < 21)
+        if (width < 21 || height < 21 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
         {
             text = string.Empty;
             info = new QRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
             return false;
         }
 
-        var rented = ArrayPool<byte>.Shared.Rent(width * height);
+        var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
         try
         {
-            var luminance = rented.AsSpan(0, width * height);
+            var luminance = rented.AsSpan(0, pixelCount);
             LuminanceConverter.Convert(bitmap, luminance);
             return TryDecodeImage(luminance, width, height, out text, out info);
         }

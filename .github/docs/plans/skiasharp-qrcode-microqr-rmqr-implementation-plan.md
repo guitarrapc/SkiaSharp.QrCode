@@ -510,6 +510,178 @@ after = this change): all scenarios within noise or faster (Matrix_Short_M
 all measured faster on the after run), allocations 0 B on both sides — the
 `SegmentDecoders` extraction did not regress the Standard QR path.
 
+### Phase 4 — completed 2026-07-17
+
+**Done (4a — rendering integration)**
+
+- Public API: `MicroQrCodeImageBuilder` (fluent + static helpers mirroring
+  `QRCodeImageBuilder`: PNG/JPEG/WEBP bytes/stream/IBufferWriter, SVG with
+  viewBox/crispEdges injection; Micro-typed `WithErrorCorrection(MicroQrEccLevel)` /
+  `WithVersion(MicroQrVersion)`; quiet zone default 2 per spec; no icon overlay or
+  finder-styling options — single finder, no ECC headroom),
+  `QRCodeRenderer.Render(…, MicroQrCodeData, …)` low-level overload, and
+  `SKCanvas.Render(MicroQrCodeData, …)` extensions.
+- Sharing: draw loops generalized over an internal `IModuleMatrixView` struct view
+  (generic specialization, no virtual dispatch; Standard QR call sites unchanged),
+  canvas layout math extracted to `QrImageLayout` — both builders delegate.
+- Tests (+94): `MicroQrCodeImageBuilderUnitTest` — full-matrix module-to-pixel
+  parity (every module center vs `MicroQrCodeData`, all 8 version/ECC combos,
+  custom colors, circle shapes), quiet zone defaults/overrides, layout
+  (pad/center/too-small/odd padding), SVG structure (viewBox, crispEdges on/off),
+  static helper signatures, validation negatives, renderer/extension entry points.
+
+**Done (4b — image detection)**
+
+- Public API: `MicroQrCodeDecoder.TryDecode(SKBitmap, …)` and
+  `TryDecodeImage(luminance, …)` (string and zero-allocation span-destination
+  overloads). `QRCodeDecoder` remains Standard QR-only — Micro QR scanning is
+  explicitly-typed, so default scanning perf is untouched.
+- Pipeline (`Internals/MicroQr/MicroQrImageDecoder`): shared Otsu threshold →
+  shared 1:1:3:1:1 finder scan collecting ALL cross-checked candidates (new
+  `FinderPatternFinder.FindCandidates`) → module size from dark-light-dark runs
+  through the single finder center → axis-aligned grid sampling trying
+  sizes M4..M1 × 4 right-angle orientations × transpose (full dihedral coverage
+  for mirrored captures) → `MicroQrMatrixDecoder` arbitrates (format/RS/Table 9
+  capacity kill wrong grids) → inverted retry for reflectance reversal.
+- Detection primitives lifted to `Internals.ImageDecoders` (`Binarizer`,
+  `FinderPatternFinder`) exactly on the spec's second-consumer trigger; the
+  namespace dependency rule holds (`Internals.MicroQr` no longer references
+  `Internals.StandardQr`).
+- Tests (+130, full suite 3,866 on net8.0 + net10.0, 0 failed, 100
+  skipped-by-design): clean renders all versions × ECC; module pixel sizes 3-13;
+  non-integer scale; translation; quiet zone 1/4; 90/180/270 rotation; mirror;
+  inverted colors; JPEG q60 / low contrast / seeded additive noise; luminance +
+  span-destination parity; negatives (Standard↔Micro cross-rejection, blank,
+  too-small, null); committed fixture corpus (35 PNGs, both lineages) through
+  the image path.
+- Playground: symbology selector (QR / Micro QR) with symbology-driven ECC/version
+  selects, quiet-zone default switching, finder/logo controls hidden for Micro QR,
+  Micro-aware stats and benchmark panel; decode panel and the generated-image
+  self-check now fall back to the Micro QR decoder. Verified in-browser on the
+  published WASM build (generation + ✓ self-check decode round-trip). BlazorWasm
+  sample gained the same symbology switch (live SKCanvasView preview + PNG/SVG
+  export via `CreateMicroBuilder`).
+- Docs: microqr-spec-map (Image Rendering + Image Detection sections, supported
+  envelope), qrcode-symbologies (status table, lifted primitives, scope
+  decisions), fixture record, README (symbology table, image API + scanning
+  examples, FAQ).
+
+**Lessons learned**
+
+- Trying every (size × orientation × transpose) grid and letting the matrix
+  decoder arbitrate beats bespoke orientation detection at Micro QR scale: wrong
+  grids die at the 32-candidate format Hamming check in ~µs, so 32 attempts cost
+  less than one robust orientation estimator — and the negative tests (Standard
+  QR must not decode) come out free.
+- The supported envelope must be stated, not implied: a single finder cannot
+  anchor small-angle rotation or perspective recovery (three finders can), so the
+  spec map and API docs say so explicitly instead of letting users infer tiers
+  from Standard QR.
+- An author CSS rule (`.field { display: flex }`) silently overrides the UA
+  stylesheet's `[hidden] { display: none }` — the Playground's attribute-based
+  hiding never worked for field rows (latent for `#corner-row` too). Fixed
+  globally with `[hidden] { display: none !important; }`.
+- Styled symbols (rounded modules < 100%, gradients) break the 1:1:3:1:1 run
+  continuity and go undetected — same failure mode as Standard QR, but Micro QR
+  has no ECC headroom to spare, so the Playground's "could not read this styling"
+  self-check message is the norm for decorated Micro QR, not the exception.
+
+**Benchmark delta (net10.0 Release, before = ff64136 via worktree, after = this change)**
+
+Standard QR guards — flat, allocations identical:
+
+| Benchmark | Before | After |
+|---|---|---|
+| QrCodeImageEndToEnd Small_512px | 4.67 ms / 5.44 KB | 4.49 ms / 5.44 KB |
+| QrCodeImageEndToEnd Large_2048px | 89.3 ms / 41.9 KB | 80.8 ms / 41.9 KB |
+| QrCodeDecodeEndToEnd Matrix_Short_M | 1.06 µs / 0 B | 1.06 µs / 0 B |
+| QrCodeDecodeEndToEnd Image_Url_M | 37.4 µs / 0 B | 38.4 µs / 0 B |
+
+New Micro QR image paths (`MicroQrImageEndToEnd`):
+
+| Benchmark | Mean | Allocated |
+|---|---|---|
+| M2_512px (render + PNG encode) | ~4.5 ms | 5.3 KB |
+| M4_512px | ~4.6 ms | 5.5 KB |
+| M4_128px | ~316 µs | 3.8 KB |
+| M4_ImageDecode_Span (136×136 px) | 17.1 µs | **0 B** |
+
+Render times are PNG-encode dominated (Standard QR Small_512px is the same
+~4.5 ms); the builder itself adds no measurable overhead.
+
+### Phase 4 follow-up — capacity error messages, completed 2026-07-18
+
+**Done**
+
+- `MicroQrCodeGenerator` capacity errors now state the actual length, the
+  applicable maximum, and the remedy, in mode-appropriate units (digits /
+  characters / encoded bytes): e.g. "Content is too long for Micro QR: 46 bytes
+  in Byte mode, but ECC level M fits at most 13 bytes (M4). Shorten the content,
+  lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content."
+  The maximum comes from a new `GetMaxDataLength` helper (closed-form inverse of
+  `GetRequiredBits` against the Table 7 bit capacity; error-path only). The
+  mode-unsupported-at-ECC case (e.g. Alphanumeric + ErrorDetectionOnly) gets its
+  own constraint-oriented message instead of a misleading "too long".
+- Playground and BlazorWasm display these messages verbatim; both rephrase the
+  API-oriented remedy ("use Standard QR (QRCodeGenerator)") to the page's actual
+  control ("switch Symbology to QR Code"). Verified in the published WASM build.
+- Tests (+4): message content per path (auto too-long byte/numeric with computed
+  maxima, fixed-version too-long, mode-unsupported constraint). Full suite
+  3,918, 0 failed. Exception types unchanged (`ArgumentException`).
+
+**Benchmarks**
+
+- Not applicable: error-path-only change (message composition on throw); no hot
+  path touched.
+
+### Phase 4 follow-up (2) — image builder base class, completed 2026-07-18
+
+**Done**
+
+- `QrCodeImageBuilderBase<TSelf>` (self-referential generic): the fluent options
+  every symbology shares (`WithSize` / `WithModulePixelSize` / `WithFormat` /
+  `WithQuietZone` / `WithColors` / `WithModuleShape` / `WithGradient`) and the
+  complete output surface (`SaveTo` ×2, `SaveToSvg` ×2, `ToSvgString`,
+  `ToByteArray`, `ToImage`, `ToBitmap`, plus the raster/SVG pipeline with the
+  opaque-surface and crispEdges logic) now exist exactly once.
+  `QRCodeImageBuilder` / `MicroQrCodeImageBuilder` keep constructors, their
+  symbology-typed options, static helpers, and three `private protected` hooks
+  (`ResolveSymbol`, `RenderSymbol`, `UseCrispEdgesCore`). Quiet-zone defaults
+  (4 / 2) moved from parameter defaults into builder initial state;
+  `WithQuietZone` no longer declares a default argument.
+- `QrImageBuilderApiParityTest`: reflection over both public surfaces asserts
+  1:1 correspondence with symbology types canonicalized (QRCodeData ⇔
+  MicroQrCodeData, ECCLevel ⇔ MicroQrEccLevel, int version ⇔ MicroQrVersion)
+  modulo the documented Standard-only options (WithIcon, WithFinderPatternShape,
+  WithEciMode) — guards the statics the base class cannot share. Passed against
+  the pre-refactor surfaces first (they were already symmetric), so it now locks
+  the contract; the rMQR builder joins the same base and the same test.
+- Source compatible; binary breaking (members moved to the base) — recorded in
+  `docs/migration.md`. Playground / BlazorWasm / ConsoleApp compile unchanged.
+- Full suite 3,930 on net8.0 + net10.0, 0 failed (golden-pixel and SVG builder
+  tests unchanged — behavior preserved).
+
+**Lessons learned**
+
+- The parity test passing before the refactor was the useful signal, not a
+  wasted red: hand-mirrored surfaces were symmetric today, and the test is what
+  keeps that true when the third symbology lands.
+- The one hook shape that avoids double encoding is "resolve once, hand back an
+  opaque handle" (`object ResolveSymbol(out int matrixSize)` + `RenderSymbol`);
+  splitting into separate size/render hooks would re-encode the symbol per
+  output call, and a second generic parameter would leak the data type into the
+  public base signature for no user benefit.
+
+**Benchmark delta (QrCodeImageEndToEnd + MicroQrImageEndToEnd, net10.0 Release,
+before = pre-refactor tree, after = this change)**
+
+All scenarios within single-iteration noise, allocations byte-identical
+(Standard 5.44/20.44/19.44/41.91 KB; Micro 5400/5576/3856 B, decode 0 B):
+Small_512px 4.49→4.63 ms, Large_2048px 80.8→82.3 ms, M2_512px 4.52→4.46 ms,
+M4_128px 314→315 µs (an intermediate 366 µs reading did not reproduce),
+M4_ImageDecode_Span 17.1→16.0 µs. The per-image virtual hook dispatch is
+invisible under ms-scale PNG encoding.
+
 ## Risks Beyond the Test Strategy Document
 
 - Renderer assumptions: `IconShape`/finder styling assume three finder patterns; rectangular output changes image sizing APIs. Audit in Phase 0.

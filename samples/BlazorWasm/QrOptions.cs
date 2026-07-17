@@ -11,13 +11,17 @@ namespace BlazorWasm;
 public sealed class QrOptions
 {
     public string Content { get; set; } = "https://github.com/guitarrapc/SkiaSharp.QrCode";
+    /// <summary>Symbology: Standard QR (versions 1-40) or Micro QR (M1-M4).</summary>
+    public SymbologyKind Symbology { get; set; } = SymbologyKind.QrCode;
     /// <summary>Error correction level. H is recommended when a logo overlays the code.</summary>
     public ECCLevel Ecc { get; set; } = ECCLevel.H;
+    /// <summary>Micro QR error correction level (M1 supports error detection only).</summary>
+    public MicroQrEccLevel MicroEcc { get; set; } = MicroQrEccLevel.M;
     /// <summary>Exported image size in pixels (square). The on-screen preview scales to fit.</summary>
     public int Size { get; set; } = 512;
-    /// <summary>Quiet zone in modules (0-10).</summary>
+    /// <summary>Quiet zone in modules (0-10). The specification default is 4 (Micro QR: 2).</summary>
     public int QuietZone { get; set; } = 4;
-    /// <summary>QR version 1-40, or -1 for automatic selection.</summary>
+    /// <summary>QR version 1-40 (Micro QR: 1-4 for M1-M4), or -1 for automatic selection.</summary>
     public int Version { get; set; } = -1;
     public ModuleShapeKind ModuleShape { get; set; } = ModuleShapeKind.Circle;
     /// <summary>Module size as a fraction of the cell (0.5-1.0). Below 1.0 leaves gaps between modules.</summary>
@@ -39,6 +43,13 @@ public sealed class QrOptions
     public int LogoSizePercent { get; set; } = 18;
     /// <summary>Border padding around the logo in pixels (0-24).</summary>
     public int LogoBorderWidth { get; set; } = 6;
+}
+
+/// <summary>Symbology choices exposed by the page.</summary>
+public enum SymbologyKind
+{
+    QrCode,
+    MicroQr,
 }
 
 /// <summary>Module shape choices exposed by the page.</summary>

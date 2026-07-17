@@ -205,6 +205,12 @@ details.panel[open] summary {
 
 /* ─── Fields ─── */
 
+/* Author display rules (e.g. .field { display: flex }) override the UA
+   stylesheet's [hidden] { display: none }; restore the attribute's meaning. */
+[hidden] {
+  display: none !important;
+}
+
 .field {
   display: flex;
   flex-direction: column;

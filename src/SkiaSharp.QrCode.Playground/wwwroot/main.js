@@ -132,12 +132,15 @@ const loading = document.getElementById('loading');
 const versionEl = document.getElementById('playground-version');
 const contentEl = document.getElementById('content');
 const presetSelect = document.getElementById('preset-select');
+const symbologySelect = document.getElementById('symbology-select');
 const eccSelect = document.getElementById('ecc-select');
 const versionSelect = document.getElementById('version-select');
 const sizeRange = document.getElementById('size-range');
 const sizeOut = document.getElementById('size-out');
 const quietRange = document.getElementById('quiet-range');
 const quietOut = document.getElementById('quiet-out');
+const finderRow = document.getElementById('finder-row');
+const logoPanel = document.getElementById('logo-panel');
 const moduleShapeSelect = document.getElementById('module-shape-select');
 const moduleSizeRange = document.getElementById('module-size-range');
 const moduleSizeOut = document.getElementById('module-size-out');
@@ -178,20 +181,69 @@ const benchCancelBtn = document.getElementById('bench-cancel-btn');
 const benchProgress = document.getElementById('bench-progress');
 const benchResult = document.getElementById('bench-result');
 
-// Version select: auto + 1..40
-{
+/* ─── Symbology-dependent selects ─── */
+
+const ECC_OPTIONS = {
+  qr: [
+    ['L', 'L — 7%'],
+    ['M', 'M — 15%'],
+    ['Q', 'Q — 25%'],
+    ['H', 'H — 30%'],
+  ],
+  microqr: [
+    ['EDO', 'Error detection only (M1)'],
+    ['L', 'L — 7%'],
+    ['M', 'M — 15%'],
+    ['Q', 'Q — 25% (M4 only)'],
+  ],
+};
+
+function isMicroSymbology() {
+  return symbologySelect.value === 'microqr';
+}
+
+/** Repopulates the ECC select for the symbology, keeping the value when still valid. */
+function populateEccSelect() {
+  const prev = eccSelect.value;
+  eccSelect.replaceChildren();
+  for (const [value, label] of ECC_OPTIONS[isMicroSymbology() ? 'microqr' : 'qr']) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    eccSelect.appendChild(opt);
+  }
+  eccSelect.value = [...eccSelect.options].some((o) => o.value === prev) ? prev : 'M';
+}
+
+/** Repopulates the version select for the symbology, keeping the value when still valid. */
+function populateVersionSelect() {
+  const prev = versionSelect.value;
+  versionSelect.replaceChildren();
   const auto = document.createElement('option');
   auto.value = '-1';
   auto.textContent = 'Auto';
   versionSelect.appendChild(auto);
-  for (let v = 1; v <= 40; v++) {
-    const opt = document.createElement('option');
-    opt.value = String(v);
-    opt.textContent = `${v} (${17 + 4 * v}×${17 + 4 * v})`;
-    versionSelect.appendChild(opt);
+  if (isMicroSymbology()) {
+    for (let v = 1; v <= 4; v++) {
+      const side = 9 + 2 * v;
+      const opt = document.createElement('option');
+      opt.value = String(v);
+      opt.textContent = `M${v} (${side}×${side})`;
+      versionSelect.appendChild(opt);
+    }
+  } else {
+    for (let v = 1; v <= 40; v++) {
+      const opt = document.createElement('option');
+      opt.value = String(v);
+      opt.textContent = `${v} (${17 + 4 * v}×${17 + 4 * v})`;
+      versionSelect.appendChild(opt);
+    }
   }
-  versionSelect.value = '-1';
+  versionSelect.value = [...versionSelect.options].some((o) => o.value === prev) ? prev : '-1';
 }
+
+populateEccSelect();
+populateVersionSelect();
 
 /* ─── Presets ─── */
 
@@ -285,6 +337,7 @@ let applyingState = false;
 function collectState() {
   return {
     content: contentEl.value,
+    symbology: symbologySelect.value,
     ecc: eccSelect.value,
     size: Number(sizeRange.value),
     quietZone: Number(quietRange.value),
@@ -313,6 +366,10 @@ function applyStateToControls(state) {
   applyingState = true;
   try {
     if (typeof state.content === 'string') contentEl.value = state.content;
+    if (state.symbology === 'qr' || state.symbology === 'microqr') symbologySelect.value = state.symbology;
+    // Symbology decides the legal ECC / version option sets — rebuild before applying values
+    populateEccSelect();
+    populateVersionSelect();
     if (state.ecc) eccSelect.value = state.ecc;
     if (Number.isFinite(state.size)) sizeRange.value = String(clamp(state.size, 128, 1024));
     if (Number.isFinite(state.quietZone)) quietRange.value = String(clamp(state.quietZone, 0, 10));
@@ -382,6 +439,10 @@ function syncDerivedControls() {
   logoSizeOut.textContent = logoSizeRange.value;
   logoBorderOut.textContent = logoBorderRange.value;
   cornerRow.hidden = moduleShapeSelect.value !== 'rounded';
+  // Micro QR has a single finder pattern and no ECC headroom for overlays —
+  // the finder shape and logo options do not apply.
+  finderRow.hidden = isMicroSymbology();
+  logoPanel.hidden = isMicroSymbology();
   gradientPanel.hidden = !gradientToggle.checked;
   fgRow.classList.toggle('field--disabled', gradientToggle.checked);
   fgColor.disabled = gradientToggle.checked;
@@ -572,8 +633,9 @@ function generate() {
 
   try {
     const meta = JSON.parse(exports.SkiaSharp.QrCode.Playground.QrInterop.GetLastMeta());
+    const versionLabel = meta.symbology === 'microqr' ? `Micro QR M${meta.qrVersion}` : `QR version ${meta.qrVersion}`;
     statsEl.textContent =
-      `QR version ${meta.qrVersion} · ${meta.matrixSize}×${meta.matrixSize} modules · `
+      `${versionLabel} · ${meta.matrixSize}×${meta.matrixSize} modules · `
       + `${meta.totalMs} ms in WASM (${interopMs.toFixed(1)} ms total) · ${formatBytes(meta.bytes)}`;
   } catch {
     statsEl.textContent = '';
@@ -662,8 +724,9 @@ decodeFileEl.addEventListener('change', async () => {
       `No QR code decoded (${result.status}). The built-in decoder targets clean, screen-rendered images.`;
     return;
   }
+  const decodedLabel = result.symbology === 'microqr' ? `Micro QR M${result.qrVersion}` : `QR version ${result.qrVersion}`;
   decodeResultEl.textContent =
-    `“${result.text}” · QR version ${result.qrVersion} · ECC ${result.ecc} · mask ${result.maskPattern}`
+    `“${result.text}” · ${decodedLabel} · ECC ${result.ecc} · mask ${result.maskPattern}`
     + ` · ${result.errorsCorrected} codewords corrected · ${result.totalMs} ms`;
 });
 
@@ -698,6 +761,17 @@ for (const el of [
     scheduleGenerate();
   });
 }
+
+// Symbology switch rebuilds the dependent selects and resets the quiet zone to
+// the symbology's specification default (QR: 4 modules, Micro QR: 2 modules).
+symbologySelect.addEventListener('input', () => {
+  populateEccSelect();
+  populateVersionSelect();
+  quietRange.value = isMicroSymbology() ? '2' : '4';
+  syncDerivedControls();
+  markCustomPreset();
+  scheduleGenerate();
+});
 
 // Color inputs inside the dynamic gradient list (event delegation).
 gradientColorsEl.addEventListener('input', () => {

@@ -5,10 +5,13 @@ using BenchmarkDotNet.Configs;
 /// Payloads mirror MicroQrEncode so encode and decode costs are directly comparable;
 /// a Standard QR v1 decode of the same numeric payload gives the scale reference.
 /// Matrices are quiet-zone-free (the decoder's in-place fast path).
+///
+/// Scenarios:
+///   Numeric_M2_L : M2-L (numeric capacity boundary)
+///   Alphanumeric_M3_L : M3-L (alphanumeric capacity boundary)
+///   Byte_M4_M : M4-M (byte capacity boundary)
 /// </summary>
-[MemoryDiagnoser]
-[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
-public class MicroQrDecode
+public class MicroQrDecodeEndToEnd
 {
     private byte[] _numericModules = default!;
     private int _numericSize;
@@ -39,7 +42,6 @@ public class MicroQrDecode
     // Span destination (zero-allocation) path
 
     [Benchmark(Baseline = true, Description = "MicroQr_Numeric_M2_Decode (Span)")]
-    [BenchmarkCategory("MicroQrDecode")]
     public int MicroQr_Numeric_M2_DecodeSpan()
     {
         MicroQrCodeDecoder.TryDecode(_numericModules, _numericSize, _chars, out var written, out _);
@@ -47,7 +49,6 @@ public class MicroQrDecode
     }
 
     [Benchmark(Description = "MicroQr_Alphanumeric_M3_Decode (Span)")]
-    [BenchmarkCategory("MicroQrDecode")]
     public int MicroQr_Alphanumeric_M3_DecodeSpan()
     {
         MicroQrCodeDecoder.TryDecode(_alphanumericModules, _alphanumericSize, _chars, out var written, out _);
@@ -55,7 +56,6 @@ public class MicroQrDecode
     }
 
     [Benchmark(Description = "MicroQr_Byte_M4_Decode (Span)")]
-    [BenchmarkCategory("MicroQrDecode")]
     public int MicroQr_Byte_M4_DecodeSpan()
     {
         MicroQrCodeDecoder.TryDecode(_byteModules, _byteSize, _chars, out var written, out _);
@@ -65,7 +65,6 @@ public class MicroQrDecode
     // String path (allocates the result string only)
 
     [Benchmark]
-    [BenchmarkCategory("MicroQrDecode")]
     public string MicroQr_Numeric_M2_Decode()
     {
         MicroQrCodeDecoder.TryDecode(_numericModules, _numericSize, out var text, out _);
@@ -73,7 +72,6 @@ public class MicroQrDecode
     }
 
     [Benchmark]
-    [BenchmarkCategory("MicroQrDecode")]
     public string MicroQr_Byte_M4_Decode()
     {
         MicroQrCodeDecoder.TryDecode(_byteModules, _byteSize, out var text, out _);
@@ -83,7 +81,6 @@ public class MicroQrDecode
     // Standard QR version 1 with the same numeric payload, for scale reference.
 
     [Benchmark(Description = "StandardQr_Numeric_V1_Decode (Span)")]
-    [BenchmarkCategory("MicroQrDecode")]
     public int StandardQr_Numeric_V1_DecodeSpan()
     {
         QRCodeDecoder.TryDecode(_standardModules, _standardSize, _standardChars, out var written, out _);
