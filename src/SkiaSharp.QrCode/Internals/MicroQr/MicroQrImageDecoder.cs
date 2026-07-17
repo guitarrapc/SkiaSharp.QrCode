@@ -12,7 +12,8 @@ namespace SkiaSharp.QrCode.Internals.MicroQr;
 /// <code>
 /// 1. Global binarization threshold (Otsu, shared with Standard QR)
 /// 2. Finder pattern candidates (shared 1:1:3:1:1 scan; ALL candidates, not best three)
-/// 3. Module size refinement through the finder center (dark-light-dark runs)
+/// 3. Horizontal/vertical module size refinement through the finder center
+///    (dark-light-dark runs)
 /// 4. Axis-aligned grid sampling anchored on the single finder, trying every
 ///    version size (M4..M1) × 4 right-angle orientations × transpose (mirror)
 /// 5. Matrix decoding arbitrates: format info is cross-checked against the matrix
@@ -107,9 +108,10 @@ internal static class MicroQrImageDecoder
         for (var c = 0; c < tried; c++)
         {
             ref readonly var candidate = ref candidates[c];
-            var moduleSize = RefineModuleSize(luminance, width, height, threshold, candidate);
-            if (moduleSize < 1f)
+            RefineModuleSize(luminance, width, height, threshold, candidate, out var horizontalModuleSize, out var verticalModuleSize);
+            if (horizontalModuleSize < 1f || verticalModuleSize < 1f)
                 continue; // below one pixel per module nothing can be sampled reliably
+            var samplingSlack = Math.Max(horizontalModuleSize, verticalModuleSize);
 
             // Right-angle orientations as grid axis pairs (u = grid column axis,
             // v = grid row axis, in pixels per module).
@@ -117,10 +119,10 @@ internal static class MicroQrImageDecoder
             {
                 var (uX, uY, vX, vY) = orientation switch
                 {
-                    0 => (moduleSize, 0f, 0f, moduleSize),   // finder at symbol top-left
-                    1 => (0f, moduleSize, -moduleSize, 0f),  // rotated 90° clockwise
-                    2 => (-moduleSize, 0f, 0f, -moduleSize), // rotated 180°
-                    _ => (0f, -moduleSize, moduleSize, 0f),  // rotated 270°
+                    0 => (horizontalModuleSize, 0f, 0f, verticalModuleSize),   // finder at symbol top-left
+                    1 => (0f, verticalModuleSize, -horizontalModuleSize, 0f),  // rotated 90° clockwise
+                    2 => (-horizontalModuleSize, 0f, 0f, -verticalModuleSize), // rotated 180°
+                    _ => (0f, -verticalModuleSize, horizontalModuleSize, 0f),  // rotated 270°
                 };
 
                 // Grid origin: the finder center sits at grid (3.5, 3.5)
@@ -131,7 +133,7 @@ internal static class MicroQrImageDecoder
                 // sub-grid, while trying real sizes first exits at the first success.
                 for (var size = 17; size >= 11; size -= 2)
                 {
-                    if (!SymbolFitsImage(originX, originY, uX, uY, vX, vY, size, width, height, moduleSize))
+                    if (!SymbolFitsImage(originX, originY, uX, uY, vX, vY, size, width, height, samplingSlack))
                         continue;
 
                     SampleGrid(luminance, width, height, threshold, originX, originY, uX, uY, vX, vY, size, modules);
@@ -206,31 +208,29 @@ internal static class MicroQrImageDecoder
     }
 
     /// <summary>
-    /// Refines the module size by walking dark-light-dark runs from the finder
-    /// center along both image axes: center square (3) + light ring (1) + dark
-    /// ring (1) on each side spans exactly 7 modules of the 1:1:3:1:1 structure.
-    /// Falls back to the row-scan estimate when both axes clip the image edge.
+    /// Refines the horizontal and vertical module sizes independently by walking
+    /// dark-light-dark runs from the finder center: center square (3) + light
+    /// ring (1) + dark ring (1) on each side spans exactly 7 modules of the
+    /// 1:1:3:1:1 structure. Keeping both estimates lets the decoder read symbols
+    /// rendered into a non-square rectangle. A clipped axis falls back to the
+    /// other axis, then to the row-scan estimate when both axes clip.
     /// </summary>
-    private static float RefineModuleSize(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern candidate)
+    private static void RefineModuleSize(
+        ReadOnlySpan<byte> luminance,
+        int width,
+        int height,
+        byte threshold,
+        in FinderPattern candidate,
+        out float horizontalModuleSize,
+        out float verticalModuleSize)
     {
-        var sum = 0f;
-        var count = 0;
+        horizontalModuleSize = MeasureAxis(luminance, width, height, threshold, candidate.X, candidate.Y, 1f, 0f);
+        verticalModuleSize = MeasureAxis(luminance, width, height, threshold, candidate.X, candidate.Y, 0f, 1f);
 
-        var horizontal = MeasureAxis(luminance, width, height, threshold, candidate.X, candidate.Y, 1f, 0f);
-        if (!float.IsNaN(horizontal))
-        {
-            sum += horizontal;
-            count++;
-        }
-
-        var vertical = MeasureAxis(luminance, width, height, threshold, candidate.X, candidate.Y, 0f, 1f);
-        if (!float.IsNaN(vertical))
-        {
-            sum += vertical;
-            count++;
-        }
-
-        return count > 0 ? sum / count : candidate.ModuleSize;
+        if (float.IsNaN(horizontalModuleSize))
+            horizontalModuleSize = float.IsNaN(verticalModuleSize) ? candidate.ModuleSize : verticalModuleSize;
+        if (float.IsNaN(verticalModuleSize))
+            verticalModuleSize = horizontalModuleSize;
     }
 
     private static float MeasureAxis(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float centerX, float centerY, float dirX, float dirY)

@@ -22,11 +22,11 @@ namespace SkiaSharp.QrCode;
 /// zone border is detected and skipped automatically) or images via the
 /// <see cref="TryDecode(SKBitmap, out string)"/> / <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out MicroQrCodeDecodeInfo)"/>
 /// overloads. Image detection targets clean, screen-rendered or scanned images:
-/// 90°/180°/270° rotations, mirroring, reflectance reversal, scaling and
-/// translation are supported; small-angle rotation and perspective distortion are
-/// out of scope for the single-finder detector. Micro QR image scanning is a
-/// separate, explicitly-typed entry point — <see cref="QRCodeDecoder"/> continues
-/// to scan Standard QR only.
+/// 90°/180°/270° rotations, mirroring, reflectance reversal, uniform or
+/// non-uniform scaling and translation are supported; small-angle rotation and
+/// perspective distortion are out of scope for the single-finder detector. Micro
+/// QR image scanning is a separate, explicitly-typed entry point —
+/// <see cref="QRCodeDecoder"/> continues to scan Standard QR only.
 /// </para>
 /// </remarks>
 public static class MicroQrCodeDecoder
@@ -152,10 +152,10 @@ public static class MicroQrCodeDecoder
     /// <remarks>
     /// Targets clean, well-lit images such as screenshots, rendered symbols and
     /// scans: 90°/180°/270° rotations, mirroring, reflectance reversal
-    /// (light-on-dark), scaling and translation are handled. Small-angle rotation,
-    /// perspective distortion, uneven lighting and blur are out of scope — the
-    /// single Micro QR finder pattern cannot anchor the geometry recovery that
-    /// three Standard QR finders allow.
+    /// (light-on-dark), uniform or non-uniform scaling and translation are handled.
+    /// Small-angle rotation, perspective distortion, uneven lighting and blur are
+    /// out of scope — the single Micro QR finder pattern cannot anchor the geometry
+    /// recovery that three Standard QR finders allow.
     /// </remarks>
     /// <param name="bitmap">The bitmap to scan.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>

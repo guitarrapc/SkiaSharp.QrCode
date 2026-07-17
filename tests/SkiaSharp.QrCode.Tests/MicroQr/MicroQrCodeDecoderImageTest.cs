@@ -80,6 +80,27 @@ public class MicroQrCodeDecoderImageTest
     }
 
     [Test]
+    [Arguments(0)]
+    [Arguments(90)]
+    [Arguments(180)]
+    [Arguments(270)]
+    public async Task Decode_NonSquareRender(int degrees)
+    {
+        // The image builder supports independent width and height, so the image
+        // decoder must preserve the finder pattern's horizontal and vertical
+        // module scales instead of collapsing them to one square-module estimate.
+        const string content = "MICRO QR M4 TEST";
+        var data = MicroQrCodeGenerator.CreateMicroQrCode(content, MicroQrEccLevel.M);
+        using var rendered = new MicroQrCodeImageBuilder(data).WithSize(300, 400).ToBitmap();
+        using var bitmap = Rotate(rendered, degrees);
+
+        var success = MicroQrCodeDecoder.TryDecode(bitmap, out var text, out _);
+
+        await Assert.That(success).IsTrue();
+        await Assert.That(text).IsEqualTo(content);
+    }
+
+    [Test]
     public async Task Decode_TranslatedOnLargerCanvas()
     {
         const string content = "12345";
