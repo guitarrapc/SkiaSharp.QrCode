@@ -67,9 +67,9 @@ Reference tests: [ModulePlacerPlaceDataWordsParityTest](../../../tests/SkiaSharp
 | Spec reference | Topic | Implementation |
 |---|---|---|
 | Section 7.8.2 | The 8 mask pattern formulas (patterns 0–7) | [ModulePlacer.MaskCode / Pattern0–Pattern7](../../../src/SkiaSharp.QrCode/Internals/StandardQr/ModulePlacer.cs) |
-| Section 8.8.2 | Penalty scoring rules 1–4 for mask selection | [ModulePlacer.Masking.cs](../../../src/SkiaSharp.QrCode/Internals/StandardQr/ModulePlacer.Masking.cs) — bit-parallel implementation of all four rules |
+| Section 8.8.2 | Penalty scoring rules 1–4 for mask selection | [ModulePlacer.Masking.cs](../../../src/SkiaSharp.QrCode/Internals/StandardQr/ModulePlacer.Masking.cs) — bit-parallel implementation of all four rules, plus SIMD variants ([x64 AVX2](../../../src/SkiaSharp.QrCode/Internals/StandardQr/ModulePlacer.Masking.Simd.cs), [ARM AdvSimd](../../../src/SkiaSharp.QrCode/Internals/StandardQr/ModulePlacer.Masking.Simd.Arm.cs)) selected at runtime |
 
-Reference tests: [ModulePlacerMaskPackedParityTest](../../../tests/SkiaSharp.QrCode.Tests/StandardQr/ModulePlacerMaskPackedParityTest.cs) — packed masking/scoring vs. naive byte-per-module reference formulas.
+Reference tests: [ModulePlacerMaskPackedParityTest](../../../tests/SkiaSharp.QrCode.Tests/StandardQr/ModulePlacerMaskPackedParityTest.cs) — packed masking/scoring vs. naive byte-per-module reference formulas; [ModulePlacerMaskSimdParityTest](../../../tests/SkiaSharp.QrCode.Tests/StandardQr/ModulePlacerMaskSimdParityTest.cs) / [ModulePlacerMaskAdvSimdParityTest](../../../tests/SkiaSharp.QrCode.Tests/StandardQr/ModulePlacerMaskAdvSimdParityTest.cs) — vectorized tiers vs. the scalar bit-packed kernels.
 
 ## Decoding Pipeline
 
