@@ -9,8 +9,7 @@ namespace SkiaSharp.QrCode.Internals.BinaryDecoders;
 /// <summary>
 /// GFNI syndrome kernel: all ≤30 syndrome accumulators live in one 256-bit register,
 /// so every data byte updates every syndrome with one gf2p8mulb — replacing up to 30
-/// scalar GF multiplies per byte (measured ~114x on a version 40 block, see the
-/// EccDecode findings log in the MicroBenchmarks repository).
+/// scalar GF multiplies per byte (measured ~114x on a version 40 block).
 /// </summary>
 /// <remarks>
 /// GF2P8MULB is hardwired to the AES polynomial 0x11B while QR uses 0x11D, so the
