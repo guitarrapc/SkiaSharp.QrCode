@@ -55,7 +55,7 @@ public sealed class ZintMicroQrFixtureGenerator : IMicroQrFixtureGenerator
         var modules = new byte[size * size];
         for (var i = 0; i < modules.Length; i++)
         {
-            modules[i] = pixels[i] < 128 ? (byte)1 : (byte)0; // luminance: dark = 0
+            modules[i] = pixels[i] < 128 ? (byte)1 : (byte)0; // luminance: dark < 128 -> module = 1
         }
 
         var manifest = new FixtureManifest
