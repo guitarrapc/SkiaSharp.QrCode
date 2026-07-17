@@ -67,4 +67,68 @@ public static class QRCodeExtensions
         canvas.Clear(clearColor ?? SKColors.Transparent);
         QRCodeRenderer.Render(canvas, area, data, codeColor, backgroundColor, iconData, moduleShape, moduleSizePercent, gradientOptions, finderPatternShape);
     }
+
+    /// <summary>
+    /// Renders a Micro QR code on the canvas with default colors.
+    /// </summary>
+    /// <remarks>
+    /// Micro QR does not offer the Standard QR icon overlay or custom finder pattern
+    /// shape options (single finder pattern, no error-correction headroom for overlays).
+    /// </remarks>
+    /// <param name="canvas">The canvas to render on.</param>
+    /// <param name="data">The Micro QR code data.</param>
+    /// <param name="width">The width of the rendering area.</param>
+    /// <param name="height">The height of the rendering area.</param>
+    /// <param name="clearColor">The color used to clear the canvas. Defaults to Transparent.</param>
+    /// <param name="codeColor">The color of the modules. Defaults to Black.</param>
+    /// <param name="backgroundColor">The background color of the symbol. Defaults to White.</param>
+    /// <param name="moduleShape">The shape to use for drawing modules. If null, rectangles are used.</param>
+    /// <param name="moduleSizePercent">The size of each module as a percentage of the cell size (0.0 to 1.0). Default is 1.0 (no gap).</param>
+    /// <param name="gradientOptions">Optional gradient options for the modules.</param>
+    public static void Render(
+        this SKCanvas canvas,
+        MicroQrCodeData data,
+        int width,
+        int height,
+        SKColor? clearColor = null,
+        SKColor? codeColor = null,
+        SKColor? backgroundColor = null,
+        ModuleShape? moduleShape = null,
+        float moduleSizePercent = 1.0f,
+        GradientOptions? gradientOptions = null)
+    {
+        var area = SKRect.Create(0, 0, width, height);
+        canvas.Render(data, area, clearColor, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
+    }
+
+    /// <summary>
+    /// Renders a Micro QR code on the canvas with custom colors.
+    /// </summary>
+    /// <remarks>
+    /// Micro QR does not offer the Standard QR icon overlay or custom finder pattern
+    /// shape options (single finder pattern, no error-correction headroom for overlays).
+    /// </remarks>
+    /// <param name="canvas">The canvas to render on.</param>
+    /// <param name="data">The Micro QR code data.</param>
+    /// <param name="area">The rectangular area where the Micro QR code will be rendered.</param>
+    /// <param name="clearColor">The color used to clear the canvas. Defaults to Transparent.</param>
+    /// <param name="codeColor">The color of the modules. Defaults to Black.</param>
+    /// <param name="backgroundColor">The background color of the symbol. Defaults to White.</param>
+    /// <param name="moduleShape">The shape to use for drawing modules. If null, rectangles are used.</param>
+    /// <param name="moduleSizePercent">The size of each module as a percentage of the cell size (0.0 to 1.0). Default is 1.0 (no gap).</param>
+    /// <param name="gradientOptions">Optional gradient options for the modules.</param>
+    public static void Render(
+        this SKCanvas canvas,
+        MicroQrCodeData data,
+        SKRect area,
+        SKColor? clearColor = null,
+        SKColor? codeColor = null,
+        SKColor? backgroundColor = null,
+        ModuleShape? moduleShape = null,
+        float moduleSizePercent = 1.0f,
+        GradientOptions? gradientOptions = null)
+    {
+        canvas.Clear(clearColor ?? SKColors.Transparent);
+        QRCodeRenderer.Render(canvas, area, data, codeColor, backgroundColor, moduleShape, moduleSizePercent, gradientOptions);
+    }
 }

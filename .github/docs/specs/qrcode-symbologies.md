@@ -11,7 +11,7 @@ Design record for supporting multiple QR symbologies — Standard QR (ISO/IEC 18
 | Symbology | Standard | Encode | Matrix decode | Image decode |
 |---|---|---|---|---|
 | Standard QR (versions 1–40) | ISO/IEC 18004 | Shipped | Shipped | Shipped (Tier 1–2) |
-| Micro QR (M1–M4) | ISO/IEC 18004 | Shipped | Shipped | Planned |
+| Micro QR (M1–M4) | ISO/IEC 18004 | Shipped | Shipped | Shipped (axis-aligned tier 1) |
 | rMQR (R7x43–R17x139) | ISO/IEC 23941 | Planned | Planned | Planned |
 
 ### Document set
@@ -44,10 +44,10 @@ Internals are split into shared primitives and per-symbology pipelines.
 
 Dependency rule: shared code never references a symbology namespace; symbology namespaces never reference each other. Each symbology pipeline composes the shared primitives. Existing Standard QR code moves under `Internals.StandardQr` unchanged — no behavioral or algorithmic modification accompanies the move.
 
-Two components currently live in `Internals.StandardQr` but contain liftable pieces; they are lifted only when a second consumer actually appears (Phase 4b, Micro QR image detection), not speculatively:
+Two detection primitives were lifted from `Internals.StandardQr` to the shared `Internals.ImageDecoders` namespace when Micro QR image detection (Phase 4b) became their second consumer — exactly the trigger this document prescribed:
 
-- `QRImageDecoder.ComputeOtsuThreshold` — generic binarization
-- `FinderPatternFinder`'s 1:1:3:1:1 run-ratio scan — Micro QR uses the same finder pattern shape (single finder instead of three)
+- `Binarizer.ComputeOtsuThreshold` — generic binarization (moved out of `QRImageDecoder`)
+- `FinderPatternFinder` — the 1:1:3:1:1 run-ratio scan and cross-checks; Micro QR uses the same finder pattern shape (single finder instead of three) via `FindCandidates` (all cross-checked candidates), while Standard QR keeps its best-three selection in `TryFind`
 
 ### Public API direction
 
@@ -96,8 +96,8 @@ The library does not implement Kanji segments for Standard QR today (detected an
 | Decision | Choice | Revisit when |
 |---|---|---|
 | Kanji mode (all symbologies) | Deferred; tables keep the column | User demand or decoder interop need |
-| Image detection default | Standard QR only; new symbologies opt-in | Phase 4b API design |
-| Shared detection primitives (Otsu, run-ratio scan) | Stay in `Internals.StandardQr` until a second consumer exists | Phase 4b |
+| Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR scanning is its own explicitly-typed entry (`MicroQrCodeDecoder`) | rMQR image detection API |
+| Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) | — |
 | `QRCodeData` | Frozen for Standard QR | Never (compatibility contract) |
 
 ## Lessons learned

@@ -1,4 +1,5 @@
 using System.Buffers;
+using SkiaSharp.QrCode.Internals.ImageDecoders;
 using SkiaSharp.QrCode.Internals.MicroQr;
 
 namespace SkiaSharp.QrCode;
@@ -16,10 +17,16 @@ namespace SkiaSharp.QrCode;
 /// ISO-8859-1 otherwise (matching this library's encoder).
 /// </para>
 /// <para>
-/// Image detection is not part of this decoder (implementation plan Phase 6);
-/// inputs are module matrices — either <see cref="MicroQrCodeData"/> or byte-per-module
-/// buffers as produced by <see cref="MicroQrCodeGenerator"/>. A uniform light quiet
-/// zone border is detected and skipped automatically.
+/// Inputs are module matrices (<see cref="MicroQrCodeData"/> or byte-per-module
+/// buffers as produced by <see cref="MicroQrCodeGenerator"/>; a uniform light quiet
+/// zone border is detected and skipped automatically) or images via the
+/// <see cref="TryDecode(SKBitmap, out string)"/> / <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out MicroQrCodeDecodeInfo)"/>
+/// overloads. Image detection targets clean, screen-rendered or scanned images:
+/// 90°/180°/270° rotations, mirroring, reflectance reversal, scaling and
+/// translation are supported; small-angle rotation and perspective distortion are
+/// out of scope for the single-finder detector. Micro QR image scanning is a
+/// separate, explicitly-typed entry point — <see cref="QRCodeDecoder"/> continues
+/// to scan Standard QR only.
 /// </para>
 /// </remarks>
 public static class MicroQrCodeDecoder
@@ -137,6 +144,113 @@ public static class MicroQrCodeDecoder
         Span<byte> core = stackalloc byte[17 * 17].Slice(0, coreSize * coreSize);
         CopyCoreWindow(modules, size, origin, coreSize, core);
         return MicroQrMatrixDecoder.DecodeMatrix(core, coreSize, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
+    }
+
+    /// <summary>
+    /// Detects and decodes a Micro QR code from a bitmap image.
+    /// </summary>
+    /// <remarks>
+    /// Targets clean, well-lit images such as screenshots, rendered symbols and
+    /// scans: 90°/180°/270° rotations, mirroring, reflectance reversal
+    /// (light-on-dark), scaling and translation are handled. Small-angle rotation,
+    /// perspective distortion, uneven lighting and blur are out of scope — the
+    /// single Micro QR finder pattern cannot anchor the geometry recovery that
+    /// three Standard QR finders allow.
+    /// </remarks>
+    /// <param name="bitmap">The bitmap to scan.</param>
+    /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
+    /// <returns>True when a Micro QR code was detected and decoded.</returns>
+    /// <exception cref="ArgumentNullException"></exception>
+    public static bool TryDecode(SKBitmap bitmap, out string text)
+        => TryDecode(bitmap, out text, out _);
+
+    /// <summary>
+    /// Detects and decodes a Micro QR code from a bitmap image, with diagnostic information.
+    /// </summary>
+    /// <remarks>
+    /// See <see cref="TryDecode(SKBitmap, out string)"/> for the supported image envelope.
+    /// </remarks>
+    /// <param name="bitmap">The bitmap to scan.</param>
+    /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
+    /// <param name="info">Diagnostic information (status, version, ECC level, mask pattern, corrected errors).</param>
+    /// <returns>True when a Micro QR code was detected and decoded.</returns>
+    /// <exception cref="ArgumentNullException"></exception>
+    public static bool TryDecode(SKBitmap bitmap, out string text, out MicroQrCodeDecodeInfo info)
+    {
+        if (bitmap is null)
+            throw new ArgumentNullException(nameof(bitmap));
+
+        var width = bitmap.Width;
+        var height = bitmap.Height;
+        if (width < 11 || height < 11) // M1 is 11 modules per side
+        {
+            text = string.Empty;
+            info = new MicroQrCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
+            return false;
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(width * height);
+        try
+        {
+            var luminance = rented.AsSpan(0, width * height);
+            LuminanceConverter.Convert(bitmap, luminance);
+            return TryDecodeImage(luminance, width, height, out text, out info);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// Detects and decodes a Micro QR code from grayscale image pixels.
+    /// </summary>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
+    /// <param name="info">Diagnostic information (status, version, ECC level, mask pattern, corrected errors).</param>
+    /// <returns>True when a Micro QR code was detected and decoded.</returns>
+    /// <exception cref="ArgumentException"></exception>
+    public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out MicroQrCodeDecodeInfo info)
+    {
+        char[]? rentedChars = null;
+        try
+        {
+            // Version is unknown until detection completes, so size for the maximum
+            var maxChars = MicroQrMatrixDecoder.GetMaxCharCount(MicroQrVersion.M4);
+            rentedChars = ArrayPool<char>.Shared.Rent(maxChars);
+
+            var success = TryDecodeImage(luminance, width, height, rentedChars.AsSpan(0, maxChars), out var charsWritten, out info);
+            text = success ? rentedChars.AsSpan(0, charsWritten).ToString() : string.Empty;
+            return success;
+        }
+        finally
+        {
+            if (rentedChars is not null)
+                ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// Detects and decodes a Micro QR code from grayscale image pixels into a
+    /// caller-provided buffer without heap allocation.
+    /// </summary>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>
+    /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
+    /// <param name="info">Diagnostic information (status, version, ECC level, mask pattern, corrected errors).</param>
+    /// <returns>True when a Micro QR code was detected and decoded.</returns>
+    /// <exception cref="ArgumentException"></exception>
+    public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQrCodeDecodeInfo info)
+    {
+        // long arithmetic: dimensions are caller-controlled and width·height can overflow int
+        if (width < 1 || height < 1 || luminance.Length < (long)width * height)
+            throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
+
+        return MicroQrImageDecoder.DecodeLuminance(luminance, width, height, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
     }
 
     /// <summary>

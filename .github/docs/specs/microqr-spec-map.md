@@ -18,7 +18,7 @@ Micro QR has a single Reed-Solomon block and no codeword interleaving; the inter
 Matrix ──> Version from size ──> Format info ──> Unmask + extract ──> RS correction ──> Bitstream ──> Text
 ```
 
-Same internal boundary as the Standard QR `QRMatrixDecoder`; image detection is implementation plan Phase 4b. Public entry: [MicroQrCodeDecoder](../../../src/SkiaSharp.QrCode/MicroQrCodeDecoder.cs) (`MicroQrCodeData` / module-matrix / zero-allocation span overloads, uniform quiet-zone stripping), diagnostics in [MicroQrCodeDecodeInfo](../../../src/SkiaSharp.QrCode/MicroQrCodeDecodeInfo.cs).
+Same internal boundary as the Standard QR `QRMatrixDecoder`. Public entry: [MicroQrCodeDecoder](../../../src/SkiaSharp.QrCode/MicroQrCodeDecoder.cs) (`MicroQrCodeData` / module-matrix / zero-allocation span overloads, uniform quiet-zone stripping; image overloads below), diagnostics in [MicroQrCodeDecodeInfo](../../../src/SkiaSharp.QrCode/MicroQrCodeDecodeInfo.cs).
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
@@ -90,6 +90,38 @@ Reference tests: [MicroQrCodeGeneratorUnitTest.CreateMicroQrCode_M2_MatrixStruct
 | — | Placement: bits 14…8 along row 8 cols 1-7, bit 7 at (8,8), bits 6…0 down col 8 rows 7-1 | [MicroQrModulePlacer.PlaceFormat](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrModulePlacer.cs) |
 
 Reference tests: [MicroQrConstantsUnitTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrConstantsUnitTest.cs) (all 32 format patterns against the ISO-derived table plus a naive BCH reference), [MicroQrCodeGeneratorUnitTest.CreateMicroQrCode_FormatInfo_RoundTripsFromMatrix](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrCodeGeneratorUnitTest.cs).
+
+## Image Rendering
+
+| Spec reference | Topic | Implementation |
+|---|---|---|
+| Section 9.1 | Quiet zone: 2 modules (narrower than Standard QR's 4) — the builder default | [MicroQrCodeImageBuilder.WithQuietZone](../../../src/SkiaSharp.QrCode/Image/MicroQrCodeImageBuilder.cs) |
+| — | High-level image builder (PNG/JPEG/WEBP/SVG, fluent options; no icon overlay or finder styling — single finder, no ECC headroom) | [MicroQrCodeImageBuilder](../../../src/SkiaSharp.QrCode/Image/MicroQrCodeImageBuilder.cs) |
+| — | Low-level canvas rendering (module-run merging shared with Standard QR through the internal `IModuleMatrixView` struct views) | [QRCodeRenderer.Render (MicroQrCodeData overload)](../../../src/SkiaSharp.QrCode/QRCodeRenderer.cs), views in [ModuleMatrixView](../../../src/SkiaSharp.QrCode/Internals/ModuleMatrixView.cs) |
+| — | SKCanvas extension entry points | [QRCodeExtensions.Render (MicroQrCodeData overloads)](../../../src/SkiaSharp.QrCode/QRCodeExtensions.cs) |
+| — | Canvas layout math (explicit size / module pixel size / centering), shared with the Standard QR builder | [QrImageLayout](../../../src/SkiaSharp.QrCode/Image/QrImageLayout.cs) |
+
+Reference tests: [MicroQrCodeImageBuilderUnitTest](../../../tests/SkiaSharp.QrCode.Tests/Rendering/MicroQrCodeImageBuilderUnitTest.cs) (full-matrix module-to-pixel parity for every version × ECC — every module center sampled against `MicroQrCodeData`, stronger than golden hashes — plus quiet zone defaults, layout, SVG structure, validation negatives).
+
+## Image Detection and Sampling
+
+```
+Luminance ──> Otsu threshold ──> Finder candidates (shared 1:1:3:1:1 scan, ALL candidates)
+          ──> Module size refinement ──> Grid sampling (sizes M4..M1 × 4 orientations × transpose)
+          ──> Matrix decoding (format/RS/capacity checks arbitrate the right grid)
+```
+
+| Spec reference | Topic | Implementation |
+|---|---|---|
+| — | Detection pipeline orchestration; inverted (reflectance-reversed) retry | [MicroQrImageDecoder](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrImageDecoder.cs) |
+| — | Binarization (Otsu) — shared with Standard QR (lifted to `Internals.ImageDecoders` when Micro QR became the second consumer) | [Binarizer.ComputeOtsuThreshold](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/Binarizer.cs) |
+| Section 6.3.1 | Finder pattern candidates: the shared 1:1:3:1:1 run scan collecting every cross-checked candidate (Standard QR keeps its best-three selection; lifted to `Internals.ImageDecoders` when Micro QR became the second consumer) | [FinderPatternFinder.FindCandidates](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/FinderPatternFinder.cs) |
+| — | Module size from dark-light-dark runs through the single finder center (both image axes, 7-module span) | [MicroQrImageDecoder.RefineModuleSize](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrImageDecoder.cs) |
+| — | Public image entry points (SKBitmap / luminance span / zero-allocation destination) | [MicroQrCodeDecoder.TryDecode / TryDecodeImage](../../../src/SkiaSharp.QrCode/MicroQrCodeDecoder.cs) |
+
+Supported envelope (single-finder tier 1): clean screen-rendered or scanned images with 90°/180°/270° rotation, mirroring, reflectance reversal, non-integer scaling, translation and quiet zone variants, plus mild optical degradation (JPEG artifacts, low contrast, additive noise). Small-angle rotation and perspective distortion are **out of scope**: one finder pattern cannot anchor the orientation/homography recovery that three Standard QR finders allow. `QRCodeDecoder` remains Standard QR-only — Micro QR image scanning is its own explicitly-typed entry point, so default Standard QR scanning performance is unaffected.
+
+Reference tests: [MicroQrCodeDecoderImageTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrCodeDecoderImageTest.cs) (clean renders for every version × ECC, scale/rotation/mirror/inversion/translation/quiet-zone variants, deterministic degradation subset per test strategy §7, negative cases both symbology directions), [MicroQrFixtureTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrFixtureTest.cs) (committed external-encoder PNG corpus through the image path).
 
 ## Data Model and Serialization
 

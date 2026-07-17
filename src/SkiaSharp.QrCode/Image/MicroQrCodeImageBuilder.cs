@@ -4,37 +4,33 @@ using System.Text;
 namespace SkiaSharp.QrCode.Image;
 
 /// <summary>
-/// High-level builder for creating QR code images with fluent configuration and static methods.
+/// High-level builder for creating Micro QR code images with fluent configuration and static methods.
 /// </summary>
 /// <remarks>
 /// <para>
-/// This builder provides both simple static methods for quick QR code generation
-/// and a fluent API for advanced customization.
+/// This builder mirrors <see cref="QRCodeImageBuilder"/> for the Micro QR symbology
+/// (ISO/IEC 18004, versions M1-M4). Version and error correction use the Micro
+/// QR-typed <see cref="MicroQrVersion"/> / <see cref="MicroQrEccLevel"/>, and the
+/// default quiet zone is the 2 modules the specification requires (Standard QR uses 4).
 /// </para>
 /// <para>
-/// <b>Quick Generation (Static Methods):</b><br/>
-/// Use static methods like <see cref="GetPngBytes(string, ECCLevel, int)"/> for one-liner QR code creation with default settings.
-/// </para>
-/// <para>
-/// <b>Advanced Configuration (Fluent API):</b><br/>
-/// Chain methods like <see cref="WithSize(int, int)"/>, <see cref="WithModulePixelSize(int)"/>, <see cref="WithColors(SKColor?, SKColor?, SKColor?)"/>,
-/// <see cref="WithModuleShape(ModuleShape?, float)"/>, <see cref="WithGradient(GradientOptions?)"/>,
-/// and <see cref="WithIcon(IconData?)"/> to customize QR code appearance.
+/// Micro QR has a single finder pattern and no high error-correction headroom,
+/// so the Standard QR styling options that depend on those (icon overlays and
+/// custom finder pattern shapes) are intentionally not offered.
 /// </para>
 /// </remarks>
-/// <seealso cref="QRCodeGenerator"/>
+/// <seealso cref="MicroQrCodeGenerator"/>
 /// <seealso cref="QRCodeRenderer"/>
-public class QRCodeImageBuilder
+public class MicroQrCodeImageBuilder
 {
     private readonly string? _content;
-    private readonly QRCodeData? _qrCodeData;
+    private readonly MicroQrCodeData? _data;
     private Vector2Slim? _explicitSize;
     private SKEncodedImageFormat _format = SKEncodedImageFormat.Png;
     private int _quality = 100;
-    private ECCLevel _eccLevel = ECCLevel.M;
-    private EciMode _eciMode = EciMode.Default;
-    private int _requestedVersion = -1;
-    private int _quietZoneSize = 4;
+    private MicroQrEccLevel _eccLevel = MicroQrEccLevel.M;
+    private MicroQrVersion? _requestedVersion;
+    private int _quietZoneSize = 2;
     private int? _modulePixelSize;
 
     // rendering
@@ -43,11 +39,9 @@ public class QRCodeImageBuilder
     private SKColor? _clearColor;
     private ModuleShape? _moduleShape;
     private float _moduleSizePercent = 1.0f;
-    private FinderPatternShape? _finderPatternShape;
     private GradientOptions? _gradientOptions;
-    private IconData? _iconData;
 
-    public QRCodeImageBuilder(string content)
+    public MicroQrCodeImageBuilder(string content)
     {
         if (string.IsNullOrWhiteSpace(content))
             throw new ArgumentException("Content cannot be empty", nameof(content));
@@ -55,51 +49,51 @@ public class QRCodeImageBuilder
         _content = content;
     }
 
-    public QRCodeImageBuilder(QRCodeData qrCodeData)
+    public MicroQrCodeImageBuilder(MicroQrCodeData microQrCodeData)
     {
-        if (qrCodeData is null)
-            throw new ArgumentNullException(nameof(qrCodeData));
+        if (microQrCodeData is null)
+            throw new ArgumentNullException(nameof(microQrCodeData));
 
-        _qrCodeData = qrCodeData;
+        _data = microQrCodeData;
     }
 
     // static methods for quick generation
 
     /// <summary>
-    /// Generate a QR code as PNG byte array with default settings.
+    /// Generate a Micro QR code as PNG byte array with default settings.
     /// </summary>
     /// <param name="content">The content to encode.</param>
-    /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
     /// <returns>PNG encoded byte array.</returns>
-    public static byte[] GetPngBytes(string content, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static byte[] GetPngBytes(string content, MicroQrEccLevel eccLevel = MicroQrEccLevel.M, int size = 512)
     {
         return GetImageBytes(content, SKEncodedImageFormat.Png, eccLevel, size, 100);
     }
 
     /// <summary>
-    /// Generate a QR code as PNG byte array with default settings.
+    /// Generate a Micro QR code as PNG byte array with default settings.
     /// </summary>
-    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
     /// <returns>PNG encoded byte array.</returns>
-    public static byte[] GetPngBytes(QRCodeData qrCodeData, int size = 512)
+    public static byte[] GetPngBytes(MicroQrCodeData microQrCodeData, int size = 512)
     {
-        return GetImageBytes(qrCodeData, SKEncodedImageFormat.Png, size, 100);
+        return GetImageBytes(microQrCodeData, SKEncodedImageFormat.Png, size, 100);
     }
 
     /// <summary>
-    /// Generate a QR code as image byte array with specified format.
+    /// Generate a Micro QR code as image byte array with specified format.
     /// </summary>
     /// <param name="content">The content to encode.</param>
     /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
-    /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
     /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
     /// <returns>Encoded byte array.</returns>
-    public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, ECCLevel eccLevel = ECCLevel.M, int size = 512, int quality = 100)
+    public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, MicroQrEccLevel eccLevel = MicroQrEccLevel.M, int size = 512, int quality = 100)
     {
-        return new QRCodeImageBuilder(content)
+        return new MicroQrCodeImageBuilder(content)
             .WithSize(size, size)
             .WithErrorCorrection(eccLevel)
             .WithFormat(format, quality)
@@ -107,60 +101,60 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Generate a QR code as image byte array with specified format.
+    /// Generate a Micro QR code as image byte array with specified format.
     /// </summary>
-    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
     /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
     /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
     /// <returns>Encoded byte array.</returns>
-    public static byte[] GetImageBytes(QRCodeData qrCodeData, SKEncodedImageFormat format, int size = 512, int quality = 100)
+    public static byte[] GetImageBytes(MicroQrCodeData microQrCodeData, SKEncodedImageFormat format, int size = 512, int quality = 100)
     {
-        return new QRCodeImageBuilder(qrCodeData)
+        return new MicroQrCodeImageBuilder(microQrCodeData)
             .WithSize(size, size)
             .WithFormat(format, quality)
             .ToByteArray();
     }
 
     /// <summary>
-    /// Generate a QR code and save to stream with default PNG settings.
+    /// Generate a Micro QR code and save to stream with default PNG settings.
     /// </summary>
     /// <param name="content">The content to encode.</param>
     /// <param name="output">The output stream.</param>
-    /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
-    public static void SavePng(string content, Stream output, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static void SavePng(string content, Stream output, MicroQrEccLevel eccLevel = MicroQrEccLevel.M, int size = 512)
     {
-        new QRCodeImageBuilder(content)
+        new MicroQrCodeImageBuilder(content)
             .WithSize(size, size)
             .WithErrorCorrection(eccLevel)
             .SaveTo(output);
     }
 
     /// <summary>
-    /// Generate a QR code and save to stream with default PNG settings.
+    /// Generate a Micro QR code and save to stream with default PNG settings.
     /// </summary>
-    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
     /// <param name="output">The output stream.</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
-    public static void SavePng(QRCodeData qrCodeData, Stream output, int size = 512)
+    public static void SavePng(MicroQrCodeData microQrCodeData, Stream output, int size = 512)
     {
-        new QRCodeImageBuilder(qrCodeData)
+        new MicroQrCodeImageBuilder(microQrCodeData)
             .WithSize(size, size)
             .SaveTo(output);
     }
 
     /// <summary>
-    /// Generate a QR code as SVG (UTF-8 encoded) byte array with default settings.
+    /// Generate a Micro QR code as SVG (UTF-8 encoded) byte array with default settings.
     /// </summary>
     /// <param name="content">The content to encode.</param>
-    /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
     /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
     /// <returns>UTF-8 encoded SVG document.</returns>
-    public static byte[] GetSvgBytes(string content, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static byte[] GetSvgBytes(string content, MicroQrEccLevel eccLevel = MicroQrEccLevel.M, int size = 512)
     {
         using var stream = new MemoryStream();
-        new QRCodeImageBuilder(content)
+        new MicroQrCodeImageBuilder(content)
             .WithSize(size, size)
             .WithErrorCorrection(eccLevel)
             .SaveToSvg(stream);
@@ -168,139 +162,139 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Generate a QR code as SVG (UTF-8 encoded) byte array with default settings.
+    /// Generate a Micro QR code as SVG (UTF-8 encoded) byte array with default settings.
     /// </summary>
-    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
     /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
     /// <returns>UTF-8 encoded SVG document.</returns>
-    public static byte[] GetSvgBytes(QRCodeData qrCodeData, int size = 512)
+    public static byte[] GetSvgBytes(MicroQrCodeData microQrCodeData, int size = 512)
     {
         using var stream = new MemoryStream();
-        new QRCodeImageBuilder(qrCodeData)
+        new MicroQrCodeImageBuilder(microQrCodeData)
             .WithSize(size, size)
             .SaveToSvg(stream);
         return stream.ToArray();
     }
 
     /// <summary>
-    /// Generate a QR code and save as SVG to stream with default settings.
+    /// Generate a Micro QR code and save as SVG to stream with default settings.
     /// </summary>
     /// <param name="content">The content to encode.</param>
     /// <param name="output">The output stream.</param>
-    /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
     /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
-    public static void SaveSvg(string content, Stream output, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static void SaveSvg(string content, Stream output, MicroQrEccLevel eccLevel = MicroQrEccLevel.M, int size = 512)
     {
-        new QRCodeImageBuilder(content)
+        new MicroQrCodeImageBuilder(content)
             .WithSize(size, size)
             .WithErrorCorrection(eccLevel)
             .SaveToSvg(output);
     }
 
     /// <summary>
-    /// Generate a QR code and save as SVG to stream with default settings.
+    /// Generate a Micro QR code and save as SVG to stream with default settings.
     /// </summary>
-    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
     /// <param name="output">The output stream.</param>
     /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
-    public static void SaveSvg(QRCodeData qrCodeData, Stream output, int size = 512)
+    public static void SaveSvg(MicroQrCodeData microQrCodeData, Stream output, int size = 512)
     {
-        new QRCodeImageBuilder(qrCodeData)
+        new MicroQrCodeImageBuilder(microQrCodeData)
             .WithSize(size, size)
             .SaveToSvg(output);
     }
 
     /// <summary>
-    /// Generate a QR code as SVG document string with default settings.
+    /// Generate a Micro QR code as SVG document string with default settings.
     /// </summary>
     /// <param name="content">The content to encode.</param>
-    /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
     /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
     /// <returns>SVG document.</returns>
-    public static string GetSvgString(string content, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static string GetSvgString(string content, MicroQrEccLevel eccLevel = MicroQrEccLevel.M, int size = 512)
     {
-        return new QRCodeImageBuilder(content)
+        return new MicroQrCodeImageBuilder(content)
             .WithSize(size, size)
             .WithErrorCorrection(eccLevel)
             .ToSvgString();
     }
 
     /// <summary>
-    /// Generate a QR code as SVG document string with default settings.
+    /// Generate a Micro QR code as SVG document string with default settings.
     /// </summary>
-    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
     /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
     /// <returns>SVG document.</returns>
-    public static string GetSvgString(QRCodeData qrCodeData, int size = 512)
+    public static string GetSvgString(MicroQrCodeData microQrCodeData, int size = 512)
     {
-        return new QRCodeImageBuilder(qrCodeData)
+        return new MicroQrCodeImageBuilder(microQrCodeData)
             .WithSize(size, size)
             .ToSvgString();
     }
 
     /// <summary>
-    /// Generate a QR code and write as SVG (UTF-8 encoded) to an IBufferWriter with default settings.
+    /// Generate a Micro QR code and write as SVG (UTF-8 encoded) to an IBufferWriter with default settings.
     /// </summary>
     /// <param name="content">The content to encode.</param>
     /// <param name="writer">The buffer writer to write to.</param>
-    /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
     /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
-    public static void WriteSvg(string content, IBufferWriter<byte> writer, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static void WriteSvg(string content, IBufferWriter<byte> writer, MicroQrEccLevel eccLevel = MicroQrEccLevel.M, int size = 512)
     {
-        new QRCodeImageBuilder(content)
+        new MicroQrCodeImageBuilder(content)
             .WithSize(size, size)
             .WithErrorCorrection(eccLevel)
             .SaveToSvg(writer);
     }
 
     /// <summary>
-    /// Generate a QR code and write as SVG (UTF-8 encoded) to an IBufferWriter with default settings.
+    /// Generate a Micro QR code and write as SVG (UTF-8 encoded) to an IBufferWriter with default settings.
     /// </summary>
-    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
     /// <param name="writer">The buffer writer to write to.</param>
     /// <param name="size">SVG viewport size in units. Default is 512x512.</param>
-    public static void WriteSvg(QRCodeData qrCodeData, IBufferWriter<byte> writer, int size = 512)
+    public static void WriteSvg(MicroQrCodeData microQrCodeData, IBufferWriter<byte> writer, int size = 512)
     {
-        new QRCodeImageBuilder(qrCodeData)
+        new MicroQrCodeImageBuilder(microQrCodeData)
             .WithSize(size, size)
             .SaveToSvg(writer);
     }
 
     /// <summary>
-    /// Generate a QR code and write to an IBufferWriter with default PNG settings.
+    /// Generate a Micro QR code and write to an IBufferWriter with default PNG settings.
     /// </summary>
     /// <param name="content">The content to encode.</param>
     /// <param name="writer">The buffer writer to write to.</param>
-    /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
-    public static void WritePng(string content, IBufferWriter<byte> writer, ECCLevel eccLevel = ECCLevel.M, int size = 512)
+    public static void WritePng(string content, IBufferWriter<byte> writer, MicroQrEccLevel eccLevel = MicroQrEccLevel.M, int size = 512)
     {
         WriteImage(content, writer, SKEncodedImageFormat.Png, eccLevel, size, quality: 100);
     }
 
     /// <summary>
-    /// Generate a QR code and write to an IBufferWriter with default PNG settings.
+    /// Generate a Micro QR code and write to an IBufferWriter with default PNG settings.
     /// </summary>
-    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
     /// <param name="writer">The buffer writer to write to.</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
-    public static void WritePng(QRCodeData qrCodeData, IBufferWriter<byte> writer, int size = 512)
+    public static void WritePng(MicroQrCodeData microQrCodeData, IBufferWriter<byte> writer, int size = 512)
     {
-        WriteImage(qrCodeData, writer, SKEncodedImageFormat.Png, size, quality: 100);
+        WriteImage(microQrCodeData, writer, SKEncodedImageFormat.Png, size, quality: 100);
     }
 
     /// <summary>
-    /// Generate a QR code and write to an IBufferWriter with specified format.
+    /// Generate a Micro QR code and write to an IBufferWriter with specified format.
     /// </summary>
     /// <param name="content">The content to encode.</param>
     /// <param name="writer">The buffer writer to write to.</param>
     /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
-    /// <param name="eccLevel">Error correction level. Default is M (15%).</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
     /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
-    public static void WriteImage(string content, IBufferWriter<byte> writer, SKEncodedImageFormat format, ECCLevel eccLevel = ECCLevel.M, int size = 512, int quality = 100)
+    public static void WriteImage(string content, IBufferWriter<byte> writer, SKEncodedImageFormat format, MicroQrEccLevel eccLevel = MicroQrEccLevel.M, int size = 512, int quality = 100)
     {
-        new QRCodeImageBuilder(content)
+        new MicroQrCodeImageBuilder(content)
             .WithSize(size, size)
             .WithErrorCorrection(eccLevel)
             .WithFormat(format, quality)
@@ -308,16 +302,16 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Generate a QR code and write to an IBufferWriter with specified format.
+    /// Generate a Micro QR code and write to an IBufferWriter with specified format.
     /// </summary>
-    /// <param name="qrCodeData">The QR code data to render.</param>
+    /// <param name="microQrCodeData">The Micro QR code data to render.</param>
     /// <param name="writer">The buffer writer to write to.</param>
     /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
     /// <param name="size">Image size in pixels. Default is 512x512.</param>
     /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
-    public static void WriteImage(QRCodeData qrCodeData, IBufferWriter<byte> writer, SKEncodedImageFormat format, int size = 512, int quality = 100)
+    public static void WriteImage(MicroQrCodeData microQrCodeData, IBufferWriter<byte> writer, SKEncodedImageFormat format, int size = 512, int quality = 100)
     {
-        new QRCodeImageBuilder(qrCodeData)
+        new MicroQrCodeImageBuilder(microQrCodeData)
             .WithSize(size, size)
             .WithFormat(format, quality)
             .SaveTo(writer);
@@ -331,20 +325,20 @@ public class QRCodeImageBuilder
     /// <remarks>
     /// <para>
     /// Used alone, this sets an exact canvas size. Module pixel size then becomes
-    /// <c>imageSize / QRCodeData.Size</c>, which may be fractional and can change when QR version changes.
+    /// <c>imageSize / MicroQrCodeData.Size</c>, which may be fractional and can change when the version changes.
     /// </para>
     /// <para>
     /// Used with <see cref="WithModulePixelSize(int)"/>, this sets the canvas size while module pixels
-    /// define the QR content size (<c>QRCodeData.Size * modulePixelSize</c>).
+    /// define the content size (<c>MicroQrCodeData.Size * modulePixelSize</c>).
     /// The canvas must be at least as large as the content on both sides; extra space is padded and
-    /// the QR content is centered. Padding uses <c>clearColor</c> from <see cref="WithColors"/>.
+    /// the content is centered. Padding uses <c>clearColor</c> from <see cref="WithColors"/>.
     /// </para>
     /// </remarks>
     /// <param name="width">Width in pixels (must be positive).</param>
     /// <param name="height">Height in pixels (must be positive).</param>
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
-    public QRCodeImageBuilder WithSize(int width, int height)
+    public MicroQrCodeImageBuilder WithSize(int width, int height)
     {
         if (width <= 0)
             throw new ArgumentOutOfRangeException(nameof(width), "Width must be positive");
@@ -356,12 +350,12 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Configure QR content size from pixels-per-module.
+    /// Configure content size from pixels-per-module.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Sets each QR module to an exact integer pixel size. Content side length is
-    /// <c>QRCodeData.Size * modulePixelSize</c>.
+    /// Sets each module to an exact integer pixel size. Content side length is
+    /// <c>MicroQrCodeData.Size * modulePixelSize</c>.
     /// </para>
     /// <para>
     /// Used alone, the output image matches the content size.
@@ -369,10 +363,10 @@ public class QRCodeImageBuilder
     /// and padded with <c>clearColor</c>. If the canvas is smaller than the content, rendering throws.
     /// </para>
     /// </remarks>
-    /// <param name="modulePixelSize">Pixel size per QR module (must be positive).</param>
+    /// <param name="modulePixelSize">Pixel size per module (must be positive).</param>
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
-    public QRCodeImageBuilder WithModulePixelSize(int modulePixelSize)
+    public MicroQrCodeImageBuilder WithModulePixelSize(int modulePixelSize)
     {
         if (modulePixelSize <= 0)
             throw new ArgumentOutOfRangeException(nameof(modulePixelSize), "Module pixel size must be positive");
@@ -388,7 +382,7 @@ public class QRCodeImageBuilder
     /// <param name="quality">The image quality (0-100).</param>
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
-    public QRCodeImageBuilder WithFormat(SKEncodedImageFormat format, int quality = 100)
+    public MicroQrCodeImageBuilder WithFormat(SKEncodedImageFormat format, int quality = 100)
     {
         if (quality is < 0 or > 100)
             throw new ArgumentOutOfRangeException(nameof(quality), "Quality must be between 0 and 100");
@@ -399,52 +393,50 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Configure the error correction level for the QR code.
+    /// Configure the error correction level for the Micro QR code.
     /// </summary>
-    /// <param name="eccLevel">Error correction level (L=7%, M=15%, Q=25%, H=30%). Level H is recommended when using icons or custom module shapes.</param>
+    /// <remarks>
+    /// Legal combinations are version-dependent: M1 supports
+    /// <see cref="MicroQrEccLevel.ErrorDetectionOnly"/> only, M2/M3 support L and M,
+    /// M4 supports L, M, and Q. Illegal combinations throw when the symbol is generated.
+    /// </remarks>
+    /// <param name="eccLevel">Error correction level.</param>
     /// <returns>This builder instance for method chaining.</returns>
-    public QRCodeImageBuilder WithErrorCorrection(ECCLevel eccLevel)
+    /// <exception cref="InvalidOperationException"></exception>
+    public MicroQrCodeImageBuilder WithErrorCorrection(MicroQrEccLevel eccLevel)
     {
+        if (_data is not null)
+            throw new InvalidOperationException("WithErrorCorrection cannot be used when MicroQrCodeData is provided directly.");
+
         _eccLevel = eccLevel;
         return this;
     }
 
     /// <summary>
-    /// Configure the ECI (Extended Channel Interpretation) mode for character encoding.
+    /// Configure the Micro QR version to generate.
     /// </summary>
-    /// <param name="eciMode">The ECI mode to use.</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    public QRCodeImageBuilder WithEciMode(EciMode eciMode)
-    {
-        _eciMode = eciMode;
-        return this;
-    }
-
-    /// <summary>
-    /// Configure the QR code version to generate.
-    /// </summary>
-    /// <param name="version">Version to use (1-40), or -1 for automatic selection based on content length.</param>
+    /// <param name="version">Version to use (M1-M4). When not called, the smallest version that fits the content is selected.</param>
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <exception cref="InvalidOperationException"></exception>
-    public QRCodeImageBuilder WithVersion(int version)
+    public MicroQrCodeImageBuilder WithVersion(MicroQrVersion version)
     {
-        if (_qrCodeData is not null)
-            throw new InvalidOperationException("WithVersion cannot be used when QRCodeData is provided directly.");
-        if (version is not -1 and (< 1 or > 40))
-            throw new ArgumentOutOfRangeException(nameof(version), "Version must be between 1 and 40, or -1 for automatic selection.");
+        if (_data is not null)
+            throw new InvalidOperationException("WithVersion cannot be used when MicroQrCodeData is provided directly.");
+        if ((uint)((int)version - 1) > 3)
+            throw new ArgumentOutOfRangeException(nameof(version), $"Invalid Micro QR version: {version}");
 
         _requestedVersion = version;
         return this;
     }
 
     /// <summary>
-    /// Configure the quiet zone size (white border) around the QR code.
+    /// Configure the quiet zone size (light border) around the Micro QR code.
     /// </summary>
-    /// <param name="size">Quiet zone size in modules (0-10). Recommended is 4.</param>
+    /// <param name="size">Quiet zone size in modules (0-10). The Micro QR specification requires 2 (the default).</param>
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
-    public QRCodeImageBuilder WithQuietZone(int size = 4)
+    public MicroQrCodeImageBuilder WithQuietZone(int size = 2)
     {
         if (size is < 0 or > 10)
             throw new ArgumentOutOfRangeException(nameof(size), "Quiet zone size must be between 0 and 10");
@@ -453,13 +445,13 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Configure the colors used in the QR code image.
+    /// Configure the colors used in the Micro QR code image.
     /// </summary>
-    /// <param name="codeColor">Color of QR code modules. If null, uses black.</param>
+    /// <param name="codeColor">Color of modules. If null, uses black.</param>
     /// <param name="backgroundColor">Background color. If null, uses white.</param>
     /// <param name="clearColor">Canvas clear color. If null, uses transparent.</param>
     /// <returns>This builder instance for method chaining.</returns>
-    public QRCodeImageBuilder WithColors(SKColor? codeColor = null, SKColor? backgroundColor = null, SKColor? clearColor = null)
+    public MicroQrCodeImageBuilder WithColors(SKColor? codeColor = null, SKColor? backgroundColor = null, SKColor? clearColor = null)
     {
         _codeColor = codeColor;
         _backgroundColor = backgroundColor;
@@ -468,16 +460,17 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Configure the shape of the QR code modules.
+    /// Configure the shape of the Micro QR code modules.
     /// </summary>
     /// <remarks>
-    /// Note: Custom module shapes affect finder patterns unless a custom finder pattern shape is explicitly set via <see cref="WithFinderPatternShape"/>.
+    /// Micro QR carries less error-correction headroom than Standard QR, so keep
+    /// module shapes conservative and prefer <paramref name="sizePercent"/> at or near 1.0.
     /// </remarks>
     /// <param name="moduleShape">Shape to use for modules. If null, uses rectangles.</param>
-    /// <param name="sizePercent">Module size as a percentage of cell size (0.5-1.0). Values below 0.8 may affect readability. Default is 1.0 (no gaps).</param>
+    /// <param name="sizePercent">Module size as a percentage of cell size (0.5-1.0). Default is 1.0 (no gaps).</param>
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
-    public QRCodeImageBuilder WithModuleShape(ModuleShape? moduleShape, float sizePercent = 1.0f)
+    public MicroQrCodeImageBuilder WithModuleShape(ModuleShape? moduleShape, float sizePercent = 1.0f)
     {
         if (sizePercent is < 0.5f or > 1.0f)
             throw new ArgumentOutOfRangeException(nameof(sizePercent), "Module size percent must be between 0.5 and 1.0.");
@@ -488,40 +481,18 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Configure gradient options for the QR code modules.
+    /// Configure gradient options for the Micro QR code modules.
     /// </summary>
     /// <param name="gradientOptions">Gradient configuration. If null, uses solid color.</param>
     /// <returns>This builder instance for method chaining.</returns>
-    public QRCodeImageBuilder WithGradient(GradientOptions? gradientOptions)
+    public MicroQrCodeImageBuilder WithGradient(GradientOptions? gradientOptions)
     {
         _gradientOptions = gradientOptions;
         return this;
     }
 
     /// <summary>
-    /// Configure an icon to overlay on the center of the QR code.
-    /// </summary>
-    /// <param name="iconData">Icon configuration. If null, no icon is displayed.</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    public QRCodeImageBuilder WithIcon(IconData? iconData)
-    {
-        _iconData = iconData;
-        return this;
-    }
-
-    /// <summary>
-    /// Configure the shape of the finder patterns.
-    /// </summary>
-    /// <param name="finderPatternShape">Shape to use for finder patterns. If null, uses standard pattern or same as module shape.</param>
-    /// <returns>This builder instance for method chaining.</returns>
-    public QRCodeImageBuilder WithFinderPatternShape(FinderPatternShape? finderPatternShape)
-    {
-        _finderPatternShape = finderPatternShape;
-        return this;
-    }
-
-    /// <summary>
-    /// Generate QR code and save to stream
+    /// Generate Micro QR code and save to stream
     /// </summary>
     /// <param name="output">The output stream (must be writable).</param>
     /// <exception cref="ArgumentNullException"></exception>
@@ -541,7 +512,7 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Generate QR code and write to an IBufferWriter.
+    /// Generate Micro QR code and write to an IBufferWriter.
     /// This is more efficient than SaveTo(Stream) as it avoids intermediate buffering.
     /// </summary>
     /// <param name="writer">The buffer writer</param>
@@ -560,26 +531,12 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Generate QR code and save as SVG document to stream.
+    /// Generate Micro QR code and save as SVG document to stream.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The QR code is drawn as vector shapes via <see cref="SKSvgCanvas"/>, so the output scales
-    /// without quality loss. All builder options apply: colors, module shapes, gradients, finder
-    /// pattern shapes, and icons (icon images are embedded as base64 data URIs).
-    /// </para>
-    /// <para>
-    /// The root element carries a <c>viewBox</c>, so the document scales its content when
-    /// embedded at a different size (img element, CSS). For plain rectangular modules,
-    /// <c>shape-rendering="crispEdges"</c> is added to avoid antialiasing seams between modules;
-    /// custom shapes keep antialiasing for smooth curves.
-    /// </para>
-    /// <para>
-    /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> is ignored — SVG is a vector format,
-    /// not an <see cref="SKEncodedImageFormat"/>. Size options (<see cref="WithSize(int, int)"/>,
-    /// <see cref="WithModulePixelSize(int)"/>) define the SVG viewport in units.
-    /// The stream is left open after writing.
-    /// </para>
+    /// See <see cref="QRCodeImageBuilder.SaveToSvg(Stream)"/> for the shared SVG
+    /// rendering behavior (viewBox injection, crispEdges for plain rectangles,
+    /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> ignored, stream left open).
     /// </remarks>
     /// <param name="output">The output stream (must be writable).</param>
     /// <exception cref="ArgumentNullException"></exception>
@@ -595,7 +552,7 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Generate QR code and write as SVG document to an IBufferWriter.
+    /// Generate Micro QR code and write as SVG document to an IBufferWriter.
     /// </summary>
     /// <remarks>
     /// See <see cref="SaveToSvg(Stream)"/> for rendering behavior. Data is written in
@@ -614,7 +571,7 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Generate QR code and return as SVG document string.
+    /// Generate Micro QR code and return as SVG document string.
     /// </summary>
     /// <remarks>
     /// See <see cref="SaveToSvg(Stream)"/> for rendering behavior.
@@ -628,53 +585,7 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Renders the SVG document to the output stream, injecting root element attributes
-    /// (<c>viewBox</c>, optional <c>shape-rendering</c>) while streaming.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="SKSvgCanvas"/> writes <c>width</c>/<c>height</c> on the root element but no
-    /// <c>viewBox</c>. Without a viewBox, an SVG embedded at a different size (img element, CSS)
-    /// keeps its content at the original coordinates instead of scaling — the main reason to use
-    /// SVG in the first place. <see cref="SvgRootAttributeInjectorStream"/> inserts the attributes
-    /// right after the <c>&lt;svg </c> marker while the canvas streams to the output, so the
-    /// document is never buffered as a whole; if the marker is not found (unexpected upstream
-    /// format change), the document passes through unpatched.
-    /// </remarks>
-    private void RenderSvg(Stream output)
-    {
-        var qrCodeData = ResolveQrCodeData();
-        var (info, contentRect) = CreateLayout(qrCodeData);
-
-        var viewBox = $"viewBox=\"0 0 {info.Width} {info.Height}\" ";
-        var rootAttributes = UseCrispEdges() ? viewBox + "shape-rendering=\"crispEdges\" " : viewBox;
-
-        using var injector = new SvgRootAttributeInjectorStream(output, rootAttributes);
-        // SKSvgCanvas flushes the SVG document when the canvas is disposed, so dispose
-        // it before the injector (which then flushes any pending header bytes).
-        // The output stream itself stays open.
-        using (var canvas = SKSvgCanvas.Create(SKRect.Create(0, 0, info.Width, info.Height), injector))
-        {
-            RenderContent(canvas, qrCodeData, info, contentRect);
-        }
-    }
-
-    /// <summary>
-    /// Antialiasing between adjacent vector shapes produces visible hairline seams when the SVG
-    /// is scaled to non-integer sizes. For plain rectangular modules crispEdges removes the seams;
-    /// for custom shapes (circles, rounded rects, custom finder patterns or icons) antialiasing
-    /// is kept for smooth curves. Built-in icon shapes only draw rectangles, bitmaps, and text,
-    /// none of which degrade under crispEdges.
-    /// </summary>
-    private bool UseCrispEdges()
-    {
-        return (_moduleShape is null || _moduleShape is RectangleModuleShape)
-            && _moduleSizePercent == 1.0f
-            && _finderPatternShape is null
-            && (_iconData?.Icon is null or ImageIconShape or ImageTextIconShape);
-    }
-
-    /// <summary>
-    /// Generate QR code and return as byte array.
+    /// Generate Micro QR code and return as byte array.
     /// </summary>
     /// <returns>Encoded image as byte array.</returns>
     public byte[] ToByteArray()
@@ -685,7 +596,7 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Generate QR code and return as SKImage.
+    /// Generate Micro QR code and return as SKImage.
     /// </summary>
     /// <returns>SKImage instance (caller must dispose).</returns>
     public SKImage ToImage()
@@ -694,7 +605,7 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Generate QR code and return as SKBitmap.
+    /// Generate Micro QR code and return as SKBitmap.
     /// </summary>
     /// <returns>SKBitmap instance (caller must dispose).</returns>
     public SKBitmap ToBitmap()
@@ -704,31 +615,65 @@ public class QRCodeImageBuilder
     }
 
     /// <summary>
-    /// Generate the QRCodeData from builder input.
+    /// Generate the MicroQrCodeData from builder input.
     /// </summary>
-    private QRCodeData ResolveQrCodeData()
+    private MicroQrCodeData ResolveData()
     {
-        return _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, requestedVersion: _requestedVersion, quietZoneSize: _quietZoneSize);
+        return _data ?? MicroQrCodeGenerator.CreateMicroQrCode(_content.AsSpan(), _eccLevel, _requestedVersion, _quietZoneSize);
     }
 
     /// <summary>
-    /// Generate the SKImage from QR code data.
+    /// Renders the SVG document to the output stream, injecting root element attributes
+    /// (<c>viewBox</c>, optional <c>shape-rendering</c>) while streaming.
+    /// Same mechanism as <see cref="QRCodeImageBuilder"/> — see
+    /// <see cref="SvgRootAttributeInjectorStream"/> for why the attributes are injected.
+    /// </summary>
+    private void RenderSvg(Stream output)
+    {
+        var data = ResolveData();
+        var (info, contentRect) = QrImageLayout.CreateLayout(data.Size, _explicitSize, _modulePixelSize);
+
+        var viewBox = $"viewBox=\"0 0 {info.Width} {info.Height}\" ";
+        var rootAttributes = UseCrispEdges() ? viewBox + "shape-rendering=\"crispEdges\" " : viewBox;
+
+        using var injector = new SvgRootAttributeInjectorStream(output, rootAttributes);
+        // SKSvgCanvas flushes the SVG document when the canvas is disposed, so dispose
+        // it before the injector (which then flushes any pending header bytes).
+        // The output stream itself stays open.
+        using (var canvas = SKSvgCanvas.Create(SKRect.Create(0, 0, info.Width, info.Height), injector))
+        {
+            RenderContent(canvas, data, info, contentRect);
+        }
+    }
+
+    /// <summary>
+    /// Antialiasing between adjacent vector shapes produces visible hairline seams
+    /// when the SVG is scaled to non-integer sizes; crispEdges removes them for plain
+    /// rectangular modules while custom shapes keep antialiasing for smooth curves.
+    /// </summary>
+    private bool UseCrispEdges()
+    {
+        return (_moduleShape is null || _moduleShape is RectangleModuleShape)
+            && _moduleSizePercent == 1.0f;
+    }
+
+    /// <summary>
+    /// Generate the SKImage from Micro QR code data.
     /// </summary>
     private SKImage GenerateImage()
     {
-        // Generate QR Data
-        var qrCodeData = ResolveQrCodeData();
+        var data = ResolveData();
 
-        var (info, contentRect) = CreateLayout(qrCodeData);
+        var (info, contentRect) = QrImageLayout.CreateLayout(data.Size, _explicitSize, _modulePixelSize);
 
         var clearColor = _clearColor ?? SKColors.Transparent;
-        var contentCoversCanvas = ContentCoversCanvas(contentRect, info);
+        var contentCoversCanvas = QrImageLayout.ContentCoversCanvas(contentRect, info);
         var backgroundIsOpaque = (_backgroundColor ?? SKColors.White).Alpha == byte.MaxValue;
         var clearIsOpaque = clearColor.Alpha == byte.MaxValue;
 
-        // When the base layer (QR background fill, or the cleared canvas) is opaque
+        // When the base layer (background fill, or the cleared canvas) is opaque
         // everywhere, anything drawn over it stays opaque, so the whole image is
-        // opaque no matter what modules/icons/gradients are painted on top.
+        // opaque no matter what modules/gradients are painted on top.
         // An opaque surface lets encoders skip the alpha channel and the unpremul
         // pass — PNG output becomes RGB: smaller and faster to encode.
         var isOpaque = contentCoversCanvas
@@ -740,40 +685,30 @@ public class QRCodeImageBuilder
         }
 
         using var surface = SKSurface.Create(info);
-        RenderContent(surface.Canvas, qrCodeData, info, contentRect);
+        RenderContent(surface.Canvas, data, info, contentRect);
 
         return surface.Snapshot();
     }
 
     /// <summary>
-    /// Draws the configured QR code onto the canvas. Shared by the raster
+    /// Draws the configured Micro QR code onto the canvas. Shared by the raster
     /// (<see cref="GenerateImage"/>) and SVG (<see cref="SaveToSvg(Stream)"/>) paths.
     /// </summary>
-    private void RenderContent(SKCanvas canvas, QRCodeData qrCodeData, SKImageInfo info, SKRect contentRect)
+    private void RenderContent(SKCanvas canvas, MicroQrCodeData data, SKImageInfo info, SKRect contentRect)
     {
         var clearColor = _clearColor ?? SKColors.Transparent;
-        var contentCoversCanvas = ContentCoversCanvas(contentRect, info);
+        var contentCoversCanvas = QrImageLayout.ContentCoversCanvas(contentRect, info);
         var backgroundIsOpaque = (_backgroundColor ?? SKColors.White).Alpha == byte.MaxValue;
 
-        // Clear the canvas with clearColor, then draw QR into contentRect; extra
+        // Clear the canvas with clearColor, then draw into contentRect; extra
         // canvas area (pad) keeps clearColor. The clear is skipped when it cannot
         // remain visible: a fresh canvas is already fully transparent, and an
-        // opaque QR background covering the whole canvas overwrites it anyway.
+        // opaque background covering the whole canvas overwrites it anyway.
         if (clearColor.Alpha != 0 && !(contentCoversCanvas && backgroundIsOpaque))
         {
             canvas.Clear(clearColor);
         }
 
-        QRCodeRenderer.Render(canvas, contentRect, qrCodeData, _codeColor, _backgroundColor, _iconData, _moduleShape, _moduleSizePercent, _gradientOptions, _finderPatternShape);
-    }
-
-    private static bool ContentCoversCanvas(SKRect contentRect, SKImageInfo info)
-    {
-        return QrImageLayout.ContentCoversCanvas(contentRect, info);
-    }
-
-    private (SKImageInfo info, SKRect contentRect) CreateLayout(QRCodeData qrCodeData)
-    {
-        return QrImageLayout.CreateLayout(qrCodeData.Size, _explicitSize, _modulePixelSize);
+        QRCodeRenderer.Render(canvas, contentRect, data, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions);
     }
 }
