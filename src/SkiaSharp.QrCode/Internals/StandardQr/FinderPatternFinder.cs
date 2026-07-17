@@ -39,8 +39,7 @@ internal struct FinderPattern
 /// is classified into a dark bitmask with SIMD compares (AVX2, NEON, or any
 /// 128-bit acceleration) and walked run-by-run via trailing-zero counts instead
 /// of pixel-by-pixel (measured ~11x combined on the found path on x64 and
-/// 3.3-4.1x on Apple M2; see the FinderScan and FinderScanArm findings logs in
-/// MicroBenchmarks).
+/// 3.3-4.1x on Apple M2.
 /// </para>
 /// </remarks>
 internal static class FinderPatternFinder
@@ -252,8 +251,7 @@ internal static class FinderPatternFinder
                         // word instead: 4 compares select per-byte bit weights, 3
                         // pairwise adds reduce them (simdjson bulk-movemask shape).
                         // Measured ~8-11% over per-16 ExtractMostSignificantBits and
-                        // 3.3-4.1x over the scalar walk on Apple M2 (FinderScanArm
-                        // findings log in MicroBenchmarks).
+                        // 3.3-4.1x over the scalar walk on Apple M2
                         for (; i + 64 <= width; i += 64)
                         {
                             var d0 = Vector128.LessThan(Vector128.LoadUnsafe(ref rowRef, (nuint)i), thr) & NeonBitWeights;
