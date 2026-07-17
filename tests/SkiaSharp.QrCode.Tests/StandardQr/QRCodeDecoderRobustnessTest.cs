@@ -1,3 +1,5 @@
+using SkiaSharp.QrCode.Internals.StandardQr;
+
 namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
@@ -34,6 +36,22 @@ public class QRCodeDecoderRobustnessTest
 
         Assert.Throws<ArgumentException>(() => QRCodeDecoder.TryDecodeImage(luminance, 65536, 65536, out _, out _));
         Assert.Throws<ArgumentException>(() => QRCodeDecoder.TryDecodeImage(luminance, int.MaxValue, 2, out _, out _));
+    }
+
+    [Test]
+    public async Task DecodeLuminance_DimensionsOverflowInt_ReturnsNotDetected()
+    {
+        var status = QRImageDecoder.DecodeLuminance(
+            ReadOnlySpan<byte>.Empty,
+            65_536,
+            65_536,
+            Span<char>.Empty,
+            out var charsWritten,
+            out var info);
+
+        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(charsWritten).IsEqualTo(0);
+        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
     }
 
     [Test]

@@ -182,17 +182,18 @@ public static class MicroQrCodeDecoder
 
         var width = bitmap.Width;
         var height = bitmap.Height;
-        if (width < 11 || height < 11) // M1 is 11 modules per side
+        // M1 is 11 modules per side
+        if (width < 11 || height < 11 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
         {
             text = string.Empty;
             info = new MicroQrCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
             return false;
         }
 
-        var rented = ArrayPool<byte>.Shared.Rent(width * height);
+        var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
         try
         {
-            var luminance = rented.AsSpan(0, width * height);
+            var luminance = rented.AsSpan(0, pixelCount);
             LuminanceConverter.Convert(bitmap, luminance);
             return TryDecodeImage(luminance, width, height, out text, out info);
         }

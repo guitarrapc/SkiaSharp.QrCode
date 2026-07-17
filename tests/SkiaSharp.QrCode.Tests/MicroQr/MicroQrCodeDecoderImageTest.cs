@@ -1,4 +1,5 @@
 using SkiaSharp.QrCode.Image;
+using SkiaSharp.QrCode.Internals.MicroQr;
 
 namespace SkiaSharp.QrCode.Tests;
 
@@ -375,6 +376,22 @@ public class MicroQrCodeDecoderImageTest
     public async Task Decode_NullBitmap_ThrowsArgumentNullException()
     {
         Assert.Throws<ArgumentNullException>(() => MicroQrCodeDecoder.TryDecode((SKBitmap)null!, out _, out _));
+    }
+
+    [Test]
+    public async Task DecodeLuminance_DimensionsOverflowInt_ReturnsNotDetected()
+    {
+        var status = MicroQrImageDecoder.DecodeLuminance(
+            ReadOnlySpan<byte>.Empty,
+            65_536,
+            65_536,
+            Span<char>.Empty,
+            out var charsWritten,
+            out var info);
+
+        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
+        await Assert.That(charsWritten).IsEqualTo(0);
+        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.NotDetected);
     }
 
     #endregion

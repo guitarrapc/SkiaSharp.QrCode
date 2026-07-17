@@ -3,7 +3,7 @@ using System.Text;
 
 /// <summary>
 /// End-to-end QR decoding through the public API (QRCodeDecoder).
-/// Payloads mirror QrCodeEndToEnd so encode and decode costs are directly comparable,
+/// Payloads mirror QrCodeEncodeEndToEnd so encode and decode costs are directly comparable,
 /// plus an image-pipeline scenario (detection + sampling).
 /// Matrices are quiet-zone-free (the decoder's in-place fast path).
 ///

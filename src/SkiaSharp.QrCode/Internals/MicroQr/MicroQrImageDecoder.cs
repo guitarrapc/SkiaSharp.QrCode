@@ -37,16 +37,24 @@ internal static class MicroQrImageDecoder
     /// </summary>
     public static QRCodeDecodeStatus DecodeLuminance(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQrCodeDecodeInfo info)
     {
+        if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
+        {
+            charsWritten = 0;
+            info = new MicroQrCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
+            return QRCodeDecodeStatus.NotDetected;
+        }
+
+        luminance = luminance.Slice(0, pixelCount);
         var status = DecodeLuminanceCore(luminance, width, height, destination, out charsWritten, out info);
         if (status == QRCodeDecodeStatus.Success)
             return status;
 
         // Reflectance reversal: invert into a rented buffer and retry once.
         // Taken only on the failure path, so the normal case stays allocation-free.
-        var rented = ArrayPool<byte>.Shared.Rent(width * height);
+        var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
         try
         {
-            var inverted = rented.AsSpan(0, width * height);
+            var inverted = rented.AsSpan(0, pixelCount);
             for (var i = 0; i < inverted.Length; i++)
             {
                 inverted[i] = (byte)(255 - luminance[i]);
