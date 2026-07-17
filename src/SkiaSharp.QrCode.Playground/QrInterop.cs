@@ -95,14 +95,21 @@ public static partial class QrInterop
             if (string.IsNullOrWhiteSpace(request.Content))
                 throw new ArgumentException("Content is empty.");
 
-            var data = QRCodeGenerator.CreateQrCode(
-                request.Content.AsSpan(),
-                ParseEcc(request.Ecc),
-                requestedVersion: request.Version,
-                quietZoneSize: Math.Clamp(request.QuietZone, 0, 10));
-
             using var stream = new MemoryStream();
-            CreateBuilder(request, data, customLogo).SaveToSvg(stream);
+            if (IsMicroQr(request))
+            {
+                var microData = CreateMicroData(request);
+                CreateMicroBuilder(request, microData).SaveToSvg(stream);
+            }
+            else
+            {
+                var data = QRCodeGenerator.CreateQrCode(
+                    request.Content.AsSpan(),
+                    ParseEcc(request.Ecc),
+                    requestedVersion: request.Version,
+                    quietZoneSize: Math.Clamp(request.QuietZone, 0, 10));
+                CreateBuilder(request, data, customLogo).SaveToSvg(stream);
+            }
             return stream.ToArray();
         }
         catch (Exception ex)
@@ -138,18 +145,48 @@ public static partial class QrInterop
                 ?? throw new ArgumentException("The file is not a decodable image (PNG/JPEG/WebP).");
 
             var success = QRCodeDecoder.TryDecode(bitmap, out var text, out var info);
+            if (success)
+            {
+                stopwatch.Stop();
+                var payload = new DecodePayload(
+                    Ok: true,
+                    Text: text,
+                    Status: info.Status.ToString(),
+                    Symbology: "qr",
+                    QrVersion: info.Version,
+                    Ecc: info.EccLevel.ToString(),
+                    MaskPattern: info.MaskPattern,
+                    ErrorsCorrected: info.ErrorsCorrected,
+                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1));
+                return JsonSerializer.Serialize(payload, PlaygroundJsonContext.Default.DecodePayload);
+            }
+
+            // Standard QR failed: try Micro QR (separate, explicitly-typed detector)
+            var microSuccess = MicroQrCodeDecoder.TryDecode(bitmap, out var microText, out var microInfo);
             stopwatch.Stop();
 
-            var payload = new DecodePayload(
-                Ok: success,
-                Text: success ? text : null,
-                Status: info.Status.ToString(),
-                QrVersion: info.Version,
-                Ecc: success ? info.EccLevel.ToString() : null,
-                MaskPattern: info.MaskPattern,
-                ErrorsCorrected: info.ErrorsCorrected,
-                TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1));
-            return JsonSerializer.Serialize(payload, PlaygroundJsonContext.Default.DecodePayload);
+            var resultPayload = microSuccess
+                ? new DecodePayload(
+                    Ok: true,
+                    Text: microText,
+                    Status: microInfo.Status.ToString(),
+                    Symbology: "microqr",
+                    QrVersion: (int)microInfo.Version,
+                    Ecc: microInfo.EccLevel.ToString(),
+                    MaskPattern: microInfo.MaskPattern,
+                    ErrorsCorrected: microInfo.ErrorsCorrected,
+                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1))
+                : new DecodePayload(
+                    Ok: false,
+                    Text: null,
+                    Status: info.Status.ToString(),
+                    Symbology: null,
+                    QrVersion: info.Version,
+                    Ecc: null,
+                    MaskPattern: info.MaskPattern,
+                    ErrorsCorrected: info.ErrorsCorrected,
+                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1));
+            return JsonSerializer.Serialize(resultPayload, PlaygroundJsonContext.Default.DecodePayload);
         }
         catch (Exception ex)
         {
@@ -163,6 +200,18 @@ public static partial class QrInterop
             throw new ArgumentException("Content is empty.");
 
         var stopwatch = Stopwatch.StartNew();
+        if (IsMicroQr(request))
+        {
+            var microData = CreateMicroData(request);
+            var microBytes = CreateMicroBuilder(request, microData).ToByteArray();
+            stopwatch.Stop();
+
+            s_lastMeta = string.Create(
+                CultureInfo.InvariantCulture,
+                $"{{\"symbology\":\"microqr\",\"qrVersion\":{(int)microData.Version},\"matrixSize\":{microData.Size},\"totalMs\":{stopwatch.Elapsed.TotalMilliseconds:F1},\"bytes\":{microBytes.Length}}}");
+            return microBytes;
+        }
+
         var data = QRCodeGenerator.CreateQrCode(
             request.Content.AsSpan(),
             ParseEcc(request.Ecc),
@@ -174,9 +223,54 @@ public static partial class QrInterop
 
         s_lastMeta = string.Create(
             CultureInfo.InvariantCulture,
-            $"{{\"qrVersion\":{data.Version},\"matrixSize\":{data.Size},\"totalMs\":{stopwatch.Elapsed.TotalMilliseconds:F1},\"bytes\":{bytes.Length}}}");
+            $"{{\"symbology\":\"qr\",\"qrVersion\":{data.Version},\"matrixSize\":{data.Size},\"totalMs\":{stopwatch.Elapsed.TotalMilliseconds:F1},\"bytes\":{bytes.Length}}}");
         return bytes;
     }
+
+    private static bool IsMicroQr(QrRequest request)
+        => string.Equals(request.Symbology, "microqr", StringComparison.OrdinalIgnoreCase);
+
+    private static MicroQrCodeData CreateMicroData(QrRequest request)
+    {
+        return MicroQrCodeGenerator.CreateMicroQrCode(
+            request.Content.AsSpan(),
+            ParseMicroEcc(request.Ecc),
+            ParseMicroVersion(request.Version),
+            Math.Clamp(request.QuietZone, 0, 10));
+    }
+
+    /// <summary>
+    /// Builds the Micro QR image builder from request options. Micro QR has no icon
+    /// overlay or finder pattern shape options (single finder, no ECC headroom), so
+    /// those request fields are ignored — the page hides the controls.
+    /// </summary>
+    private static MicroQrCodeImageBuilder CreateMicroBuilder(QrRequest request, MicroQrCodeData data)
+    {
+        var size = Math.Clamp(request.Size, 64, 2048);
+        return new MicroQrCodeImageBuilder(data)
+            .WithSize(size, size)
+            .WithColors(
+                ParseColor(request.Foreground, SKColors.Black),
+                ParseColor(request.Background, SKColors.White))
+            .WithModuleShape(CreateModuleShape(request), Math.Clamp(request.ModuleSizePercent, 0.5f, 1.0f))
+            .WithGradient(CreateGradient(request.Gradient));
+    }
+
+    private static MicroQrEccLevel ParseMicroEcc(string ecc) => ecc.ToUpperInvariant() switch
+    {
+        "EDO" => MicroQrEccLevel.ErrorDetectionOnly,
+        "L" => MicroQrEccLevel.L,
+        "M" => MicroQrEccLevel.M,
+        "Q" => MicroQrEccLevel.Q,
+        _ => throw new ArgumentException($"Unknown Micro QR ECC level '{ecc}'. Use EDO, L, M or Q."),
+    };
+
+    private static MicroQrVersion? ParseMicroVersion(int version) => version switch
+    {
+        -1 => null,
+        >= 1 and <= 4 => (MicroQrVersion)version,
+        _ => throw new ArgumentException($"Unknown Micro QR version '{version}'. Use 1-4 (M1-M4) or -1 for automatic selection."),
+    };
 
     /// <summary>Builds the image builder from request options; shared by preview and benchmark rendering.</summary>
     private static QRCodeImageBuilder CreateBuilder(QrRequest request, QRCodeData data, byte[] customLogo)
@@ -222,6 +316,16 @@ public static partial class QrInterop
                 throw new ArgumentException("Content is empty.");
             if (count is <= 0 or > 1_000_000)
                 throw new ArgumentOutOfRangeException(nameof(count), "Batch count must be between 1 and 1,000,000.");
+
+            if (IsMicroQr(request))
+            {
+                return mode switch
+                {
+                    "encode" => BenchmarkMicroEncode(request, count),
+                    "render" => BenchmarkMicroRender(request, count),
+                    _ => throw new ArgumentException($"Unknown benchmark mode '{mode}'. Use 'encode' or 'render'."),
+                };
+            }
 
             return mode switch
             {
@@ -300,6 +404,65 @@ public static partial class QrInterop
             qrVersion = data.Version;
             matrixSize = data.Size;
             bytesTotal += CreateBuilder(request, data, customLogo).ToByteArray().Length;
+        }
+        stopwatch.Stop();
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"qrVersion\":{qrVersion},\"matrixSize\":{matrixSize},\"bytesTotal\":{bytesTotal}}}");
+    }
+
+    /// <summary>
+    /// Tight loop over the zero-allocation Micro QR span API. Micro QR capacity is
+    /// tiny (≤ 35 characters), so unlike the Standard QR benchmark the content is
+    /// NOT suffixed with a unique index — appending one would overflow most payloads.
+    /// </summary>
+    private static string BenchmarkMicroEncode(QrRequest request, int count)
+    {
+        var ecc = ParseMicroEcc(request.Ecc);
+        var version = ParseMicroVersion(request.Version);
+        var quietZone = Math.Clamp(request.QuietZone, 0, 10);
+
+        // M4 with quiet zone is the largest possible Micro QR matrix.
+        var maxSide = 17 + 2 * quietZone;
+        var moduleBuffer = ArrayPool<byte>.Shared.Rent(maxSide * maxSide);
+        try
+        {
+            long bytesTotal = 0;
+            var written = 0;
+            var stopwatch = Stopwatch.StartNew();
+            for (var i = 0; i < count; i++)
+            {
+                written = MicroQrCodeGenerator.CreateMicroQrCode(request.Content.AsSpan(), ecc, moduleBuffer, version, quietZone);
+                bytesTotal += written;
+            }
+            stopwatch.Stop();
+
+            var matrixSize = (int)Math.Sqrt(written);
+            var qrVersion = (matrixSize - 2 * quietZone - 9) / 2;
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"qrVersion\":{qrVersion},\"matrixSize\":{matrixSize},\"bytesTotal\":{bytesTotal}}}");
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(moduleBuffer, clearArray: false);
+        }
+    }
+
+    /// <summary>Full Micro QR pipeline per iteration: encode, Skia render, PNG encode.</summary>
+    private static string BenchmarkMicroRender(QrRequest request, int count)
+    {
+        long bytesTotal = 0;
+        var qrVersion = 0;
+        var matrixSize = 0;
+        var stopwatch = Stopwatch.StartNew();
+        for (var i = 0; i < count; i++)
+        {
+            var data = CreateMicroData(request);
+            qrVersion = (int)data.Version;
+            matrixSize = data.Size;
+            bytesTotal += CreateMicroBuilder(request, data).ToByteArray().Length;
         }
         stopwatch.Stop();
 
@@ -452,7 +615,9 @@ public static partial class QrInterop
 public sealed record QrRequest
 {
     public string Content { get; init; } = "";
-    /// <summary>Error correction level: L, M, Q or H.</summary>
+    /// <summary>Symbology: "qr" (Standard QR) or "microqr" (Micro QR M1-M4).</summary>
+    public string Symbology { get; init; } = "qr";
+    /// <summary>Error correction level: L, M, Q or H (Micro QR: EDO, L, M or Q).</summary>
     public string Ecc { get; init; } = "M";
     /// <summary>Output image size in pixels (square).</summary>
     public int Size { get; init; } = 512;
@@ -502,6 +667,7 @@ public sealed record DecodePayload(
     bool Ok,
     string? Text,
     string Status,
+    string? Symbology,
     int QrVersion,
     string? Ecc,
     int MaskPattern,
