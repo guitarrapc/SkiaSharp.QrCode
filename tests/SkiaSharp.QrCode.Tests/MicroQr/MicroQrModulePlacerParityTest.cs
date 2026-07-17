@@ -123,6 +123,15 @@ public class MicroQrModulePlacerParityTest
     /// The BMI2+AVX2 kernel (PEXT/PDEP placement permutation, AVX2 32-module
     /// unpack) must match the reference on machines that support it.
     /// </summary>
+    /// <remarks>
+    /// Deliberately gated on instruction SUPPORT only, not on the production
+    /// dispatch's fast-PEXT vendor/family check: named-entry parity tests exist
+    /// precisely to cover tiers the local dispatch would not take (the SSSE3
+    /// and scalar tests run on BMI2 machines for the same reason), and PEXT/PDEP
+    /// results are identical where they are merely microcoded (pre-Zen 3 AMD) —
+    /// only slower, by well under a millisecond across this whole data source
+    /// (~96 BMI ops per placement call).
+    /// </remarks>
     [Test]
     [MethodDataSource(nameof(AllCombinationsAndSeeds))]
     public async Task PlaceSymbolBmi2_MatchesNaiveReference(MicroQrVersion version, MicroQrEccLevel ecc, int seed)
