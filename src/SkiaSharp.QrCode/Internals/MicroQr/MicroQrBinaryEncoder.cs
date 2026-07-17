@@ -196,12 +196,14 @@ internal static class MicroQrBinaryEncoder
         // scalar tail: 0-3 digits left, no headroom for an 8-byte load
         if (i + 2 < length)
         {
-            Append(ref hi, ref lo, ref pos, digits[i] * 100 + digits[i + 1] * 10 + digits[i + 2] - 5328, 10); // 5328 = '0' * 111
+            // chars stay unbiased through the multiply; the per-digit '0' offsets
+            // fold into one subtract: 5328 = '0' * (100 + 10 + 1)
+            Append(ref hi, ref lo, ref pos, digits[i] * 100 + digits[i + 1] * 10 + digits[i + 2] - 5328, 10);
             i += 3;
         }
         if (i + 1 < length)
         {
-            Append(ref hi, ref lo, ref pos, digits[i] * 10 + digits[i + 1] - 528, 7); // 528 = '0' * 11
+            Append(ref hi, ref lo, ref pos, digits[i] * 10 + digits[i + 1] - 528, 7); // folded bias: 528 = '0' * (10 + 1)
         }
         else if (i < length)
         {
@@ -251,8 +253,19 @@ internal static class MicroQrBinaryEncoder
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int SwarGroup(ref char c, int i)
     {
-        var chunk = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref c, i)));
-        return (int)(((chunk - SwarDigitBias) * SwarGroupMagic) >> 32) & 0x3FF;
+        if (BitConverter.IsLittleEndian)
+        {
+            var chunk = Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref c, i)));
+            return (int)(((chunk - SwarDigitBias) * SwarGroupMagic) >> 32) & 0x3FF;
+        }
+
+        // Big-endian runtimes (e.g. s390x): the little-endian lane layout above
+        // does not hold, and a whole-ulong byte reversal (the NormalizeEndianness
+        // approach used for byte-lane SWAR elsewhere) would also swap the bytes
+        // INSIDE each 16-bit char lane — so fall back to scalar group math.
+        // IsLittleEndian is a JIT-time constant; this branch vanishes from
+        // little-endian codegen.
+        return Unsafe.Add(ref c, i) * 100 + Unsafe.Add(ref c, i + 1) * 10 + Unsafe.Add(ref c, i + 2) - 5328; // folded bias: 5328 = '0' * 111
     }
 
     // Direct value table replacing the per-char CharacterSets.GetAlphanumericValue
