@@ -106,7 +106,7 @@ Numeric and Alphanumeric payloads do not need character-set conversion, although
 
 Explicit ECI is a caller constraint. In particular, forcing `Iso8859_1` is only semantically correct for text in U+0000..U+00FF; `Default` avoids an incompatible choice by upgrading such input to UTF-8.
 
-On supported x86/x64 runtimes, analysis uses AVX2 or SSE2 for character-class checks, with a scalar path for short inputs and other targets.
+On supported x86/x64 runtimes, analysis uses AVX2 or SSE2 for character-class checks; on ARM64 it uses a NEON tier (16 chars per step with 8-wide vector remainder blocks). A scalar path covers short inputs and other targets.
 
 ### 3. Select the version
 

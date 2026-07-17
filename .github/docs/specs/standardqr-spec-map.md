@@ -14,7 +14,7 @@ Text ──> Mode analysis ──> Data encoding ──> ECC ──> Interleavin
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
-| Section 7.4.1 | Encoding modes (Numeric / Alphanumeric / Byte) | [EncodingMode.cs](../../../src/SkiaSharp.QrCode/Internals/EncodingMode.cs), [TextAnalyzer.Analyze](../../../src/SkiaSharp.QrCode/Internals/TextAnalyzer.cs) |
+| Section 7.4.1 | Encoding modes (Numeric / Alphanumeric / Byte) | [EncodingMode.cs](../../../src/SkiaSharp.QrCode/Internals/EncodingMode.cs), [TextAnalyzer.Analyze](../../../src/SkiaSharp.QrCode/Internals/TextAnalyzer.cs) — scalar classification plus SIMD tiers (x64 AVX2 / SSE2, ARM AdvSimd) selected at runtime; parity: [TextAnalyzerAdvSimdParityTest](../../../tests/SkiaSharp.QrCode.Tests/Shared/TextAnalyzerAdvSimdParityTest.cs) |
 | Section 7.4.3 | Alphanumeric character set (45 characters) and values | [CharacterSets.alphanumericLookup / GetAlphanumericValue](../../../src/SkiaSharp.QrCode/Internals/CharacterSets.cs) — shared across symbologies |
 | — | Numeric / Alphanumeric / Byte mode bit stream encoding | [QRBinaryEncoder](../../../src/SkiaSharp.QrCode/Internals/StandardQr/QRBinaryEncoder.cs) (`WriteNumericData`, `WriteAlphanumericData`, `WriteByteData`) |
 | Section 7.4.4 | Character count indicator widths (version 1-9 / 10-26 / 27-40) | [EncodingModeExtensions.GetCountIndicatorLength](../../../src/SkiaSharp.QrCode/Internals/StandardQr/EncodingModeExtensions.cs) |

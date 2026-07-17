@@ -1,0 +1,107 @@
+using SkiaSharp.QrCode.Internals;
+
+namespace SkiaSharp.QrCode.Tests;
+
+/// <summary>
+/// Verifies that the ARM64 NEON text analysis (TextAnalyzer.AnalyzeAdvSimd)
+/// returns the same TextAnalysisResult (EncodingMode, EciMode, DataLength) as
+/// the scalar reference for every character class and block boundary. Analyze
+/// dispatches by hardware capability, so these tests pin BOTH sides explicitly:
+/// AnalyzeScalar is called directly, and the NEON entry point is called
+/// directly (skipped on machines without AdvSimd.Arm64).
+/// </summary>
+public class TextAnalyzerAdvSimdParityTest
+{
+    // Representative payloads: one per encoding-mode/ECI equivalence class,
+    // plus flag flips isolated to the first vector block vs the scalar tail.
+    public static IEnumerable<string> RepresentativeTexts =>
+    [
+        "0",
+        "0123456789",                                                   // Numeric, below/at vector grain
+        "01234567890123456789012345678901234567890123456789",           // Numeric, multi-block
+        "HELLO WORLD $%*+-./:",                                         // Alphanumeric incl. all specials
+        "TICKET-2026/07 GATE A SEAT 42 PRICE $35.00 :*+",               // Alphanumeric, realistic
+        "https://github.com/guitarrapc/SkiaSharp.QrCode?tab=readme#qr", // Byte + ASCII (lowercase)
+        "café au lait été",                                             // Byte + ISO-8859-1
+        "QRコード日本語テスト",                                          // Byte + UTF-8
+        "0123456789012345X",                                            // Numeric flips only in scalar tail
+        "X0123456789012345",                                            // Numeric flips only in first block
+        "0123456é0123456789",                                           // non-ASCII inside first block
+        "01234567890123456789é",                                        // non-ASCII only in scalar tail
+    ];
+
+    // Boundary chars adjacent to every SIMD range check:
+    // '/'(0x2F) and ':'(0x3A) are IN the alphanumeric set, ';' '@' '[' '`' '{' are OUT;
+    // 0x7F/0x80 straddle ASCII, 0xFF/0x100 straddle ISO-8859-1.
+    public static IEnumerable<char> BoundaryChars =>
+    [
+        '/', '0', '9', ':', ';', '@', 'A', 'Z', '[', '`', 'z', '{',
+        ' ', '!', '#', '$', '%', '&', ')', '*', '+', ',', '-', '.',
+        '\u007F', '\u0080', 'ÿ', 'Ā', 'あ',
+    ];
+
+    [Test]
+    [MethodDataSource(nameof(RepresentativeTexts))]
+    public async Task AnalyzeAdvSimd_MatchesScalar(string text)
+    {
+        if (!System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+        {
+            Skip.Test("AdvSimd.Arm64 not supported on this machine");
+            return;
+        }
+
+        foreach (var eciMode in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
+        {
+            var expected = TextAnalyzer.AnalyzeScalar(text, eciMode);
+            var actual = TextAnalyzer.AnalyzeAdvSimd(text, eciMode);
+
+            await Assert.That(actual).IsEqualTo(expected);
+        }
+    }
+
+    [Test]
+    [MethodDataSource(nameof(BoundaryChars))]
+    public async Task AnalyzeAdvSimd_BoundaryChars_AllPositionsAndLengths_MatchScalar(char c)
+    {
+        if (!System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+        {
+            Skip.Test("AdvSimd.Arm64 not supported on this machine");
+            return;
+        }
+
+        // Lengths crossing the 8/16-char vector grain; the char alone, repeated,
+        // leading a digit run, and trailing a digit run (tail-only flag flips).
+        foreach (var length in new[] { 1, 7, 8, 9, 15, 16, 17, 24 })
+        {
+            var digits = "012345678901234567890123".AsSpan(0, length);
+            string[] inputs =
+            [
+                new string(c, length),
+                string.Concat(c.ToString(), digits),
+                string.Concat(digits, c.ToString()),
+            ];
+
+            foreach (var input in inputs)
+            {
+                var expected = TextAnalyzer.AnalyzeScalar(input, EciMode.Default);
+                var actual = TextAnalyzer.AnalyzeAdvSimd(input, EciMode.Default);
+
+                await Assert.That(actual).IsEqualTo(expected);
+            }
+        }
+    }
+
+    [Test]
+    public async Task Analyze_Dispatch_MatchesScalar_OnThisMachine()
+    {
+        // Public dispatch parity: whatever tier Analyze picks on this machine
+        // must agree with the scalar reference.
+        foreach (var text in RepresentativeTexts)
+        {
+            var expected = TextAnalyzer.AnalyzeScalar(text, EciMode.Default);
+            var actual = TextAnalyzer.Analyze(text, EciMode.Default);
+
+            await Assert.That(actual).IsEqualTo(expected);
+        }
+    }
+}
