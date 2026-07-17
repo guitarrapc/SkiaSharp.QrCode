@@ -251,6 +251,14 @@
     private void Regenerate() => canvasView?.Invalidate();
 
     /// <summary>
+    /// The library's capacity errors point developers at the API ("use Standard QR
+    /// (QRCodeGenerator)"); on this page the actionable control is the Symbology
+    /// selector, so the remedy is rephrased for display.
+    /// </summary>
+    private static string ToUserFacingMessage(Exception ex)
+        => ex.GetBaseException().Message.Replace("use Standard QR (QRCodeGenerator)", "switch Symbology to QR Code");
+
+    /// <summary>
     /// Symbology switch: reset the version (the M1-M4 / 1-40 domains do not overlap
     /// meaningfully) and apply the symbology's specification quiet zone default.
     /// </summary>
@@ -312,7 +320,7 @@
         catch (Exception ex)
         {
             stats = "";
-            errorMessage = ex.GetBaseException().Message;
+            errorMessage = ToUserFacingMessage(ex);
         }
         StateHasChanged(); // paint runs outside Blazor's render cycle; publish stats/error to the DOM
     }
@@ -338,7 +346,7 @@
         }
         catch (Exception ex)
         {
-            errorMessage = ex.GetBaseException().Message;
+            errorMessage = ToUserFacingMessage(ex);
         }
     }
 
@@ -362,7 +370,7 @@
         }
         catch (Exception ex)
         {
-            errorMessage = ex.GetBaseException().Message;
+            errorMessage = ToUserFacingMessage(ex);
         }
     }
 
@@ -384,7 +392,7 @@
         }
         catch (Exception ex)
         {
-            errorMessage = ex.GetBaseException().Message;
+            errorMessage = ToUserFacingMessage(ex);
         }
     }
 

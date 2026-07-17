@@ -63,6 +63,61 @@ public class MicroQrCodeGeneratorUnitTest
         await Assert.That(() => MicroQrCodeGenerator.CreateMicroQrCode(text, ecc, version)).Throws<ArgumentException>();
     }
 
+    // ---------------------------------------------------------------
+    // Capacity error messages (interactive UIs surface these verbatim,
+    // so they must state the actual length, the applicable maximum, and
+    // an actionable way out)
+    // ---------------------------------------------------------------
+
+    [Test]
+    public async Task CreateMicroQrCode_AutoVersion_TooLongByte_MessageStatesLengthMaximumAndRemedy()
+    {
+        // 37 lowercase bytes; ECC M byte capacity tops out at 13 (M4-M)
+        var text = "this text is way too long for microqr";
+        var ex = Assert.Throws<ArgumentException>(() => MicroQrCodeGenerator.CreateMicroQrCode(text, MicroQrEccLevel.M));
+
+        await Assert.That(ex.Message).Contains("too long for Micro QR");
+        await Assert.That(ex.Message).Contains("37 bytes");     // actual encoded length
+        await Assert.That(ex.Message).Contains("13 bytes");     // maximum at ECC M (M4)
+        await Assert.That(ex.Message).Contains("M4");           // version carrying that maximum
+        await Assert.That(ex.Message).Contains("QRCodeGenerator"); // remedy: Standard QR
+    }
+
+    [Test]
+    public async Task CreateMicroQrCode_AutoVersion_TooLongNumeric_MessageStatesDigitMaximum()
+    {
+        // 36 digits; ECC L numeric capacity tops out at 35 (M4-L)
+        var ex = Assert.Throws<ArgumentException>(() => MicroQrCodeGenerator.CreateMicroQrCode("123456789012345678901234567890123456", MicroQrEccLevel.L));
+
+        await Assert.That(ex.Message).Contains("too long for Micro QR");
+        await Assert.That(ex.Message).Contains("36 digits");
+        await Assert.That(ex.Message).Contains("35 digits");
+        await Assert.That(ex.Message).Contains("M4");
+    }
+
+    [Test]
+    public async Task CreateMicroQrCode_RequestedVersion_TooLong_MessageStatesVersionMaximum()
+    {
+        // 11 digits on M2-L (numeric capacity 10)
+        var ex = Assert.Throws<ArgumentException>(() => MicroQrCodeGenerator.CreateMicroQrCode("12345678901", MicroQrEccLevel.L, MicroQrVersion.M2));
+
+        await Assert.That(ex.Message).Contains("too long for Micro QR M2");
+        await Assert.That(ex.Message).Contains("11 digits");
+        await Assert.That(ex.Message).Contains("10 digits");
+        await Assert.That(ex.Message).Contains("QRCodeGenerator");
+    }
+
+    [Test]
+    public async Task CreateMicroQrCode_AutoVersion_ModeUnsupportedAtEcc_MessageStatesConstraint()
+    {
+        // Alphanumeric at ErrorDetectionOnly: no version supports the combination at any length
+        var ex = Assert.Throws<ArgumentException>(() => MicroQrCodeGenerator.CreateMicroQrCode("HELLO", MicroQrEccLevel.ErrorDetectionOnly));
+
+        await Assert.That(ex.Message).Contains("ErrorDetectionOnly");
+        await Assert.That(ex.Message).Contains("M1");
+        await Assert.That(ex.Message).Contains("QRCodeGenerator");
+    }
+
     [Test]
     public async Task CreateMicroQrCode_RequestedVersion_UsesRequestedVersion()
     {

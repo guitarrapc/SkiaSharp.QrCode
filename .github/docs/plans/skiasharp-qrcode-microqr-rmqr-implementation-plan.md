@@ -609,6 +609,31 @@ New Micro QR image paths (`MicroQrImageEndToEnd`):
 Render times are PNG-encode dominated (Standard QR Small_512px is the same
 ~4.5 ms); the builder itself adds no measurable overhead.
 
+### Phase 4 follow-up — capacity error messages, completed 2026-07-18
+
+**Done**
+
+- `MicroQrCodeGenerator` capacity errors now state the actual length, the
+  applicable maximum, and the remedy, in mode-appropriate units (digits /
+  characters / encoded bytes): e.g. "Content is too long for Micro QR: 46 bytes
+  in Byte mode, but ECC level M fits at most 13 bytes (M4). Shorten the content,
+  lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content."
+  The maximum comes from a new `GetMaxDataLength` helper (closed-form inverse of
+  `GetRequiredBits` against the Table 7 bit capacity; error-path only). The
+  mode-unsupported-at-ECC case (e.g. Alphanumeric + ErrorDetectionOnly) gets its
+  own constraint-oriented message instead of a misleading "too long".
+- Playground and BlazorWasm display these messages verbatim; both rephrase the
+  API-oriented remedy ("use Standard QR (QRCodeGenerator)") to the page's actual
+  control ("switch Symbology to QR Code"). Verified in the published WASM build.
+- Tests (+4): message content per path (auto too-long byte/numeric with computed
+  maxima, fixed-version too-long, mode-unsupported constraint). Full suite
+  3,918, 0 failed. Exception types unchanged (`ArgumentException`).
+
+**Benchmarks**
+
+- Not applicable: error-path-only change (message composition on throw); no hot
+  path touched.
+
 ## Risks Beyond the Test Strategy Document
 
 - Renderer assumptions: `IconShape`/finder styling assume three finder patterns; rectangular output changes image sizing APIs. Audit in Phase 0.

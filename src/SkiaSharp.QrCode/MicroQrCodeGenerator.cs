@@ -157,21 +157,89 @@ public static class MicroQrCodeGenerator
             if (!MicroQrConstants.IsModeSupported(version, mode))
                 throw new ArgumentException($"Encoding mode {mode} is not available on Micro QR version {version} (M1: Numeric; M2: +Alphanumeric; M3/M4: +Byte).", nameof(requestedVersion));
             if (GetRequiredBits(version, mode, dataLength) > MicroQrConstants.GetDataBitCapacity(version, eccLevel))
-                throw new ArgumentException($"Data too large for Micro QR version {version} at ECC level {eccLevel} (mode {mode}, {dataLength} units).", nameof(requestedVersion));
+            {
+                throw new ArgumentException(
+                    $"Content is too long for Micro QR {version} at ECC level {eccLevel}: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
+                    $"but the maximum is {FormatDataLength(GetMaxDataLength(version, eccLevel, mode), mode)}. " +
+                    "Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content.",
+                    nameof(requestedVersion));
+            }
 
             return new MicroQrConfiguration(version, eccLevel, mode);
         }
 
+        var bestMax = -1;
+        var bestVersion = MicroQrVersion.M1;
         for (var candidate = MicroQrVersion.M1; candidate <= MicroQrVersion.M4; candidate++)
         {
             if (!MicroQrConstants.IsValidCombination(candidate, eccLevel) || !MicroQrConstants.IsModeSupported(candidate, mode))
                 continue;
             if (GetRequiredBits(candidate, mode, dataLength) <= MicroQrConstants.GetDataBitCapacity(candidate, eccLevel))
                 return new MicroQrConfiguration(candidate, eccLevel, mode);
+
+            var candidateMax = GetMaxDataLength(candidate, eccLevel, mode);
+            if (candidateMax > bestMax)
+            {
+                bestMax = candidateMax;
+                bestVersion = candidate;
+            }
         }
 
-        throw new ArgumentException($"Data does not fit any Micro QR version for ECC level {eccLevel} (mode {mode}, {dataLength} units). " +
-            $"Note: {nameof(MicroQrEccLevel.ErrorDetectionOnly)} limits the symbol to M1 (numeric, 5 digits); level Q requires M4.");
+        // No version supports this mode/ECC combination at any length — a constraint
+        // problem, not a length problem; say which constraint binds.
+        if (bestMax < 0)
+        {
+            throw new ArgumentException(
+                $"Micro QR cannot encode {mode} mode at ECC level {eccLevel}: {nameof(MicroQrEccLevel.ErrorDetectionOnly)} limits the symbol to M1 " +
+                "(Numeric only, 5 digits); Alphanumeric requires M2+, Byte requires M3+, and level Q requires M4. " +
+                "Choose another ECC level or use Standard QR (QRCodeGenerator).");
+        }
+
+        throw new ArgumentException(
+            $"Content is too long for Micro QR: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
+            $"but ECC level {eccLevel} fits at most {FormatDataLength(bestMax, mode)} ({bestVersion}). " +
+            "Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content.");
+    }
+
+    /// <summary>Human unit per mode: Numeric counts digits, Alphanumeric characters, Byte encoded bytes (UTF-8 for non-Latin-1 text).</summary>
+    private static string FormatDataLength(int dataLength, EncodingMode mode) => mode switch
+    {
+        EncodingMode.Numeric => $"{dataLength} digits",
+        EncodingMode.Alphanumeric => $"{dataLength} characters",
+        _ => $"{dataLength} bytes",
+    };
+
+    /// <summary>
+    /// Largest data length that fits a version/ECC/mode combination — the inverse of
+    /// <see cref="GetRequiredBits"/> against the ISO Table 7 bit capacity. Error-path
+    /// only (capacity-exceeded messages).
+    /// </summary>
+    private static int GetMaxDataLength(MicroQrVersion version, MicroQrEccLevel eccLevel, EncodingMode mode)
+    {
+        var headerBits = MicroQrConstants.GetModeIndicatorLength(version) + MicroQrConstants.GetCountIndicatorLength(version, mode);
+        var dataBits = MicroQrConstants.GetDataBitCapacity(version, eccLevel) - headerBits;
+        if (dataBits <= 0)
+            return 0;
+
+        switch (mode)
+        {
+            case EncodingMode.Numeric:
+            {
+                // 10 bits per 3-digit group; a 2-digit tail costs 7 bits, 1 digit costs 4
+                var groups = dataBits / 10;
+                var remainder = dataBits - groups * 10;
+                return groups * 3 + (remainder >= 7 ? 2 : remainder >= 4 ? 1 : 0);
+            }
+            case EncodingMode.Alphanumeric:
+            {
+                // 11 bits per character pair; a single tail character costs 6 bits
+                var pairs = dataBits / 11;
+                var remainder = dataBits - pairs * 11;
+                return pairs * 2 + (remainder >= 6 ? 1 : 0);
+            }
+            default:
+                return dataBits / 8;
+        }
     }
 
     /// <summary>

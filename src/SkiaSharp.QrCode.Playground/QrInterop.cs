@@ -190,7 +190,7 @@ public static partial class QrInterop
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new ErrorPayload(ex.GetBaseException().Message), PlaygroundJsonContext.Default.ErrorPayload);
+            return JsonSerializer.Serialize(new ErrorPayload(ToUserFacingMessage(ex)), PlaygroundJsonContext.Default.ErrorPayload);
         }
     }
 
@@ -336,7 +336,7 @@ public static partial class QrInterop
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new ErrorPayload(ex.GetBaseException().Message), PlaygroundJsonContext.Default.ErrorPayload);
+            return JsonSerializer.Serialize(new ErrorPayload(ToUserFacingMessage(ex)), PlaygroundJsonContext.Default.ErrorPayload);
         }
     }
 
@@ -606,8 +606,18 @@ public static partial class QrInterop
 
     private static byte[] SerializeError(Exception ex)
     {
-        var message = ex.GetBaseException().Message;
-        return JsonSerializer.SerializeToUtf8Bytes(new ErrorPayload(message), PlaygroundJsonContext.Default.ErrorPayload);
+        return JsonSerializer.SerializeToUtf8Bytes(new ErrorPayload(ToUserFacingMessage(ex)), PlaygroundJsonContext.Default.ErrorPayload);
+    }
+
+    /// <summary>
+    /// The library's capacity errors point developers at the API ("use Standard QR
+    /// (QRCodeGenerator)"); in the playground the actionable control is the
+    /// Symbology selector, so the remedy is rephrased for the page.
+    /// </summary>
+    private static string ToUserFacingMessage(Exception ex)
+    {
+        return ex.GetBaseException().Message
+            .Replace("use Standard QR (QRCodeGenerator)", "switch Symbology to QR Code");
     }
 }
 
