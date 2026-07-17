@@ -634,6 +634,54 @@ Render times are PNG-encode dominated (Standard QR Small_512px is the same
 - Not applicable: error-path-only change (message composition on throw); no hot
   path touched.
 
+### Phase 4 follow-up (2) — image builder base class, completed 2026-07-18
+
+**Done**
+
+- `QrCodeImageBuilderBase<TSelf>` (self-referential generic): the fluent options
+  every symbology shares (`WithSize` / `WithModulePixelSize` / `WithFormat` /
+  `WithQuietZone` / `WithColors` / `WithModuleShape` / `WithGradient`) and the
+  complete output surface (`SaveTo` ×2, `SaveToSvg` ×2, `ToSvgString`,
+  `ToByteArray`, `ToImage`, `ToBitmap`, plus the raster/SVG pipeline with the
+  opaque-surface and crispEdges logic) now exist exactly once.
+  `QRCodeImageBuilder` / `MicroQrCodeImageBuilder` keep constructors, their
+  symbology-typed options, static helpers, and three `private protected` hooks
+  (`ResolveSymbol`, `RenderSymbol`, `UseCrispEdgesCore`). Quiet-zone defaults
+  (4 / 2) moved from parameter defaults into builder initial state;
+  `WithQuietZone` no longer declares a default argument.
+- `QrImageBuilderApiParityTest`: reflection over both public surfaces asserts
+  1:1 correspondence with symbology types canonicalized (QRCodeData ⇔
+  MicroQrCodeData, ECCLevel ⇔ MicroQrEccLevel, int version ⇔ MicroQrVersion)
+  modulo the documented Standard-only options (WithIcon, WithFinderPatternShape,
+  WithEciMode) — guards the statics the base class cannot share. Passed against
+  the pre-refactor surfaces first (they were already symmetric), so it now locks
+  the contract; the rMQR builder joins the same base and the same test.
+- Source compatible; binary breaking (members moved to the base) — recorded in
+  `docs/migration.md`. Playground / BlazorWasm / ConsoleApp compile unchanged.
+- Full suite 3,930 on net8.0 + net10.0, 0 failed (golden-pixel and SVG builder
+  tests unchanged — behavior preserved).
+
+**Lessons learned**
+
+- The parity test passing before the refactor was the useful signal, not a
+  wasted red: hand-mirrored surfaces were symmetric today, and the test is what
+  keeps that true when the third symbology lands.
+- The one hook shape that avoids double encoding is "resolve once, hand back an
+  opaque handle" (`object ResolveSymbol(out int matrixSize)` + `RenderSymbol`);
+  splitting into separate size/render hooks would re-encode the symbol per
+  output call, and a second generic parameter would leak the data type into the
+  public base signature for no user benefit.
+
+**Benchmark delta (QrCodeImageEndToEnd + MicroQrImageEndToEnd, net10.0 Release,
+before = pre-refactor tree, after = this change)**
+
+All scenarios within single-iteration noise, allocations byte-identical
+(Standard 5.44/20.44/19.44/41.91 KB; Micro 5400/5576/3856 B, decode 0 B):
+Small_512px 4.49→4.63 ms, Large_2048px 80.8→82.3 ms, M2_512px 4.52→4.46 ms,
+M4_128px 314→315 µs (an intermediate 366 µs reading did not reproduce),
+M4_ImageDecode_Span 17.1→16.0 µs. The per-image virtual hook dispatch is
+invisible under ms-scale PNG encoding.
+
 ## Risks Beyond the Test Strategy Document
 
 - Renderer assumptions: `IconShape`/finder styling assume three finder patterns; rectangular output changes image sizing APIs. Audit in Phase 0.

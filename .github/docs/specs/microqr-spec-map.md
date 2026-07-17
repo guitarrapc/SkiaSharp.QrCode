@@ -96,12 +96,12 @@ Reference tests: [MicroQrConstantsUnitTest](../../../tests/SkiaSharp.QrCode.Test
 | Spec reference | Topic | Implementation |
 |---|---|---|
 | Section 9.1 | Quiet zone: 2 modules (narrower than Standard QR's 4) — the builder default | [MicroQrCodeImageBuilder.WithQuietZone](../../../src/SkiaSharp.QrCode/Image/MicroQrCodeImageBuilder.cs) |
-| — | High-level image builder (PNG/JPEG/WEBP/SVG, fluent options; no icon overlay or finder styling — single finder, no ECC headroom) | [MicroQrCodeImageBuilder](../../../src/SkiaSharp.QrCode/Image/MicroQrCodeImageBuilder.cs) |
+| — | High-level image builder (PNG/JPEG/WEBP/SVG, fluent options; no icon overlay or finder styling — single finder, no ECC headroom); shared options and the output surface come from the common `QrCodeImageBuilderBase<TSelf>` | [MicroQrCodeImageBuilder](../../../src/SkiaSharp.QrCode/Image/MicroQrCodeImageBuilder.cs), base in [QrCodeImageBuilderBase](../../../src/SkiaSharp.QrCode/Image/QrCodeImageBuilderBase.cs) |
 | — | Low-level canvas rendering (module-run merging shared with Standard QR through the internal `IModuleMatrixView` struct views) | [QRCodeRenderer.Render (MicroQrCodeData overload)](../../../src/SkiaSharp.QrCode/QRCodeRenderer.cs), views in [ModuleMatrixView](../../../src/SkiaSharp.QrCode/Internals/ModuleMatrixView.cs) |
 | — | SKCanvas extension entry points | [QRCodeExtensions.Render (MicroQrCodeData overloads)](../../../src/SkiaSharp.QrCode/QRCodeExtensions.cs) |
 | — | Canvas layout math (explicit size / module pixel size / centering), shared with the Standard QR builder | [QrImageLayout](../../../src/SkiaSharp.QrCode/Image/QrImageLayout.cs) |
 
-Reference tests: [MicroQrCodeImageBuilderUnitTest](../../../tests/SkiaSharp.QrCode.Tests/Rendering/MicroQrCodeImageBuilderUnitTest.cs) (full-matrix module-to-pixel parity for every version × ECC — every module center sampled against `MicroQrCodeData`, stronger than golden hashes — plus quiet zone defaults, layout, SVG structure, validation negatives).
+Reference tests: [MicroQrCodeImageBuilderUnitTest](../../../tests/SkiaSharp.QrCode.Tests/Rendering/MicroQrCodeImageBuilderUnitTest.cs) (full-matrix module-to-pixel parity for every version × ECC — every module center sampled against `MicroQrCodeData`, stronger than golden hashes — plus quiet zone defaults, layout, SVG structure, validation negatives), [QrImageBuilderApiParityTest](../../../tests/SkiaSharp.QrCode.Tests/Rendering/QrImageBuilderApiParityTest.cs) (the two builders' public surfaces must correspond 1:1 modulo the documented Standard QR-only options).
 
 ## Image Detection and Sampling
 
