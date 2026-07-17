@@ -26,6 +26,34 @@ public static class QrImageFactory
             quietZoneSize: Math.Clamp(options.QuietZone, 0, 10));
     }
 
+    /// <summary>Encodes the content into a Micro QR module matrix.</summary>
+    public static MicroQrCodeData CreateMicroQrData(QrOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.Content))
+            throw new ArgumentException("Content is empty.");
+
+        return MicroQrCodeGenerator.CreateMicroQrCode(
+            options.Content.AsSpan(),
+            options.MicroEcc,
+            options.Version is >= 1 and <= 4 ? (MicroQrVersion)options.Version : null,
+            Math.Clamp(options.QuietZone, 0, 10));
+    }
+
+    /// <summary>
+    /// Builds the Micro QR image builder for PNG/SVG export. Micro QR has no icon
+    /// overlay or finder pattern shape options (single finder, no ECC headroom),
+    /// so the page hides those controls.
+    /// </summary>
+    public static MicroQrCodeImageBuilder CreateMicroBuilder(QrOptions options, MicroQrCodeData data)
+    {
+        var size = Math.Clamp(options.Size, 64, 2048);
+        return new MicroQrCodeImageBuilder(data)
+            .WithSize(size, size)
+            .WithColors(GetForegroundColor(options), GetBackgroundColor(options))
+            .WithModuleShape(CreateModuleShape(options), Math.Clamp(options.ModuleSizePercent, 0.5f, 1.0f))
+            .WithGradient(CreateGradient(options));
+    }
+
     /// <summary>Builds the image builder for PNG/SVG export with the current visual options.</summary>
     public static QRCodeImageBuilder CreateBuilder(QrOptions options, QRCodeData data, SKBitmap? customLogo)
     {
