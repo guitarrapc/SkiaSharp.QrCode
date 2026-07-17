@@ -206,8 +206,8 @@ internal static class AlignmentPatternFinder
                 if (AdvSimd.Arm64.IsSupported)
                 {
                     // NEON has no movemask; fold 64 pixels straight into one mask
-                    // word instead: 4 compares select per-byte bit weights, 3
-                    // pairwise adds reduce them (simdjson bulk-movemask shape).
+                    // word instead: 4 compares select per-byte bit weights, then a
+                    // chain of pairwise adds reduces them (simdjson bulk-movemask shape).
                     for (; i + 64 <= length; i += 64)
                     {
                         var d0 = Vector128.LessThan(Vector128.LoadUnsafe(ref rowRef, (nuint)i), thr) & NeonBitWeights;
