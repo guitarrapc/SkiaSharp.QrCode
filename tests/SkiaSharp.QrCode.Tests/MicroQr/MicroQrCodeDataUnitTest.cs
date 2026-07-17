@@ -64,6 +64,48 @@ public class MicroQrCodeDataUnitTest
     }
 
     [Test]
+    public async Task Constructor_RejectsInvalidVersionAndQuietZone()
+    {
+        await Assert.That(() => new MicroQrCodeData((MicroQrVersion)0, 2)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new MicroQrCodeData((MicroQrVersion)5, 2)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new MicroQrCodeData(MicroQrVersion.M2, -1)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new MicroQrCodeData(MicroQrVersion.M2, 10_001)).Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
+    public async Task Constructor_Deserialize_RejectsInvalidQuietZone()
+    {
+        var raw = MicroQrCodeGenerator.CreateMicroQrCode("123", MicroQrEccLevel.L).GetRawData();
+
+        await Assert.That(() => new MicroQrCodeData(raw, -1)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new MicroQrCodeData(raw, 10_001)).Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
+    public async Task SetCoreData_SecondCall_ReplacesPreviousMatrix()
+    {
+        // SetCoreData must fully replace the matrix, not OR into the previous
+        // one: an all-dark core followed by an all-light core must read light.
+        var data = new MicroQrCodeData(MicroQrVersion.M1, 0);
+        var allDark = new byte[11 * 11];
+        Array.Fill(allDark, (byte)1);
+        data.SetCoreData(allDark);
+        data.SetCoreData(new byte[11 * 11]);
+
+        for (var row = 0; row < 11; row++)
+        {
+            for (var col = 0; col < 11; col++)
+            {
+                if (data[row, col])
+                {
+                    Assert.Fail($"Dark module leaked from the previous SetCoreData at ({row},{col})");
+                }
+            }
+        }
+        await Assert.That(data[0, 0]).IsFalse();
+    }
+
+    [Test]
     public async Task Indexer_QuietZoneReadsLightAndOutOfRangeThrows()
     {
         var data = MicroQrCodeGenerator.CreateMicroQrCode("123", MicroQrEccLevel.L, quietZoneSize: 3);

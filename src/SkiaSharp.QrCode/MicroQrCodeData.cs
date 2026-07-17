@@ -61,8 +61,13 @@ public class MicroQrCodeData
     /// Quiet zone width in modules. The Micro QR specification requires a quiet
     /// zone of 2 modules (narrower than Standard QR's 4).
     /// </param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the version is not M1-M4 or the quiet zone size is out of range.</exception>
     public MicroQrCodeData(MicroQrVersion version, int quietZoneSize)
     {
+        if ((uint)((int)version - 1) > 3)
+            throw new ArgumentOutOfRangeException(nameof(version), $"Invalid Micro QR version: {version}");
+        ValidateQuietZone(quietZoneSize);
+
         Version = version;
         _baseSize = MicroQrConstants.SizeFromVersion(version);
         _quietZoneSize = quietZoneSize;
@@ -77,6 +82,7 @@ public class MicroQrCodeData
     /// <param name="quietZoneSize">Quiet zone width to apply; independent of the serialized data.</param>
     /// <exception cref="InvalidDataException">Thrown when the header or dimensions are invalid.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the payload is truncated.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the quiet zone size is out of range.</exception>
     public MicroQrCodeData(byte[] rawData, int quietZoneSize) : this(rawData.AsSpan(), quietZoneSize)
     {
     }
@@ -84,6 +90,7 @@ public class MicroQrCodeData
     /// <inheritdoc cref="MicroQrCodeData(byte[], int)"/>
     public MicroQrCodeData(ReadOnlySpan<byte> rawData, int quietZoneSize)
     {
+        ValidateQuietZone(quietZoneSize);
         if (rawData.Length < 6)
             throw new InvalidDataException($"Invalid Micro QR code data: too short ({rawData.Length} bytes).");
         if (rawData[0] != 0x51 || rawData[1] != 0x52 || rawData[2] != 0x58) // "QRX"
@@ -115,6 +122,14 @@ public class MicroQrCodeData
         {
             _bits[_bits.Length - 1] &= (byte)(0xFF << (8 - remainder));
         }
+    }
+
+    private static void ValidateQuietZone(int quietZoneSize)
+    {
+        // Same bounds as MicroQrCodeGenerator: negative widths break the virtual
+        // quiet-zone translation, and a hard cap keeps size arithmetic overflow-free.
+        if (quietZoneSize < 0 || quietZoneSize > 10_000)
+            throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be 0-10000, got {quietZoneSize}");
     }
 
     /// <summary>Gets the serialized size in bytes ("QRX" header + packed core bits).</summary>
@@ -175,6 +190,10 @@ public class MicroQrCodeData
         var totalModules = _baseSize * _baseSize;
         if (source.Length != totalModules)
             throw new ArgumentException($"Source span size mismatch: expected {totalModules} bytes (baseSize={_baseSize}), got {source.Length} bytes");
+
+        // Replace, don't merge: clear previous contents so repeated calls cannot
+        // leak dark modules from an earlier matrix into the new one.
+        Array.Clear(_bits, 0, _bits.Length);
 
         // Micro QR cores are at most 17×17 = 289 modules, so a plain scalar pack
         // is already negligible next to the encode pipeline.
