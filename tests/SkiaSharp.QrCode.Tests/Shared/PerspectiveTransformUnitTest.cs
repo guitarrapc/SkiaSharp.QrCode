@@ -63,6 +63,37 @@ public class PerspectiveTransformUnitTest
         }
     }
 
+    [Test]
+    public async Task FromLocalFrame_PreservesAnchorAndDerivatives()
+    {
+        const float gridX = 3.5f;
+        const float gridY = 3.5f;
+        const float imageX = 42f;
+        const float imageY = 27f;
+        const float derivativeUx = 7.2f;
+        const float derivativeUy = 1.1f;
+        const float derivativeVx = -0.8f;
+        const float derivativeVy = 6.6f;
+        const float step = 0.001f;
+
+        var transform = PerspectiveTransform.FromLocalFrame(
+            gridX, gridY,
+            imageX, imageY,
+            derivativeUx, derivativeUy,
+            derivativeVx, derivativeVy,
+            perspectiveX: 0.004f,
+            perspectiveY: -0.003f);
+
+        await AssertMaps(transform, gridX, gridY, imageX, imageY);
+
+        transform.Transform(gridX + step, gridY, out var uX, out var uY);
+        transform.Transform(gridX, gridY + step, out var vX, out var vY);
+        await Assert.That((uX - imageX) / step).IsEqualTo(derivativeUx).Within(0.02f);
+        await Assert.That((uY - imageY) / step).IsEqualTo(derivativeUy).Within(0.02f);
+        await Assert.That((vX - imageX) / step).IsEqualTo(derivativeVx).Within(0.02f);
+        await Assert.That((vY - imageY) / step).IsEqualTo(derivativeVy).Within(0.02f);
+    }
+
     private static async Task AssertMaps(PerspectiveTransform transform, float x, float y, float expectedX, float expectedY)
     {
         transform.Transform(x, y, out var actualX, out var actualY);

@@ -11,7 +11,7 @@ Design record for supporting multiple QR symbologies — Standard QR (ISO/IEC 18
 | Symbology | Standard | Encode | Matrix decode | Image decode |
 |---|---|---|---|---|
 | Standard QR (versions 1–40) | ISO/IEC 18004 | Shipped | Shipped | Shipped (Tier 1–2) |
-| Micro QR (M1–M4) | ISO/IEC 18004 | Shipped | Shipped | Shipped (axis-aligned tier 1) |
+| Micro QR (M1–M4) | ISO/IEC 18004 | Shipped | Shipped | Shipped (Tier 1–2, conservative measured envelope) |
 | rMQR (R7x43–R17x139) | ISO/IEC 23941 | Planned | Planned | Planned |
 
 ### Document set

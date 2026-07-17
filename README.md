@@ -281,7 +281,7 @@ using var bitmap = SKBitmap.Decode("microqr.png");
 var found = MicroQrCodeDecoder.TryDecode(bitmap, out var scanned, out _);
 ```
 
-Micro QR image detection targets clean, screen-rendered or scanned images (90°/180°/270° rotation, mirroring, inverted colors, uniform or non-uniform scaling, translation). Small-angle rotation and perspective are out of scope: the single Micro QR finder pattern cannot anchor the geometry recovery that three Standard QR finders allow.
+Micro QR image detection targets clean, screen-rendered or scanned images, including arbitrary rotation, mirroring, inverted colors, uniform or non-uniform scaling, translation, and mild perspective distortion. Because Micro QR has only one finder pattern and no alignment patterns, its measured perspective envelope is intentionally more conservative than Standard QR: the test suite covers 2% top-edge inset for M1/M2 and 4% for M3/M4, including rotation and mirror combinations. Strong perspective, uneven lighting, and blur remain out of scope.
 
 ## Platform-Specific Considerations
 

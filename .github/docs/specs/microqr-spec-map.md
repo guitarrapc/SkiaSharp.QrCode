@@ -107,7 +107,9 @@ Reference tests: [MicroQrCodeImageBuilderUnitTest](../../../tests/SkiaSharp.QrCo
 
 ```
 Luminance ──> Otsu threshold ──> Finder candidates (shared 1:1:3:1:1 scan, ALL candidates)
-          ──> Module size refinement ──> Grid sampling (sizes M4..M1 × 4 orientations × transpose)
+          ──> Axis-aligned fast path
+          ──> Angular finder-axis recovery ──> Center / scale / bounded projective refinement
+          ──> Shared projective grid sampling (sizes M4..M1 × orientations × transpose)
           ──> Matrix decoding (format/RS/capacity checks arbitrate the right grid)
 ```
 
@@ -117,11 +119,13 @@ Luminance ──> Otsu threshold ──> Finder candidates (shared 1:1:3:1:1 sca
 | — | Binarization (Otsu) — shared with Standard QR (lifted to `Internals.ImageDecoders` when Micro QR became the second consumer) | [Binarizer.ComputeOtsuThreshold](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/Binarizer.cs) |
 | Section 6.3.1 | Finder pattern candidates: the shared 1:1:3:1:1 run scan collecting every cross-checked candidate (Standard QR keeps its best-three selection; lifted to `Internals.ImageDecoders` when Micro QR became the second consumer) | [FinderPatternFinder.FindCandidates](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/FinderPatternFinder.cs) |
 | — | Independent horizontal/vertical module sizes from dark-light-dark runs through the single finder center (7-module span per axis) | [MicroQrImageDecoder.RefineModuleSize](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrImageDecoder.cs) |
+| — | Arbitrary-rotation recovery from separated angular finder-axis candidates; local center/scale refinement handles pixel quantization, while a bounded two-parameter projective search supplies the correspondences unavailable from a single finder | [MicroQrImageDecoder.TryDecodeArbitraryOrientation](../../../src/SkiaSharp.QrCode/Internals/MicroQr/MicroQrImageDecoder.cs) |
+| — | Projective transform and module-center sampler shared with Standard QR | [PerspectiveTransform](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/PerspectiveTransform.cs), [QRImageDecoder.SampleGrid](../../../src/SkiaSharp.QrCode/Internals/StandardQr/QRImageDecoder.cs) |
 | — | Public image entry points (SKBitmap / luminance span / zero-allocation destination) | [MicroQrCodeDecoder.TryDecode / TryDecodeImage](../../../src/SkiaSharp.QrCode/MicroQrCodeDecoder.cs) |
 
-Supported envelope (single-finder tier 1): clean screen-rendered or scanned images with 90°/180°/270° rotation, mirroring, reflectance reversal, non-integer uniform or non-uniform scaling, translation and quiet zone variants, plus mild optical degradation (JPEG artifacts, low contrast, additive noise). Small-angle rotation and perspective distortion are **out of scope**: one finder pattern cannot anchor the orientation/homography recovery that three Standard QR finders allow. `QRCodeDecoder` remains Standard QR-only — Micro QR image scanning is its own explicitly-typed entry point, so default Standard QR scanning performance is unaffected.
+Supported envelope (Tier 1–2, conservative single-finder envelope): clean screen-rendered or scanned images with arbitrary rotation, mirroring, reflectance reversal, non-integer uniform or non-uniform scaling, translation and quiet zone variants, plus mild optical degradation (JPEG artifacts, low contrast, additive noise). The measured keystone envelope uses a symmetric top-edge inset of 2% of symbol width for M1/M2 and 4% for M3/M4; representative rotation-plus-keystone and mirror-plus-keystone combinations are covered. Strong perspective is **out of scope** because one finder cannot provide the independent correspondences available from three Standard QR finders and alignment patterns. `QRCodeDecoder` remains Standard QR-only — Micro QR image scanning is its own explicitly-typed entry point, so default Standard QR scanning performance is unaffected.
 
-Reference tests: [MicroQrCodeDecoderImageTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrCodeDecoderImageTest.cs) (clean renders for every version × ECC, uniform/non-uniform scale, rotation/mirror/inversion/translation/quiet-zone variants, deterministic degradation subset per test strategy §7, negative cases both symbology directions), [MicroQrFixtureTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrFixtureTest.cs) (committed external-encoder PNG corpus through the image path).
+Reference tests: [MicroQrCodeDecoderImageTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrCodeDecoderImageTest.cs) (clean renders for every version × ECC, arbitrary rotation, uniform/non-uniform scale, mirror/inversion/translation/quiet-zone variants, deterministic degradation subset per test strategy §7, negative cases both symbology directions), [MicroQrCodeDecoderPerspectiveTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrCodeDecoderPerspectiveTest.cs) (measured keystone envelope and rotation/mirror combinations), [MicroQrFixtureTest](../../../tests/SkiaSharp.QrCode.Tests/MicroQr/MicroQrFixtureTest.cs) (committed external-encoder PNG corpus through the image path).
 
 ## Data Model and Serialization
 
