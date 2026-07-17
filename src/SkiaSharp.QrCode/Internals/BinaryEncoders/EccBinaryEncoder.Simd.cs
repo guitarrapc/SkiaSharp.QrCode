@@ -13,8 +13,7 @@ namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 /// </summary>
 /// <remarks>
 /// Shared architecture of both kernels (result of a measured 13-round optimization
-/// loop; the discarded alternatives and reasoning live in the private MicroBenchmarks
-/// repository):
+/// loop)
 ///
 /// - The ≤32-byte remainder register lives in one (eccCount ≤ 16) or two vector
 ///   registers for the whole block — no message buffer, no store/load round-trips.

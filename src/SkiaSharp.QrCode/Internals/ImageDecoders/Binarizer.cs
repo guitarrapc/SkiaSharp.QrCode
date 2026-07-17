@@ -20,7 +20,7 @@ internal static class Binarizer
     /// rotation turns a whole uniform group into a single `+= 8`; non-uniform
     /// groups (module boundaries, photos) fall back to 8 increments — measured
     /// ~8-10x on QR-like inputs, break-even to modestly slower on uniform random
-    /// noise (see the OtsuHistogram findings log in MicroBenchmarks). The result
+    /// noise. The result
     /// is byte-identical either way, and bin order is irrelevant to a histogram,
     /// so the walk is endian-safe.
     /// </remarks>
