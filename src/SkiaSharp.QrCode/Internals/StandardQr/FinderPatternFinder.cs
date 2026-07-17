@@ -39,7 +39,7 @@ internal struct FinderPattern
 /// is classified into a dark bitmask with SIMD compares (AVX2, NEON, or any
 /// 128-bit acceleration) and walked run-by-run via trailing-zero counts instead
 /// of pixel-by-pixel (measured ~11x combined on the found path on x64 and
-/// 3.3-4.1x on Apple M2.
+/// 3.3-4.1x on Apple M2).
 /// </para>
 /// </remarks>
 internal static class FinderPatternFinder
