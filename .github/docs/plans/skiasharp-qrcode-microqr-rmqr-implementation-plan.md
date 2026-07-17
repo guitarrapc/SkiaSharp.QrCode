@@ -307,6 +307,56 @@ only).
 
 Allocations unchanged (Span paths 0 B). StandardQr control stable across runs.
 
+### Phase 2 follow-up (3) — binary encoder register-accumulator rewrite, completed 2026-07-17 (#341)
+
+**Done**
+
+- Rewrote `MicroQrBinaryEncoder.EncodeDataCodewords`: the whole ≤ 128-bit data
+  codeword stream is accumulated MSB-first in two ulong registers (`BitWriter`
+  is no longer on the Micro QR path). Mode + count header fused into one append;
+  numeric SWAR 3-digit groups (one 64-bit load + multiply per group, 9 digits
+  per 30-bit append); alphanumeric pair-of-pairs appends via an unchecked
+  128-entry value table; byte mode SSE2 8-char narrow; terminator / byte
+  alignment / M1-M3 half-codeword zeros by position arithmetic only; 0xEC/0x11
+  padding OR-ed from a phase-selected 128-bit constant under prefix masks;
+  hand-rolled UTF-8 fallback matching `Encoding.UTF8` semantics including
+  lone-surrogate U+FFFD (also removes the netstandard2.0 string + array
+  allocation).
+- Tests: `MicroQrBinaryEncoderParityTest` (exhaustive vs an independent naive
+  bit-string reference: all 8 version/ECC combos × every length up to capacity
+  × min/max/random contents, full Latin-1 range, UTF-8 fallbacks including
+  surrogate pairs and lone surrogates), `MicroQrBitAccumulatorUnitTest`
+  (Append/Append64 at positions 0/64 and word-straddling writes). Spec map row
+  updated. Full suite green: 3,010 tests (net8.0 + net10.0), 0 failed.
+
+**Lessons learned**
+
+- Address exposure is per-LOCAL, not per-call-path: one cold NoInlining callee
+  taking `ref hi/lo/pos` forced every hot-path append through the stack even
+  though that callee was never called on hot paths. Fix = give the cold UTF-8
+  path its own accumulator (whole-encode split), not just AggressiveInlining
+  on the hot writers.
+- Ref-iteration (`Unsafe.Add(ref c, i + k)`) lost to span indexing in the
+  numeric loop: each access emits `lea + movsxd` where indexed spans fold into
+  scaled address modes, and the loop guard had already eliminated the bounds
+  checks. Don't reach for ref-iteration reflexively.
+- SWAR digit grouping reads one char beyond the group (8-byte load over 3
+  digits) — loop guards must carry that headroom explicitly (`i + 9 < length`).
+- BDN DisassemblyDiagnoser flakes ~50% on this box; tiering off +
+  `DOTNET_JitDisasm` is the reliable fallback for reading codegen.
+
+**Benchmark delta** — kernel (private micro-benchmark loop, MicroQrBinaryEncode):
+1.8-2.5x (15-31 ns → 6.7-17 ns across M1-M4 payloads); E2E MicroQrEncode −4 to
+−14% (placement dominates after the earlier follow-ups). Branch-final E2E state
+(net10.0 Release, two launches averaged, 2026-07-17):
+
+| Benchmark | Mean | Allocated |
+|---|---|---|
+| MicroQr_Numeric_M2_Encode (Span) | ~175 ns | 0 B |
+| MicroQr_Alphanumeric_M3_Encode (Span) | ~230 ns | 0 B |
+| MicroQr_Byte_M4_Encode (Span) | ~293 ns | 0 B |
+| StandardQr_Numeric_V1_Encode (Span), control | ~2.1 µs | 0 B |
+
 ## Risks Beyond the Test Strategy Document
 
 - Renderer assumptions: `IconShape`/finder styling assume three finder patterns; rectangular output changes image sizing APIs. Audit in Phase 0.
