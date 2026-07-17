@@ -3,6 +3,7 @@ using System.Buffers;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 #endif
 
 namespace SkiaSharp.QrCode.Internals.StandardQr;
@@ -35,9 +36,11 @@ internal struct FinderPattern
 /// several times. When the stride pass finds nothing, the rows it skipped are
 /// scanned as a complementary pass — together exactly one full-image sweep, so
 /// striding can never lose a symbol a full scan would find. On net8.0+ each row
-/// is classified into a dark bitmask with SIMD compares and walked run-by-run
-/// via trailing-zero counts instead of pixel-by-pixel (measured ~11x combined
-/// on the found path; see the FinderScan findings log in MicroBenchmarks).
+/// is classified into a dark bitmask with SIMD compares (AVX2, NEON, or any
+/// 128-bit acceleration) and walked run-by-run via trailing-zero counts instead
+/// of pixel-by-pixel (measured ~11x combined on the found path on x64 and
+/// 3.3-4.1x on Apple M2; see the FinderScan and FinderScanArm findings logs in
+/// MicroBenchmarks).
 /// </para>
 /// </remarks>
 internal static class FinderPatternFinder
@@ -108,9 +111,12 @@ internal static class FinderPatternFinder
     private static void ScanRow(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, bool forceScalar, Span<FinderPattern> candidates, ref int candidateCount)
     {
 #if NET8_0_OR_GREATER
-        // SIMD path: classify 32 pixels per compare into a dark bitmask, then walk
-        // RUNS via tzcnt instead of pixels — result bit-identical to the scalar walk.
-        if (!forceScalar && Vector256.IsHardwareAccelerated && width >= 32)
+        // SIMD path: classify pixels into a dark bitmask with vector compares
+        // (32 per AVX2 compare, 64 per NEON fold, 16 per 128-bit compare), then
+        // walk RUNS via tzcnt instead of pixels — result bit-identical to the
+        // scalar walk. Vector256 acceleration implies Vector128, so one gate covers
+        // x64, ARM64 and WASM SIMD.
+        if (!forceScalar && Vector128.IsHardwareAccelerated && width >= 16)
         {
             ScanRowMask(luminance, width, height, threshold, y, candidates, ref candidateCount);
             return;
@@ -194,11 +200,16 @@ internal static class FinderPatternFinder
     }
 
 #if NET8_0_OR_GREATER
+    /// <summary>Per-byte bit weights [1,2,4,...,128] repeated: dark byte i contributes bit (i mod 8) of its half.</summary>
+    private static readonly Vector128<byte> NeonBitWeights = Vector128.Create(
+        (byte)1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);
+
     /// <summary>
-    /// Mask-based row scan: 32 pixels per vector compare produce a dark bitmask;
-    /// runs are walked via trailing-zero counts. The 1:1:3:1:1 window is evaluated
-    /// at the end of every dark run from the third onward — exactly the positions
-    /// and order the scalar walk evaluates, so the result is bit-identical.
+    /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px
+    /// otherwise) produce a dark bitmask; runs are walked via trailing-zero
+    /// counts. The 1:1:3:1:1 window is evaluated at the end of every dark run
+    /// from the third onward — exactly the positions and order the scalar walk
+    /// evaluates, so the result is bit-identical.
     /// </summary>
     private static void ScanRowMask(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, Span<FinderPattern> candidates, ref int candidateCount)
     {
@@ -212,19 +223,54 @@ internal static class FinderPatternFinder
 
         try
         {
-            // Build the dark bitmask (bit i = pixel i of this row is dark)
+            // Build the dark bitmask (bit i = pixel i of this row is dark);
+            // threshold == 0 means nothing is dark, so the compare loops can skip.
             var row = luminance.Slice(y * width, width);
             var i = 0;
             if (threshold > 0)
             {
-                // unsigned v < t ⟺ min(v, t-1) == v; threshold == 0 means nothing is dark
-                var thresholdMinus1 = Vector256.Create((byte)(threshold - 1));
                 ref var rowRef = ref MemoryMarshal.GetReference(row);
-                for (; i + 32 <= width; i += 32)
+                if (Vector256.IsHardwareAccelerated && width >= 32)
                 {
-                    var v = Vector256.LoadUnsafe(ref rowRef, (nuint)i);
-                    var dark = Vector256.Equals(Vector256.Min(v, thresholdMinus1), v);
-                    mask[i >> 6] |= (ulong)dark.ExtractMostSignificantBits() << (i & 63);
+                    // x64 has no unsigned byte compare: unsigned v < t ⟺ min(v, t-1) == v
+                    var thresholdMinus1 = Vector256.Create((byte)(threshold - 1));
+                    for (; i + 32 <= width; i += 32)
+                    {
+                        var v = Vector256.LoadUnsafe(ref rowRef, (nuint)i);
+                        var dark = Vector256.Equals(Vector256.Min(v, thresholdMinus1), v);
+                        mask[i >> 6] |= (ulong)dark.ExtractMostSignificantBits() << (i & 63);
+                    }
+                }
+                else
+                {
+                    // 128-bit lanes: LessThan on byte lanes is an unsigned compare
+                    // (cmhi on NEON), so no min-trick is needed.
+                    var thr = Vector128.Create(threshold);
+                    if (AdvSimd.Arm64.IsSupported)
+                    {
+                        // NEON has no movemask; fold 64 pixels straight into one mask
+                        // word instead: 4 compares select per-byte bit weights, 3
+                        // pairwise adds reduce them (simdjson bulk-movemask shape).
+                        // Measured ~8-11% over per-16 ExtractMostSignificantBits and
+                        // 3.3-4.1x over the scalar walk on Apple M2 (FinderScanArm
+                        // findings log in MicroBenchmarks).
+                        for (; i + 64 <= width; i += 64)
+                        {
+                            var d0 = Vector128.LessThan(Vector128.LoadUnsafe(ref rowRef, (nuint)i), thr) & NeonBitWeights;
+                            var d1 = Vector128.LessThan(Vector128.LoadUnsafe(ref rowRef, (nuint)(i + 16)), thr) & NeonBitWeights;
+                            var d2 = Vector128.LessThan(Vector128.LoadUnsafe(ref rowRef, (nuint)(i + 32)), thr) & NeonBitWeights;
+                            var d3 = Vector128.LessThan(Vector128.LoadUnsafe(ref rowRef, (nuint)(i + 48)), thr) & NeonBitWeights;
+                            var s = AdvSimd.Arm64.AddPairwise(AdvSimd.Arm64.AddPairwise(d0, d1), AdvSimd.Arm64.AddPairwise(d2, d3));
+                            s = AdvSimd.Arm64.AddPairwise(s, s);
+                            // i is a multiple of 64 here, so this writes the whole word
+                            mask[i >> 6] = s.AsUInt64().ToScalar();
+                        }
+                    }
+                    for (; i + 16 <= width; i += 16)
+                    {
+                        var dark = Vector128.LessThan(Vector128.LoadUnsafe(ref rowRef, (nuint)i), thr);
+                        mask[i >> 6] |= (ulong)dark.ExtractMostSignificantBits() << (i & 63);
+                    }
                 }
             }
             for (; i < width; i++)
