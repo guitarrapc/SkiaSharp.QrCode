@@ -21,10 +21,6 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 /// over the 8 patterns (which allocates and still loses at every size) and
 /// early-terminating the score (5-15%): the serial 8-pattern loop was never
 /// the problem — the per-pattern representation was.
-///
-/// Pure scalar ulong arithmetic: runs identically on every TFM (netstandard2.0+)
-/// and is NativeAOT/trimming-safe (the only table is a 96-entry static array
-/// built by ordinary code).
 /// </summary>
 internal static partial class ModulePlacer
 {
@@ -47,6 +43,15 @@ internal static partial class ModulePlacer
     /// </remarks>
     public static int MaskCode(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
     {
+#if NET8_0_OR_GREATER
+        // Vectorized tiers (lane-per-row scorer + SIMD byte<->bit conversion),
+        // see ModulePlacer.Masking.Simd.cs. Measured 1.3-2x over the scalar
+        // bit-packed paths below (findings log, round 5).
+        if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
+        {
+            return MaskCodeSimd(buffer, size, version, blockedMask, eccLevel);
+        }
+#endif
         // Versions 1-11 (size <= 61) fit a whole row in one ulong.
         return size <= 64
             ? MaskCode64(buffer, size, version, blockedMask, eccLevel)
@@ -57,7 +62,7 @@ internal static partial class ModulePlacer
     // Single-word path (versions 1-11)
     // ---------------------------------
 
-    private static int MaskCode64(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCode64(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
     {
         Span<ulong> packed = stackalloc ulong[64];
         Span<ulong> allowed = stackalloc ulong[64];
@@ -347,7 +352,7 @@ internal static partial class ModulePlacer
     // Triple-word path (versions 12-40)
     // ---------------------------------
 
-    private static int MaskCode192(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
+    internal static int MaskCode192(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
     {
         // One rent, partitioned four ways (packed / allowed / masked / ~masked).
         var rent = ArrayPool<Row192>.Shared.Rent(4 * size);
