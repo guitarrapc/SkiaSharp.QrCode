@@ -50,6 +50,15 @@ internal static partial class ModulePlacer
     // ---------------------------------
     // Shared SIMD pieces
     // ---------------------------------
+    // Operand-order note: the cross-platform helper Vector256.AndNot(left, right)
+    // computes left & ~right ("bitwise-and of a given vector and the ones
+    // complement of another vector"). This is the OPPOSITE operand convention of
+    // the hardware intrinsic Avx2.AndNot(left, right) = ~left & right (vpandn) —
+    // the JIT swaps the operands when it emits vpandn for the helper. Every
+    // AndNot in this file is the cross-platform helper, so e.g.
+    // Vector256.AndNot(rowMask, x) == ~x & rowMask and
+    // Vector256.AndNot(y5, y5 << 1) == y5 & ~(y5 << 1), matching the scalar code
+    // (verified byte-for-byte by ModulePlacerMaskSimdParityTest).
 
     /// <summary>Nibble LUT for the Mula vector popcount (per-4-bit set-bit counts).</summary>
     private static readonly Vector256<byte> PopLut256 = Vector256.Create(
@@ -636,7 +645,7 @@ internal static partial class ModulePlacer
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public RV128 Xnor(in RV128 o) => new(~(A ^ o.A), ~(B ^ o.B));
 
-        /// <summary>this &amp; ~other.</summary>
+        /// <summary>this &amp; ~other (Vector256.AndNot(left, right) == left &amp; ~right; see the operand-order note above).</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public RV128 AndNotWith(in RV128 o) => new(Vector256.AndNot(A, o.A), Vector256.AndNot(B, o.B));
 
@@ -1025,7 +1034,7 @@ internal static partial class ModulePlacer
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public RV192 Xnor(in RV192 o) => new(~(A ^ o.A), ~(B ^ o.B), ~(C ^ o.C));
 
-        /// <summary>this &amp; ~other.</summary>
+        /// <summary>this &amp; ~other (Vector256.AndNot(left, right) == left &amp; ~right; see the operand-order note above).</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public RV192 AndNotWith(in RV192 o) => new(Vector256.AndNot(A, o.A), Vector256.AndNot(B, o.B), Vector256.AndNot(C, o.C));
 
