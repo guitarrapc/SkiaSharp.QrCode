@@ -70,6 +70,44 @@ public class MicroQrBitAccumulatorUnitTest
         await Assert.That(ToBytes(hi, lo)).IsEquivalentTo(BitsToBytes16(bits.ToString()));
     }
 
+    public static IEnumerable<(int Pos, int BitCount)> AppendWideCases()
+    {
+        // hi-only (end <= 64)
+        yield return (0, 8);
+        yield return (0, 56);
+        yield return (8, 56);
+        yield return (24, 40);
+        yield return (56, 8);
+        // straddle (pos < 64 < end)
+        yield return (16, 56);
+        yield return (40, 32);
+        yield return (56, 16);
+        yield return (63, 8);
+        // lo-only (pos >= 64)
+        yield return (64, 8);
+        yield return (64, 56);
+        yield return (72, 56);
+        yield return (120, 8);
+    }
+
+    [Test]
+    [MethodDataSource(nameof(AppendWideCases))]
+    public async Task AppendWide_BoundaryPositions_MatchBitStringReference(int pos, int bitCount)
+    {
+        ulong hi = 0, lo = 0;
+        var p = 0;
+        var bits = new StringBuilder();
+        AppendPrefix(ref hi, ref lo, ref p, bits, pos);
+
+        const ulong pattern = 0xA5C3_F169_5B87_2D4EUL; // asymmetric: detects any misalignment
+        var value = pattern & ((1UL << bitCount) - 1); // AppendWide contract: pre-masked
+        MicroQrBinaryEncoder.AppendWide(ref hi, ref lo, ref p, value, bitCount);
+        AppendValueBits(bits, value, bitCount);
+
+        await Assert.That(p).IsEqualTo(pos + bitCount);
+        await Assert.That(ToBytes(hi, lo)).IsEquivalentTo(BitsToBytes16(bits.ToString()));
+    }
+
     /// <summary>Advances the accumulator and the reference bit string by
     /// <paramref name="count"/> bits of a non-uniform pattern, in 1-32 bit chunks.</summary>
     private static void AppendPrefix(ref ulong hi, ref ulong lo, ref int pos, StringBuilder bits, int count)

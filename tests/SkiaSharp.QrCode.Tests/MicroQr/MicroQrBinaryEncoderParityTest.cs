@@ -115,6 +115,32 @@ public class MicroQrBinaryEncoderParityTest
 
     [Test]
     [MethodDataSource(nameof(AllCombos))]
+    public async Task EncodeDataCodewords_ByteSingleNonLatin1AtEveryPosition_FallsBackToUtf8(MicroQrVersion version, MicroQrEccLevel ecc)
+    {
+        if (version < MicroQrVersion.M3)
+        {
+            return;
+        }
+
+        // A single 2-byte char at EVERY index of every payload length: the
+        // vectorized Latin-1 detector reads the text as overlapping windows,
+        // so each position must be proven visible to it (a missed char would
+        // silently emit a truncated byte instead of the UTF-8 fallback).
+        var maxBytes = MaxLength(version, ecc, EncodingMode.Byte);
+        for (var len = 1; len + 1 <= maxBytes; len++) // encoded bytes = len + 1
+        {
+            for (var at = 0; at < len; at++)
+            {
+                var chars = new char[len];
+                Array.Fill(chars, 'x');
+                chars[at] = 'Ā'; // U+0100: smallest non-Latin-1 code unit
+                await AssertParity(new string(chars), version, ecc, EncodingMode.Byte);
+            }
+        }
+    }
+
+    [Test]
+    [MethodDataSource(nameof(AllCombos))]
     public async Task EncodeDataCodewords_ByteSurrogates_MatchEncodingUtf8(MicroQrVersion version, MicroQrEccLevel ecc)
     {
         if (version < MicroQrVersion.M3)

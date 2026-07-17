@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 #endif
 
@@ -37,6 +38,13 @@ namespace SkiaSharp.QrCode.Internals.MicroQr;
 /// force every hot-path append through the stack. Terminator/alignment zeros
 /// are position arithmetic only, and the 0xEC/0x11 pad run is OR-ed in from a
 /// phase-selected 128-bit constant.
+///
+/// Byte-mode Latin-1 SIMD tiers: x64 narrows 8 chars per SSE2 pack into one
+/// 64-bit append behind the scalar OR-reduction validity scan. ARM64 goes
+/// further — because payloads never exceed 15 chars, one aligned load plus one
+/// end-overlapped load cover the whole text, serving both the validity check
+/// (UMAXV) and the appends (XTN narrow; the overlapped vector's low bytes are
+/// the tail), with a 64-bit SWAR variant of the same overlap for 4-7 chars.
 /// </remarks>
 internal static class MicroQrBinaryEncoder
 {
@@ -97,6 +105,67 @@ internal static class MicroQrBinaryEncoder
 
             case EncodingMode.Byte:
             {
+#if NET8_0_OR_GREATER
+                if (AdvSimd.Arm64.IsSupported && text.Length >= 8)
+                {
+                    // NEON tier: byte payloads top out at 15 chars (M4-L), so ONE
+                    // aligned 8-char load plus ONE load overlapped to END at the
+                    // last char cover the whole payload. The same two vectors
+                    // serve BOTH the Latin-1 validity check (OR + UMAXV replacing
+                    // the serial per-char OR chain) and the data appends (XTN
+                    // narrow -> big-endian ulong): chars 0-7 land in one Append64,
+                    // and the overlapped vector's low (length - 8) bytes are
+                    // exactly chars 8..length, landing in one masked AppendWide.
+                    var length = text.Length;
+                    Debug.Assert(length <= 15, "byte payloads beyond any Micro QR capacity must be rejected by the caller");
+                    ref var t0 = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(text));
+                    var v0 = Vector128.LoadUnsafe(ref t0);
+                    var v1 = Vector128.LoadUnsafe(ref t0, (nuint)(length - 8));
+                    if (AdvSimd.Arm64.MaxAcross(v0 | v1).ToScalar() > 0xFF)
+                    {
+                        return EncodeUtf8Codewords(text, version, capacityBits, codewordCount, modeValue, headerBits, destination);
+                    }
+
+                    Append(ref hi, ref lo, ref pos, modeValue | length, headerBits);
+                    Append64(ref hi, ref lo, ref pos,
+                        BinaryPrimitives.ReverseEndianness(AdvSimd.ExtractNarrowingLower(v0).AsUInt64().ToScalar()));
+                    var tailBits = (length - 8) * 8;
+                    if (tailBits > 0)
+                    {
+                        var tail = BinaryPrimitives.ReverseEndianness(AdvSimd.ExtractNarrowingLower(v1).AsUInt64().ToScalar());
+                        AppendWide(ref hi, ref lo, ref pos, tail & ((1UL << tailBits) - 1), tailBits);
+                    }
+                    break;
+                }
+                if (AdvSimd.Arm64.IsSupported && text.Length >= 4)
+                {
+                    // 64-bit SWAR tier for 4-7 chars (below the vector grain):
+                    // the same overlap idea on two 4-char ulong reads. Validity
+                    // is one AND against the per-lane high-byte mask; SwarPack4
+                    // compacts the four 16-bit lanes to 4 bytes. Gated to ARM64
+                    // alongside the NEON tier (measured there; x64 keeps its
+                    // shipped SSE2 shape below) — the lane math is little-endian,
+                    // which every AdvSimd runtime satisfies.
+                    var length = text.Length;
+                    ref var b0 = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(text));
+                    var u0 = Unsafe.ReadUnaligned<ulong>(ref b0);
+                    var u1 = Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref b0, (length - 4) * 2));
+                    if (((u0 | u1) & 0xFF00_FF00_FF00_FF00UL) != 0)
+                    {
+                        return EncodeUtf8Codewords(text, version, capacityBits, codewordCount, modeValue, headerBits, destination);
+                    }
+
+                    Append(ref hi, ref lo, ref pos, modeValue | length, headerBits);
+                    Append(ref hi, ref lo, ref pos, (int)BinaryPrimitives.ReverseEndianness(SwarPack4(u0)), 32);
+                    var tailBits = (length - 4) * 8;
+                    if (tailBits > 0)
+                    {
+                        // Append masks to tailBits, dropping the overlap bytes
+                        Append(ref hi, ref lo, ref pos, (int)BinaryPrimitives.ReverseEndianness(SwarPack4(u1)), tailBits);
+                    }
+                    break;
+                }
+#endif
                 // Latin-1 validity, branch-free: if every char is <= 0x00FF the
                 // OR of all code units stays <= 0xFF; any char with high bits
                 // pushes it above. The loop only ORs and the compare happens once
@@ -267,6 +336,21 @@ internal static class MicroQrBinaryEncoder
         // little-endian codegen.
         return Unsafe.Add(ref c, i) * 100 + Unsafe.Add(ref c, i + 1) * 10 + Unsafe.Add(ref c, i + 2) - 5328; // folded bias: 5328 = '0' * 111
     }
+
+#if NET8_0_OR_GREATER
+    /// <summary>
+    /// Compacts four little-endian 16-bit char lanes (high bytes zero, verified
+    /// by the caller's validity mask) to their four low bytes:
+    /// <c>chunk | chunk &gt;&gt; 8</c> yields bytes <c>[c0 c1 c1 c2 c2 c3 c3 0]</c>
+    /// (LSB first); bytes 0-1 and 4-5 are the contiguous pairs.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static uint SwarPack4(ulong chunk)
+    {
+        var r = chunk | (chunk >> 8);
+        return (uint)((r & 0xFFFF) | ((r >> 16) & 0xFFFF0000));
+    }
+#endif
 
     // Direct value table replacing the per-char CharacterSets.GetAlphanumericValue
     // call (and its two compare+throw branches). QR alphanumeric values are 0-44,
@@ -473,6 +557,39 @@ internal static class MicroQrBinaryEncoder
             lo |= value;
         }
         pos += 64;
+    }
+
+    /// <summary>
+    /// Appends the low <paramref name="bitCount"/> bits (1-56) of an
+    /// already-masked ulong — Append generalized past 32 bits for the NEON byte
+    /// tail (up to 7 bytes in one call). Unlike Append this does not mask
+    /// internally: the caller needs the mask anyway to strip the overlap bytes
+    /// of its tail load, so re-masking here would be a redundant AND — the
+    /// pre-masked contract is asserted instead.
+    /// Internal (not private) so boundary tests can drive it directly.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static void AppendWide(ref ulong hi, ref ulong lo, ref int pos, ulong value, int bitCount)
+    {
+        Debug.Assert(bitCount >= 1 && bitCount <= 56, "bitCount must be between 1 and 56");
+        Debug.Assert(pos + bitCount <= 128, "the stream never exceeds 16 codeword bytes");
+        Debug.Assert(value >> bitCount == 0, "value must be pre-masked to bitCount bits");
+
+        var end = pos + bitCount;
+        if (end <= 64)
+        {
+            hi |= value << (64 - end);
+        }
+        else if (pos >= 64)
+        {
+            lo |= value << (128 - end);
+        }
+        else
+        {
+            hi |= value >> (end - 64);
+            lo |= value << (128 - end);
+        }
+        pos = end;
     }
 
     // Prefix masks over whole bytes: entry n = first n bytes of the 16-byte
