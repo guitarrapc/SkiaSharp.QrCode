@@ -11,7 +11,7 @@ using System.Text;
 ///   Long_L  : ~2900 chars -> version 40, ECC level L (largest data blocks)
 ///   Long_H  : ~1200 chars -> version 40, ECC level H (81 blocks x 30 ecc, max ECC share)
 /// </summary>
-public class QrCodeEndToEnd
+public class QrCodeEncodeEndToEnd
 {
     private string _short = default!;
     private string _url = default!;
