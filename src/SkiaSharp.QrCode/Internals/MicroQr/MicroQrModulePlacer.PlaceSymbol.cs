@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 #endif
 
@@ -16,11 +17,13 @@ namespace SkiaSharp.QrCode.Internals.MicroQr;
 ///
 /// Produces matrices byte-identical to the per-module reference methods in
 /// MicroQrModulePlacer.cs (guarded by MicroQrModulePlacerParityTest).
-/// Three runtime tiers: BMI2+AVX2 (placement as a static per-row PEXT/PDEP
+/// Four runtime tiers: BMI2+AVX2 (placement as a static per-row PEXT/PDEP
 /// permutation, 32-module unpack; gated on fast-PEXT hardware — Intel or
-/// AMD Zen 3+), SSSE3 (serial packed placement, 16-module unpack), and
+/// AMD Zen 3+), SSSE3 and ARM64 NEON (serial packed placement, 16-module
+/// unpack sharing one pipeline — only the bit-expand idiom differs), and
 /// portable scalar (SWAR spreads). Measured 3.6-8.4x over the reference
-/// across M1-M4, zero allocations (see the micro-optimization findings log):
+/// across M1-M4 on x64, zero allocations (see the micro-optimization
+/// findings log):
 /// <list type="bullet">
 /// <item>The transmission stream is at most 192 bits (M4), so it is packed once
 /// into three ulongs and consumed MSB-first from a register accumulator instead
@@ -77,7 +80,7 @@ internal static partial class MicroQrModulePlacer
         {
             return PlaceCoreBmi2(matrix, size, stream, version, eccLevel);
         }
-        if (Ssse3.IsSupported)
+        if (Ssse3.IsSupported || AdvSimd.Arm64.IsSupported)
         {
             return PlaceCoreVector(matrix, size, stream, version, eccLevel);
         }
@@ -87,8 +90,8 @@ internal static partial class MicroQrModulePlacer
 
     /// <summary>
     /// Scalar-unpack variant of <see cref="PlaceSymbol"/> — the code path taken
-    /// at runtime when SSSE3 is unavailable, exposed as a named entry point so
-    /// parity tests exercise it on SIMD-capable machines too.
+    /// at runtime when neither SSSE3 nor NEON is available, exposed as a named
+    /// entry point so parity tests exercise it on SIMD-capable machines too.
     /// </summary>
     internal static int PlaceSymbolScalar(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQrVersion version, MicroQrEccLevel eccLevel)
     {
@@ -123,6 +126,23 @@ internal static partial class MicroQrModulePlacer
     /// prefers the BMI2 kernel.
     /// </summary>
     internal static int PlaceSymbolSsse3(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQrVersion version, MicroQrEccLevel eccLevel)
+    {
+        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
+
+        Span<ulong> stream = stackalloc ulong[3];
+        PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
+
+        return PlaceCoreVector(matrix, size, stream, version, eccLevel);
+    }
+
+    /// <summary>
+    /// ARM64 NEON mid-tier variant of <see cref="PlaceSymbol"/> — the code path
+    /// taken at runtime on ARM64 (same <see cref="PlaceCoreVector"/> pipeline as
+    /// the SSSE3 tier; only the 16-module unpack idiom differs inside
+    /// <see cref="WriteExpand16"/>), exposed as a named entry point for parity
+    /// tests. Caller must ensure AdvSimd.Arm64 support.
+    /// </summary>
+    internal static int PlaceSymbolAdvSimd(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQrVersion version, MicroQrEccLevel eccLevel)
     {
         ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
 
@@ -323,7 +343,8 @@ internal static partial class MicroQrModulePlacer
         rows = rows.Slice(0, size);
         var mask = BuildPackedRows(rows, size, stream, version, eccLevel);
 
-        // Unpack with the mask applied on the fly, 16 modules per SSSE3 step.
+        // Unpack with the mask applied on the fly, 16 modules per SIMD step
+        // (SSSE3 or NEON — see WriteExpand16).
         // Rows 0..size-2 may overrun into the following row: bits >= size are
         // zero and rows unpack in ascending order, so the overwritten zeros are
         // immediately replaced by that row's own unpack. The last row (buffer
@@ -365,10 +386,15 @@ internal static partial class MicroQrModulePlacer
 
     /// <summary>
     /// Expands 16 bits to 16 (0/1) module bytes: broadcast the 16-bit lane,
-    /// shuffle byte 0/1 across the halves, AND with per-lane bit masks and
-    /// compare-equal (byte k = 1 iff bit k set). Beat the GFNI bit-expand in
-    /// the micro-benchmark loop — GFNI's matrix-operand preparation outweighs
-    /// its single-instruction expand.
+    /// shuffle byte 0/1 across the halves, then per-lane bit test (byte k = 1
+    /// iff bit k set). Caller (via <see cref="PlaceCoreVector"/> dispatch)
+    /// guarantees SSSE3 or AdvSimd.Arm64; IsSupported is a JIT constant so the
+    /// untaken branch is eliminated.
+    /// x86: PSHUFB + PAND + PCMPEQB — beat the GFNI bit-expand in the
+    /// micro-benchmark loop (GFNI's matrix-operand preparation outweighs its
+    /// single-instruction expand).
+    /// ARM64: TBL + CMTST — CMTST (compare-test: 0xFF iff (a &amp; b) != 0)
+    /// fuses the AND+CMEQ pair; x86 has no per-lane bit-test compare.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteExpand16(ref byte p, uint bits16)
@@ -376,8 +402,17 @@ internal static partial class MicroQrModulePlacer
         var src = Vector128.Create((ushort)bits16).AsByte();
         var sel = Vector128.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
         var bitm = Vector128.Create((byte)1, 2, 4, 8, 16, 32, 64, 128, 1, 2, 4, 8, 16, 32, 64, 128);
-        var m = Ssse3.Shuffle(src, sel) & bitm;
-        var ones = Vector128.Equals(m, bitm) & Vector128.Create((byte)1);
+        Vector128<byte> ones;
+        if (Ssse3.IsSupported)
+        {
+            var m = Ssse3.Shuffle(src, sel) & bitm;
+            ones = Vector128.Equals(m, bitm) & Vector128.Create((byte)1);
+        }
+        else
+        {
+            var repl = AdvSimd.Arm64.VectorTableLookup(src, sel);
+            ones = AdvSimd.CompareTest(repl, bitm) & Vector128.Create((byte)1);
+        }
         ones.StoreUnsafe(ref p);
     }
 

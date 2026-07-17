@@ -220,6 +220,57 @@ public class MicroQrModulePlacerParityTest
 #endif
     }
 
+    /// <summary>
+    /// The ARM64 NEON mid-tier kernel (packed placement + 16-module TBL/CMTST
+    /// unpack) must match the reference on ARM64 machines. Exposed as a named
+    /// entry point so it stays covered independently of the runtime dispatch.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(AllCombinationsAndSeeds))]
+    public async Task PlaceSymbolAdvSimd_MatchesNaiveReference(MicroQrVersion version, MicroQrEccLevel ecc, int seed)
+    {
+#if NET8_0_OR_GREATER
+        if (!System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+        {
+            Skip.Test("AdvSimd (ARM64 NEON) not supported on this machine.");
+            return;
+        }
+
+        var size = MicroQrConstants.SizeFromVersion(version);
+        var dataCount = MicroQrConstants.GetDataCodewordCount(version, ecc);
+        var eccCount = MicroQrConstants.GetEccCodewordCount(version, ecc);
+        var dataBitCount = MicroQrConstants.GetDataBitCapacity(version, ecc);
+
+        var data = new byte[dataCount];
+        var eccBytes = new byte[eccCount];
+        switch (seed)
+        {
+            case -1:
+                break;
+            case -2:
+                Array.Fill(data, (byte)0xFF);
+                Array.Fill(eccBytes, (byte)0xFF);
+                break;
+            default:
+                new Random(seed).NextBytes(data);
+                new Random(seed + 100).NextBytes(eccBytes);
+                break;
+        }
+
+        var expected = new byte[size * size];
+        var expectedMask = ReferencePlace(expected, size, data, eccBytes, dataBitCount, version, ecc);
+
+        var actual = new byte[size * size];
+        var actualMask = MicroQrModulePlacer.PlaceSymbolAdvSimd(actual, size, data, eccBytes, dataBitCount, version, ecc);
+
+        await Assert.That(actualMask).IsEqualTo(expectedMask);
+        await Assert.That(actual).IsEquivalentTo(expected);
+#else
+        Skip.Test("AdvSimd kernel requires net8.0+.");
+        await Task.CompletedTask;
+#endif
+    }
+
     [Test]
     public async Task PlaceSymbol_InvalidSize_Throws()
     {
