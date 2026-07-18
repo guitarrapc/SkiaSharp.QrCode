@@ -685,7 +685,7 @@ Console.WriteLine("""
 {
     using var logo = SKBitmap.Decode(File.ReadAllBytes(iconInstaPath));
 
-    // Before: percent/pixel sizing on a fixed box — logo edges can cut through modules.
+    // Before: percent/pixel sizing on a fixed box, logo edges can cut through modules.
     {
         var path = Path.Combine(outputDir, "pattern18a_logo_percent_overlap.png");
         var icon = IconData.FromImage(logo, iconSizePercent: 18, iconBorderWidth: 8);
@@ -702,7 +702,7 @@ Console.WriteLine("""
         Console.WriteLine($"  ✓ Before (percent sizing): {path}");
     }
 
-    // After: module-based icon + integer module pixels — border covers whole modules cleanly.
+    // After: module-based icon + integer module pixels, border covers whole modules cleanly.
     {
         var path = Path.Combine(outputDir, "pattern18b_logo_module_aligned.png");
         var icon = IconData.FromImageByModules(logo, iconSizeModules: 7, iconBorderModules: 2, maxCoreOccupancyPercent: 40);
@@ -724,7 +724,7 @@ Console.WriteLine();
 
 // Showcase: Aurora gradient
 Console.WriteLine("""
-    Pattern 19: Showcase — Aurora
+    Pattern 19: Showcase, Aurora
       - Best for: Attractive gradient + soft circle modules + rounded finder eyes
     """);
 {
@@ -757,7 +757,7 @@ Console.WriteLine();
 
 // Showcase: Sunset brand card with padded canvas + logo
 Console.WriteLine("""
-    Pattern 20: Showcase — Sunset Brand Card
+    Pattern 20: Showcase, Sunset Brand Card
       - Best for: Module-aligned logo + fixed canvas padding + warm gradient
     """);
 {
@@ -796,7 +796,7 @@ Console.WriteLine();
 
 // Showcase: Neon night with icon+text
 Console.WriteLine("""
-    Pattern 21: Showcase — Neon Night (icon + text)
+    Pattern 21: Showcase, Neon Night (icon + text)
       - Best for: Combining gradient, shapes, and ImageTextIconShape
     """);
 {
@@ -982,11 +982,11 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
-// Micro QR — ISO/IEC 18004 M2-L numeric example (11×11 core, 13×13 with quiet zone)
+// Micro QR, ISO/IEC 18004 M2-L numeric example (11×11 core, 13×13 with quiet zone)
 var microContent = "01234567";
 
 Console.WriteLine("""
-    Pattern 24: Micro QR — Static Method (Simplest)
+    Pattern 24: Micro QR, Static Method (Simplest)
       - Best for: Quick Micro QR generation with default settings
       - API: MicroQRCodeImageBuilder.GetPngBytes()
     """);
@@ -1001,7 +1001,7 @@ Console.WriteLine("""
 Console.WriteLine();
 
 Console.WriteLine("""
-    Pattern 25: Micro QR — Builder (colors, module shape, gradient)
+    Pattern 25: Micro QR, Builder (colors, module shape, gradient)
       - Best for: Styled Micro QR within symbology limits (no icon / finder styling)
       - API: new MicroQRCodeImageBuilder().WithXxx()
       - Default quiet zone is 2 modules (Standard QR uses 4)
@@ -1027,7 +1027,7 @@ Console.WriteLine("""
 Console.WriteLine();
 
 Console.WriteLine("""
-    Pattern 26: Micro QR — Decode (matrix / image round-trip)
+    Pattern 26: Micro QR, Decode (matrix / image round-trip)
       - Best for: Round-trip validation, reading rendered Micro QR images
       - API: MicroQRCodeDecoder.TryDecode()
       - QRCodeDecoder stays Standard QR-only (cross-symbology rejection)

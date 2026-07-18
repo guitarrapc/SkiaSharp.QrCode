@@ -9,9 +9,9 @@
 
 `QRCodeImageBuilder` and `MicroQRCodeImageBuilder` now derive from `QRCodeImageBuilderBase<TSelf>`, which carries the options every symbology shares (`WithSize`, `WithModulePixelSize`, `WithFormat`, `WithQuietZone`, `WithColors`, `WithModuleShape`, `WithGradient`) and the complete output surface (`SaveTo`, `SaveToSvg`, `ToSvgString`, `ToByteArray`, `ToImage`, `ToBitmap`). Symbology-specific options (`WithErrorCorrection`, `WithVersion`, and on Standard QR `WithIcon`, `WithFinderPatternShape`, `WithEciMode`) stay on the concrete builders.
 
-- **Source compatible** — fluent chains compile unchanged; the self-referential type parameter keeps every method returning the concrete builder type.
-- **Binary breaking** — the shared members moved to the base class, so assemblies compiled against an older version must be recompiled (no code changes needed).
-- `WithQuietZone` no longer declares a default argument value (it was 4 for Standard QR, 2 for Micro QR — a value the builder already starts with). Calling `WithQuietZone()` with no argument no longer compiles; simply remove the call.
+- **Source compatible**, fluent chains compile unchanged; the self-referential type parameter keeps every method returning the concrete builder type.
+- **Binary breaking**, the shared members moved to the base class, so assemblies compiled against an older version must be recompiled (no code changes needed).
+- `WithQuietZone` no longer declares a default argument value (it was 4 for Standard QR, 2 for Micro QR, a value the builder already starts with). Calling `WithQuietZone()` with no argument no longer compiles; simply remove the call.
 
 ## from before v1.0.0 to v1.0.0
 

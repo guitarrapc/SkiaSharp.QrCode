@@ -4,14 +4,14 @@
 <head>
   <meta charset="utf-8" />
   <title>SkiaSharp.QrCode Playground</title>
-  <meta name="description" content="Generate beautiful QR codes with SkiaSharp.QrCode — entirely in your browser via WebAssembly">
+  <meta name="description" content="Generate beautiful QR codes with SkiaSharp.QrCode, entirely in your browser via WebAssembly">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="SkiaSharp.QrCode Playground | Try in your browser">
-  <meta name="twitter:description" content="Generate beautiful QR codes with gradients, shapes and logos — entirely in your browser">
+  <meta name="twitter:description" content="Generate beautiful QR codes with gradients, shapes and logos, entirely in your browser">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://guitarrapc.github.io/SkiaSharp.QrCode/">
   <meta property="og:title" content="SkiaSharp.QrCode Playground | Try in your browser">
-  <meta property="og:description" content="Generate beautiful QR codes with gradients, shapes and logos — entirely in your browser">
+  <meta property="og:description" content="Generate beautiful QR codes with gradients, shapes and logos, entirely in your browser">
   <meta property="og:site_name" content="SkiaSharp.QrCode Playground">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" id="meta-color-scheme" content="light dark" />
@@ -56,9 +56,9 @@
         </h1>
         <a id="playground-version" class="version-badge" hidden target="_blank" rel="noopener noreferrer"
           href="https://github.com/guitarrapc/SkiaSharp.QrCode/releases"
-          aria-label="Playground build version — GitHub releases"></a>
+          aria-label="Playground build version, GitHub releases"></a>
       </div>
-      <p class="tagline">QR codes with gradients, shapes and logos — rendered by Skia in your browser</p>
+      <p class="tagline">QR codes with gradients, shapes and logos, rendered by Skia in your browser</p>
     </header>
   </nav>
   <div id="toast-stack" class="toast-stack" aria-live="polite" aria-relevant="additions"></div>
@@ -97,7 +97,7 @@
             </label>
             <label class="field">
               <span class="field__label">Error correction</span>
-              <select id="ecc-select" title="Higher levels survive more damage or overlay — H is recommended with a logo">
+              <select id="ecc-select" title="Higher levels survive more damage or overlay, H is recommended with a logo">
               </select>
             </label>
             <label class="field">
@@ -214,7 +214,7 @@
               <input type="range" id="logo-border-range" min="0" max="24" step="1" value="6" />
             </label>
           </div>
-          <p class="field__hint">A logo covers part of the code — use error correction H and verify the result scans.</p>
+          <p class="field__hint">A logo covers part of the code, use error correction H and verify the result scans.</p>
         </details>
 
         <details class="panel">
@@ -225,7 +225,7 @@
           </label>
           <div id="decode-result" class="qr-stats" aria-live="polite"></div>
           <p class="field__hint">
-            Runs SkiaSharp.QrCode's built-in decoder in your browser — nothing is uploaded.
+            Runs SkiaSharp.QrCode's built-in decoder in your browser, nothing is uploaded.
             It targets clean, screen-rendered images (rotation, mirroring and mild perspective are fine);
             photographed or heavily stylized codes may not decode even when a camera app reads them.
           </p>
@@ -238,8 +238,8 @@
               <span class="field__label">Mode</span>
               <select id="bench-mode-select"
                 title="Encode only exercises the zero-allocation span API; full pipeline also renders and PNG-encodes with the current visual settings">
-                <option value="encode">Encode only — zero-allocation API</option>
-                <option value="render">Full pipeline — encode + render + PNG</option>
+                <option value="encode">Encode only, zero-allocation API</option>
+                <option value="render">Full pipeline, encode + render + PNG</option>
               </select>
             </label>
             <label class="field">
@@ -261,7 +261,7 @@
           <p class="field__hint">
             Generates unique codes sequentially (content is suffixed with #1, #2, …) using the current
             settings, single-threaded on the WASM runtime in this tab. Native .NET throughput is much
-            higher — see the repository benchmarks.
+            higher, see the repository benchmarks.
           </p>
         </details>
       </div>
@@ -279,10 +279,10 @@
           <div class="preview-actions">
             <button type="button" id="download-btn" class="action-btn" disabled>Download PNG</button>
             <button type="button" id="download-svg-btn" class="action-btn" disabled
-              title="Vector output — scales to any size without quality loss">Download SVG</button>
+              title="Vector output, scales to any size without quality loss">Download SVG</button>
             <button type="button" id="copy-image-btn" class="action-btn" disabled>Copy image</button>
             <button type="button" id="permalink-btn" class="action-btn action-btn--primary" disabled
-              title="Share — copy a link with all settings encoded in the URL">Share link</button>
+              title="Share, copy a link with all settings encoded in the URL">Share link</button>
           </div>
         </div>
       </div>
@@ -298,11 +298,11 @@
         <strong>in your browser</strong>. Nothing you type is uploaded to a server.
       </p>
       <ul>
-        <li>Rendering uses the real SkiaSharp (Skia) native library compiled to WebAssembly — the output is
+        <li>Rendering uses the real SkiaSharp (Skia) native library compiled to WebAssembly, the output is
           pixel-identical to what the NuGet package produces on .NET.</li>
         <li><strong>Share link</strong> stores your settings compressed in the URL hash. Uploaded logo images are not
           included in share links.</li>
-        <li>Decorated codes (gradients, shapes, logos) trade error margin for looks — always test-scan before printing.</li>
+        <li>Decorated codes (gradients, shapes, logos) trade error margin for looks, always test-scan before printing.</li>
         <li>Every generated code is <strong>decoded back in-browser</strong> by the library's own decoder as a
           self-check, and the <em>Decode an image</em> panel reads QR codes from your image files the same way.</li>
       </ul>

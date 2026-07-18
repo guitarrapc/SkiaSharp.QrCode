@@ -77,7 +77,7 @@ public class QRBinaryDecoderUnitTest
     public async Task EciIso8859_1_BomLikeBytes_AreLatin1Text_NotBom()
     {
         // ECI 3 explicitly declares ISO-8859-1: EF BB BF is the legitimate Latin-1
-        // text "ï»¿", not a BOM — an explicit charset declaration must win over the
+        // text "ï»¿", not a BOM, an explicit charset declaration must win over the
         // BOM heuristic.
         var data = Build(
             (ModeEci, 4), (3, 8),
@@ -139,7 +139,7 @@ public class QRBinaryDecoderUnitTest
         await Assert.That(text).IsEquivalentTo("7");
     }
 
-    // Unsupported content (recognized but rejected — never misdecoded)
+    // Unsupported content (recognized but rejected, never misdecoded)
 
     [Test]
     [Arguments(ModeKanji)]

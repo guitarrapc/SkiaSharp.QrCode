@@ -26,15 +26,15 @@ internal struct FinderPattern
 /// Scans rows for the characteristic 1:1:3:1:1 dark/light run ratio, then
 /// cross-checks each hit vertically, horizontally and diagonally before accepting
 /// it as a candidate (the standard ZXing-style detection approach). Designed for
-/// Tier-1 inputs — clean, well-lit, screen-rendered or scanned images with mild
-/// rotation — not for low-contrast photos.
+/// Tier-1 inputs, clean, well-lit, screen-rendered or scanned images with mild
+/// rotation, not for low-contrast photos.
 /// <para>
 /// The scan strides over rows: the band of rows showing the 1:1:3:1:1 signature
 /// is 3 modules tall, and although the module size is unknown before detection,
 /// the worst case (a version-40 symbol filling the frame) bounds it from below,
 /// so a stride of 3·height/(4·177) still hits the band of every supported symbol
 /// several times. When the stride pass finds nothing, the rows it skipped are
-/// scanned as a complementary pass — together exactly one full-image sweep, so
+/// scanned as a complementary pass, together exactly one full-image sweep, so
 /// striding can never lose a symbol a full scan would find. On net8.0+ each row
 /// is classified into a dark bitmask with SIMD compares (AVX2, NEON, or any
 /// 128-bit acceleration) and walked run-by-run via trailing-zero counts instead
@@ -91,7 +91,7 @@ internal static class FinderPatternFinder
         // Row stride bound: a v40 symbol filling the frame has module size
         // height/177, so its 3-module center band is 3·height/177 px tall and a
         // stride of a quarter of that hits it ≥ 4 times (≥ 2 when the symbol
-        // occupies half the frame) — enough for the Count-based confirmation in
+        // occupies half the frame), enough for the Count-based confirmation in
         // TrySelectBestThree. Smaller strides than 3 don't pay for themselves.
         var stride = Math.Max(3, 3 * height / (4 * MaxSymbolModules));
 
@@ -133,7 +133,7 @@ internal static class FinderPatternFinder
 #if NET8_0_OR_GREATER
         // SIMD path: classify pixels into a dark bitmask with vector compares
         // (32 per AVX2 compare, 64 per NEON fold, 16 per 128-bit compare), then
-        // walk RUNS via tzcnt instead of pixels — result bit-identical to the
+        // walk RUNS via tzcnt instead of pixels, result bit-identical to the
         // scalar walk. Vector256 acceleration implies Vector128, so one gate covers
         // x64, ARM64 and WASM SIMD.
         if (!forceScalar && Vector128.IsHardwareAccelerated && width >= 16)
@@ -228,7 +228,7 @@ internal static class FinderPatternFinder
     /// Mask-based row scan: vector compares (32 px AVX2, 64 px NEON fold, 16 px
     /// otherwise) produce a dark bitmask; runs are walked via trailing-zero
     /// counts. The 1:1:3:1:1 window is evaluated at the end of every dark run
-    /// from the third onward — exactly the positions and order the scalar walk
+    /// from the third onward, exactly the positions and order the scalar walk
     /// evaluates, so the result is bit-identical.
     /// </summary>
     private static void ScanRowMask(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, int y, Span<FinderPattern> candidates, ref int candidateCount)
@@ -299,7 +299,7 @@ internal static class FinderPatternFinder
             }
 
             // Walk dark runs. The scalar window is [dark, light, dark, light, dark],
-            // evaluated whenever its 5th run (a dark run) completes — at its
+            // evaluated whenever its 5th run (a dark run) completes, at its
             // dark→light transition or at the end of the row. That is: at the end
             // of every dark run from the third onward, with the window being that
             // run plus the two dark runs (and light gaps) before it.

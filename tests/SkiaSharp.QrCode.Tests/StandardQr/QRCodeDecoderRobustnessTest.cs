@@ -5,7 +5,7 @@ namespace SkiaSharp.QrCode.Tests;
 /// <summary>
 /// Robustness tests for the public decode API: adversarial argument values and
 /// random garbage input must fail cleanly (documented exception type or a false
-/// return with a status) — never crash, over-read, or misdecode.
+/// return with a status), never crash, over-read, or misdecode.
 /// </summary>
 public class QRCodeDecoderRobustnessTest
 {
@@ -78,7 +78,7 @@ public class QRCodeDecoderRobustnessTest
     public async Task TryDecode_ValidPatternsCorruptedDataArea_FailsOrDecodesExactly()
     {
         // Take a real QR and corrupt random module subsets of increasing size: the
-        // decoder must either fail or return the exact original text — a wrong text
+        // decoder must either fail or return the exact original text, a wrong text
         // (misdecode) is never acceptable.
         var content = "fail closed";
         var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, quietZoneSize: 0);

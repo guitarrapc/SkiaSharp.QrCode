@@ -5,7 +5,7 @@ Blazor WebAssembly sample for SkiaSharp.QrCode. The UI mirrors
 GitHub Pages playground), but demonstrates the Blazor-specific integration:
 
 - **Live preview** renders directly onto a [SkiaSharp.Views.Blazor](https://www.nuget.org/packages/SkiaSharp.Views.Blazor)
-  `SKCanvasView` with the low-level `QRCodeRenderer` canvas API — every control change repaints the surface.
+  `SKCanvasView` with the low-level `QRCodeRenderer` canvas API, every control change repaints the surface.
 - **Download PNG / SVG** exports through the `QRCodeImageBuilder` fluent API at the selected export size.
 - [QrOptions.cs](QrOptions.cs) holds the page state; [QrImageFactory.cs](QrImageFactory.cs) translates it
   into library calls shared by both paths.

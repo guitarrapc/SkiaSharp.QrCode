@@ -5,11 +5,11 @@ namespace QRInteropFixtures;
 
 /// <summary>
 /// Micro QR fixture generator backed by the Rust <c>qrtool</c> CLI (which builds
-/// on the <c>qrcode</c> crate) — the second external encoder lineage, independent
+/// on the <c>qrcode</c> crate), the second external encoder lineage, independent
 /// of zint and of the ZXing family. Uses the prebuilt release binary pinned by
 /// version and SHA-256 (see <c>get-qrtool.ps1</c>); no Rust toolchain is required.
 /// The module matrix is read from the tool's ASCII output (2 characters per
-/// module, <c>##</c> dark), which is exact — no image parsing involved.
+/// module, <c>##</c> dark), which is exact, no image parsing involved.
 /// </summary>
 public sealed class QrtoolMicroQRFixtureGenerator : IMicroQRFixtureGenerator
 {

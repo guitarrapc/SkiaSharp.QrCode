@@ -57,7 +57,7 @@ internal static class BinaryInterleaver
             output.Slice(dataLen + eccLen).Clear();
 
         // Single block: interleaving is the identity permutation (versions 1-2 at most
-        // ECC levels, v5L, ...) — two sequential copies, ~5x faster than the loop
+        // ECC levels, v5L, ...), two sequential copies, ~5x faster than the loop
         if (totalBlocks == 1)
         {
             data.Slice(0, dataLen).CopyTo(output);

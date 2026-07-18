@@ -20,7 +20,7 @@ namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 ///   semantic difference (PSHUFB keys on bit 7, TBL on index ≥ 16) is never exercised.
 /// - PSRLDQ (byte shift right) → EXT (<see cref="AdvSimd.ExtractVector128(Vector128{byte}, Vector128{byte}, byte)"/>
 ///   with a zero upper operand).
-/// - PALIGNR(hi, lo, n) → EXT(lo, hi, n) — ARM's operand order is (lower, upper, index).
+/// - PALIGNR(hi, lo, n) → EXT(lo, hi, n), ARM's operand order is (lower, upper, index).
 ///
 /// The factor tables (nibble-split multiply, quad factors T, composed T∘U) are
 /// ISA-independent and shared with the x86 kernels. GFNI has no NEON equivalent

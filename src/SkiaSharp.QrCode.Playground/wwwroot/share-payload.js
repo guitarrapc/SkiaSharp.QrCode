@@ -2,8 +2,8 @@
  * Share-link payload codec.
  *
  * Hash segment format: "<mode>.<base64url>"
- *   mode "1" — deflate-raw compressed UTF-8 JSON (via native CompressionStream)
- *   mode "0" — plain UTF-8 JSON (fallback for browsers without CompressionStream)
+ *   mode "1", deflate-raw compressed UTF-8 JSON (via native CompressionStream)
+ *   mode "0", plain UTF-8 JSON (fallback for browsers without CompressionStream)
  *
  * The JSON payload is the playground state object plus a "v" schema version.
  */

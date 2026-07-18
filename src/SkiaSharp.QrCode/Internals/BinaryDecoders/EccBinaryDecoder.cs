@@ -138,7 +138,7 @@ internal static partial class EccBinaryDecoder
                 continue;
 
             if (errorCount == errorCountEstimate)
-                return false; // more roots than deg(Λ) — inconsistent, uncorrectable
+                return false; // more roots than deg(Λ), inconsistent, uncorrectable
 
             errorIndexes[errorCount] = length - 1 - p;
             errorLocators[errorCount] = GaloisField.Exp[p % 255];
@@ -147,7 +147,7 @@ internal static partial class EccBinaryDecoder
         }
 
         // Every root of Λ must lie inside the codeword; a deficit means errors
-        // at positions that do not exist (degree mismatch) — uncorrectable.
+        // at positions that do not exist (degree mismatch), uncorrectable.
         if (errorCount != errorCountEstimate)
             return false;
 
@@ -214,7 +214,7 @@ internal static partial class EccBinaryDecoder
     /// <remarks>
     /// Dispatches to the GFNI kernel (all accumulators in one vector register, one
     /// multiply per data byte for every syndrome at once) when available; the scalar
-    /// path keeps the Horner multiply in log domain — the multiplier's log is the
+    /// path keeps the Horner multiply in log domain, the multiplier's log is the
     /// constant i, so each step is one zero-check + one log load + one exp load
     /// (measured 0.84-0.90x of the GaloisField.Multiply form).
     /// </remarks>

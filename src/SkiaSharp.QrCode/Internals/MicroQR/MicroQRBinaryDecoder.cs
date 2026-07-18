@@ -16,7 +16,7 @@ namespace SkiaSharp.QrCode.Internals.MicroQR;
 /// <see cref="QRCodeDecodeStatus.UnsupportedContent"/>); M4 values 4-7 are undefined.</item>
 /// <item>Character count indicator is 3-6 bits (Numeric = version + 2, others = version + 1).</item>
 /// <item>The terminator (2·version + 1 zero bits) is exactly a Numeric mode
-/// indicator followed by an all-zero count — a zero-count Numeric segment ends the
+/// indicator followed by an all-zero count, a zero-count Numeric segment ends the
 /// stream. It may be truncated when the data fills the capacity.</item>
 /// <item>No ECI: byte segments always use the UTF-8-validates heuristic.</item>
 /// <item>The bit capacity is not a whole number of bytes for M1/M3: the final data

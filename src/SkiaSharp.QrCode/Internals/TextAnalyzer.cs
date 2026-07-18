@@ -433,7 +433,7 @@ internal static class TextAnalyzer
             var bytes = AdvSimd.ExtractNarrowingSaturateUpper(AdvSimd.ExtractNarrowingSaturateLower(lo), hi);
 
             // Numeric check (0-9): (c - '0') wraps unsigned, so any non-digit
-            // pushes the block max above 9 — one SUB + one UMAXV
+            // pushes the block max above 9, one SUB + one UMAXV
             if (!hasNonNumeric)
             {
                 if (AdvSimd.Arm64.MaxAcross(AdvSimd.Subtract(bytes, char0Byte)).ToScalar() > 9)
@@ -453,7 +453,7 @@ internal static class TextAnalyzer
         }
 
         // Every flag is a monotonic OR, so once all are set the remainder
-        // cannot change the result — and re-classifying a char twice is
+        // cannot change the result, and re-classifying a char twice is
         // harmless, which allows the overlapped final block below.
         if (!(hasNonNumeric && hasNonAlphanumeric && hasNonIso88591))
         {
@@ -537,7 +537,7 @@ internal static class TextAnalyzer
     }
 
     // The alphanumeric alphabet (ISO/IEC 18004 Section 7.4.3) as five unsigned
-    // ranges/equalities — '$%', '*+' and '-./' are contiguous code points:
+    // ranges/equalities, '$%', '*+' and '-./' are contiguous code points:
     //   digits  '0'-'9'  : (c - 0x30) <= 9
     //   upper   'A'-'Z'  : (c - 0x41) <= 25
     //   '$','%'          : (c - 0x24) <= 1

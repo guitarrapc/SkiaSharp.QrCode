@@ -4,9 +4,9 @@ namespace QRInteropFixtures;
 /// Input definition of one Micro QR corpus case. Version and ECC are pinned per
 /// case (the corpus enumerates every version × legal ECC combination), and the
 /// expected mode is declared explicitly because external encoders choose their
-/// own segmentation — the manifest mode is informational, not asserted.
+/// own segmentation, the manifest mode is informational, not asserted.
 /// </summary>
-/// <param name="ErrorCorrectionLevel">"ErrorDetectionOnly" (M1), "L", "M" or "Q" — the MicroQREccLevel name.</param>
+/// <param name="ErrorCorrectionLevel">"ErrorDetectionOnly" (M1), "L", "M" or "Q", the MicroQREccLevel name.</param>
 /// <param name="Version">Micro QR version 1-4 (M1-M4), requested from the generator.</param>
 /// <param name="Mode">"Numeric", "Alphanumeric" or "Byte".</param>
 public sealed record MicroQRFixtureCaseDefinition(string Id, string PayloadText, string ErrorCorrectionLevel, int Version, string Mode, bool Utf8 = false);

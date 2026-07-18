@@ -6,12 +6,12 @@ namespace SkiaSharp.QrCode.Internals.MicroQR;
 /// Decodes a Micro QR module matrix (one byte per module, no quiet zone) back into text.
 /// </summary>
 /// <remarks>
-/// Inverse of <see cref="MicroQRCodeGenerator"/>'s matrix writing pipeline — the
+/// Inverse of <see cref="MicroQRCodeGenerator"/>'s matrix writing pipeline, the
 /// same internal boundary as the Standard QR <c>QRMatrixDecoder</c>:
 /// <code>
 /// 1. Version from matrix size (11/13/15/17 → M1-M4)
 /// 2. Format information → version cross-check + ECC level + mask pattern
-///    (single 15-bit copy — Standard QR has two)
+///    (single 15-bit copy, Standard QR has two)
 /// 3. Codeword extraction: inverse two-column zigzag, unmasking on the fly
 ///    (single Reed-Solomon block, so there is no deinterleaving stage)
 /// 4. Reed-Solomon error correction, capped at the ISO Table 9 capacity t

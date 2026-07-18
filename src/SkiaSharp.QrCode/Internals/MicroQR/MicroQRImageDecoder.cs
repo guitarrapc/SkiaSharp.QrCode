@@ -772,7 +772,7 @@ internal static class MicroQRImageDecoder
 
     /// <summary>
     /// Samples every module center on the axis-aligned (per orientation) grid.
-    /// Out-of-range positions clamp to the nearest edge pixel — mild inaccuracy at
+    /// Out-of-range positions clamp to the nearest edge pixel, mild inaccuracy at
     /// the outermost modules must not read out of bounds.
     /// </summary>
     private static void SampleGrid(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float originX, float originY, float uX, float uY, float vX, float vY, int size, Span<byte> modules)

@@ -8,7 +8,7 @@ namespace SkiaSharp.QrCode.Tests;
 /// builders: every public member of <see cref="QRCodeImageBuilder"/> must exist on
 /// <see cref="MicroQRCodeImageBuilder"/> with the symbology types swapped
 /// (QRCodeData ⇔ MicroQRCodeData, ECCLevel ⇔ MicroQREccLevel, int version ⇔
-/// MicroQRVersion), and vice versa — except for the documented Standard QR-only
+/// MicroQRVersion), and vice versa, except for the documented Standard QR-only
 /// options. Adding an output method or static helper to one builder without the
 /// other fails here. Extend the map when the rMQR builder lands.
 /// </summary>
@@ -16,7 +16,7 @@ public class QrImageBuilderApiParityTest
 {
     /// <summary>
     /// Standard QR-only fluent options: Micro QR has a single finder pattern, no
-    /// ECC headroom for overlays, and no ECI mode — these members intentionally
+    /// ECC headroom for overlays, and no ECI mode, these members intentionally
     /// have no Micro QR counterpart (decision recorded in specs/microqr-spec-map.md).
     /// </summary>
     private static readonly string[] standardOnlyMembers =

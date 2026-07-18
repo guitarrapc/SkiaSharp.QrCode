@@ -76,7 +76,7 @@ internal sealed class SvgRootAttributeInjectorStream : Stream
 
             if (_headerLength == _header.Length)
             {
-                // No marker within the scan window — forward the document unmodified.
+                // No marker within the scan window, forward the document unmodified.
                 _inner.Write(_header, 0, _headerLength);
                 CompleteInjection();
                 break;
@@ -100,7 +100,7 @@ internal sealed class SvgRootAttributeInjectorStream : Stream
     {
         if (disposing && _header is not null && _headerLength > 0)
         {
-            // The document ended inside the scan window without a marker — forward
+            // The document ended inside the scan window without a marker, forward
             // it unmodified rather than dropping bytes.
             _inner.Write(_header, 0, _headerLength);
             CompleteInjection();

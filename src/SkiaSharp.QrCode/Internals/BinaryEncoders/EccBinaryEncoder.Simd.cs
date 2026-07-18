@@ -16,7 +16,7 @@ namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 /// loop)
 ///
 /// - The ≤32-byte remainder register lives in one (eccCount ≤ 16) or two vector
-///   registers for the whole block — no message buffer, no store/load round-trips.
+///   registers for the whole block, no message buffer, no store/load round-trips.
 /// - Four data bytes are consumed per iteration. Their division factors are a
 ///   GF(2)-linear function of the four input bytes, so they come from four parallel
 ///   256-entry uint table lookups (T) instead of a serial per-byte recurrence.
@@ -631,7 +631,7 @@ internal static partial class EccBinaryEncoder
         return t;
     }
 
-    // Composed T∘U tables: TU_k[b] = T(U_k[b]) — the next quad's factor contribution
+    // Composed T∘U tables: TU_k[b] = T(U_k[b]), the next quad's factor contribution
     // of current factor f_k = b, folding two dependent lookup rounds into one.
     // Valid because T and U are GF(2)-linear maps.
     private static readonly uint[]?[] _composedTUCache = new uint[]?[33];

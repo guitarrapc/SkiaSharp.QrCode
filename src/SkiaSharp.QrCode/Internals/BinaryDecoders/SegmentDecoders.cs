@@ -119,7 +119,7 @@ internal static class SegmentDecoders
         var bytes = byteBuffer.AsSpan(0, count);
 
         // Resolve the effective charset. A UTF-8 BOM (the encoder can emit one with
-        // utf8BOM: true) is consumed, not decoded — but an explicit ECI ISO-8859-1
+        // utf8BOM: true) is consumed, not decoded, but an explicit ECI ISO-8859-1
         // declaration wins over the BOM heuristic: there, EF BB BF is the legitimate
         // Latin-1 text "ï»¿".
         var useUtf8 = charset switch

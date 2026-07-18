@@ -7,8 +7,8 @@ namespace SkiaSharp.QrCode.Image;
 /// Shared implementation for the symbology-specific QR image builders
 /// (<see cref="QRCodeImageBuilder"/>, <see cref="MicroQRCodeImageBuilder"/>):
 /// the fluent options every symbology supports, canvas layout, and the complete
-/// raster/SVG output surface. Symbology-specific concerns — error correction and
-/// version types, icon overlays, finder pattern styling — live on the derived
+/// raster/SVG output surface. Symbology-specific concerns, error correction and
+/// version types, icon overlays, finder pattern styling, live on the derived
 /// builders.
 /// </summary>
 /// <remarks>
@@ -260,7 +260,7 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// custom shapes keep antialiasing for smooth curves.
     /// </para>
     /// <para>
-    /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> is ignored — SVG is a vector format,
+    /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> is ignored, SVG is a vector format,
     /// not an <see cref="SKEncodedImageFormat"/>. Size options (<see cref="WithSize(int, int)"/>,
     /// <see cref="WithModulePixelSize(int)"/>) define the SVG viewport in units.
     /// The stream is left open after writing.
@@ -351,7 +351,7 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// <remarks>
     /// <see cref="SKSvgCanvas"/> writes <c>width</c>/<c>height</c> on the root element but no
     /// <c>viewBox</c>. Without a viewBox, an SVG embedded at a different size (img element, CSS)
-    /// keeps its content at the original coordinates instead of scaling — the main reason to use
+    /// keeps its content at the original coordinates instead of scaling, the main reason to use
     /// SVG in the first place. <see cref="SvgRootAttributeInjectorStream"/> inserts the attributes
     /// right after the <c>&lt;svg </c> marker while the canvas streams to the output, so the
     /// document is never buffered as a whole; if the marker is not found (unexpected upstream
@@ -406,7 +406,7 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
         // everywhere, anything drawn over it stays opaque, so the whole image is
         // opaque no matter what modules/icons/gradients are painted on top.
         // An opaque surface lets encoders skip the alpha channel and the unpremul
-        // pass — PNG output becomes RGB: smaller and faster to encode.
+        // pass, PNG output becomes RGB: smaller and faster to encode.
         var isOpaque = contentCoversCanvas
             ? backgroundIsOpaque || clearIsOpaque
             : clearIsOpaque;

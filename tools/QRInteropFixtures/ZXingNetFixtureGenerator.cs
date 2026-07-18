@@ -8,7 +8,7 @@ namespace QRInteropFixtures;
 
 /// <summary>
 /// Fixture generator backed by ZXing.Net's Standard QR encoder
-/// (<see cref="ZXing.QrCode.Internal.Encoder"/>) — an independent implementation
+/// (<see cref="ZXing.QrCode.Internal.Encoder"/>), an independent implementation
 /// lineage from SkiaSharp.QrCode. Runs in-process from the pinned NuGet package, so it
 /// needs no external toolchain and is always available.
 /// </summary>

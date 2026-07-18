@@ -57,7 +57,7 @@ public static partial class QrInterop
     /// <summary>
     /// Generates a QR code PNG from JSON options (see <see cref="QrRequest"/>).
     /// Returns PNG bytes on success (first byte 0x89), or UTF-8 JSON
-    /// <c>{"error":"..."}</c> on failure (first byte 0x7B) — the JS side
+    /// <c>{"error":"..."}</c> on failure (first byte 0x7B), the JS side
     /// distinguishes the two by the first byte.
     /// </summary>
     /// <param name="optionsJson">Serialized <see cref="QrRequest"/> (camelCase).</param>
@@ -80,7 +80,7 @@ public static partial class QrInterop
     /// <summary>
     /// Generates a QR code SVG document from JSON options (see <see cref="QrRequest"/>).
     /// Returns UTF-8 SVG bytes on success (first byte '&lt;' 0x3C), or UTF-8 JSON
-    /// <c>{"error":"..."}</c> on failure (first byte 0x7B) — the JS side
+    /// <c>{"error":"..."}</c> on failure (first byte 0x7B), the JS side
     /// distinguishes the two by the first byte.
     /// </summary>
     /// <param name="optionsJson">Serialized <see cref="QrRequest"/> (camelCase).</param>
@@ -242,7 +242,7 @@ public static partial class QrInterop
     /// <summary>
     /// Builds the Micro QR image builder from request options. Micro QR has no icon
     /// overlay or finder pattern shape options (single finder, no ECC headroom), so
-    /// those request fields are ignored — the page hides the controls.
+    /// those request fields are ignored, the page hides the controls.
     /// </summary>
     private static MicroQRCodeImageBuilder CreateMicroBuilder(QrRequest request, MicroQRCodeData data)
     {
@@ -415,7 +415,7 @@ public static partial class QrInterop
     /// <summary>
     /// Tight loop over the zero-allocation Micro QR span API. Micro QR capacity is
     /// tiny (≤ 35 characters), so unlike the Standard QR benchmark the content is
-    /// NOT suffixed with a unique index — appending one would overflow most payloads.
+    /// NOT suffixed with a unique index, appending one would overflow most payloads.
     /// </summary>
     private static string BenchmarkMicroEncode(QrRequest request, int count)
     {

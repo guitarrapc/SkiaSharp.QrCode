@@ -4,8 +4,8 @@ namespace SkiaSharp.QrCode.Tests;
 /// Tier-2 image decoding: mild perspective (keystone) distortion, alone and
 /// combined with rotation and mirroring. The asserted tilt levels sit inside the
 /// measured envelope with margin (probe results: versions 2-5 decode to ~15%
-/// keystone, 10-15 to ~6-10%, version 1 — no alignment pattern, parallelogram
-/// fallback — to ~2%).
+/// keystone, 10-15 to ~6-10%, version 1, no alignment pattern, parallelogram
+/// fallback, to ~2%).
 /// </summary>
 public class QRCodeDecoderPerspectiveTest
 {
@@ -40,7 +40,7 @@ public class QRCodeDecoderPerspectiveTest
     public async Task Decode_Keystone_Version1_ParallelogramFallback()
     {
         // Version 1 has no alignment pattern; the fourth point is estimated, so
-        // only very mild perspective is absorbed — that boundary is by design.
+        // only very mild perspective is absorbed, that boundary is by design.
         var content = "v1 fallback";
         using var bitmap = RenderKeystone(content, version: 1, tilt: 0.02f, rotateDegrees: 0);
 

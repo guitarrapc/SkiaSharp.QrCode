@@ -36,7 +36,7 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 /// accumulate beat the per-qword AVX2-shaped accumulate by ~8% and the SIMD
 /// edges beat the SWAR edges by ~5-11%; the scalar scorer's early-exit is
 /// intentionally absent (structurally incompatible with vector accumulators,
-/// and the vector throughput win dwarfs it — same conclusion as the x64 loop).
+/// and the vector throughput win dwarfs it, same conclusion as the x64 loop).
 /// </summary>
 internal static partial class ModulePlacer
 {
