@@ -90,6 +90,17 @@ public static class QRCodeRenderer
         // Draw finder patterns
         if (finderPatternShape is not null)
         {
+            // Finder shapes draw the outer dark area before drawing the light inner
+            // ring. A non-opaque light color with SrcOver cannot restore the
+            // background after that dark area has been drawn. In that case, draw
+            // each finder on a temporary layer and clear its light modules to reveal
+            // the already-rendered QR background underneath.
+            var requiresBackgroundRestore = bgColor.Alpha < byte.MaxValue;
+            if (requiresBackgroundRestore)
+            {
+                lightPaint.BlendMode = SKBlendMode.Clear;
+            }
+
             // Curved finder shapes require antialiasing independently from module shapes.
             // Apply the same setting to both paints so their shared edges are rasterized
             // consistently.
@@ -103,7 +114,21 @@ public static class QRCodeRenderer
             for (var i = 0; i < 3; i++)
             {
                 var finderRect = GetFinderPatternRect(data, i, area);
-                finderPatternShape.Draw(canvas, finderRect, darkPaint, lightPaint);
+                if (!requiresBackgroundRestore)
+                {
+                    finderPatternShape.Draw(canvas, finderRect, darkPaint, lightPaint);
+                    continue;
+                }
+
+                var saveCount = canvas.SaveLayer(finderRect, null);
+                try
+                {
+                    finderPatternShape.Draw(canvas, finderRect, darkPaint, lightPaint);
+                }
+                finally
+                {
+                    canvas.RestoreToCount(saveCount);
+                }
             }
         }
 

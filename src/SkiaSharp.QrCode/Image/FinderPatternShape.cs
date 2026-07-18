@@ -38,12 +38,16 @@ public abstract class FinderPatternShape
     /// <remarks>
     /// The default implementation preserves compatibility with custom finder shapes that
     /// override the color-based overload. Built-in shapes override this overload so the
-    /// renderer can reuse the paint that already drew the QR code background. The renderer
-    /// owns <paramref name="backgroundPaint"/> and may reuse it across calls; implementations
-    /// must not modify or dispose it.
+    /// renderer can reuse its background paint. The renderer may set the paint's blend mode
+    /// to <see cref="SKBlendMode.Clear"/> while drawing on an isolated layer so transparent
+    /// and translucent light modules reveal the background rendered beneath the finder pattern.
+    /// Implementations should therefore draw with this paint directly instead of copying only
+    /// its color. The renderer owns <paramref name="backgroundPaint"/> and may reuse it across
+    /// calls; implementations must not modify or dispose it.
     /// Custom shapes should override this overload when they need to reuse the renderer's
-    /// configured background paint; existing custom shapes may continue to override the
-    /// <see cref="Draw(SKCanvas, SKRect, SKPaint, SKColor)"/> overload.
+    /// configured background paint or when they must support non-opaque backgrounds (blend modes).
+    /// Existing custom shapes may continue to override <see cref="Draw(SKCanvas, SKRect, SKPaint, SKColor)"/>,
+    /// but that overload cannot use the renderer's blend mode.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="rect">The rectangular area for the finder pattern (7x7 modules).</param>

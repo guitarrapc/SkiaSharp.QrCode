@@ -150,6 +150,71 @@ public class FinderPatternShapeColorTest
     }
 
     [Test]
+    [MethodDataSource(nameof(GetFinderPatternShapes))]
+    public async Task ToByteArray_TransparentBackground_KeepsFinderPatternInnerRingTransparent(FinderPatternShape finderPatternShape)
+    {
+        const string content = "transparent-finder-background-test";
+        var pngBytes = new QRCodeImageBuilder(content)
+            .WithSize(800, 800)
+            .WithErrorCorrection(ECCLevel.H)
+            .WithColors(SKColors.Black, new SKColor(0xFF, 0xFF, 0x00, 0x00), SKColors.Transparent)
+            .WithGradient(new GradientOptions(
+                [SKColors.Blue, SKColors.Purple, SKColors.Pink],
+                GradientDirection.TopLeftToBottomRight,
+                [0f, 0.5f, 1f]))
+            .WithFinderPatternShape(finderPatternShape)
+            .WithModuleShape(RoundedRectangleModuleShape.Default, 0.9f)
+            .ToByteArray();
+
+        using var bitmap = SKBitmap.Decode(pngBytes) ?? throw new InvalidOperationException("Failed to decode generated PNG.");
+        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.H);
+        var finderRect = QRCodeRenderer.GetFinderPatternRect(
+            qr,
+            0,
+            SKRect.Create(0, 0, bitmap.Width, bitmap.Height));
+        var moduleSize = finderRect.Width / 7f;
+        var ringPixel = bitmap.GetPixel(
+            (int)MathF.Round(finderRect.Left + moduleSize * 1.5f),
+            (int)MathF.Round(finderRect.Top + moduleSize * 3.5f));
+        var centerPixel = bitmap.GetPixel(
+            (int)MathF.Round(finderRect.Left + moduleSize * 3.5f),
+            (int)MathF.Round(finderRect.Top + moduleSize * 3.5f));
+
+        await Assert.That(ringPixel.Alpha).IsEqualTo((byte)0);
+        await Assert.That(centerPixel.Alpha).IsEqualTo((byte)255);
+    }
+
+    [Test]
+    [MethodDataSource(nameof(GetFinderPatternShapes))]
+    public async Task TranslucentBackground_FinderPatternInnerRingMatchesRenderedBackground(FinderPatternShape finderPatternShape)
+    {
+        var backgroundColor = new SKColor(0xFF, 0xFF, 0xFF, 0x80);
+        var qr = QRCodeGenerator.CreateQrCode("translucent-finder-background-test", ECCLevel.M);
+        var imageSize = qr.Size * 10;
+        var area = SKRect.Create(0, 0, imageSize, imageSize);
+        using var bitmap = new SKBitmap(imageSize, imageSize);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.Red);
+
+        QRCodeRenderer.Render(
+            canvas,
+            area,
+            qr,
+            SKColors.Black,
+            backgroundColor,
+            finderPatternShape: finderPatternShape);
+
+        var finderRect = QRCodeRenderer.GetFinderPatternRect(qr, 0, area);
+        var moduleSize = finderRect.Width / 7f;
+        var ringPixel = bitmap.GetPixel(
+            (int)MathF.Round(finderRect.Left + moduleSize * 1.5f),
+            (int)MathF.Round(finderRect.Top + moduleSize * 3.5f));
+        var quietZonePixel = bitmap.GetPixel(0, 0);
+
+        await Assert.That(ringPixel).IsEqualTo(quietZonePixel);
+    }
+
+    [Test]
     [Arguments(false)]
     public async Task RectangleFinderPatternShape_RequiresAntialiasing_IsFalse(bool expected)
     {
