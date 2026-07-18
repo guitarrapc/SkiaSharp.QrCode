@@ -18,9 +18,9 @@ namespace SkiaSharp.QrCode.Internals.MicroQR;
 /// Produces matrices byte-identical to the per-module reference methods in
 /// MicroQRModulePlacer.cs (guarded by MicroQRModulePlacerParityTest).
 /// Four runtime tiers: BMI2+AVX2 (placement as a static per-row PEXT/PDEP
-/// permutation, 32-module unpack; gated on fast-PEXT hardware — Intel or
+/// permutation, 32-module unpack; gated on fast-PEXT hardware, Intel or
 /// AMD Zen 3+), SSSE3 and ARM64 NEON (serial packed placement, 16-module
-/// unpack sharing one pipeline — only the bit-expand idiom differs), and
+/// unpack sharing one pipeline, only the bit-expand idiom differs), and
 /// portable scalar (SWAR spreads). Measured 3.6-8.4x over the reference
 /// across M1-M4 on x64, zero allocations (see the micro-optimization
 /// findings log):
@@ -30,7 +30,7 @@ namespace SkiaSharp.QrCode.Internals.MicroQR;
 /// of per-bit indexed loads with a data/ecc branch.</item>
 /// <item>Column pairs are (even, odd) and never straddle the finder boundary:
 /// <c>right &gt;= 10</c> frees rows 1..size-1, <c>right &lt;= 8</c> frees rows
-/// 9..size-1 — no per-module function-region predicate, and the stream fills
+/// 9..size-1, no per-module function-region predicate, and the stream fills
 /// the free modules exactly (ISO capacity tables, validated up front) so no
 /// remaining-bits guard is needed. Every segment's row count is even for all
 /// four sizes, so placement runs 2 rows (4 stream bits) per iteration.</item>
@@ -45,7 +45,7 @@ namespace SkiaSharp.QrCode.Internals.MicroQR;
 /// broadcast/shuffle/compare idiom when available, falling back to scalar SWAR
 /// spreads (8 modules per step) otherwise; a single code path serves all four
 /// sizes (the scalar phase's size-11 byte-domain dispatch lost its advantage
-/// once the unpack was vectorized and the placement unrolled — measured).</item>
+/// once the unpack was vectorized and the placement unrolled, measured).</item>
 /// <item>All tables are small static arrays built by ordinary code from the
 /// reference implementations (NativeAOT/trimming-safe).</item>
 /// </list>
@@ -62,7 +62,7 @@ internal static partial class MicroQRModulePlacer
     /// <param name="dataCodewords">Data codewords including padding.</param>
     /// <param name="eccCodewords">Error correction codewords.</param>
     /// <param name="dataBitCount">
-    /// Number of DATA bits to emit — for M1/M3 this stops after the high nibble
+    /// Number of DATA bits to emit, for M1/M3 this stops after the high nibble
     /// of the final (4-bit) data codeword; its forced-zero low nibble is never
     /// placed.
     /// </param>
@@ -89,7 +89,7 @@ internal static partial class MicroQRModulePlacer
     }
 
     /// <summary>
-    /// Scalar-unpack variant of <see cref="PlaceSymbol"/> — the code path taken
+    /// Scalar-unpack variant of <see cref="PlaceSymbol"/>, the code path taken
     /// at runtime when neither SSSE3 nor NEON is available, exposed as a named
     /// entry point so parity tests exercise it on SIMD-capable machines too.
     /// </summary>
@@ -120,7 +120,7 @@ internal static partial class MicroQRModulePlacer
     }
 
     /// <summary>
-    /// SSSE3 mid-tier variant of <see cref="PlaceSymbol"/> — the code path
+    /// SSSE3 mid-tier variant of <see cref="PlaceSymbol"/>, the code path
     /// taken at runtime when BMI2/AVX2 (or fast PEXT) are absent, exposed as a
     /// named entry point so it stays covered on machines whose dispatch
     /// prefers the BMI2 kernel.
@@ -136,7 +136,7 @@ internal static partial class MicroQRModulePlacer
     }
 
     /// <summary>
-    /// ARM64 NEON mid-tier variant of <see cref="PlaceSymbol"/> — the code path
+    /// ARM64 NEON mid-tier variant of <see cref="PlaceSymbol"/>, the code path
     /// taken at runtime on ARM64 (same <see cref="PlaceCoreVector"/> pipeline as
     /// the SSSE3 tier; only the 16-module unpack idiom differs inside
     /// <see cref="WriteExpand16"/>), exposed as a named entry point for parity
@@ -270,7 +270,7 @@ internal static partial class MicroQRModulePlacer
         // Format information: row 8 cols 1..8 carry bits 14..7, col 8 rows 7..1
         // carry bits 6..0 (same coordinates as PlaceFormat). These modules lie
         // outside the data-region mask, so the fused apply cannot flip them.
-        // Row 8's cols 1..8 hold format bits 14..7 in descending order — the
+        // Row 8's cols 1..8 hold format bits 14..7 in descending order, the
         // bit-reversed high byte of (formatBits >> 7) shifted to bit 1, one
         // masked insert instead of eight.
         var formatBits = _formatBitsTable[(MicroQRConstants.GetSymbolNumber(version, eccLevel) << 2) | mask];
@@ -344,7 +344,7 @@ internal static partial class MicroQRModulePlacer
         var mask = BuildPackedRows(rows, size, stream, version, eccLevel);
 
         // Unpack with the mask applied on the fly, 16 modules per SIMD step
-        // (SSSE3 or NEON — see WriteExpand16).
+        // (SSSE3 or NEON, see WriteExpand16).
         // Rows 0..size-2 may overrun into the following row: bits >= size are
         // zero and rows unpack in ascending order, so the overwritten zeros are
         // immediately replaced by that row's own unpack. The last row (buffer
@@ -390,10 +390,10 @@ internal static partial class MicroQRModulePlacer
     /// iff bit k set). Caller (via <see cref="PlaceCoreVector"/> dispatch)
     /// guarantees SSSE3 or AdvSimd.Arm64; IsSupported is a JIT constant so the
     /// untaken branch is eliminated.
-    /// x86: PSHUFB + PAND + PCMPEQB — beat the GFNI bit-expand in the
+    /// x86: PSHUFB + PAND + PCMPEQB, beat the GFNI bit-expand in the
     /// micro-benchmark loop (GFNI's matrix-operand preparation outweighs its
     /// single-instruction expand).
-    /// ARM64: TBL + CMTST — CMTST (compare-test: 0xFF iff (a &amp; b) != 0)
+    /// ARM64: TBL + CMTST, CMTST (compare-test: 0xFF iff (a &amp; b) != 0)
     /// fuses the AND+CMEQ pair; x86 has no per-lane bit-test compare.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -467,7 +467,7 @@ internal static partial class MicroQRModulePlacer
             }
         }
 
-        // Scoring and format information — identical to BuildPackedRows.
+        // Scoring and format information, identical to BuildPackedRows.
         var last = size - 1;
         ulong colDark = 0;
         for (var i = 1; i < size; i++)
@@ -585,7 +585,7 @@ internal static partial class MicroQRModulePlacer
     /// bit p placed at (row, col): word p&gt;&gt;6, source bit 63-(p&amp;63)
     /// (MSB-first stream), deposit bit col. Within a word, ascending source
     /// bit means descending stream position, which the zigzag maps to strictly
-    /// ascending columns — so PEXT's packing order matches PDEP's deposit
+    /// ascending columns, so PEXT's packing order matches PDEP's deposit
     /// order (guarded by MicroQRModulePlacerParityTest).
     /// </summary>
     private static readonly ulong[][] _pextPlaceTables = BuildPextPlaceTables();
@@ -655,7 +655,7 @@ internal static partial class MicroQRModulePlacer
     /// <summary>
     /// Writes 8 modules at once: byte k = bit k of the low byte of
     /// <paramref name="bits"/> (multiply-replicate to the per-byte diagonal,
-    /// OR-cascade down to bit 0 — the ModulePlacer.Masking SWAR unpack).
+    /// OR-cascade down to bit 0, the ModulePlacer.Masking SWAR unpack).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteSpread8(ref byte p, ulong bits)
@@ -670,7 +670,7 @@ internal static partial class MicroQRModulePlacer
 
     // ---------------------------------------------------------------
     // Static tables (all built by ordinary code from the reference
-    // implementations in MicroQRModulePlacer.cs — NativeAOT/trimming-safe)
+    // implementations in MicroQRModulePlacer.cs, NativeAOT/trimming-safe)
     // ---------------------------------------------------------------
 
     /// <summary>

@@ -147,7 +147,7 @@ internal static class MicroQRConstants
 
     /// <summary>
     /// Mode availability per version (ISO/IEC 18004): M1 numeric only, M2 adds
-    /// alphanumeric, M3/M4 add byte (Kanji is not implemented — see the symbology spec).
+    /// alphanumeric, M3/M4 add byte (Kanji is not implemented, see the symbology spec).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsModeSupported(MicroQRVersion version, EncodingMode mode) => mode switch

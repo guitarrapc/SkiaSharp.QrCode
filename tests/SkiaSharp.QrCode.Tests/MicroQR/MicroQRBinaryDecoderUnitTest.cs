@@ -131,7 +131,7 @@ public class MicroQRBinaryDecoderUnitTest
     [Test]
     public async Task DecodeBitStream_ZeroCountNonNumericSegment_DecodesAsEmpty()
     {
-        // M2: mode 1 (alnum), count 0 — an empty segment is not a terminator
+        // M2: mode 1 (alnum), count 0, an empty segment is not a terminator
         // (the terminator is numeric-mode-with-zero-count); the stream then ends.
         var (status, text) = Decode([0b1_000_0000, 0x00, 0x00, 0x00, 0x00], dataBitCount: 40, MicroQRVersion.M2);
 
@@ -155,7 +155,7 @@ public class MicroQRBinaryDecoderUnitTest
     public async Task DecodeBitStream_HalfCodewordBitsBeyondCapacity_AreNeverRead()
     {
         // M3-L: 84 data bits = 10.5 codewords; the low nibble of the final
-        // codeword is outside the data capacity. Fill it with garbage — the
+        // codeword is outside the data capacity. Fill it with garbage, the
         // decoder must ignore it.
         var codewords = new byte[16];
         var analysis = TextAnalyzer.Analyze("ABC".AsSpan(), EciMode.Default);

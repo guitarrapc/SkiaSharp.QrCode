@@ -185,7 +185,7 @@ public static class MicroQRCodeGenerator
             }
         }
 
-        // No version supports this mode/ECC combination at any length — a constraint
+        // No version supports this mode/ECC combination at any length, a constraint
         // problem, not a length problem; say which constraint binds.
         if (bestMax < 0)
         {
@@ -210,7 +210,7 @@ public static class MicroQRCodeGenerator
     };
 
     /// <summary>
-    /// Largest data length that fits a version/ECC/mode combination — the inverse of
+    /// Largest data length that fits a version/ECC/mode combination, the inverse of
     /// <see cref="GetRequiredBits"/> against the ISO Table 7 bit capacity. Error-path
     /// only (capacity-exceeded messages).
     /// </summary>

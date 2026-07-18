@@ -4,7 +4,7 @@ namespace QRInteropFixtures;
 
 /// <summary>
 /// Diagnostic: checks whether the pinned ZXingCpp native build can CREATE
-/// Micro QR / rMQR symbols (zxing-cpp's writer is backed by libzint — if this
+/// Micro QR / rMQR symbols (zxing-cpp's writer is backed by libzint, if this
 /// works, a zint-lineage encoder oracle is available with no extra toolchain).
 /// </summary>
 public static class CreatorProbe

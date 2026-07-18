@@ -131,7 +131,7 @@ internal static class QRImageDecoder
     /// Samples the module grid at the given dimension and decodes it, retrying once
     /// transposed for mirrored images (e.g. front-camera captures): finder geometry
     /// is identical but data is transposed. The mirror retry triggers on any decode
-    /// failure — a permuted format pattern may fall within BCH distance of a wrong
+    /// failure, a permuted format pattern may fall within BCH distance of a wrong
     /// candidate and surface as DataUncorrectable instead of FormatInformationInvalid.
     /// </summary>
     private static QRCodeDecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
@@ -161,7 +161,7 @@ internal static class QRImageDecoder
 
                 // Mesh fallback: a partially-detected mesh (unfound nodes keep
                 // extrapolated predictions) can sample worse than the single global
-                // homography — retrying globally guarantees the mesh path never
+                // homography, retrying globally guarantees the mesh path never
                 // regresses below it. Failure-path cost only.
             }
 
@@ -299,7 +299,7 @@ internal static class QRImageDecoder
     /// <summary>
     /// Measures the module size along the finder-to-finder axes: from each pattern
     /// center, a dark-light-dark run toward (and away from) its neighbor spans
-    /// exactly 7 modules of the 1:1:3:1:1 structure — independent of rotation.
+    /// exactly 7 modules of the 1:1:3:1:1 structure, independent of rotation.
     /// </summary>
     private static float MeasureModuleSize(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft)
     {
@@ -408,7 +408,7 @@ internal static class QRImageDecoder
     /// <returns>
     /// True when the mesh should be used: at least half of the searched nodes were
     /// actually detected. With mostly-predicted nodes the mesh is merely a bilinear
-    /// approximation of the global homography — strictly worse, so the caller keeps
+    /// approximation of the global homography, strictly worse, so the caller keeps
     /// the global transform instead.
     /// </returns>
     internal static bool TryBuildSampleMesh(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<float> gridCoords, Span<float> nodeXs, Span<float> nodeYs, out int meshSize, out int searchedNodes, out int foundNodes)
@@ -444,7 +444,7 @@ internal static class QRImageDecoder
         // from its three already-processed neighbors via the local parallelogram
         // P(i,j) = P(i-1,j) + P(i,j-1) - P(i-1,j-1). Local extrapolation tracks the
         // perspective cell by cell, so predictions stay within the small search
-        // window even where the global transform has drifted — its fourth anchor
+        // window even where the global transform has drifted, its fourth anchor
         // carries the full parallelogram error (≈ 2·keystone-shrink, many modules on
         // large symbols), so predicting every node through it would make detection
         // fail exactly when the mesh is needed most.
@@ -469,7 +469,7 @@ internal static class QRImageDecoder
                 else
                 {
                     // First lattice row/column: seeded from the finder-only affine
-                    // frame, NOT the global transform — the global fourth anchor
+                    // frame, NOT the global transform, the global fourth anchor
                     // carries the parallelogram/detection error and would bend these
                     // seeds (and with them every wavefront prediction downstream).
                     // Along the top/left edges the finder affine is nearly exact.
@@ -492,7 +492,7 @@ internal static class QRImageDecoder
                 // parallelogram sources) still carry the affine seeds' foreshortening
                 // drift and get a wider window; once a detected neighbor feeds the
                 // prediction, drift differences cancel and the tight window applies.
-                // Keeping the wide window rare matters — a wide-window false positive
+                // Keeping the wide window rare matters, a wide-window false positive
                 // does not stay local, the wavefront propagates it downstream
                 // (measured as a broad regression when every node searched wide).
                 var window = anySourceFound ? 2.5f : 4f;
@@ -508,7 +508,7 @@ internal static class QRImageDecoder
 
         // Refinement pass: when nodes were missed, rebuild a homography from the
         // three finder centers plus the detected node closest to the bottom-right
-        // lattice corner (a reliable, ring-validated fourth correspondence — unlike
+        // lattice corner (a reliable, ring-validated fourth correspondence, unlike
         // the global transform's swept-window anchor), then re-search the missed
         // nodes around its predictions. For an exact-homography distortion four
         // exact correspondences reproduce the mapping, so the remaining nodes land
@@ -585,7 +585,7 @@ internal static class QRImageDecoder
         // extrapolation along their lattice row/column. The affine seeds are good
         // enough to FIND patterns, but not to SAMPLE with: projective foreshortening
         // makes lattice spacing non-uniform, and the affine (average-slope) edge
-        // prediction drifts up to ~1.5 modules mid-edge — enough to garble the whole
+        // prediction drifts up to ~1.5 modules mid-edge, enough to garble the whole
         // first cell band. LINEAR extrapolation fails for the same reason (points on
         // the lattice line are collinear, but their spacing along it is projective):
         // quadratic (Lagrange) extrapolation through three interior nodes captures
@@ -711,7 +711,7 @@ internal static class QRImageDecoder
     /// Builds the grid-to-pixel projective transform from the three finder centers
     /// plus a fourth correspondence point: the bottom-right alignment pattern when
     /// one exists and is found, otherwise the parallelogram corner estimate (which
-    /// degrades the transform to affine — exact for flat, on-axis captures).
+    /// degrades the transform to affine, exact for flat, on-axis captures).
     /// Grid coordinates put module (u, v)'s center at (u+0.5, v+0.5), so finder
     /// centers sit at 3.5 and the alignment center at dimension−6.5.
     /// </summary>
@@ -773,7 +773,7 @@ internal static class QRImageDecoder
     /// <remarks>
     /// The loop is bound by scalar conversion/clamp/branch overhead, not by the
     /// divisions (module computations are independent, so out-of-order execution
-    /// hides division latency — halving the division count measured no gain).
+    /// hides division latency, halving the division count measured no gain).
     /// The SIMD paths process 8 module centers per iteration with the exact scalar
     /// op sequence (no FMA), so lane results are bit-identical to the scalar path:
     /// one Vector256 on AVX2 (measured 2.7x at version 40; PerspectiveSample

@@ -50,7 +50,7 @@ public class FinderPatternFinderParityTest
 
                 if (finderCount == 3)
                 {
-                    await Assert.That(scalarFound).IsTrue().Because($"3-finder scene not detected (seed={seed}, dim={dimension}) — scene generator or finder broken");
+                    await Assert.That(scalarFound).IsTrue().Because($"3-finder scene not detected (seed={seed}, dim={dimension}), scene generator or finder broken");
                 }
             }
         }
@@ -88,7 +88,7 @@ public class FinderPatternFinderParityTest
                     }
                 }
 
-                await Assert.That(scalarFound).IsTrue().Because($"3-finder scene not detected (seed={seed}, dim={dimension}, ppm={ppm}) — scene generator or finder broken");
+                await Assert.That(scalarFound).IsTrue().Because($"3-finder scene not detected (seed={seed}, dim={dimension}, ppm={ppm}), scene generator or finder broken");
             }
         }
     }

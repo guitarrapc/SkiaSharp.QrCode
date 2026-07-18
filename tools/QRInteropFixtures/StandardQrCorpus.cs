@@ -6,7 +6,7 @@ namespace QRInteropFixtures;
 /// The deterministic Standard QR fixture corpus. Cases are chosen to cover every mode
 /// (Numeric / Alphanumeric / Byte) and ECC level, plus capacity boundaries, ECI (UTF-8)
 /// payloads, and the smallest/largest versions. Everything is a fixed literal or a
-/// fixed repetition — no randomness, no timestamps — so regeneration is reproducible.
+/// fixed repetition, no randomness, no timestamps, so regeneration is reproducible.
 /// </summary>
 public static class StandardQrCorpus
 {

@@ -4,7 +4,7 @@ using ZXingCpp;
 namespace QRInteropFixtures;
 
 /// <summary>
-/// Micro QR fixture generator backed by libzint — zxing-cpp's writer is libzint
+/// Micro QR fixture generator backed by libzint, zxing-cpp's writer is libzint
 /// compiled into the pinned ZXingCpp native binary, so this is a zint-lineage
 /// ENCODER (independent of both SkiaSharp.QrCode and the zxing-cpp reader used
 /// as the sanity gate) with no external toolchain. Capability verified by
@@ -35,7 +35,7 @@ public sealed class ZintMicroQRFixtureGenerator : IMicroQRFixtureGenerator
 
     public GeneratedFixture Generate(MicroQRFixtureCaseDefinition caseDefinition)
     {
-        // M1 has no selectable ECC level (error detection only) — pin the version
+        // M1 has no selectable ECC level (error detection only), pin the version
         // and let libzint apply the implicit level.
         var options = caseDefinition.ErrorCorrectionLevel == "ErrorDetectionOnly"
             ? $"version={caseDefinition.Version}"

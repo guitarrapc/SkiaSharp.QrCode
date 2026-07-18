@@ -231,7 +231,7 @@ internal static class QRMatrixDecoder
 
     /// <summary>
     /// Distributes interleaved codewords into per-block contiguous [data | ecc]
-    /// layout — the exact inverse of <see cref="BinaryEncoders.BinaryInterleaver.InterleaveCodewords"/>.
+    /// layout, the exact inverse of <see cref="BinaryEncoders.BinaryInterleaver.InterleaveCodewords"/>.
     /// </summary>
     private static void DeinterleaveCodewords(ReadOnlySpan<byte> interleaved, Span<byte> blocks, in ECCInfo eccInfo)
     {

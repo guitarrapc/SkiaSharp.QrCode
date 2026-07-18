@@ -124,7 +124,7 @@ public class QRCodeData
     // - 8.7x smaller per-instance allocation (34,225 -> 3,944 bytes at v40/qz4),
     //   which was essentially 100% of CreateQrCode's allocation.
     // - _bits IS the serialization payload, so GetRawData collapses to
-    //   header + copy (~800x) and deserialization to the mirror copy — the
+    //   header + copy (~800x) and deserialization to the mirror copy, the
     //   previous implementation round-tripped through a byte-per-module
     //   temporary (a ~31 KB stackalloc at v40).
     // - The cost is one shift+mask per indexer read (~+45% on a raw
@@ -176,7 +176,7 @@ public class QRCodeData
     /// <remarks>
     /// Quiet zone positions always read false (the quiet zone is light by
     /// definition and is not stored). The internal setter only accepts core
-    /// positions — quiet zone modules cannot be modified.
+    /// positions, quiet zone modules cannot be modified.
     /// </remarks>
     public bool this[int row, int col]
     {
@@ -246,7 +246,7 @@ public class QRCodeData
     /// Data format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
     /// </para>
     /// <para>
-    /// The quiet zone (white border) can be added during deserialization by specifying the <paramref name="quietZoneSize"/> parameter. 
+    /// The quiet zone (white border) can be added during deserialization by specifying the <paramref name="quietZoneSize"/> parameter.
     /// </para>
     /// </remarks>
     /// <param name="rawData">The serialized QR code data. This data should be obtained from <see cref="GetRawData"/>.</param>
@@ -273,7 +273,7 @@ public class QRCodeData
     /// Data format: "QRR" header (3 bytes) + base size (1 byte) + bit-packed module data
     /// </para>
     /// <para>
-    /// The quiet zone (white border) can be added during deserialization by specifying the <paramref name="quietZoneSize"/> parameter. 
+    /// The quiet zone (white border) can be added during deserialization by specifying the <paramref name="quietZoneSize"/> parameter.
     /// </para>
     /// <para>
     /// This overload is useful for high-performance scenarios where you want to deserialize from
@@ -311,7 +311,7 @@ public class QRCodeData
         _size = _baseSize + (_quietZoneSize * 2);
         var coreTotalBits = _baseSize * _baseSize; // core data size (without quiet zone)
 
-        // The payload IS the internal representation — copy it directly.
+        // The payload IS the internal representation, copy it directly.
         var payloadBytes = PayloadBytes(_baseSize);
         var available = rawDataSpan.Length - 4;
         if (available < payloadBytes)
@@ -491,7 +491,7 @@ public class QRCodeData
         // isolate each bit on its byte's diagonal, then OR-cascade down to bit 0
         // so byte k of the ulong becomes module bit (7-k) as 0/1. The gather
         // constants assume little-endian byte order (ulong byte k = memory
-        // offset k); reverse on big-endian targets — the check is a JIT-time
+        // offset k); reverse on big-endian targets, the check is a JIT-time
         // constant, so little-endian codegen is unaffected.
         ref var destRef = ref MemoryMarshal.GetReference(destination);
         var m = 0;
@@ -526,12 +526,12 @@ public class QRCodeData
         if (source.Length != totalModules)
             throw new ArgumentException($"Source span size mismatch: expected {totalModules} bytes (baseSize={_baseSize}), got {source.Length} bytes");
 
-        // The payload bit stream is flat row-major module order — the same
-        // order as the source buffer — so pack 8 modules per byte via the
+        // The payload bit stream is flat row-major module order, the same
+        // order as the source buffer, so pack 8 modules per byte via the
         // MSB multiply-gather (byte k of a ulong of 0/1 bytes lands at bit
         // 56+(7-k) after * 0x8040...01). The gather constant assumes
         // little-endian byte order (source[m+k] = ulong byte k); reverse on
-        // big-endian targets — the check is a JIT-time constant, so
+        // big-endian targets, the check is a JIT-time constant, so
         // little-endian codegen is unaffected.
         ref var srcRef = ref MemoryMarshal.GetReference(source);
         var m = 0;

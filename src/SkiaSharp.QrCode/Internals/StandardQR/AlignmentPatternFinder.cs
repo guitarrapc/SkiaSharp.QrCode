@@ -14,11 +14,11 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 /// </summary>
 /// <remarks>
 /// The scan matches the light-dark-light run triple through the pattern center
-/// (inner ring, center module, inner ring — one module each). Unlike the outer dark
+/// (inner ring, center module, inner ring, one module each). Unlike the outer dark
 /// ring, those three runs are fully owned by the pattern: adjacent dark data
 /// modules can merge with the border ring and stretch its runs, but never touch the
 /// inner ones. Candidates are cross-checked vertically with the same signature.
-/// The search stays inside a small window around the prediction — 1-module runs
+/// The search stays inside a small window around the prediction, 1-module runs
 /// are everywhere in QR data, so an unconstrained search would drown in false
 /// positives. Version 1 symbols have no alignment pattern and callers fall back to
 /// the parallelogram corner estimate.
@@ -368,7 +368,7 @@ internal static class AlignmentPatternFinder
         var refinedY = candidateY + (down - up) / 2f + 0.5f;
 
         // Border-ring check: the light-dark-light core signature also matches any
-        // isolated dark data module (light on all four sides) — extremely common in
+        // isolated dark data module (light on all four sides), extremely common in
         // data areas, and a false positive here shears the whole sampling transform.
         // Only the real pattern has its 5×5 dark border: all eight ring samples at
         // ±2 modules from the center must be dark.

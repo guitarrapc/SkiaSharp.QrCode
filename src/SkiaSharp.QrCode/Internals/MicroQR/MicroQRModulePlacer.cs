@@ -63,7 +63,7 @@ internal static partial class MicroQRModulePlacer
     /// <param name="dataCodewords">Data codewords including padding.</param>
     /// <param name="eccCodewords">Error correction codewords.</param>
     /// <param name="dataBitCount">
-    /// Number of DATA bits to emit — for M1/M3 this stops after the high nibble of
+    /// Number of DATA bits to emit, for M1/M3 this stops after the high nibble of
     /// the final (4-bit) data codeword; its forced-zero low nibble is never placed.
     /// </param>
     public static void PlaceDataCodewords(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount)

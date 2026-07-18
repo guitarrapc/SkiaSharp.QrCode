@@ -54,7 +54,7 @@ public class QRCodeRendererRunMergeParityTest
         // Axis-preserving transforms (translation/scale) keep both paths
         // pixel-identical: they compute the same edge coordinates and rasterize
         // without antialiasing. Rotation is intentionally outside the parity
-        // guarantee — non-axis-aligned rasterization rounds shared edges at
+        // guarantee, non-axis-aligned rasterization rounds shared edges at
         // sub-pixel level, which affects per-module drawing between adjacent
         // modules just the same (measured ~0.003% of pixels at 7-30 degrees).
         var qr = QRCodeGenerator.CreateQrCode("transform-parity", ECCLevel.M);

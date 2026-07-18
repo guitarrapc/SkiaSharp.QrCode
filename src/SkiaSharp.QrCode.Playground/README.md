@@ -33,7 +33,7 @@ same `-o` directory leaves the previous build's fingerprinted files behind; the
 directory" error (two `dotnet.*.js` entry files cannot both be the fallback).
 
 After deleting `obj/` (or on a fresh clone), the **first** publish can emit BOTH the build-phase
-and the relinked publish-phase native bundles — two `dotnet.native.*.wasm` files — and the
+and the relinked publish-phase native bundles, two `dotnet.native.*.wasm` files, and the
 `dotnet.js` fallback may bind the non-relinked one, which fails at runtime with
 `DllNotFoundException: libSkiaSharp`. Delete the output directory and publish a second time
 (warm `obj/`): the output converges to the single relinked bundle.
@@ -61,9 +61,9 @@ re-run its release workflow run. GitHub Pages must be configured with
 The "Performance benchmark" panel generates many unique codes sequentially (content suffixed
 with `#1`, `#2`, …) to demo library throughput under load, in two modes:
 
-- **Encode only** — the zero-allocation `CreateQrCode(text, ecc, Span<byte>)` overload in a
+- **Encode only**, the zero-allocation `CreateQrCode(text, ecc, Span<byte>)` overload in a
   tight loop (pooled text/module buffers, no per-iteration allocation).
-- **Full pipeline** — encode + Skia render + PNG encode with the current visual settings.
+- **Full pipeline**, encode + Skia render + PNG encode with the current visual settings.
 
 The page script chains `BenchmarkBatch` calls sized to ~150ms of wall clock, so progress
 renders and Cancel stays responsive while everything runs single-threaded on the WASM runtime.
@@ -71,5 +71,5 @@ renders and Cancel stays responsive while everything runs single-threaded on the
 ## Share links
 
 The Share button stores the full playground state (compressed with `CompressionStream`,
-base64url) in the URL hash — nothing is sent to a server. Uploaded logo images are excluded
+base64url) in the URL hash, nothing is sent to a server. Uploaded logo images are excluded
 from share links; the link falls back to the built-in logo.

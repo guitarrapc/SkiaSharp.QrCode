@@ -81,7 +81,7 @@ public class MicroQRModulePlacerParityTest
 
     /// <summary>
     /// The scalar-unpack fallback (taken at runtime when SSSE3 is unavailable)
-    /// must match the reference too — on SIMD-capable test machines it is
+    /// must match the reference too, on SIMD-capable test machines it is
     /// exercised through this named internal entry point.
     /// </summary>
     [Test]

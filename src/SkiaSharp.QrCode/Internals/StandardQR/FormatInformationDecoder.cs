@@ -7,7 +7,7 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 /// Inverse of <see cref="QRCodeConstants.GetFormatBits"/>. Instead of running BCH(15,5)
 /// syndrome decoding, the raw 15 bits are matched against all 32 valid masked format
 /// patterns (4 ECC levels × 8 masks) by Hamming distance. BCH(15,5) has minimum
-/// distance 7, so up to 3 bit errors are unambiguously correctable — a candidate is
+/// distance 7, so up to 3 bit errors are unambiguously correctable, a candidate is
 /// accepted only when its distance is ≤ 3 and strictly better than any other.
 /// </remarks>
 internal static class FormatInformationDecoder

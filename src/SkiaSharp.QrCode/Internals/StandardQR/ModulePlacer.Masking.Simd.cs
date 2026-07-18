@@ -21,7 +21,7 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 ///   (2x vpshufb nibble LUT + vpsadbw), accumulated in weight-grouped vector
 ///   accumulators and reduced once per score.
 /// - Three width tiers: 1 ulong per row (size &lt;= 64, versions 1-11), 2-word
-///   SoA (size &lt;= 128, versions 12-29 — the third word would be permanently
+///   SoA (size &lt;= 128, versions 12-29, the third word would be permanently
 ///   zero), 3-word SoA (versions 30-40). SoA storage (w0[]/w1[]/w2[] arrays)
 ///   turns cross-word shifts into vector ops on adjacent word arrays.
 /// - Byte&lt;-&gt;bit edges are native SIMD: packing 0/1 bytes is pcmpeqb+pmovmskb

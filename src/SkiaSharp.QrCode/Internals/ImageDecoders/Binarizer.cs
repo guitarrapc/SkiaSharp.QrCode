@@ -18,7 +18,7 @@ internal static class Binarizer
     /// bin, and QR-like images (long runs of two dominant values) are the worst
     /// case. Reading 8 pixels as one ulong and testing uniformity with a byte
     /// rotation turns a whole uniform group into a single `+= 8`; non-uniform
-    /// groups (module boundaries, photos) fall back to 8 increments — measured
+    /// groups (module boundaries, photos) fall back to 8 increments, measured
     /// ~8-10x on QR-like inputs, break-even to modestly slower on uniform random
     /// noise. The result
     /// is byte-identical either way, and bin order is irrelevant to a histogram,

@@ -185,16 +185,16 @@ const benchResult = document.getElementById('bench-result');
 
 const ECC_OPTIONS = {
   qr: [
-    ['L', 'L — 7%'],
-    ['M', 'M — 15%'],
-    ['Q', 'Q — 25%'],
-    ['H', 'H — 30%'],
+    ['L', 'L, 7%'],
+    ['M', 'M, 15%'],
+    ['Q', 'Q, 25%'],
+    ['H', 'H, 30%'],
   ],
   microqr: [
     ['EDO', 'Error detection only (M1)'],
-    ['L', 'L — 7%'],
-    ['M', 'M — 15%'],
-    ['Q', 'Q — 25% (M4 only)'],
+    ['L', 'L, 7%'],
+    ['M', 'M, 15%'],
+    ['Q', 'Q, 25% (M4 only)'],
   ],
 };
 
@@ -367,7 +367,7 @@ function applyStateToControls(state) {
   try {
     if (typeof state.content === 'string') contentEl.value = state.content;
     if (state.symbology === 'qr' || state.symbology === 'microqr') symbologySelect.value = state.symbology;
-    // Symbology decides the legal ECC / version option sets — rebuild before applying values
+    // Symbology decides the legal ECC / version option sets, rebuild before applying values
     populateEccSelect();
     populateVersionSelect();
     if (state.ecc) eccSelect.value = state.ecc;
@@ -545,7 +545,7 @@ function handleRuntimeDeath() {
   benchRunBtn.disabled = true;
   showToast('The WebAssembly runtime has crashed. Please reload the page to continue.', 'error', 60000);
   generateErrorEl.hidden = false;
-  generateErrorEl.textContent = 'Runtime crashed — please reload the page.';
+  generateErrorEl.textContent = 'Runtime crashed, please reload the page.';
 }
 
 function syncVersionBadge() {
@@ -555,11 +555,11 @@ function syncVersionBadge() {
     if (typeof v === 'string' && v.length > 0 && v !== 'unknown') {
       versionEl.textContent = `v${v}`;
       versionEl.href = RELEASE_TAG_BASE_URL + encodeURIComponent(v);
-      versionEl.setAttribute('aria-label', `Release ${v} — open on GitHub`);
+      versionEl.setAttribute('aria-label', `Release ${v}, open on GitHub`);
       versionEl.hidden = false;
     }
   } catch {
-    /* ignore — older bundles or trimmed exports */
+    /* ignore, older bundles or trimmed exports */
   }
 }
 
@@ -676,10 +676,10 @@ function runVerifyDecode(pngBytes, expectedText) {
     const corrected = result.errorsCorrected > 0 ? ` · ${result.errorsCorrected} codewords corrected` : '';
     decodeVerifyEl.textContent = `✓ Decodes back to the input (self-check${corrected} · ${result.totalMs} ms)`;
   } else if (result.ok) {
-    decodeVerifyEl.textContent = '⚠ Self-check decoded different text — please test-scan this code.';
+    decodeVerifyEl.textContent = '⚠ Self-check decoded different text, please test-scan this code.';
   } else {
     decodeVerifyEl.textContent =
-      `Self-check: ${result.status} — the built-in decoder could not read this styling; a camera app may still scan it.`;
+      `Self-check: ${result.status}, the built-in decoder could not read this styling; a camera app may still scan it.`;
   }
 }
 
@@ -709,7 +709,7 @@ decodeFileEl.addEventListener('change', async () => {
   }
 
   if (!runtimeAlive || !runtimeReady || !exports) {
-    decodeResultEl.textContent = 'The WebAssembly runtime is still loading — try again in a moment.';
+    decodeResultEl.textContent = 'The WebAssembly runtime is still loading, try again in a moment.';
     return;
   }
 
@@ -915,7 +915,7 @@ permalinkBtn.addEventListener('click', async () => {
     if (state.logo.mode === 'custom') {
       // Uploaded image bytes do not fit in a URL; the link falls back to the built-in logo.
       state.logo = { ...state.logo, mode: 'default' };
-      showToast('Uploaded logo images are not included in share links — the link uses the built-in logo instead.', 'info');
+      showToast('Uploaded logo images are not included in share links, the link uses the built-in logo instead.', 'info');
     }
     const hash = await encodeShareState(state);
     const url = `${location.pathname}${location.search}#${hash}`;
@@ -927,7 +927,7 @@ permalinkBtn.addEventListener('click', async () => {
     history.replaceState(null, '', url);
     const copied = await copyTextToClipboard(location.href);
     showToast(
-      copied ? 'Link copied to clipboard.' : 'URL updated — copy from the address bar if clipboard was blocked.',
+      copied ? 'Link copied to clipboard.' : 'URL updated, copy from the address bar if clipboard was blocked.',
       copied ? 'success' : 'info',
     );
   } catch (e) {
@@ -1007,7 +1007,7 @@ async function runBenchmark() {
       meta = result;
 
       benchProgress.value = done;
-      benchResult.textContent = `${done.toLocaleString()} / ${total.toLocaleString()} — ${formatRate(done, wasmMs)}`;
+      benchResult.textContent = `${done.toLocaleString()} / ${total.toLocaleString()}, ${formatRate(done, wasmMs)}`;
 
       // Resize the next batch toward the wall-clock target (bounded so one batch cannot stall the tab).
       const perItem = Math.max(result.elapsedMs / result.count, 0.0001);
@@ -1020,9 +1020,9 @@ async function runBenchmark() {
     if (done > 0 && meta && !benchResult.textContent.startsWith('Failed')) {
       const wallSeconds = ((performance.now() - wallStart) / 1000).toFixed(2);
       const avgMs = wasmMs / done;
-      const prefix = benchCancelled ? `Cancelled — ${done.toLocaleString()} of ${total.toLocaleString()}` : done.toLocaleString();
+      const prefix = benchCancelled ? `Cancelled, ${done.toLocaleString()} of ${total.toLocaleString()}` : done.toLocaleString();
       benchResult.textContent =
-        `${prefix} codes in ${(wasmMs / 1000).toFixed(2)} s of WASM time — ${formatRate(done, wasmMs)} `
+        `${prefix} codes in ${(wasmMs / 1000).toFixed(2)} s of WASM time, ${formatRate(done, wasmMs)} `
         + `(avg ${avgMs >= 1 ? avgMs.toFixed(2) : avgMs.toFixed(3)} ms/code, QR v${meta.qrVersion} ${meta.matrixSize}×${meta.matrixSize}, wall ${wallSeconds} s)`;
     }
   } catch (err) {

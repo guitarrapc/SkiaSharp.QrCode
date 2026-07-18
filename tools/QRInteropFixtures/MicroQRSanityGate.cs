@@ -6,7 +6,7 @@ namespace QRInteropFixtures;
 /// Fixture sanity gate: every generated Micro QR fixture must decode with the
 /// zxing-cpp reader (the only maintained OSS Micro QR decode lineage) before it
 /// is written, so a broken generator cannot poison the committed corpus. The
-/// reader's metadata also supplies the mask pattern for the manifest — an
+/// reader's metadata also supplies the mask pattern for the manifest, an
 /// externally-sourced value, not this library's own reading.
 /// </summary>
 public static class MicroQRSanityGate

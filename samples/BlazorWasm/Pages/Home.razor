@@ -37,9 +37,9 @@
                         <select title="Legal levels depend on the version: M1 is error detection only, M2/M3 allow L and M, M4 adds Q"
                                 @bind="Options.MicroEcc" @bind:after="Regenerate">
                             <option value="@MicroQREccLevel.ErrorDetectionOnly">Error detection only (M1)</option>
-                            <option value="@MicroQREccLevel.L">L — 7%</option>
-                            <option value="@MicroQREccLevel.M">M — 15%</option>
-                            <option value="@MicroQREccLevel.Q">Q — 25% (M4 only)</option>
+                            <option value="@MicroQREccLevel.L">L, 7%</option>
+                            <option value="@MicroQREccLevel.M">M, 15%</option>
+                            <option value="@MicroQREccLevel.Q">Q, 25% (M4 only)</option>
                         </select>
                     </label>
                     <label class="field">
@@ -58,12 +58,12 @@
                 {
                     <label class="field">
                         <span class="field__label">Error correction</span>
-                        <select title="Higher levels survive more damage or overlay — H is recommended with a logo"
+                        <select title="Higher levels survive more damage or overlay, H is recommended with a logo"
                                 @bind="Options.Ecc" @bind:after="Regenerate">
-                            <option value="@ECCLevel.L">L — 7%</option>
-                            <option value="@ECCLevel.M">M — 15%</option>
-                            <option value="@ECCLevel.Q">Q — 25%</option>
-                            <option value="@ECCLevel.H">H — 30%</option>
+                            <option value="@ECCLevel.L">L, 7%</option>
+                            <option value="@ECCLevel.M">M, 15%</option>
+                            <option value="@ECCLevel.Q">Q, 25%</option>
+                            <option value="@ECCLevel.H">H, 30%</option>
                         </select>
                     </label>
                     <label class="field">
@@ -217,7 +217,7 @@
                     </label>
                 }
             </div>
-            <p class="field__hint">A logo covers part of the code — use error correction H and verify the result scans.</p>
+            <p class="field__hint">A logo covers part of the code, use error correction H and verify the result scans.</p>
         </details>
         }
     </div>
@@ -235,7 +235,7 @@
             <div class="preview-actions">
                 <button type="button" class="action-btn" @onclick="DownloadPngAsync">Download PNG</button>
                 <button type="button" class="action-btn" @onclick="DownloadSvgAsync"
-                        title="Vector output — scales to any size without quality loss">Download SVG</button>
+                        title="Vector output, scales to any size without quality loss">Download SVG</button>
             </div>
         </div>
     </div>

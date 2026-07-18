@@ -9,8 +9,8 @@ namespace SkiaSharp.QrCode.Internals.ImageDecoders;
 /// a unit-square-to-quadrilateral transform is built directly from the target quad,
 /// its inverse comes from the adjugate matrix (a projective transform needs no
 /// normalization, so the adjugate substitutes for the true inverse), and
-/// quad-to-quad is the composition of the two. Mild keystone distortion — the
-/// Tier-2 target — is exactly representable; the affine case falls out naturally
+/// quad-to-quad is the composition of the two. Mild keystone distortion, the
+/// Tier-2 target, is exactly representable; the affine case falls out naturally
 /// when the fourth point matches the parallelogram estimate.
 /// </remarks>
 internal readonly struct PerspectiveTransform
@@ -40,7 +40,7 @@ internal readonly struct PerspectiveTransform
         float x0p, float y0p, float x1p, float y1p, float x2p, float y2p, float x3p, float y3p)
     {
         // Composition order follows the element convention of Times (row-vector
-        // application): squareToQuad ∘ quadToSquare — verified by the corner
+        // application): squareToQuad ∘ quadToSquare, verified by the corner
         // correspondence unit tests.
         var quadToSquare = SquareToQuadrilateral(x0, y0, x1, y1, x2, y2, x3, y3).BuildAdjoint();
         var squareToQuad = SquareToQuadrilateral(x0p, y0p, x1p, y1p, x2p, y2p, x3p, y3p);

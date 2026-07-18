@@ -91,7 +91,7 @@ public class QRCodeImageBuilderSvgTest
     public async Task SaveToSvg_BuiltInIconShape_UsesCrispEdges()
     {
         // Built-in icon shapes draw rectangles, bitmaps, and text only, none of
-        // which degrade under crispEdges — the QR modules stay seam-free.
+        // which degrade under crispEdges, the QR modules stay seam-free.
         using var bitmap = new SKBitmap(32, 32);
         using (var canvas = new SKCanvas(bitmap))
         {

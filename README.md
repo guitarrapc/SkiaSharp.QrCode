@@ -16,7 +16,7 @@ SkiaSharp.QrCode provides high-performance QR code generation/read with [SkiaSha
 
 Many existing QR code libraries rely on System.Drawing, which has well-known GDI+ limitations and cross-platform issues. SkiaSharp.QrCode was created to provide high performance, minimum memory allocation, a simpler and more intuitive API while leveraging SkiaSharp's cross-platform capabilities. Generate a QR code in a single line, or customize every detail - the choice is yours.
 
-You can create professional-looking QR codes like this with just a few lines of code:
+You can create professional-looking QR codes like this with just a few lines of code. Here's a small sample of Standard QR and Micro QR.
 
 <p float="left">
   <img src="samples/ConsoleApp/samples/pattern15_instagram_frame.png" width="250" alt="Instagram-style"/>
@@ -24,11 +24,16 @@ You can create professional-looking QR codes like this with just a few lines of 
   <img src="samples/ConsoleApp/samples/pattern7_builder_icon.png" width="250" alt="Icon QR"/>
 </p>
 
+<p float="left">
+  <img src="samples/ConsoleApp/samples/pattern24_microqr_static.png" width="250" alt="MicroQR static"/>
+  <img src="samples/ConsoleApp/samples/pattern25_microqr_styled.png" width="250" alt="MicroQR styled"/>
+</p>
+
 See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these styles.
 
 ## Playground
 
-Try SkiaSharp.QrCode in your browser — no install required: **[SkiaSharp.QrCode Playground](https://guitarrapc.github.io/SkiaSharp.QrCode/)**
+Try SkiaSharp.QrCode in your browser, no install required: **[SkiaSharp.QrCode Playground](https://guitarrapc.github.io/SkiaSharp.QrCode/)**
 
 The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or SVG, or share your settings as a permalink. Every generated code is decoded back in-browser by the library's own decoder as a self-check, and the *Decode an image* panel reads QR codes from your own image files. Source lives in [src/SkiaSharp.QrCode.Playground](src/SkiaSharp.QrCode.Playground); it is deployed to GitHub Pages by [release.yaml](.github/workflows/release.yaml) as part of every release.
 
@@ -48,7 +53,7 @@ SkiaSharp.QrCode is a modern, high-performance QR code generation library built 
 
 ## Supported Symbologies
 
-SkiaSharp.QrCode implements the Standard QR Code symbology and Micro QR generation/decoding. Unless a section says otherwise, this README — generation, decoding, styling, and the specification tables — refers to Standard QR; Micro QR is available via `MicroQRCodeGenerator` / `MicroQRCodeDecoder`.
+SkiaSharp.QrCode implements the Standard QR Code symbology and Micro QR generation/decoding. Unless a section says otherwise, this README refers to Standard QR; Micro QR is available via `MicroQRCodeGenerator` / `MicroQRCodeDecoder`.
 
 | Symbology | Standard | Generate (Encode) | Decode |
 |---|---|---|---|
@@ -235,12 +240,12 @@ Buffer sizes are bounded: version 40 with the standard quiet zone needs 185 × 1
 
 ### QRCodeDecoder (Decoding)
 
-Decodes QR codes back into text — the inverse of `QRCodeGenerator`. Works at two levels:
+Decodes QR codes back into text, the inverse of `QRCodeGenerator`. Works at two levels:
 
 - **Matrix level**: from `QRCodeData` or a byte-per-module span (the same format the zero-allocation generator produces). Full Reed-Solomon error correction included.
 - **Image level**: from `SKBitmap` or a grayscale luminance span. Detects the QR code (arbitrary rotation, mirroring, inverted light-on-dark palettes and mild perspective supported), samples the grid, then decodes.
 
-**Scope**: image decoding targets *clean* inputs — screenshots, rendered QR codes, and scans. Real-world photos with strong perspective, uneven lighting, or blur are out of scope; use a computer-vision grade reader such as ZXing.Net for those. See [Standard QR Decoder](.github/docs/specs/standardqr-decoder.md) for design details.
+**Scope**: image decoding targets *clean* inputs, screenshots, rendered QR codes, and scans. Real-world photos with strong perspective, uneven lighting, or blur are out of scope; use a computer-vision grade reader such as ZXing.Net for those. See [Standard QR Decoder](.github/docs/specs/standardqr-decoder.md) for design details.
 
 ```csharp
 // From QRCodeData (e.g. round-trip validation)
@@ -276,7 +281,7 @@ if (MicroQRCodeDecoder.TryDecode(micro, out var text, out var info))
     Console.WriteLine($"{text} ({info.Version}, ECC {info.EccLevel})"); // 01234567 (M2, ECC L)
 }
 
-// Image scanning is explicitly typed — QRCodeDecoder stays Standard QR-only
+// Image scanning is explicitly typed, QRCodeDecoder stays Standard QR-only
 using var bitmap = SKBitmap.Decode("microqr.png");
 var found = MicroQRCodeDecoder.TryDecode(bitmap, out var scanned, out _);
 ```
@@ -427,11 +432,11 @@ Currently, SkiaSharp.QrCode supports ISO-8859-1 and UTF-8. Other encodings (e.g.
 
 ### Does SVG output require SkiaSharp.Svg or other packages?
 
-No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package — no additional dependencies. Note that SkiaSharp.QrCode outputs SVG only; it does not read or render existing SVG files.
+No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional dependencies. Note that SkiaSharp.QrCode outputs SVG only; it does not read or render existing SVG files.
 
 ### Any plan to support QR code scanning?
 
-Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#qrcodedecoder-decoding)). Image decoding intentionally targets clean inputs: screenshots, rendered QR codes, and scans, including rotated and mirrored ones. Robust decoding of real-world photos (perspective distortion, uneven lighting, blur) is a computer-vision problem outside this library's scope — use a dedicated reader such as ZXing.Net for camera captures.
+Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#qrcodedecoder-decoding)). Image decoding intentionally targets clean inputs: screenshots, rendered QR codes, and scans, including rotated and mirrored ones. Robust decoding of real-world photos (perspective distortion, uneven lighting, blur) is a computer-vision problem outside this library's scope, use a dedicated reader such as ZXing.Net for camera captures.
 
 ### Does it support Micro QR or rMQR?
 
@@ -446,7 +451,7 @@ var ok = MicroQRCodeDecoder.TryDecode(data, out var text, out var info);
 // ok == true, text == "01234567", info.Version == MicroQRVersion.M2
 ```
 
-Micro QR images are rendered with `MicroQRCodeImageBuilder` (PNG/JPEG/WEBP/SVG, colors, module shapes, gradients — no icon overlay or finder styling, which Micro QR's single finder and small ECC headroom cannot afford), and scanned back with `MicroQRCodeDecoder.TryDecode(SKBitmap, ...)`:
+Micro QR images are rendered with `MicroQRCodeImageBuilder` (PNG/JPEG/WEBP/SVG, colors, module shapes, gradients, no icon overlay or finder styling, which Micro QR's single finder and small ECC headroom cannot afford), and scanned back with `MicroQRCodeDecoder.TryDecode(SKBitmap, ...)`:
 
 ```csharp
 // Render: spec-default 2-module quiet zone, same fluent surface as QRCodeImageBuilder
@@ -541,7 +546,9 @@ See [Data Capacity Reference](docs/data-capacity.md) for practical capacities an
 
 ## Usage Examples
 
-### Basic Usage
+Each symbology has its own API surface, see [Supported Symbologies](#supported-symbologies). Examples below are grouped by symbology.
+
+### Standard QR
 
 #### Using Builder Pattern
 
@@ -571,7 +578,7 @@ new QRCodeImageBuilder("https://example.com")
 
 #### Raster Output (PNG / JPEG / WebP)
 
-Default format is PNG. Switch with `WithFormat()` — quality (0–100) applies to lossy formats (JPEG, WebP).
+Default format is PNG. Switch with `WithFormat()`, quality (0–100) applies to lossy formats (JPEG, WebP).
 
 ```csharp
 using SkiaSharp;
@@ -601,7 +608,7 @@ var bytes = QRCodeImageBuilder.GetImageBytes(
 
 #### SVG Output (Vector)
 
-SVG output draws the QR code as vector shapes, so it scales to any size without quality loss — ideal for print and web embedding. All builder options (colors, module shapes, gradients, finder patterns, icons) apply to SVG as well.
+SVG output draws the QR code as vector shapes, so it scales to any size without quality loss, ideal for print and web embedding. All builder options (colors, module shapes, gradients, finder patterns, icons) apply to SVG as well.
 
 ```csharp
 using SkiaSharp;
@@ -677,9 +684,7 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 var pngBytes = qrCode.ToByteArray();
 ```
 
-### Advanced Usage
-
-#### Request Veresion
+#### Request Version
 
 "abc" can fit in Version 1, but we request Version 10 to show more dots. This can be useful for adding logo with short content.
 
@@ -794,7 +799,7 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 var pngBytes = qrCode.ToByteArray();
 ```
 
-### Custom Finder Pattern
+#### Custom Finder Pattern
 
 ```csharp
 var qrCode = new QRCodeImageBuilder("https://example.com")
@@ -805,7 +810,7 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 var pngBytes = qrCode.ToByteArray();
 ```
 
-### Gradient QR Code
+#### Gradient QR Code
 
 ```csharp
 var instagramGradient = new GradientOptions([
@@ -853,6 +858,58 @@ using var image = surface.Snapshot();
 using var data = image.Encode(SKEncodedImageFormat.Png, 100);
 using var stream = File.OpenWrite("qrcode.png");
 data.SaveTo(stream);
+```
+
+### Micro QR
+
+`MicroQRCodeGenerator`, `MicroQRCodeImageBuilder`, and `MicroQRCodeDecoder`, version/ECC constraints and capacity in the [FAQ](#does-it-support-micro-qr-or-rmqr). Runnable samples: [ConsoleApp patterns 24–26](samples/ConsoleApp).
+
+#### One-liner (PNG)
+
+```csharp
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
+// ISO/IEC 18004 M2-L numeric example, auto-selects the smallest version that fits
+var pngBytes = MicroQRCodeImageBuilder.GetPngBytes("01234567", MicroQREccLevel.L, size: 256);
+File.WriteAllBytes("microqr.png", pngBytes);
+```
+
+#### Builder (colors, module shape, gradient)
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
+var gradient = new GradientOptions(
+    [SKColor.Parse("00B894"), SKColor.Parse("0984E3")],
+    GradientDirection.TopLeftToBottomRight);
+
+var pngBytes = new MicroQRCodeImageBuilder("SKU-42")
+    .WithModulePixelSize(14)
+    .WithErrorCorrection(MicroQREccLevel.M)
+    .WithColors(codeColor: SKColor.Parse("2D3436"), backgroundColor: SKColors.White)
+    .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.92f)
+    .WithGradient(gradient)
+    .ToByteArray();
+```
+
+#### Decode (matrix and image)
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode;
+
+var micro = MicroQRCodeGenerator.CreateMicroQRCode("01234567", MicroQREccLevel.L);
+if (MicroQRCodeDecoder.TryDecode(micro, out var text, out var info))
+{
+    Console.WriteLine($"{text} ({info.Version}, ECC {info.EccLevel})"); // 01234567 (M2, ECC L)
+}
+
+// Image scan, use MicroQRCodeDecoder (QRCodeDecoder is Standard QR-only)
+using var bitmap = SKBitmap.Decode("microqr.png");
+var ok = MicroQRCodeDecoder.TryDecode(bitmap, out var scanned, out _);
 ```
 
 

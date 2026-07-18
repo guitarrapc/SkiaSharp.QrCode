@@ -1,6 +1,6 @@
 # QR Symbology Architecture
 
-Design record for supporting multiple QR symbologies — Standard QR (ISO/IEC 18004), Micro QR (ISO/IEC 18004), and rMQR (ISO/IEC 23941) — in one library. This document defines how the codebase is organized so each symbology can be added without destabilizing the others. Implementation details live in code comments next to the code; the implementation order lives in [the implementation plan](../plans/skiasharp-qrcode-microqr-rmqr-implementation-plan.md).
+Design record for supporting multiple QR symbologies, Standard QR (ISO/IEC 18004), Micro QR (ISO/IEC 18004), and rMQR (ISO/IEC 23941), in one library. This document defines how the codebase is organized so each symbology can be added without destabilizing the others. Implementation details live in code comments next to the code; the implementation order lives in [the implementation plan](../plans/skiasharp-qrcode-microqr-rmqr-implementation-plan.md).
 
 ---
 
@@ -16,13 +16,13 @@ Design record for supporting multiple QR symbologies — Standard QR (ISO/IEC 18
 
 ### Document set
 
-Specs are one set of files per symbology plus this cross-cutting record — see the [documentation index](../README.md) for the file list. Structure and naming rules live in [docs_authoring_guidelines.md](../docs_authoring_guidelines.md); new symbologies copy the section skeleton of the Standard QR document of the same type.
+Specs are one set of files per symbology plus this cross-cutting record, see the [documentation index](../README.md) for the file list. Structure and naming rules live in [docs_authoring_guidelines.md](../docs_authoring_guidelines.md); new symbologies copy the section skeleton of the Standard QR document of the same type.
 
 ### Internal organization
 
 Internals are split into shared primitives and per-symbology pipelines.
 
-**Shared primitives** (`Internals`, `Internals.BinaryEncoders`, `Internals.BinaryDecoders`, `Internals.ImageDecoders`) — knowledge that is identical across all three symbologies:
+**Shared primitives** (`Internals`, `Internals.BinaryEncoders`, `Internals.BinaryDecoders`, `Internals.ImageDecoders`), knowledge that is identical across all three symbologies:
 
 | Component | Why it is shared |
 |---|---|
@@ -34,7 +34,7 @@ Internals are split into shared primitives and per-symbology pipelines.
 | `LuminanceConverter`, `PerspectiveTransform` | Image preprocessing and geometry are symbology-independent |
 | `Point`, `Rectangle` | Plain geometry types |
 
-**Per-symbology pipelines** (`Internals.StandardQr`, later `Internals.MicroQR`, `Internals.RmQr`) — knowledge specific to one symbol format:
+**Per-symbology pipelines** (`Internals.StandardQr`, later `Internals.MicroQR`, `Internals.RmQr`), knowledge specific to one symbol format:
 
 - Capacity / ECC / interleaving tables and version selection
 - Mode indicator and character-count indicator widths
@@ -42,20 +42,20 @@ Internals are split into shared primitives and per-symbology pipelines.
 - Function pattern layout, data module placement, mask patterns and mask scoring
 - Symbol detection and sampling in images
 
-Dependency rule: shared code never references a symbology namespace; symbology namespaces never reference each other. Each symbology pipeline composes the shared primitives. Existing Standard QR code moves under `Internals.StandardQr` unchanged — no behavioral or algorithmic modification accompanies the move.
+Dependency rule: shared code never references a symbology namespace; symbology namespaces never reference each other. Each symbology pipeline composes the shared primitives. Existing Standard QR code moves under `Internals.StandardQr` unchanged, no behavioral or algorithmic modification accompanies the move.
 
-Two detection primitives were lifted from `Internals.StandardQr` to the shared `Internals.ImageDecoders` namespace when Micro QR image detection (Phase 4b) became their second consumer — exactly the trigger this document prescribed:
+Two detection primitives were lifted from `Internals.StandardQr` to the shared `Internals.ImageDecoders` namespace when Micro QR image detection (Phase 4b) became their second consumer, exactly the trigger this document prescribed:
 
-- `Binarizer.ComputeOtsuThreshold` — generic binarization (moved out of `QRImageDecoder`)
-- `FinderPatternFinder` — the 1:1:3:1:1 run-ratio scan and cross-checks; Micro QR uses the same finder pattern shape (single finder instead of three) via `FindCandidates` (all cross-checked candidates), while Standard QR keeps its best-three selection in `TryFind`
+- `Binarizer.ComputeOtsuThreshold`, generic binarization (moved out of `QRImageDecoder`)
+- `FinderPatternFinder`, the 1:1:3:1:1 run-ratio scan and cross-checks; Micro QR uses the same finder pattern shape (single finder instead of three) via `FindCandidates` (all cross-checked candidates), while Standard QR keeps its best-three selection in `TryFind`
 
 ### Public API direction
 
-Each symbology gets its own generator entry point with symbology-typed version and error-correction parameters. `QRCodeGenerator.CreateQrCode` and its overloads remain unchanged — Standard QR users see no difference.
+Each symbology gets its own generator entry point with symbology-typed version and error-correction parameters. `QRCodeGenerator.CreateQrCode` and its overloads remain unchanged, Standard QR users see no difference.
 
 Decoding: matrix-level entry points are symbology-explicit (matrix size alone distinguishes Micro QR 11–17 from Standard 21–177, but rectangular input needs width/height). Image-level decoding keeps Standard-QR-only scanning as the default; additional symbologies are opt-in so the existing detection hot path keeps its performance characteristics.
 
-Image builders: one builder per symbology, all deriving from `QRCodeImageBuilderBase<TSelf>` (self-referential generic, so fluent chains keep the concrete type). The base carries every shared option and the complete raster/SVG output surface; a symbology builder adds only its typed options (ECC/version) and connects its data model through three `private protected` hooks. Two guards keep the surfaces from drifting: the base class makes output-method omissions structurally impossible, and `QrImageBuilderApiParityTest` (reflection over the public surfaces with a documented allowed-difference list) catches asymmetry in what cannot be shared — the symbology-typed static helpers. The rMQR builder extends the same base and the same parity test.
+Image builders: one builder per symbology, all deriving from `QRCodeImageBuilderBase<TSelf>` (self-referential generic, so fluent chains keep the concrete type). The base carries every shared option and the complete raster/SVG output surface; a symbology builder adds only its typed options (ECC/version) and connects its data model through three `private protected` hooks. Two guards keep the surfaces from drifting: the base class makes output-method omissions structurally impossible, and `QrImageBuilderApiParityTest` (reflection over the public surfaces with a documented allowed-difference list) catches asymmetry in what cannot be shared, the symbology-typed static helpers. The rMQR builder extends the same base and the same parity test.
 
 Exact API names and shapes are finalized per-symbology at implementation time, spec-first, following the API-driven development principle in [DESIGN.md](../DESIGN.md).
 
@@ -81,7 +81,7 @@ Overloading one method family with union-typed parameters would make illegal com
 
 ### Why sibling namespaces instead of a polymorphic abstraction
 
-The Standard QR pipeline is heavily performance-tuned (zero-allocation steady state, SIMD kernels, stackalloc buffers, aggressive inlining). A shared abstraction over the pipeline stages (virtual dispatch, interface indirection, or generic strategy types) would put abstraction cost on the hot path and couple all symbologies to one pipeline shape — even though their stages genuinely differ (e.g. rMQR has no mask selection, Micro QR has no interleaving for most versions, format information differs in size, location, and BCH code).
+The Standard QR pipeline is heavily performance-tuned (zero-allocation steady state, SIMD kernels, stackalloc buffers, aggressive inlining). A shared abstraction over the pipeline stages (virtual dispatch, interface indirection, or generic strategy types) would put abstraction cost on the hot path and couple all symbologies to one pipeline shape, even though their stages genuinely differ (e.g. rMQR has no mask selection, Micro QR has no interleaving for most versions, format information differs in size, location, and BCH code).
 
 Sibling namespaces bound the blast radius instead: a Micro QR change cannot touch Standard QR code paths. The regression guard is structural (namespace dependency rule) plus empirical (Standard QR benchmarks must stay flat through every phase).
 
@@ -99,11 +99,11 @@ The library does not implement Kanji segments for Standard QR today (detected an
 |---|---|---|
 | Kanji mode (all symbologies) | Deferred; tables keep the column | User demand or decoder interop need |
 | Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR scanning is its own explicitly-typed entry (`MicroQRCodeDecoder`) | rMQR image detection API |
-| Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) | — |
+| Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) | - |
 | `QRCodeData` | Frozen for Standard QR | Never (compatibility contract) |
 
 ## Lessons learned
 
-- ZXing.Net (the in-CI cross-validation oracle for Standard QR) cannot decode Micro QR or rMQR, so in-CI cross-verification is unavailable for the new symbologies. Committed external fixtures are the primary conformance oracle instead — see the [test strategy](../plans/skiasharp-qrcode-microqr-rmqr-test-strategy.md).
+- ZXing.Net (the in-CI cross-validation oracle for Standard QR) cannot decode Micro QR or rMQR, so in-CI cross-verification is unavailable for the new symbologies. Committed external fixtures are the primary conformance oracle instead, see the [test strategy](../plans/skiasharp-qrcode-microqr-rmqr-test-strategy.md).
 - `EncodingModeExtensions.GetCountIndicatorLength` looked shared but encodes Standard QR's version thresholds (10/27); Micro QR and rMQR define their own indicator-width tables. The enum is shared; the width logic is per-symbology.
-- The character-class predicates and alphanumeric encoding values (`IsNumeric`, `IsAlphanumeric`, `GetAlphanumericValue`, `IsValidISO88591`) lived inside the Standard QR constants class, so `TextAnalyzer` (shared) silently depended on the Standard QR table class. Applying the namespace dependency rule surfaced this immediately; the predicates now live in shared `CharacterSets` — the alphabets are identical across ISO/IEC 18004 and ISO/IEC 23941.
+- The character-class predicates and alphanumeric encoding values (`IsNumeric`, `IsAlphanumeric`, `GetAlphanumericValue`, `IsValidISO88591`) lived inside the Standard QR constants class, so `TextAnalyzer` (shared) silently depended on the Standard QR table class. Applying the namespace dependency rule surfaced this immediately; the predicates now live in shared `CharacterSets`, the alphabets are identical across ISO/IEC 18004 and ISO/IEC 23941.

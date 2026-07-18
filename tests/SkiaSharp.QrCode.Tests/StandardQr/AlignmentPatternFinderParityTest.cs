@@ -39,7 +39,7 @@ public class AlignmentPatternFinderParityTest
                     }
                     if (include)
                     {
-                        await Assert.That(scalarFound).IsTrue().Because($"pattern not found at all (seed={seed}, offset={offset}) — scene generator or finder broken");
+                        await Assert.That(scalarFound).IsTrue().Because($"pattern not found at all (seed={seed}, offset={offset}), scene generator or finder broken");
                     }
                 }
             }
@@ -97,7 +97,7 @@ public class AlignmentPatternFinderParityTest
 
     /// <summary>
     /// QR-like scene: white background, ~45% random dark modules (isolated dark
-    /// modules included — the false candidates), optional 5×5 alignment pattern
+    /// modules included, the false candidates), optional 5×5 alignment pattern
     /// at prediction + offset with a guard zone keeping exactly one true match.
     /// </summary>
     private static byte[] BuildScene(int ppm, bool includePattern, int offsetModules, int seed, out int size, out float expectedX, out float expectedY)

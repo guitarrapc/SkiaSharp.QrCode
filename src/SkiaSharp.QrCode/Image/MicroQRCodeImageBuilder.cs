@@ -358,6 +358,6 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
         QRCodeRenderer.Render(canvas, contentRect, (MicroQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions);
     }
 
-    /// <summary>Micro QR has no finder styling or icon overlays — no extra antialiasing conditions.</summary>
+    /// <summary>Micro QR has no finder styling or icon overlays, no extra antialiasing conditions.</summary>
     private protected override bool UseCrispEdgesCore() => true;
 }

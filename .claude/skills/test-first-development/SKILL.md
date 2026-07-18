@@ -41,9 +41,9 @@ All tests must pass on both target frameworks (`net8.0` and `net10.0`) before pr
 
 ### 4. Add Regression Tests
 
-For bug fixes, the test written in Step 1 often doubles as the regression test. If Step 1 already covers the fix scenario, you do not need a separate test — but verify it matches the pattern below. For new features, add edge-case tests beyond the initial happy-path test from Step 1.
+For bug fixes, the test written in Step 1 often doubles as the regression test. If Step 1 already covers the fix scenario, you do not need a separate test, but verify it matches the pattern below. For new features, add edge-case tests beyond the initial happy-path test from Step 1.
 
-**When fixing classification or heuristic logic bugs**: Step 1 writes the single failing test that reproduces the bug. After the fix passes (Step 2), add the remaining equivalence-class tests HERE in Step 4 — not in Step 1. This keeps the red-green cycle tight while still achieving full class coverage.
+**When fixing classification or heuristic logic bugs**: Step 1 writes the single failing test that reproduces the bug. After the fix passes (Step 2), add the remaining equivalence-class tests HERE in Step 4, not in Step 1. This keeps the red-green cycle tight while still achieving full class coverage.
 
 Regression test patterns by change type:
 
@@ -121,7 +121,7 @@ The library exposes `InternalsVisibleTo` for this assembly, so internal encode/d
 
 ### Running tests (TUnit)
 
-**This project uses TUnit. Always use `--treenode-filter` — do NOT use `dotnet test --filter` (that is xUnit/MSTest syntax and will not work).**
+**This project uses TUnit. Always use `--treenode-filter`, do NOT use `dotnet test --filter` (that is xUnit/MSTest syntax and will not work).**
 
 ```shell
 # Run all tests in a class
@@ -147,7 +147,7 @@ Tests run on both `net8.0` and `net10.0`; a SIMD-only code path may pass on one 
 
 - **`[Arguments(...)]`**: Inline parameterized cases for small inputs (encoding modes, ECC levels, short strings).
 - **`[MethodDataSource(nameof(...))]`**: Enumerate version/level combinations or structural edge cases (see `BinaryInterleaverParityTest.AllVersionLevelCombinations`).
-- **Golden pixels**: `testdata/pixels/` — SHA-256 hashes of rendered PNG output (`QRCodeVisualCompatibilityTest`). Regenerate only when the visual change is intentional; commit updated `.pixels` files with the PR.
+- **Golden pixels**: `testdata/pixels/`, SHA-256 hashes of rendered PNG output (`QRCodeVisualCompatibilityTest`). Regenerate only when the visual change is intentional; commit updated `.pixels` files with the PR.
 - **Synthetic scenes**: Build in-test for decoder geometry (finder patterns, alignment grids) rather than checking in large binary fixtures.
 
 ### Assertions
@@ -166,7 +166,7 @@ Use `IsEqualTo` for scalars and strings; use `IsEquivalentTo` for collections an
 
 ### Line endings
 
-Source and test files use CRLF on Windows checkout. Bulk `sed`/`perl` edits anchored on `\n` may silently fail against CRLF files — verify with `grep` after mechanical edits.
+Source and test files use CRLF on Windows checkout. Bulk `sed`/`perl` edits anchored on `\n` may silently fail against CRLF files, verify with `grep` after mechanical edits.
 
 ## Playground (`src/SkiaSharp.QrCode.Playground`)
 
@@ -187,19 +187,19 @@ dotnet publish src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.cspro
 ```
 
 2. **Serve** `publish/playground/wwwroot` and manually verify encode, decode preview, benchmark panel, and share-link round-trip.
-3. **CI**: The `build-playground` job in `.github/workflows/build.yaml` publishes Release without AOT on every PR — ensure it stays green.
+3. **CI**: The `build-playground` job in `.github/workflows/build.yaml` publishes Release without AOT on every PR, ensure it stays green.
 
 Publish to a **clean output directory** each time; re-publishing into the same `-o` folder leaves stale fingerprinted assets and can break the build.
 
-Do not pass `-r browser-wasm` on the CLI — it propagates to the multi-targeted library and requires the `wasm-tools-net8` workload.
+Do not pass `-r browser-wasm` on the CLI, it propagates to the multi-targeted library and requires the `wasm-tools-net8` workload.
 
 ## Test Design Guardrails
 
 - Prefer black-box tests through the public API (`QRCodeGenerator`, `QRCodeDecoder`, `QRCodeImageBuilder`) for integration behavior.
-- Use `InternalsVisibleTo` and internal types for unit/parity tests of encode/decode kernels where the public surface is too coarse — this is an established pattern in this repo.
+- Use `InternalsVisibleTo` and internal types for unit/parity tests of encode/decode kernels where the public surface is too coarse, this is an established pattern in this repo.
 - Do not use reflection to invoke private methods; test through named internal entry points (`TryFindScalar`, parity reference helpers) instead.
 - Cross-validate decoder changes with ZXing.Net (`QRCodeDecoderZXingCrossTest`) when the bug is about accepting externally generated symbols.
-- Round-trip tests (`QRCodeDecoderRoundTripTest`) are the primary guard for encoder+decoder consistency — extend them when adding encoding modes or ECI handling.
+- Round-trip tests (`QRCodeDecoderRoundTripTest`) are the primary guard for encoder+decoder consistency, extend them when adding encoding modes or ECI handling.
 - Avoid tests whose only assertion is that a private helper returns a constant; test the observable matrix, decode result, or rendered output.
 
 ## Classification Logic: Equivalence Class Coverage
@@ -212,7 +212,7 @@ When implementing or modifying **classification/decision logic** (version select
 2. **Build a truth table** of variable combinations that make each branch true/false. Each combination is an equivalence class.
 3. **Write at least one test per class**, with priority on:
    - Cases where the condition is true AND should be true (true positive)
-   - Cases where the condition is true BUT should be false (false positive — **these are the most commonly missed**)
+   - Cases where the condition is true BUT should be false (false positive, **these are the most commonly missed**)
    - Cases where the condition is false AND should be false (true negative)
    - Cases where the condition is false BUT should be true (false negative)
 4. **For decode acceptance rules**: include negative cases (inputs that must **not** decode successfully) equal to or greater in count than positive cases. False decodes erode trust more than false rejections.
@@ -228,7 +228,7 @@ For mask evaluation that picks the lowest penalty among patterns 0–7:
 | Single mask eligible (others invalid) | That mask selected | Edge matrix from `ModulePlacerMaskPackedParityTest` patterns |
 | Invalid mask bits in format info | Decode fails or status ≠ Success | Corrupted format region |
 
-The **false positive** rows — inputs where a naive heuristic would pick the wrong mask or accept corrupt format data — are the ones most likely to be missed.
+The **false positive** rows, inputs where a naive heuristic would pick the wrong mask or accept corrupt format data, are the ones most likely to be missed.
 
 ### When to Apply
 

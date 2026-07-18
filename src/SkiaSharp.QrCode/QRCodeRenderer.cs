@@ -76,7 +76,7 @@ public static class QRCodeRenderer
 
         // Draw regular modules (exclude finder patterns when a custom shape draws them).
         // Full-cell rectangles with antialiasing off touch exactly, so horizontal runs
-        // of dark modules collapse into single rects — far fewer native draw calls.
+        // of dark modules collapse into single rects, far fewer native draw calls.
         var skipFinderPatterns = finderPatternShape is not null;
         if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
         {
@@ -345,7 +345,7 @@ public static class QRCodeRenderer
     /// (<see cref="RectangleModuleShape.RequiresAntialiasing"/> is false), and
     /// merging is pixel-identical to per-module drawing. The parity holds under
     /// axis-preserving canvas transforms (translation/scale); rotated canvases may
-    /// rasterize shared edges hairline-differently at sub-pixel level — inherent to
+    /// rasterize shared edges hairline-differently at sub-pixel level, inherent to
     /// non-axis-aligned rasterization, which affects per-module drawing between
     /// adjacent modules just the same.
     /// </summary>

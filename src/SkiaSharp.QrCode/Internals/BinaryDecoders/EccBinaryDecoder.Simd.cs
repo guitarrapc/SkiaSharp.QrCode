@@ -8,7 +8,7 @@ namespace SkiaSharp.QrCode.Internals.BinaryDecoders;
 
 /// <summary>
 /// GFNI syndrome kernel: all ≤30 syndrome accumulators live in one 256-bit register,
-/// so every data byte updates every syndrome with one gf2p8mulb — replacing up to 30
+/// so every data byte updates every syndrome with one gf2p8mulb, replacing up to 30
 /// scalar GF multiplies per byte (measured ~114x on a version 40 block).
 /// </summary>
 /// <remarks>

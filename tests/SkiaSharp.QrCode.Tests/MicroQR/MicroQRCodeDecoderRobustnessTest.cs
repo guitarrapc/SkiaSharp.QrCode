@@ -10,7 +10,7 @@ namespace SkiaSharp.QrCode.Tests;
 /// <item>t &lt; errors ≤ ⌊ecc/2⌋ → Reed-Solomon could correct, but the capacity
 /// cap must reject (misdecode-protection codewords p; the false-positive class)</item>
 /// <item>errors &gt; ⌊ecc/2⌋ → Reed-Solomon itself fails</item>
-/// <item>M1 (t = 0): any data error must be rejected — error detection only</item>
+/// <item>M1 (t = 0): any data error must be rejected, error detection only</item>
 /// </list>
 /// Plus format-information damage and cross-symbology rejection (a Micro QR
 /// matrix presented to the Standard QR decoder and vice versa).
