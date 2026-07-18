@@ -53,7 +53,7 @@ SkiaSharp.QrCode implements the Standard QR Code symbology and Micro QR generati
 | Symbology | Standard | Generate (Encode) | Decode |
 |---|---|---|---|
 | Standard QR (versions 1–40) | ISO/IEC 18004 | ✅ | ✅ |
-| Micro QR (M1–M4) | ISO/IEC 18004 | ✅ | ✅ (matrix + image) |
+| Micro QR (M1–M4) | ISO/IEC 18004 | ✅ | ✅ |
 | rMQR (R7x43–R17x139) | ISO/IEC 23941 | NO | NO |
 
 See the [FAQ](#does-it-support-micro-qr-or-rmqr) for the Micro QR / rMQR status.
