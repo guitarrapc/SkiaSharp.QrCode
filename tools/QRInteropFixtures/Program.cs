@@ -1,11 +1,11 @@
-using QrInteropFixtures;
+using QRInteropFixtures;
 
 // Regenerates the committed fixture corpus under tests/SkiaSharp.QrCode.Tests/Fixtures/.
 // Fixtures are produced by external (non-SkiaSharp.QrCode) encoders so the corpus can
 // serve as an independent conformance oracle. See
 // .github/docs/specs/qrcode-test-fixtures.md for the format and the oracle matrix.
 //
-// Usage: dotnet run --project tools/QrInteropFixtures -- regenerate
+// Usage: dotnet run --project tools/QRInteropFixtures -- regenerate
 
 var command = args.Length == 0 ? "regenerate" : args[0];
 if (command == "spot-check-microqr")
@@ -20,7 +20,7 @@ if (command == "probe-creator")
 }
 if (command != "regenerate")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QrInteropFixtures -- [regenerate|spot-check-microqr|probe-creator]");
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|spot-check-microqr|probe-creator]");
     return 1;
 }
 
@@ -75,7 +75,7 @@ foreach (var generator in microGenerators)
 {
     if (!generator.IsAvailable)
     {
-        Console.WriteLine($"skip: {generator.Name} (not available on this machine; see tools/QrInteropFixtures/get-qrtool.ps1 for the qrtool binary)");
+        Console.WriteLine($"skip: {generator.Name} (not available on this machine; see tools/QRInteropFixtures/get-qrtool.ps1 for the qrtool binary)");
         continue;
     }
 

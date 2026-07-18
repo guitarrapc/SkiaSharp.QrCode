@@ -4,7 +4,7 @@ using ZXing;
 using ZXing.QrCode.Internal;
 using ZXingEncoder = ZXing.QrCode.Internal.Encoder;
 
-namespace QrInteropFixtures;
+namespace QRInteropFixtures;
 
 /// <summary>
 /// Fixture generator backed by ZXing.Net's Standard QR encoder

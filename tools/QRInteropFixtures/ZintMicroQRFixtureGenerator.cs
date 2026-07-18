@@ -1,7 +1,7 @@
 using System.Text;
 using ZXingCpp;
 
-namespace QrInteropFixtures;
+namespace QRInteropFixtures;
 
 /// <summary>
 /// Micro QR fixture generator backed by libzint — zxing-cpp's writer is libzint

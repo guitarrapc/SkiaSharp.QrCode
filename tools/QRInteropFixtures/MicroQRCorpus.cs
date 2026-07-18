@@ -1,4 +1,4 @@
-namespace QrInteropFixtures;
+namespace QRInteropFixtures;
 
 /// <summary>
 /// The Micro QR fixture corpus: every version × legal ECC combination, every

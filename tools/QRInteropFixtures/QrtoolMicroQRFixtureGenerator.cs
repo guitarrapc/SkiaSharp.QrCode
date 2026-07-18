@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace QrInteropFixtures;
+namespace QRInteropFixtures;
 
 /// <summary>
 /// Micro QR fixture generator backed by the Rust <c>qrtool</c> CLI (which builds
@@ -19,7 +19,7 @@ public sealed class QrtoolMicroQRFixtureGenerator : IMicroQRFixtureGenerator
 
     public QrtoolMicroQRFixtureGenerator(string repoRoot)
     {
-        var root = Path.Combine(repoRoot, "tools", "QrInteropFixtures", "external", "qrtool");
+        var root = Path.Combine(repoRoot, "tools", "QRInteropFixtures", "external", "qrtool");
         if (Directory.Exists(root))
         {
             _exePath = Directory.EnumerateFiles(root, "qrtool.exe", SearchOption.AllDirectories).FirstOrDefault()

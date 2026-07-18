@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace QrInteropFixtures;
+namespace QRInteropFixtures;
 
 /// <summary>
 /// The deterministic Standard QR fixture corpus. Cases are chosen to cover every mode

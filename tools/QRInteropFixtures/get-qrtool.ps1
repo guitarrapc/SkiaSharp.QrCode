@@ -6,7 +6,7 @@
 # The checksum below is taken from the release's official sha256sums.txt and
 # re-pinned here so a re-tagged release cannot silently change the oracle.
 #
-# Usage: pwsh tools/QrInteropFixtures/get-qrtool.ps1
+# Usage: pwsh tools/QRInteropFixtures/get-qrtool.ps1
 
 $ErrorActionPreference = 'Stop'
 

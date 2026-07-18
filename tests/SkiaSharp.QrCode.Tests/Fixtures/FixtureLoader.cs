@@ -4,7 +4,7 @@ namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
 /// Manifest for one committed fixture case (case-name.json), produced by
-/// tools/QrInteropFixtures. Schema is documented in
+/// tools/QRInteropFixtures. Schema is documented in
 /// .github/docs/specs/qrcode-test-fixtures.md.
 /// </summary>
 public sealed record FixtureManifest

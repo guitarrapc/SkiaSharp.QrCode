@@ -1,6 +1,6 @@
 using SkiaSharp;
 
-namespace QrInteropFixtures;
+namespace QRInteropFixtures;
 
 /// <summary>
 /// Renders a core module matrix to a clean black-on-white PNG (fixed quiet zone and

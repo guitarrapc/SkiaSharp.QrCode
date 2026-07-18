@@ -1,6 +1,6 @@
 # QR Test Fixtures
 
-Design record for the committed fixture corpus and its generator (`tools/QrInteropFixtures`): what it is, why it exists, and the external-oracle landscape it draws from. The test strategy behind it lives in [the test strategy plan](../plans/skiasharp-qrcode-microqr-rmqr-test-strategy.md).
+Design record for the committed fixture corpus and its generator (`tools/QRInteropFixtures`): what it is, why it exists, and the external-oracle landscape it draws from. The test strategy behind it lives in [the test strategy plan](../plans/skiasharp-qrcode-microqr-rmqr-test-strategy.md).
 
 ---
 
@@ -59,9 +59,9 @@ Every version × legal ECC combination (M1 detection-only, M2/M3 L+M, M4 L+M+Q),
 
 ```bash
 # qrtool binary (pinned version + SHA-256), one-time per machine:
-pwsh tools/QrInteropFixtures/get-qrtool.ps1
+pwsh tools/QRInteropFixtures/get-qrtool.ps1
 
-dotnet run --project tools/QrInteropFixtures -- regenerate
+dotnet run --project tools/QRInteropFixtures -- regenerate
 ```
 
 The tool wipes and rewrites each available generator's directory. Fixture updates must be committed as an explicit, reviewed change — a generator-version bump that silently alters fixtures is exactly what the corpus is meant to catch.
@@ -73,7 +73,7 @@ Status meaning — **verified**: exercised in this repository; **documented**: c
 | Oracle | Standard QR | Micro QR | rMQR | Status | Notes |
 |---|---|---|---|---|---|
 | ZXing.Net 0.16.11 (NuGet, pinned) | encode + decode | — | — | verified | Fixture generator + `QRCodeDecoderZXingCrossTest`; in-process, no toolchain |
-| [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) (via [ZXingCpp](https://www.nuget.org/packages/ZXingCpp) 0.5.2, pinned) | read + write | read | read | verified | Micro QR reading exercised by `tools/QrInteropFixtures -- spot-check-microqr` against this library's encoder (all versions × ECC, UTF-8) and as the fixture sanity gate. Its reader exposes `Extra("Version"/"EcLevel"/"DataMask")`, which supplies externally-sourced metadata for the Micro QR manifests (note: reports M1's implicit level as "L"). The official .NET wrapper bundles native binaries, so no external toolchain is needed |
+| [zxing-cpp](https://github.com/zxing-cpp/zxing-cpp) (via [ZXingCpp](https://www.nuget.org/packages/ZXingCpp) 0.5.2, pinned) | read + write | read | read | verified | Micro QR reading exercised by `tools/QRInteropFixtures -- spot-check-microqr` against this library's encoder (all versions × ECC, UTF-8) and as the fixture sanity gate. Its reader exposes `Extra("Version"/"EcLevel"/"DataMask")`, which supplies externally-sourced metadata for the Micro QR manifests (note: reports M1's implicit level as "L"). The official .NET wrapper bundles native binaries, so no external toolchain is needed |
 | [Zint](https://zint.org.uk/) (libzint via ZXingCpp `BarcodeCreator`) | encode | encode | encode | verified | zxing-cpp's writer is libzint compiled into the same pinned native binary; Micro QR encoding exercised as a fixture lineage (`Options = "version=N,ecLevel=X"` honored; `ToImage(Scale=1, AddQuietZones=false)` is module-exact). Limits found: rejects UTF-8 Micro QR input ("Invalid UTF-8 in input"), and a Latin-1 payload with diacritics round-tripped transliterated — keep zint-lineage payloads ASCII. As an ENCODER lineage this counts as zint, independent of both this library and the Rust crates |
 | [qrcode2 / qrtool (Rust)](https://docs.rs/qrcode2) | encode | encode | encode | verified | `qrtool` 0.13.2 prebuilt binary pinned by version + SHA-256 (`get-qrtool.ps1`); Micro QR encoding exercised as a fixture lineage (all versions × ECC × modes incl. UTF-8, `--variant micro` with pinned `--symbol-version`/`--error-correction-level`/`--mode`). The `--type ascii` output is module-exact, so no image parsing is involved. M1's detection-only level is requested as `l` (the qrcode crate models it as L) |
 | rmqrcode-python | — | — | encode | claimed | Capability not independently confirmed yet — verify before relying on it |

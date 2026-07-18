@@ -1,4 +1,4 @@
-namespace QrInteropFixtures;
+namespace QRInteropFixtures;
 
 /// <summary>
 /// Input definition of one Micro QR corpus case. Version and ECC are pinned per

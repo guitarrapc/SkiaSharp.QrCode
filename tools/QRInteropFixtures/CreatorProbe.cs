@@ -1,6 +1,6 @@
 using ZXingCpp;
 
-namespace QrInteropFixtures;
+namespace QRInteropFixtures;
 
 /// <summary>
 /// Diagnostic: checks whether the pinned ZXingCpp native build can CREATE

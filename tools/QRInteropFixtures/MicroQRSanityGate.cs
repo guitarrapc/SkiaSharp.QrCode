@@ -1,6 +1,6 @@
 using ZXingCpp;
 
-namespace QrInteropFixtures;
+namespace QRInteropFixtures;
 
 /// <summary>
 /// Fixture sanity gate: every generated Micro QR fixture must decode with the

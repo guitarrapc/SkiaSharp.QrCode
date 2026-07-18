@@ -620,7 +620,7 @@ A dependency upgrade should be reviewed rather than silently changing expected f
 Provide one documented command, for example:
 
 ```bash
-dotnet run --project tools/QrInteropFixtures -- regenerate
+dotnet run --project tools/QRInteropFixtures -- regenerate
 ```
 
 The tool may invoke external executables, containers, or scripts, but its output should be deterministic.

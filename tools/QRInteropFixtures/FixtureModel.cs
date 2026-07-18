@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
 
-namespace QrInteropFixtures;
+namespace QRInteropFixtures;
 
 /// <summary>Input definition of one corpus case, independent of any generator.</summary>
 public sealed record FixtureCaseDefinition(string Id, string PayloadText, string ErrorCorrectionLevel, bool Utf8 = false);
