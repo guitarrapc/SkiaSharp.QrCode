@@ -12,7 +12,7 @@ using System.Text;
 ///   Large : version 40 matrix (~31k modules, per-module draw calls dominated)
 /// each rendered at 512px and 2048px output sizes.
 /// </summary>
-public class QrCodeImageEndToEnd
+public class QRCodeImageEndToEnd
 {
     private QRCodeData _small = default!;
     private QRCodeData _large = default!;

@@ -14,7 +14,7 @@ using System.Text;
 ///   Long_H  : ~1200 chars, version 40-H (81 blocks, max ECC share)
 ///   Image_Url_M : rendered bitmap luminance -> text (binarize + finder detection + sampling)
 /// </summary>
-public class QrCodeDecodeEndToEnd
+public class QRCodeDecodeEndToEnd
 {
     private byte[] _shortModules = default!;
     private int _shortSize;
