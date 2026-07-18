@@ -35,6 +35,22 @@ internal static class MicroQrImageDecoder
     private const int MaxOrientationCandidates = 16;
 
     /// <summary>
+    /// Maximum matrix decode attempts in the arbitrary-orientation failure path
+    /// for one finder candidate. This bounds the multiplicative frame, orientation,
+    /// size, scale and perspective searches while leaving enough for one complete
+    /// orientation frame (all four axis assignments and four symbol sizes), and
+    /// without making the result CPU-speed dependent.
+    /// </summary>
+    private const int MaxArbitraryOrientationDecodeAttempts = 10_000;
+
+    /// <summary>
+    /// Maximum angular-sweep ray length relative to the row-scan module estimate.
+    /// A finder center-to-edge ray is at most 3.5√2 modules; the extra margin
+    /// tolerates pixel quantization and mild perspective.
+    /// </summary>
+    private const float MaxAngularSweepRunModules = 8f;
+
+    /// <summary>
     /// Decodes a Micro QR code from grayscale pixels. Reflectance-reversed symbols
     /// (light modules on a dark background) are handled by one inverted retry when
     /// the normal attempt fails.
@@ -222,6 +238,7 @@ internal static class MicroQrImageDecoder
     {
         Span<OrientationCandidate> orientations = stackalloc OrientationCandidate[MaxOrientationCandidates];
         var orientationCount = FindOrientationCandidates(luminance, width, height, threshold, candidate, orientations);
+        var attemptsRemaining = MaxArbitraryOrientationDecodeAttempts;
 
         for (var frameIndex = 0; frameIndex < orientationCount; frameIndex++)
         {
@@ -242,10 +259,18 @@ internal static class MicroQrImageDecoder
 
                 for (var size = 17; size >= 11; size -= 2)
                 {
+                    if (attemptsRemaining == 0)
+                    {
+                        charsWritten = 0;
+                        info = bestInfo;
+                        return bestStatus;
+                    }
+
                     if (!SymbolFitsImage(originX, originY, uX, uY, vX, vY, size, width, height, samplingSlack))
                         continue;
 
                     SampleGrid(luminance, width, height, threshold, originX, originY, uX, uY, vX, vY, size, modules);
+                    attemptsRemaining--;
                     var status = MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
                     if (status == QRCodeDecodeStatus.Success)
                     {
@@ -254,7 +279,11 @@ internal static class MicroQrImageDecoder
                     }
                     TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
 
+                    if (attemptsRemaining == 0)
+                        continue;
+
                     TransposeInPlace(modules, size);
+                    attemptsRemaining--;
                     var mirroredStatus = MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
                     if (mirroredStatus == QRCodeDecodeStatus.Success)
                     {
@@ -263,11 +292,18 @@ internal static class MicroQrImageDecoder
                     }
                     TrackBestFailure(mirroredStatus, mirroredInfo, ref bestStatus, ref bestInfo);
 
+                    // Scale and perspective searches multiply this affine attempt
+                    // by hundreds. Enter them only after either polarity decoded
+                    // valid format information; wrong grids overwhelmingly fail
+                    // before that point.
+                    if (!IsPlausibleRefinement(status) && !IsPlausibleRefinement(mirroredStatus))
+                        continue;
+
                     var scaledStatus = TryDecodeScaleVariants(
                         luminance, width, height, threshold, candidate,
                         uX, uY, vX, vY, size, modules, destination,
                         out charsWritten, out var scaledInfo,
-                        ref bestStatus, ref bestInfo);
+                        ref bestStatus, ref bestInfo, ref attemptsRemaining);
                     if (scaledStatus == QRCodeDecodeStatus.Success)
                     {
                         info = scaledInfo;
@@ -291,7 +327,8 @@ internal static class MicroQrImageDecoder
                         out charsWritten,
                         out var projectiveInfo,
                         ref bestStatus,
-                        ref bestInfo);
+                        ref bestInfo,
+                        ref attemptsRemaining);
                     if (projectiveStatus == QRCodeDecodeStatus.Success)
                     {
                         info = projectiveInfo;
@@ -326,7 +363,8 @@ internal static class MicroQrImageDecoder
         out int charsWritten,
         out MicroQrCodeDecodeInfo info,
         ref QRCodeDecodeStatus bestStatus,
-        ref MicroQrCodeDecodeInfo bestInfo)
+        ref MicroQrCodeDecodeInfo bestInfo,
+        ref int attemptsRemaining)
     {
         ReadOnlySpan<float> centerOffsets = stackalloc float[] { 0f, -0.5f, 0.5f };
         ReadOnlySpan<float> factors = stackalloc float[] { 0.94f, 0.97f, 1f, 1.03f, 1.06f };
@@ -340,6 +378,13 @@ internal static class MicroQrImageDecoder
                 {
                     foreach (var uFactor in factors)
                     {
+                        if (attemptsRemaining == 0)
+                        {
+                            charsWritten = 0;
+                            info = bestInfo;
+                            return bestStatus;
+                        }
+
                         if (centerXOffset == 0f && centerYOffset == 0f && uFactor == 1f && vFactor == 1f)
                             continue;
 
@@ -356,6 +401,7 @@ internal static class MicroQrImageDecoder
                             continue;
 
                         SampleGrid(luminance, width, height, threshold, originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, modules);
+                        attemptsRemaining--;
                         var status = MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
                         if (status == QRCodeDecodeStatus.Success)
                         {
@@ -364,7 +410,11 @@ internal static class MicroQrImageDecoder
                         }
                         TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
 
+                        if (attemptsRemaining == 0)
+                            continue;
+
                         TransposeInPlace(modules, size);
+                        attemptsRemaining--;
                         var mirroredStatus = MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
                         if (mirroredStatus == QRCodeDecodeStatus.Success)
                         {
@@ -405,7 +455,8 @@ internal static class MicroQrImageDecoder
         out int charsWritten,
         out MicroQrCodeDecodeInfo info,
         ref QRCodeDecodeStatus bestStatus,
-        ref MicroQrCodeDecodeInfo bestInfo)
+        ref MicroQrCodeDecodeInfo bestInfo,
+        ref int attemptsRemaining)
     {
         ReadOnlySpan<float> strengths = stackalloc float[] { -0.12f, -0.08f, -0.04f, -0.02f, 0f, 0.02f, 0.04f, 0.08f, 0.12f };
         for (var pyIndex = 0; pyIndex < strengths.Length; pyIndex++)
@@ -413,6 +464,13 @@ internal static class MicroQrImageDecoder
             var perspectiveY = strengths[pyIndex] / size;
             for (var pxIndex = 0; pxIndex < strengths.Length; pxIndex++)
             {
+                if (attemptsRemaining == 0)
+                {
+                    charsWritten = 0;
+                    info = bestInfo;
+                    return bestStatus;
+                }
+
                 var perspectiveX = strengths[pxIndex] / size;
                 if (perspectiveX == 0f && perspectiveY == 0f)
                     continue; // the affine transform was already tried
@@ -432,6 +490,7 @@ internal static class MicroQrImageDecoder
                     continue;
 
                 QRImageDecoder.SampleGrid(luminance, width, height, threshold, transform, size, modules);
+                attemptsRemaining--;
                 var status = MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
                 if (status == QRCodeDecodeStatus.Success)
                 {
@@ -440,7 +499,11 @@ internal static class MicroQrImageDecoder
                 }
                 TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
 
+                if (attemptsRemaining == 0)
+                    continue;
+
                 TransposeInPlace(modules, size);
+                attemptsRemaining--;
                 var mirroredStatus = MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
                 if (mirroredStatus == QRCodeDecodeStatus.Success)
                 {
@@ -472,13 +535,14 @@ internal static class MicroQrImageDecoder
     {
         Span<float> uSizes = stackalloc float[90];
         Span<float> vSizes = stackalloc float[90];
+        var maxRunLength = candidate.ModuleSize * MaxAngularSweepRunModules;
         for (var degrees = 0; degrees < 90; degrees++)
         {
             var radians = degrees * (Math.PI / 180d);
             var cos = (float)Math.Cos(radians);
             var sin = (float)Math.Sin(radians);
-            var uSize = MeasureAxis(luminance, width, height, threshold, candidate.X, candidate.Y, cos, sin);
-            var vSize = MeasureAxis(luminance, width, height, threshold, candidate.X, candidate.Y, -sin, cos);
+            var uSize = MeasureAxis(luminance, width, height, threshold, candidate.X, candidate.Y, cos, sin, maxRunLength);
+            var vSize = MeasureAxis(luminance, width, height, threshold, candidate.X, candidate.Y, -sin, cos, maxRunLength);
             uSizes[degrees] = uSize;
             vSizes[degrees] = vSize;
         }
@@ -575,6 +639,11 @@ internal static class MicroQrImageDecoder
         };
     }
 
+    private static bool IsPlausibleRefinement(QRCodeDecodeStatus status)
+        => status is not QRCodeDecodeStatus.NotDetected
+            and not QRCodeDecodeStatus.InvalidMatrix
+            and not QRCodeDecodeStatus.FormatInformationInvalid;
+
     /// <summary>
     /// All four grid corners must land inside the image (with one module of slack
     /// for sampling clamp tolerance); orientations pointing off the image cannot
@@ -639,10 +708,19 @@ internal static class MicroQrImageDecoder
             verticalModuleSize = horizontalModuleSize;
     }
 
-    private static float MeasureAxis(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float centerX, float centerY, float dirX, float dirY)
+    private static float MeasureAxis(
+        ReadOnlySpan<byte> luminance,
+        int width,
+        int height,
+        byte threshold,
+        float centerX,
+        float centerY,
+        float dirX,
+        float dirY,
+        float maxRunLength = float.PositiveInfinity)
     {
-        var forward = DarkLightDarkRun(luminance, width, height, threshold, centerX, centerY, dirX, dirY);
-        var backward = DarkLightDarkRun(luminance, width, height, threshold, centerX, centerY, -dirX, -dirY);
+        var forward = DarkLightDarkRun(luminance, width, height, threshold, centerX, centerY, dirX, dirY, maxRunLength);
+        var backward = DarkLightDarkRun(luminance, width, height, threshold, centerX, centerY, -dirX, -dirY, maxRunLength);
         if (float.IsNaN(forward) || float.IsNaN(backward))
             return float.NaN;
 
@@ -652,14 +730,15 @@ internal static class MicroQrImageDecoder
     /// <summary>
     /// Walks from the finder center along a direction until the dark-light-dark
     /// sequence completes (center square → light ring → dark ring → out), returning
-    /// the traveled distance (≈ 3.5 modules). NaN when the image edge interrupts.
+    /// the traveled distance (≈ 3.5 modules). NaN when the image edge or the
+    /// caller's maximum run length interrupts the sequence.
     /// Returning step − 0.5 centers the one-pixel overshoot of the integer-step
     /// walk (same correction as the Standard QR measurement).
     /// </summary>
-    private static float DarkLightDarkRun(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float startX, float startY, float dirX, float dirY)
+    private static float DarkLightDarkRun(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float startX, float startY, float dirX, float dirY, float maxRunLength)
     {
         var phase = 0;
-        for (var step = 1f; ; step += 1f)
+        for (var step = 1f; step <= maxRunLength; step += 1f)
         {
             var x = (int)(startX + dirX * step + 0.5f);
             var y = (int)(startY + dirY * step + 0.5f);
@@ -687,6 +766,8 @@ internal static class MicroQrImageDecoder
                     break;
             }
         }
+
+        return float.NaN;
     }
 
     /// <summary>
