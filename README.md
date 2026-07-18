@@ -546,7 +546,9 @@ See [Data Capacity Reference](docs/data-capacity.md) for practical capacities an
 
 ## Usage Examples
 
-### Basic Usage
+Each symbology has its own API surface — see [Supported Symbologies](#supported-symbologies). Examples below are grouped by symbology.
+
+### Standard QR
 
 #### Using Builder Pattern
 
@@ -682,9 +684,7 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 var pngBytes = qrCode.ToByteArray();
 ```
 
-### Advanced Usage
-
-#### Request Veresion
+#### Request Version
 
 "abc" can fit in Version 1, but we request Version 10 to show more dots. This can be useful for adding logo with short content.
 
@@ -799,7 +799,7 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 var pngBytes = qrCode.ToByteArray();
 ```
 
-### Custom Finder Pattern
+#### Custom Finder Pattern
 
 ```csharp
 var qrCode = new QRCodeImageBuilder("https://example.com")
@@ -810,7 +810,7 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 var pngBytes = qrCode.ToByteArray();
 ```
 
-### Gradient QR Code
+#### Gradient QR Code
 
 ```csharp
 var instagramGradient = new GradientOptions([
@@ -858,6 +858,58 @@ using var image = surface.Snapshot();
 using var data = image.Encode(SKEncodedImageFormat.Png, 100);
 using var stream = File.OpenWrite("qrcode.png");
 data.SaveTo(stream);
+```
+
+### Micro QR
+
+`MicroQRCodeGenerator`, `MicroQRCodeImageBuilder`, and `MicroQRCodeDecoder` — version/ECC constraints and capacity in the [FAQ](#does-it-support-micro-qr-or-rmqr). Runnable samples: [ConsoleApp patterns 24–26](samples/ConsoleApp).
+
+#### One-liner (PNG)
+
+```csharp
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
+// ISO/IEC 18004 M2-L numeric example — auto-selects the smallest version that fits
+var pngBytes = MicroQRCodeImageBuilder.GetPngBytes("01234567", MicroQREccLevel.L, size: 256);
+File.WriteAllBytes("microqr.png", pngBytes);
+```
+
+#### Builder (colors, module shape, gradient)
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
+var gradient = new GradientOptions(
+    [SKColor.Parse("00B894"), SKColor.Parse("0984E3")],
+    GradientDirection.TopLeftToBottomRight);
+
+var pngBytes = new MicroQRCodeImageBuilder("SKU-42")
+    .WithModulePixelSize(14)
+    .WithErrorCorrection(MicroQREccLevel.M)
+    .WithColors(codeColor: SKColor.Parse("2D3436"), backgroundColor: SKColors.White)
+    .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.92f)
+    .WithGradient(gradient)
+    .ToByteArray();
+```
+
+#### Decode (matrix and image)
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode;
+
+var micro = MicroQRCodeGenerator.CreateMicroQRCode("01234567", MicroQREccLevel.L);
+if (MicroQRCodeDecoder.TryDecode(micro, out var text, out var info))
+{
+    Console.WriteLine($"{text} ({info.Version}, ECC {info.EccLevel})"); // 01234567 (M2, ECC L)
+}
+
+// Image scan — use MicroQRCodeDecoder (QRCodeDecoder is Standard QR-only)
+using var bitmap = SKBitmap.Decode("microqr.png");
+var ok = MicroQRCodeDecoder.TryDecode(bitmap, out var scanned, out _);
 ```
 
 
