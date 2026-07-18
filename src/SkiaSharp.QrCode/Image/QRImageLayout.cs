@@ -4,7 +4,7 @@ namespace SkiaSharp.QrCode.Image;
 /// Shared canvas layout math for the image builders: resolves the output image
 /// info and the content rectangle from explicit size and/or module pixel size.
 /// </summary>
-internal static class QrImageLayout
+internal static class QRImageLayout
 {
     internal static (SKImageInfo info, SKRect contentRect) CreateLayout(int matrixSize, Vector2Slim? explicitSize, int? modulePixelSize)
     {

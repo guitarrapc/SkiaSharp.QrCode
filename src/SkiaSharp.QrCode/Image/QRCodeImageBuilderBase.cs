@@ -360,7 +360,7 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     private void RenderSvg(Stream output)
     {
         var symbol = ResolveSymbol(out var matrixSize);
-        var (info, contentRect) = QrImageLayout.CreateLayout(matrixSize, _explicitSize, _modulePixelSize);
+        var (info, contentRect) = QRImageLayout.CreateLayout(matrixSize, _explicitSize, _modulePixelSize);
 
         var viewBox = $"viewBox=\"0 0 {info.Width} {info.Height}\" ";
         var rootAttributes = UseCrispEdges() ? viewBox + "shape-rendering=\"crispEdges\" " : viewBox;
@@ -395,10 +395,10 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     {
         var symbol = ResolveSymbol(out var matrixSize);
 
-        var (info, contentRect) = QrImageLayout.CreateLayout(matrixSize, _explicitSize, _modulePixelSize);
+        var (info, contentRect) = QRImageLayout.CreateLayout(matrixSize, _explicitSize, _modulePixelSize);
 
         var clearColor = _clearColor ?? SKColors.Transparent;
-        var contentCoversCanvas = QrImageLayout.ContentCoversCanvas(contentRect, info);
+        var contentCoversCanvas = QRImageLayout.ContentCoversCanvas(contentRect, info);
         var backgroundIsOpaque = (_backgroundColor ?? SKColors.White).Alpha == byte.MaxValue;
         var clearIsOpaque = clearColor.Alpha == byte.MaxValue;
 
@@ -428,7 +428,7 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     private void RenderContent(SKCanvas canvas, object symbol, SKImageInfo info, SKRect contentRect)
     {
         var clearColor = _clearColor ?? SKColors.Transparent;
-        var contentCoversCanvas = QrImageLayout.ContentCoversCanvas(contentRect, info);
+        var contentCoversCanvas = QRImageLayout.ContentCoversCanvas(contentRect, info);
         var backgroundIsOpaque = (_backgroundColor ?? SKColors.White).Alpha == byte.MaxValue;
 
         // Clear the canvas with clearColor, then draw into contentRect; extra
