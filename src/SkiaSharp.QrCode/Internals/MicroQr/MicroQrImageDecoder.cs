@@ -1,5 +1,6 @@
 using System.Buffers;
 using SkiaSharp.QrCode.Internals.ImageDecoders;
+using SkiaSharp.QrCode.Internals.StandardQr;
 
 namespace SkiaSharp.QrCode.Internals.MicroQr;
 
@@ -12,23 +13,42 @@ namespace SkiaSharp.QrCode.Internals.MicroQr;
 /// <code>
 /// 1. Global binarization threshold (Otsu, shared with Standard QR)
 /// 2. Finder pattern candidates (shared 1:1:3:1:1 scan; ALL candidates, not best three)
-/// 3. Horizontal/vertical module size refinement through the finder center
-///    (dark-light-dark runs)
-/// 4. Axis-aligned grid sampling anchored on the single finder, trying every
-///    version size (M4..M1) × 4 right-angle orientations × transpose (mirror)
-/// 5. Matrix decoding arbitrates: format info is cross-checked against the matrix
+/// 3. Fast axis-aligned grid sampling anchored on the single finder
+/// 4. Failure-path angular finder-axis recovery, local center/scale refinement and
+///    a bounded projective search using the shared Standard QR sampler
+/// 5. Every version size (M4..M1) × orientation × transpose (mirror) is tried
+/// 6. Matrix decoding arbitrates: format info is cross-checked against the matrix
 ///    size and RS + the ISO Table 9 capacity cap reject wrong-grid samples
 /// </code>
 /// A Micro QR symbol has a single finder pattern, so orientation cannot be derived
 /// from finder geometry the way three finders allow for Standard QR. The detector
-/// therefore supports the axis-aligned envelope: 90°/180°/270° rotations,
-/// mirroring, reflectance reversal, scaling and translation. Small-angle rotation
-/// and perspective distortion are out of scope (documented in the spec map).
+/// therefore recovers the finder's local axes from angular dark-light-dark runs and
+/// searches the two projective coefficients that remain unknown. This supports
+/// arbitrary rotation and mild perspective; strong perspective remains out of scope.
 /// </remarks>
 internal static class MicroQrImageDecoder
 {
     /// <summary>Candidates actually tried, most-confirmed first (false hits rank behind).</summary>
     private const int MaxCandidatesToTry = 8;
+
+    /// <summary>Best local finder-axis estimates retained from the angular sweep.</summary>
+    private const int MaxOrientationCandidates = 16;
+
+    /// <summary>
+    /// Maximum matrix decode attempts in the arbitrary-orientation failure path
+    /// for one finder candidate. This bounds the multiplicative frame, orientation,
+    /// size, scale and perspective searches while leaving enough for one complete
+    /// orientation frame (all four axis assignments and four symbol sizes), and
+    /// without making the result CPU-speed dependent.
+    /// </summary>
+    private const int MaxArbitraryOrientationDecodeAttempts = 10_000;
+
+    /// <summary>
+    /// Maximum angular-sweep ray length relative to the row-scan module estimate.
+    /// A finder center-to-edge ray is at most 3.5√2 modules; the extra margin
+    /// tolerates pixel quantization and mild perspective.
+    /// </summary>
+    private const float MaxAngularSweepRunModules = 8f;
 
     /// <summary>
     /// Decodes a Micro QR code from grayscale pixels. Reflectance-reversed symbols
@@ -166,11 +186,435 @@ internal static class MicroQrImageDecoder
                     TrackBestFailure(mirroredStatus, mirroredInfo, ref bestStatus, ref bestInfo);
                 }
             }
+
+            // The fast path above covers the overwhelmingly common axis-aligned
+            // case. On failure, recover the finder square's local axes by sweeping
+            // directions through 90 degrees, then sample along those rotated axes.
+            // A square finder repeats every 90 degrees; the four sign/axis
+            // assignments below recover the symbol orientation.
+            var rotatedStatus = TryDecodeArbitraryOrientation(
+                luminance,
+                width,
+                height,
+                threshold,
+                candidate,
+                modules,
+                destination,
+                out charsWritten,
+                out var rotatedInfo,
+                ref bestStatus,
+                ref bestInfo);
+            if (rotatedStatus == QRCodeDecodeStatus.Success)
+            {
+                info = rotatedInfo;
+                return rotatedStatus;
+            }
         }
 
         charsWritten = 0;
         info = bestInfo;
         return bestStatus;
+    }
+
+    /// <summary>
+    /// Recovers arbitrary image rotation from the single finder pattern. For a
+    /// concentric square finder, a center ray crosses the shortest
+    /// dark-light-dark span when it follows one of the square's local axes. An
+    /// angular sweep therefore supplies the two grid-axis directions without the
+    /// three finder centers available to Standard QR.
+    /// </summary>
+    private static QRCodeDecodeStatus TryDecodeArbitraryOrientation(
+        ReadOnlySpan<byte> luminance,
+        int width,
+        int height,
+        byte threshold,
+        in FinderPattern candidate,
+        Span<byte> modules,
+        Span<char> destination,
+        out int charsWritten,
+        out MicroQrCodeDecodeInfo info,
+        ref QRCodeDecodeStatus bestStatus,
+        ref MicroQrCodeDecodeInfo bestInfo)
+    {
+        Span<OrientationCandidate> orientations = stackalloc OrientationCandidate[MaxOrientationCandidates];
+        var orientationCount = FindOrientationCandidates(luminance, width, height, threshold, candidate, orientations);
+        var attemptsRemaining = MaxArbitraryOrientationDecodeAttempts;
+
+        for (var frameIndex = 0; frameIndex < orientationCount; frameIndex++)
+        {
+            ref readonly var frame = ref orientations[frameIndex];
+            for (var orientation = 0; orientation < 4; orientation++)
+            {
+                var (uX, uY, vX, vY) = orientation switch
+                {
+                    0 => (frame.UX, frame.UY, frame.VX, frame.VY),
+                    1 => (frame.VX, frame.VY, -frame.UX, -frame.UY),
+                    2 => (-frame.UX, -frame.UY, -frame.VX, -frame.VY),
+                    _ => (-frame.VX, -frame.VY, frame.UX, frame.UY),
+                };
+
+                var originX = candidate.X - 3.5f * (uX + vX);
+                var originY = candidate.Y - 3.5f * (uY + vY);
+                var samplingSlack = Math.Max(frame.USize, frame.VSize);
+
+                for (var size = 17; size >= 11; size -= 2)
+                {
+                    if (attemptsRemaining == 0)
+                    {
+                        charsWritten = 0;
+                        info = bestInfo;
+                        return bestStatus;
+                    }
+
+                    if (!SymbolFitsImage(originX, originY, uX, uY, vX, vY, size, width, height, samplingSlack))
+                        continue;
+
+                    SampleGrid(luminance, width, height, threshold, originX, originY, uX, uY, vX, vY, size, modules);
+                    attemptsRemaining--;
+                    var status = MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
+                    if (status == QRCodeDecodeStatus.Success)
+                    {
+                        info = attemptInfo;
+                        return status;
+                    }
+                    TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
+
+                    if (attemptsRemaining == 0)
+                        continue;
+
+                    TransposeInPlace(modules, size);
+                    attemptsRemaining--;
+                    var mirroredStatus = MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
+                    if (mirroredStatus == QRCodeDecodeStatus.Success)
+                    {
+                        info = mirroredInfo;
+                        return mirroredStatus;
+                    }
+                    TrackBestFailure(mirroredStatus, mirroredInfo, ref bestStatus, ref bestInfo);
+
+                    // Scale and perspective searches multiply this affine attempt
+                    // by hundreds. Enter them only after either polarity decoded
+                    // valid format information; wrong grids overwhelmingly fail
+                    // before that point.
+                    if (!IsPlausibleRefinement(status) && !IsPlausibleRefinement(mirroredStatus))
+                        continue;
+
+                    var scaledStatus = TryDecodeScaleVariants(
+                        luminance, width, height, threshold, candidate,
+                        uX, uY, vX, vY, size, modules, destination,
+                        out charsWritten, out var scaledInfo,
+                        ref bestStatus, ref bestInfo, ref attemptsRemaining);
+                    if (scaledStatus == QRCodeDecodeStatus.Success)
+                    {
+                        info = scaledInfo;
+                        return scaledStatus;
+                    }
+
+                    var projectiveStatus = TryDecodePerspectiveVariants(
+                        luminance,
+                        width,
+                        height,
+                        threshold,
+                        candidate,
+                        uX,
+                        uY,
+                        vX,
+                        vY,
+                        size,
+                        samplingSlack,
+                        modules,
+                        destination,
+                        out charsWritten,
+                        out var projectiveInfo,
+                        ref bestStatus,
+                        ref bestInfo,
+                        ref attemptsRemaining);
+                    if (projectiveStatus == QRCodeDecodeStatus.Success)
+                    {
+                        info = projectiveInfo;
+                        return projectiveStatus;
+                    }
+                }
+            }
+        }
+
+        charsWritten = 0;
+        info = bestInfo;
+        return bestStatus;
+    }
+
+    /// <summary>
+    /// Refines the two local module scales independently around the pixel-quantized
+    /// finder-run estimate while keeping the finder center fixed.
+    /// </summary>
+    private static QRCodeDecodeStatus TryDecodeScaleVariants(
+        ReadOnlySpan<byte> luminance,
+        int width,
+        int height,
+        byte threshold,
+        in FinderPattern candidate,
+        float uX,
+        float uY,
+        float vX,
+        float vY,
+        int size,
+        Span<byte> modules,
+        Span<char> destination,
+        out int charsWritten,
+        out MicroQrCodeDecodeInfo info,
+        ref QRCodeDecodeStatus bestStatus,
+        ref MicroQrCodeDecodeInfo bestInfo,
+        ref int attemptsRemaining)
+    {
+        ReadOnlySpan<float> centerOffsets = stackalloc float[] { 0f, -0.5f, 0.5f };
+        ReadOnlySpan<float> factors = stackalloc float[] { 0.94f, 0.97f, 1f, 1.03f, 1.06f };
+        var uSize = (float)Math.Sqrt(uX * uX + uY * uY);
+        var vSize = (float)Math.Sqrt(vX * vX + vY * vY);
+        foreach (var centerYOffset in centerOffsets)
+        {
+            foreach (var centerXOffset in centerOffsets)
+            {
+                foreach (var vFactor in factors)
+                {
+                    foreach (var uFactor in factors)
+                    {
+                        if (attemptsRemaining == 0)
+                        {
+                            charsWritten = 0;
+                            info = bestInfo;
+                            return bestStatus;
+                        }
+
+                        if (centerXOffset == 0f && centerYOffset == 0f && uFactor == 1f && vFactor == 1f)
+                            continue;
+
+                        var scaledUX = uX * uFactor;
+                        var scaledUY = uY * uFactor;
+                        var scaledVX = vX * vFactor;
+                        var scaledVY = vY * vFactor;
+                        var centerX = candidate.X + centerXOffset;
+                        var centerY = candidate.Y + centerYOffset;
+                        var originX = centerX - 3.5f * (scaledUX + scaledVX);
+                        var originY = centerY - 3.5f * (scaledUY + scaledVY);
+                        var samplingSlack = Math.Max(uSize * uFactor, vSize * vFactor);
+                        if (!SymbolFitsImage(originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, width, height, samplingSlack))
+                            continue;
+
+                        SampleGrid(luminance, width, height, threshold, originX, originY, scaledUX, scaledUY, scaledVX, scaledVY, size, modules);
+                        attemptsRemaining--;
+                        var status = MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
+                        if (status == QRCodeDecodeStatus.Success)
+                        {
+                            info = attemptInfo;
+                            return status;
+                        }
+                        TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
+
+                        if (attemptsRemaining == 0)
+                            continue;
+
+                        TransposeInPlace(modules, size);
+                        attemptsRemaining--;
+                        var mirroredStatus = MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
+                        if (mirroredStatus == QRCodeDecodeStatus.Success)
+                        {
+                            info = mirroredInfo;
+                            return mirroredStatus;
+                        }
+                        TrackBestFailure(mirroredStatus, mirroredInfo, ref bestStatus, ref bestInfo);
+                    }
+                }
+            }
+        }
+
+        charsWritten = 0;
+        info = bestInfo;
+        return bestStatus;
+    }
+
+    /// <summary>
+    /// A single finder determines a homography's image point and local Jacobian,
+    /// leaving only the two projective denominator coefficients unknown. Search a
+    /// bounded Tier-2 range for those two values; matrix format and RS validation
+    /// select the correct transform without image-specific heuristics.
+    /// </summary>
+    private static QRCodeDecodeStatus TryDecodePerspectiveVariants(
+        ReadOnlySpan<byte> luminance,
+        int width,
+        int height,
+        byte threshold,
+        in FinderPattern candidate,
+        float uX,
+        float uY,
+        float vX,
+        float vY,
+        int size,
+        float samplingSlack,
+        Span<byte> modules,
+        Span<char> destination,
+        out int charsWritten,
+        out MicroQrCodeDecodeInfo info,
+        ref QRCodeDecodeStatus bestStatus,
+        ref MicroQrCodeDecodeInfo bestInfo,
+        ref int attemptsRemaining)
+    {
+        ReadOnlySpan<float> strengths = stackalloc float[] { -0.12f, -0.08f, -0.04f, -0.02f, 0f, 0.02f, 0.04f, 0.08f, 0.12f };
+        for (var pyIndex = 0; pyIndex < strengths.Length; pyIndex++)
+        {
+            var perspectiveY = strengths[pyIndex] / size;
+            for (var pxIndex = 0; pxIndex < strengths.Length; pxIndex++)
+            {
+                if (attemptsRemaining == 0)
+                {
+                    charsWritten = 0;
+                    info = bestInfo;
+                    return bestStatus;
+                }
+
+                var perspectiveX = strengths[pxIndex] / size;
+                if (perspectiveX == 0f && perspectiveY == 0f)
+                    continue; // the affine transform was already tried
+
+                var transform = PerspectiveTransform.FromLocalFrame(
+                    3.5f,
+                    3.5f,
+                    candidate.X,
+                    candidate.Y,
+                    uX,
+                    uY,
+                    vX,
+                    vY,
+                    perspectiveX,
+                    perspectiveY);
+                if (!ProjectiveSymbolFitsImage(transform, size, width, height, samplingSlack))
+                    continue;
+
+                QRImageDecoder.SampleGrid(luminance, width, height, threshold, transform, size, modules);
+                attemptsRemaining--;
+                var status = MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var attemptInfo);
+                if (status == QRCodeDecodeStatus.Success)
+                {
+                    info = attemptInfo;
+                    return status;
+                }
+                TrackBestFailure(status, attemptInfo, ref bestStatus, ref bestInfo);
+
+                if (attemptsRemaining == 0)
+                    continue;
+
+                TransposeInPlace(modules, size);
+                attemptsRemaining--;
+                var mirroredStatus = MicroQrMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), size, destination, out charsWritten, out var mirroredInfo);
+                if (mirroredStatus == QRCodeDecodeStatus.Success)
+                {
+                    info = mirroredInfo;
+                    return mirroredStatus;
+                }
+                TrackBestFailure(mirroredStatus, mirroredInfo, ref bestStatus, ref bestInfo);
+            }
+        }
+
+        charsWritten = 0;
+        info = bestInfo;
+        return bestStatus;
+    }
+
+    /// <summary>
+    /// Sweeps one quadrant because finder axes repeat every 90 degrees, retaining
+    /// separated low-score directions. Pixel quantization can shift the shortest
+    /// measured run several degrees away from the true finder axis, so adjacent
+    /// samples of one minimum must not consume every candidate slot.
+    /// </summary>
+    private static int FindOrientationCandidates(
+        ReadOnlySpan<byte> luminance,
+        int width,
+        int height,
+        byte threshold,
+        in FinderPattern candidate,
+        Span<OrientationCandidate> destination)
+    {
+        Span<float> uSizes = stackalloc float[90];
+        Span<float> vSizes = stackalloc float[90];
+        var maxRunLength = candidate.ModuleSize * MaxAngularSweepRunModules;
+        for (var degrees = 0; degrees < 90; degrees++)
+        {
+            var radians = degrees * (Math.PI / 180d);
+            var cos = (float)Math.Cos(radians);
+            var sin = (float)Math.Sin(radians);
+            var uSize = MeasureAxis(luminance, width, height, threshold, candidate.X, candidate.Y, cos, sin, maxRunLength);
+            var vSize = MeasureAxis(luminance, width, height, threshold, candidate.X, candidate.Y, -sin, cos, maxRunLength);
+            uSizes[degrees] = uSize;
+            vSizes[degrees] = vSize;
+        }
+
+        // The pixel-grid minimum can be a few degrees away from the true finder
+        // axis, particularly for small rotated symbols. Select several separated
+        // minima rather than filling the result with adjacent samples of one dip.
+        Span<int> selectedDegrees = stackalloc int[MaxOrientationCandidates];
+        var count = 0;
+        while (count < destination.Length)
+        {
+            var bestDegree = -1;
+            var bestScore = float.MaxValue;
+            for (var degrees = 0; degrees < 90; degrees++)
+            {
+                var uSize = uSizes[degrees];
+                var vSize = vSizes[degrees];
+                if (float.IsNaN(uSize) || float.IsNaN(vSize) || uSize < 1f || vSize < 1f)
+                    continue;
+
+                var separated = true;
+                for (var i = 0; i < count; i++)
+                {
+                    var distance = Math.Abs(degrees - selectedDegrees[i]);
+                    if (Math.Min(distance, 90 - distance) < 2)
+                    {
+                        separated = false;
+                        break;
+                    }
+                }
+                if (!separated || uSize + vSize >= bestScore)
+                    continue;
+
+                bestDegree = degrees;
+                bestScore = uSize + vSize;
+            }
+
+            if (bestDegree < 0)
+                break;
+
+            selectedDegrees[count] = bestDegree;
+            var radians = bestDegree * (Math.PI / 180d);
+            var cos = (float)Math.Cos(radians);
+            var sin = (float)Math.Sin(radians);
+            var bestUSize = uSizes[bestDegree];
+            var bestVSize = vSizes[bestDegree];
+            destination[count++] = new OrientationCandidate(
+                cos * bestUSize,
+                sin * bestUSize,
+                -sin * bestVSize,
+                cos * bestVSize,
+                bestUSize,
+                bestVSize);
+        }
+
+        return count;
+    }
+
+    private readonly struct OrientationCandidate(
+        float uX,
+        float uY,
+        float vX,
+        float vY,
+        float uSize,
+        float vSize)
+    {
+        public float UX { get; } = uX;
+        public float UY { get; } = uY;
+        public float VX { get; } = vX;
+        public float VY { get; } = vY;
+        public float USize { get; } = uSize;
+        public float VSize { get; } = vSize;
     }
 
     /// <summary>
@@ -195,6 +639,11 @@ internal static class MicroQrImageDecoder
         };
     }
 
+    private static bool IsPlausibleRefinement(QRCodeDecodeStatus status)
+        => status is not QRCodeDecodeStatus.NotDetected
+            and not QRCodeDecodeStatus.InvalidMatrix
+            and not QRCodeDecodeStatus.FormatInformationInvalid;
+
     /// <summary>
     /// All four grid corners must land inside the image (with one module of slack
     /// for sampling clamp tolerance); orientations pointing off the image cannot
@@ -212,6 +661,24 @@ internal static class MicroQrImageDecoder
             if (x < -slack || x > width + slack || y < -slack || y > height + slack)
                 return false;
         }
+        return true;
+    }
+
+    private static bool ProjectiveSymbolFitsImage(in PerspectiveTransform transform, int size, int width, int height, float samplingSlack)
+    {
+        for (var corner = 0; corner < 4; corner++)
+        {
+            var gridX = (corner & 1) == 0 ? 0f : size;
+            var gridY = (corner & 2) == 0 ? 0f : size;
+            transform.Transform(gridX, gridY, out var x, out var y);
+            if (float.IsNaN(x) || float.IsInfinity(x) || float.IsNaN(y) || float.IsInfinity(y)
+                || x < -samplingSlack || x > width + samplingSlack
+                || y < -samplingSlack || y > height + samplingSlack)
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 
@@ -241,10 +708,19 @@ internal static class MicroQrImageDecoder
             verticalModuleSize = horizontalModuleSize;
     }
 
-    private static float MeasureAxis(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float centerX, float centerY, float dirX, float dirY)
+    private static float MeasureAxis(
+        ReadOnlySpan<byte> luminance,
+        int width,
+        int height,
+        byte threshold,
+        float centerX,
+        float centerY,
+        float dirX,
+        float dirY,
+        float maxRunLength = float.PositiveInfinity)
     {
-        var forward = DarkLightDarkRun(luminance, width, height, threshold, centerX, centerY, dirX, dirY);
-        var backward = DarkLightDarkRun(luminance, width, height, threshold, centerX, centerY, -dirX, -dirY);
+        var forward = DarkLightDarkRun(luminance, width, height, threshold, centerX, centerY, dirX, dirY, maxRunLength);
+        var backward = DarkLightDarkRun(luminance, width, height, threshold, centerX, centerY, -dirX, -dirY, maxRunLength);
         if (float.IsNaN(forward) || float.IsNaN(backward))
             return float.NaN;
 
@@ -254,14 +730,15 @@ internal static class MicroQrImageDecoder
     /// <summary>
     /// Walks from the finder center along a direction until the dark-light-dark
     /// sequence completes (center square → light ring → dark ring → out), returning
-    /// the traveled distance (≈ 3.5 modules). NaN when the image edge interrupts.
+    /// the traveled distance (≈ 3.5 modules). NaN when the image edge or the
+    /// caller's maximum run length interrupts the sequence.
     /// Returning step − 0.5 centers the one-pixel overshoot of the integer-step
     /// walk (same correction as the Standard QR measurement).
     /// </summary>
-    private static float DarkLightDarkRun(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float startX, float startY, float dirX, float dirY)
+    private static float DarkLightDarkRun(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, float startX, float startY, float dirX, float dirY, float maxRunLength)
     {
         var phase = 0;
-        for (var step = 1f; ; step += 1f)
+        for (var step = 1f; step <= maxRunLength; step += 1f)
         {
             var x = (int)(startX + dirX * step + 0.5f);
             var y = (int)(startY + dirY * step + 0.5f);
@@ -289,6 +766,8 @@ internal static class MicroQrImageDecoder
                     break;
             }
         }
+
+        return float.NaN;
     }
 
     /// <summary>

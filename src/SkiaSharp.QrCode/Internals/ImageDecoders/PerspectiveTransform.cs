@@ -48,6 +48,38 @@ internal readonly struct PerspectiveTransform
     }
 
     /// <summary>
+    /// Builds a grid-to-image homography from a known point, its two local axis
+    /// derivatives, and the two projective denominator coefficients. A single
+    /// Micro QR finder supplies the point and local frame; bounded searches over
+    /// <paramref name="perspectiveX"/> and <paramref name="perspectiveY"/> recover
+    /// the remaining two degrees of freedom.
+    /// </summary>
+    internal static PerspectiveTransform FromLocalFrame(
+        float gridX,
+        float gridY,
+        float imageX,
+        float imageY,
+        float derivativeUx,
+        float derivativeUy,
+        float derivativeVx,
+        float derivativeVy,
+        float perspectiveX,
+        float perspectiveY)
+    {
+        var denominator = perspectiveX * gridX + perspectiveY * gridY + 1f;
+        var a11 = derivativeUx * denominator + imageX * perspectiveX;
+        var a12 = derivativeUy * denominator + imageY * perspectiveX;
+        var a21 = derivativeVx * denominator + imageX * perspectiveY;
+        var a22 = derivativeVy * denominator + imageY * perspectiveY;
+        var a31 = imageX * denominator - a11 * gridX - a21 * gridY;
+        var a32 = imageY * denominator - a12 * gridX - a22 * gridY;
+        return new PerspectiveTransform(
+            a11, a21, a31,
+            a12, a22, a32,
+            perspectiveX, perspectiveY, 1f);
+    }
+
+    /// <summary>
     /// Transforms (x, y) through the projective map.
     /// </summary>
     public void Transform(float x, float y, out float xOut, out float yOut)

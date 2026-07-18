@@ -172,6 +172,54 @@ public class MicroQrCodeDecoderImageTest
     }
 
     [Test]
+    [Arguments(MicroQrVersion.M1, MicroQrEccLevel.ErrorDetectionOnly, "123", 30)]
+    [Arguments(MicroQrVersion.M2, MicroQrEccLevel.L, "12345", -7)]
+    [Arguments(MicroQrVersion.M3, MicroQrEccLevel.L, "HELLO WORLD", 45)]
+    [Arguments(MicroQrVersion.M4, MicroQrEccLevel.M, "MICRO QR M4 TEST", 5)]
+    [Arguments(MicroQrVersion.M4, MicroQrEccLevel.M, "MICRO QR M4 TEST", 30)]
+    public async Task Decode_ArbitraryRotations(MicroQrVersion version, MicroQrEccLevel eccLevel, string content, int degrees)
+    {
+        using var bitmap = RenderRotated(content, version, eccLevel, degrees);
+
+        var success = MicroQrCodeDecoder.TryDecode(bitmap, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"version={version}, degrees={degrees}, status={info.Status}");
+        await Assert.That(text).IsEqualTo(content);
+    }
+
+    [Test]
+    [Arguments(MicroQrVersion.M1, MicroQrEccLevel.ErrorDetectionOnly, "123")]
+    [Arguments(MicroQrVersion.M4, MicroQrEccLevel.M, "MICRO QR M4 TEST")]
+    public async Task Decode_EveryIntegerRotation(MicroQrVersion version, MicroQrEccLevel eccLevel, string content)
+    {
+        for (var degrees = 0; degrees < 90; degrees++)
+        {
+            using var bitmap = RenderRotated(content, version, eccLevel, degrees);
+
+            var success = MicroQrCodeDecoder.TryDecode(bitmap, out var text, out var info);
+
+            await Assert.That(success).IsTrue().Because($"version={version}, degrees={degrees}, status={info.Status}");
+            await Assert.That(text).IsEqualTo(content).Because($"version={version}, degrees={degrees}");
+        }
+    }
+
+    private static SKBitmap RenderRotated(string content, MicroQrVersion version, MicroQrEccLevel eccLevel, float degrees)
+    {
+        var data = MicroQrCodeGenerator.CreateMicroQrCode(content, eccLevel, version);
+        var qrPx = data.Size * 8;
+        var canvasPx = (int)(qrPx * 1.5f) + 16;
+        var bitmap = new SKBitmap(new SKImageInfo(canvasPx, canvasPx, SKColorType.Bgra8888, SKAlphaType.Premul));
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(SKColors.White);
+        canvas.Translate(canvasPx / 2f, canvasPx / 2f);
+        canvas.RotateDegrees(degrees);
+        canvas.Translate(-qrPx / 2f, -qrPx / 2f);
+        QRCodeRenderer.Render(canvas, SKRect.Create(0, 0, qrPx, qrPx), data, SKColors.Black, SKColors.White);
+        canvas.Flush();
+        return bitmap;
+    }
+
+    [Test]
     public async Task Decode_MirroredImage()
     {
         const string content = "12345";
