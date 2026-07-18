@@ -11,7 +11,7 @@
 
     <!-- NuGet -->
     <IsPackable>false</IsPackable>
-    <Version>1.1.0</Version>
+    <Version>1.1.1</Version>
     <Authors>guitarrapc</Authors>
     <Copyright>© guitarrapc</Copyright>
     <PackageTags>skia, skiasharp, qrcode, microqr</PackageTags>
