@@ -99,7 +99,7 @@ The library does not implement Kanji segments for Standard QR today (detected an
 |---|---|---|
 | Kanji mode (all symbologies) | Deferred; tables keep the column | User demand or decoder interop need |
 | Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR scanning is its own explicitly-typed entry (`MicroQRCodeDecoder`) | rMQR image detection API |
-| Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) |, |
+| Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) | - |
 | `QRCodeData` | Frozen for Standard QR | Never (compatibility contract) |
 
 ## Lessons learned

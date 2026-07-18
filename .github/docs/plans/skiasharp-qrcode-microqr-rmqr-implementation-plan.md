@@ -501,8 +501,8 @@ encode numbers for the same payloads shown for comparison):
 | MicroQR_Numeric_M2 (Span) | 374 ns | ~175 ns | 0 B |
 | MicroQR_Alphanumeric_M3 (Span) | 511 ns | ~230 ns | 0 B |
 | MicroQR_Byte_M4 (Span) | 684 ns | ~293 ns | 0 B |
-| MicroQR_Numeric_M2 (string) | 382 ns |, | 48 B (result string) |
-| StandardQr_Numeric_V1_Decode (Span), control | 1,148 ns |, | 0 B |
+| MicroQR_Numeric_M2 (string) | 382 ns | - | 48 B (result string) |
+| StandardQr_Numeric_V1_Decode (Span), control | 1,148 ns | - | 0 B |
 
 Standard QR decode guard (QrCodeDecodeEndToEnd, before = 359c304 via worktree,
 after = this change): all scenarios within noise or faster (Matrix_Short_M
