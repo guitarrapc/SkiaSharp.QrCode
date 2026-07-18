@@ -2,109 +2,150 @@ using SkiaSharp;
 using System.Text;
 
 /// <summary>
-/// End-to-end QR decoding through the public API (QRCodeDecoder).
-/// Payloads mirror QrCodeEncodeEndToEnd so encode and decode costs are directly comparable,
-/// plus an image-pipeline scenario (detection + sampling).
+/// End-to-end QR matrix decoding through the public API (QRCodeDecoder).
+/// Payloads mirror QRCodeEncodeEndToEnd so encode and decode costs are directly comparable;
+/// a Micro QR M2-L decode of the same numeric payload gives the scale reference.
 /// Matrices are quiet-zone-free (the decoder's in-place fast path).
 ///
 /// Scenarios:
-///   Short_M : version ~1-2 module matrix -> text
-///   Url_M   : typical URL payload, version ~4-5
-///   Long_L  : ~2900 chars, version 40-L (largest data volume)
-///   Long_H  : ~1200 chars, version 40-H (81 blocks, max ECC share)
-///   Image_Url_M : rendered bitmap luminance -> text (binarize + finder detection + sampling)
+///   Numeric_V1_L : version 1, numeric mode (digits only)
+///   Alphanumeric_V1_M : version 1, alphanumeric mode (uppercase / punctuation subset)
+///   Byte_Url_V6_M : version 6, byte mode (typical URL with lowercase)
+///   Byte_V40_L : version 40-L, byte mode (largest data volume)
+///   Byte_V40_H : version 40-H, byte mode (81 blocks, max ECC share)
+///   Image_Byte_Url_V6_M : rendered bitmap luminance -> text (binarize + finder detection + sampling)
 /// </summary>
 public class QRCodeDecodeEndToEnd
 {
-    private byte[] _shortModules = default!;
-    private int _shortSize;
-    private byte[] _urlModules = default!;
-    private int _urlSize;
-    private byte[] _longLModules = default!;
-    private int _longLSize;
-    private byte[] _longHModules = default!;
-    private int _longHSize;
+    private byte[] _numericModules = default!;
+    private int _numericSize;
+    private byte[] _alphanumericModules = default!;
+    private int _alphanumericSize;
+    private byte[] _byteUrlModules = default!;
+    private int _byteUrlSize;
+    private byte[] _byteLongLModules = default!;
+    private int _byteLongLSize;
+    private byte[] _byteLongHModules = default!;
+    private int _byteLongHSize;
+    private byte[] _microNumericModules = default!;
+    private int _microNumericSize;
     private char[] _chars = default!;
+    private char[] _microChars = default!;
 
-    private byte[] _urlLuminance = default!;
-    private int _urlImageSize;
+    private byte[] _byteUrlLuminance = default!;
+    private int _byteUrlImageSize;
+
+    private string _byteUrl = default!;
+    private string _byteLongL = default!;
+    private string _byteLongH = default!;
 
     [GlobalSetup]
     public void GlobalSetup()
     {
-        (_shortModules, _shortSize) = BuildModules("HELLO WORLD 2026", ECCLevel.M);
-        (_urlModules, _urlSize) = BuildModules("https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md?foo=sample&bar=dummy", ECCLevel.M);
-        (_longLModules, _longLSize) = BuildModules(BuildDeterministicText(2900), ECCLevel.L);
-        (_longHModules, _longHSize) = BuildModules(BuildDeterministicText(1200), ECCLevel.H);
+        (_numericModules, _numericSize) = BuildModules("0123456789", ECCLevel.L);
+        (_alphanumericModules, _alphanumericSize) = BuildModules("HELLO WORLD 2026", ECCLevel.M);
+        _byteUrl = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md?foo=sample&bar=dummy";
+        (_byteUrlModules, _byteUrlSize) = BuildModules(_byteUrl, ECCLevel.M);
+        _byteLongL = BuildDeterministicText(2900);
+        _byteLongH = BuildDeterministicText(1200);
+        (_byteLongLModules, _byteLongLSize) = BuildModules(_byteLongL, ECCLevel.L);
+        (_byteLongHModules, _byteLongHSize) = BuildModules(_byteLongH, ECCLevel.H);
         _chars = new char[QRCodeDecoder.GetMaxDecodedLength(40)];
 
-        (_urlLuminance, _urlImageSize) = RenderLuminance("https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md?foo=sample&bar=dummy", ECCLevel.M, pixelsPerModule: 8);
+        (_microNumericModules, _microNumericSize) = BuildMicro("0123456789", MicroQREccLevel.L);
+        _microChars = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M2)];
+
+        (_byteUrlLuminance, _byteUrlImageSize) = RenderLuminance(_byteUrl, ECCLevel.M, pixelsPerModule: 8);
     }
 
     // Span destination (zero-allocation) path
 
-    [Benchmark(Baseline = true, Description = "Short_M_Decode (Span)")]
-    public int Short_M_DecodeSpan()
+    [Benchmark(Baseline = true, Description = "QR_Numeric_V1_L_Decode (Span)")]
+    public int QR_Numeric_V1_L_DecodeSpan()
     {
-        QRCodeDecoder.TryDecode(_shortModules, _shortSize, _chars, out var written, out _);
+        QRCodeDecoder.TryDecode(_numericModules, _numericSize, _chars, out var written, out _);
         return written;
     }
 
-    [Benchmark(Description = "Url_M_Decode (Span)")]
-    public int Url_M_DecodeSpan()
+    [Benchmark(Description = "QR_Alphanumeric_V1_M_Decode (Span)")]
+    public int QR_Alphanumeric_V1_M_DecodeSpan()
     {
-        QRCodeDecoder.TryDecode(_urlModules, _urlSize, _chars, out var written, out _);
+        QRCodeDecoder.TryDecode(_alphanumericModules, _alphanumericSize, _chars, out var written, out _);
         return written;
     }
 
-    [Benchmark(Description = "Long_L_Decode (Span)")]
-    public int Long_L_DecodeSpan()
+    [Benchmark(Description = "QR_Byte_Url_V6_M_Decode (Span)")]
+    public int QR_Byte_Url_V6_M_DecodeSpan()
     {
-        QRCodeDecoder.TryDecode(_longLModules, _longLSize, _chars, out var written, out _);
+        QRCodeDecoder.TryDecode(_byteUrlModules, _byteUrlSize, _chars, out var written, out _);
         return written;
     }
 
-    [Benchmark(Description = "Long_H_Decode (Span)")]
-    public int Long_H_DecodeSpan()
+    [Benchmark(Description = "QR_Byte_V40_L_Decode (Span)")]
+    public int QR_Byte_V40_L_DecodeSpan()
     {
-        QRCodeDecoder.TryDecode(_longHModules, _longHSize, _chars, out var written, out _);
+        QRCodeDecoder.TryDecode(_byteLongLModules, _byteLongLSize, _chars, out var written, out _);
         return written;
     }
 
-    [Benchmark(Description = "Image_Url_M_Decode (Span)")]
-    public int Image_Url_M_DecodeSpan()
+    [Benchmark(Description = "QR_Byte_V40_H_Decode (Span)")]
+    public int QR_Byte_V40_H_DecodeSpan()
     {
-        QRCodeDecoder.TryDecodeImage(_urlLuminance, _urlImageSize, _urlImageSize, _chars, out var written, out _);
+        QRCodeDecoder.TryDecode(_byteLongHModules, _byteLongHSize, _chars, out var written, out _);
+        return written;
+    }
+
+    [Benchmark(Description = "Image_Byte_Url_V6_M_Decode (Span)")]
+    public int Image_Byte_Url_V6_M_DecodeSpan()
+    {
+        QRCodeDecoder.TryDecodeImage(_byteUrlLuminance, _byteUrlImageSize, _byteUrlImageSize, _chars, out var written, out _);
         return written;
     }
 
     // String path (allocates the result string only)
 
     [Benchmark]
-    public string Short_M_Decode()
+    public string QR_Numeric_V1_L_Decode()
     {
-        QRCodeDecoder.TryDecode(_shortModules, _shortSize, out var text, out _);
+        QRCodeDecoder.TryDecode(_numericModules, _numericSize, out var text, out _);
         return text;
     }
 
     [Benchmark]
-    public string Url_M_Decode()
+    public string QR_Byte_V40_L_Decode()
     {
-        QRCodeDecoder.TryDecode(_urlModules, _urlSize, out var text, out _);
+        QRCodeDecoder.TryDecode(_byteLongLModules, _byteLongLSize, out var text, out _);
         return text;
+    }
+
+    // Micro QR M2-L with the same numeric payload, for scale reference.
+
+    [Benchmark(Description = "MicroQR_Numeric_M2_Decode (Span)")]
+    public int MicroQR_Numeric_M2_DecodeSpan()
+    {
+        MicroQRCodeDecoder.TryDecode(_microNumericModules, _microNumericSize, _microChars, out var written, out _);
+        return written;
     }
 
     private static (byte[] modules, int size) BuildModules(string content, ECCLevel eccLevel)
     {
-        var calculated = QRCodeGenerator.GetRequiredBufferSize(content, eccLevel, quietZoneSize: 0);
+        var calculated = QRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), eccLevel, quietZoneSize: 0);
         var buffer = new byte[calculated.BufferSize];
-        QRCodeGenerator.CreateQrCode(content, eccLevel, buffer, quietZoneSize: 0);
+        QRCodeGenerator.CreateQrCode(content.AsSpan(), eccLevel, buffer, quietZoneSize: 0);
+        return (buffer, calculated.QrSize);
+    }
+
+    private static (byte[] modules, int size) BuildMicro(string content, MicroQREccLevel eccLevel)
+    {
+        var calculated = MicroQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), eccLevel, quietZoneSize: 0);
+        var buffer = new byte[calculated.BufferSize];
+        MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), eccLevel, buffer, quietZoneSize: 0);
         return (buffer, calculated.QrSize);
     }
 
     private static (byte[] luminance, int size) RenderLuminance(string content, ECCLevel eccLevel, int pixelsPerModule)
     {
-        var qr = QRCodeGenerator.CreateQrCode(content, eccLevel);
+        var qr = QRCodeGenerator.CreateQrCode(content.AsSpan(), eccLevel);
         var sizePx = qr.Size * pixelsPerModule;
         using var bitmap = new SKBitmap(new SKImageInfo(sizePx, sizePx, SKColorType.Gray8));
         using (var canvas = new SKCanvas(bitmap))

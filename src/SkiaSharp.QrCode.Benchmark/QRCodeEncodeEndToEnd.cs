@@ -1,43 +1,110 @@
 using System.Text;
 
 /// <summary>
-/// End-to-end QR generation through the public API (QRCodeGenerator.CreateQrCode).
+/// End-to-end QR matrix encoding through the public API (QRCodeGenerator).
 /// Used to measure the user-visible impact of internal kernel changes such as the
 /// Reed-Solomon ECC encoder optimization.
 ///
-/// Scenarios cover the version/ECC spread:
-///   Short_M : tiny payload, version ~1-2 (per-call overhead dominated)
-///   Url_M   : typical URL payload, version ~4-5
-///   Long_L  : ~2900 chars -> version 40, ECC level L (largest data blocks)
-///   Long_H  : ~1200 chars -> version 40, ECC level H (81 blocks x 30 ecc, max ECC share)
+/// Scenarios:
+///   Numeric_V1_L : version 1, numeric mode (digits only)
+///   Alphanumeric_V1_M : version 1, alphanumeric mode (uppercase / punctuation subset)
+///   Byte_Url_V6_M : version 6, byte mode (typical URL with lowercase)
+///   Byte_V40_L : version 40-L, byte mode (largest data blocks)
+///   Byte_V40_H : version 40-H, byte mode (81 blocks x 30 ecc, max ECC share)
 /// </summary>
 public class QRCodeEncodeEndToEnd
 {
-    private string _short = default!;
-    private string _url = default!;
-    private string _longL = default!;
-    private string _longH = default!;
+    private string _numeric = default!;
+    private string _alphanumeric = default!;
+    private string _byteUrl = default!;
+    private string _byteLongL = default!;
+    private string _byteLongH = default!;
+    private byte[] _spanDestination = default!;
 
     [GlobalSetup]
-    public void Setup()
+    public void GlobalSetup()
     {
-        _short = "HELLO WORLD 2026";
-        _url = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md?foo=sample&bar=dummy";
-        _longL = BuildDeterministicText(2900); // fits version 40-L byte mode (max 2953)
-        _longH = BuildDeterministicText(1200); // fits version 40-H byte mode (max 1273)
+        _numeric = "0123456789"; // version 1-L, numeric mode
+        _alphanumeric = "HELLO WORLD 2026"; // version 1-M, alphanumeric mode
+        _byteUrl = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md?foo=sample&bar=dummy"; // version 6-M, byte mode
+        _byteLongL = BuildDeterministicText(2900); // version 40-L byte mode (max 2953)
+        _byteLongH = BuildDeterministicText(1200); // version 40-H byte mode (max 1273)
+        _spanDestination = new byte[Math.Max(
+            QRCodeGenerator.GetRequiredBufferSize(_byteLongL.AsSpan(), ECCLevel.L).BufferSize,
+            MicroQRCodeGenerator.GetRequiredBufferSize(_numeric.AsSpan(), MicroQREccLevel.L).BufferSize)];
+    }
+
+    // Class API (allocates the result object only)
+
+    [Benchmark(Baseline = true)]
+    public QRCodeData QR_Numeric_V1_L_Encode()
+    {
+        return QRCodeGenerator.CreateQrCode(_numeric.AsSpan(), ECCLevel.L);
     }
 
     [Benchmark]
-    public QRCodeData Short_M() => QRCodeGenerator.CreateQrCode(_short, ECCLevel.M);
+    public QRCodeData QR_Alphanumeric_V1_M_Encode()
+    {
+        return QRCodeGenerator.CreateQrCode(_alphanumeric.AsSpan(), ECCLevel.M);
+    }
 
     [Benchmark]
-    public QRCodeData Url_M() => QRCodeGenerator.CreateQrCode(_url, ECCLevel.M);
+    public QRCodeData QR_Byte_Url_V6_M_Encode()
+    {
+        return QRCodeGenerator.CreateQrCode(_byteUrl.AsSpan(), ECCLevel.M);
+    }
 
     [Benchmark]
-    public QRCodeData Long_L() => QRCodeGenerator.CreateQrCode(_longL, ECCLevel.L);
+    public QRCodeData QR_Byte_V40_L_Encode()
+    {
+        return QRCodeGenerator.CreateQrCode(_byteLongL.AsSpan(), ECCLevel.L);
+    }
 
     [Benchmark]
-    public QRCodeData Long_H() => QRCodeGenerator.CreateQrCode(_longH, ECCLevel.H);
+    public QRCodeData QR_Byte_V40_H_Encode()
+    {
+        return QRCodeGenerator.CreateQrCode(_byteLongH.AsSpan(), ECCLevel.H);
+    }
+
+    // Span destination (zero-allocation) variants
+
+    [Benchmark(Description = "QR_Numeric_V1_L_Encode (Span)")]
+    public int QR_Numeric_V1_L_EncodeSpan()
+    {
+        return QRCodeGenerator.CreateQrCode(_numeric.AsSpan(), ECCLevel.L, _spanDestination);
+    }
+
+    [Benchmark(Description = "QR_Alphanumeric_V1_M_Encode (Span)")]
+    public int QR_Alphanumeric_V1_M_EncodeSpan()
+    {
+        return QRCodeGenerator.CreateQrCode(_alphanumeric.AsSpan(), ECCLevel.M, _spanDestination);
+    }
+
+    [Benchmark(Description = "QR_Byte_Url_V6_M_Encode (Span)")]
+    public int QR_Byte_Url_V6_M_EncodeSpan()
+    {
+        return QRCodeGenerator.CreateQrCode(_byteUrl.AsSpan(), ECCLevel.M, _spanDestination);
+    }
+
+    [Benchmark(Description = "QR_Byte_V40_L_Encode (Span)")]
+    public int QR_Byte_V40_L_EncodeSpan()
+    {
+        return QRCodeGenerator.CreateQrCode(_byteLongL.AsSpan(), ECCLevel.L, _spanDestination);
+    }
+
+    [Benchmark(Description = "QR_Byte_V40_H_Encode (Span)")]
+    public int QR_Byte_V40_H_EncodeSpan()
+    {
+        return QRCodeGenerator.CreateQrCode(_byteLongH.AsSpan(), ECCLevel.H, _spanDestination);
+    }
+
+    // Micro QR M2-L with the same numeric payload, for scale reference.
+
+    [Benchmark(Description = "MicroQR_Numeric_M2_Encode (Span)")]
+    public int MicroQR_Numeric_M2_EncodeSpan()
+    {
+        return MicroQRCodeGenerator.CreateMicroQRCode(_numeric.AsSpan(), MicroQREccLevel.L, _spanDestination);
+    }
 
     private static string BuildDeterministicText(int length)
     {

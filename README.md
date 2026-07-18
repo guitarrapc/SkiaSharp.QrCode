@@ -10,7 +10,7 @@
 
 SkiaSharp.QrCode provides high-performance QR code generation/read with [SkiaSharp](https://github.com/mono/SkiaSharp) integration.
 
-![Performance Benchmark](src/SkiaSharp.QrCode.Benchmark/image_net10.0.png)
+![Performance Benchmark](assets/benchmark_simpleencode_net10.0.png)
 
 > Benchmark results comparing SkiaSharp.QrCode with other libraries. See [src/SkiaSharp.QrCode.Benchmark](src/SkiaSharp.QrCode.Benchmark) for details. Above results are generated on .NET 10 with AMD Ryzen 9 7950X3D CPU, with GFNI and AVX2 enabled.
 
@@ -62,6 +62,11 @@ SkiaSharp.QrCode implements the Standard QR Code symbology and Micro QR generati
 | rMQR (R7x43–R17x139) | ISO/IEC 23941 | NO | NO |
 
 See the [FAQ](#does-it-support-micro-qr-or-rmqr) for the Micro QR / rMQR status.
+
+![StandardQR Performance](assets/benchmark_standardqr_encode.png)
+
+![MicroQR Performance](assets/benchmark_microqr_encode.png)
+
 
 ## Installation
 
