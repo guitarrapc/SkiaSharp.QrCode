@@ -72,7 +72,7 @@ public static class MicroQRCodeDecoder
     /// </summary>
     /// <param name="modules">
     /// Module matrix, one byte per module (0 = light, non-zero = dark), flat row-major
-    /// order — the format produced by <see cref="MicroQRCodeGenerator.CreateMicroQRCode(ReadOnlySpan{char}, MicroQREccLevel, Span{byte}, MicroQRVersion?, int)"/>.
+    /// order, the format produced by <see cref="MicroQRCodeGenerator.CreateMicroQRCode(ReadOnlySpan{char}, MicroQREccLevel, Span{byte}, MicroQRVersion?, int)"/>.
     /// A uniform light quiet zone border is detected and skipped automatically.
     /// </param>
     /// <param name="size">Matrix size in modules per side (including quiet zone if present).</param>
@@ -139,7 +139,7 @@ public static class MicroQRCodeDecoder
         if (origin == 0 && coreSize == size)
             return MicroQRMatrixDecoder.DecodeMatrix(modules.Slice(0, size * size), coreSize, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
 
-        // Micro QR cores are at most 17×17 = 289 modules — small enough for the stack.
+        // Micro QR cores are at most 17×17 = 289 modules, small enough for the stack.
         Span<byte> core = stackalloc byte[17 * 17].Slice(0, coreSize * coreSize);
         CopyCoreWindow(modules, size, origin, coreSize, core);
         return MicroQRMatrixDecoder.DecodeMatrix(core, coreSize, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
@@ -292,7 +292,7 @@ public static class MicroQRCodeDecoder
     /// <summary>
     /// Locates the core matrix inside an input that may carry a light quiet zone
     /// border. Micro QR has a single finder pattern, so unlike Standard QR the
-    /// right/bottom edges carry data and are not guaranteed dark — the dark
+    /// right/bottom edges carry data and are not guaranteed dark, the dark
     /// bounding box cannot size the core. Instead the top-left dark module is the
     /// finder corner (core origin); a uniform border implies
     /// <c>coreSize = size − 2·origin</c>.

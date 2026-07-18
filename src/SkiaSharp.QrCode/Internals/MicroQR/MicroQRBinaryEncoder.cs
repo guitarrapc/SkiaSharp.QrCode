@@ -41,7 +41,7 @@ namespace SkiaSharp.QrCode.Internals.MicroQR;
 ///
 /// Byte-mode Latin-1 SIMD tiers: x64 narrows 8 chars per SSE2 pack into one
 /// 64-bit append behind the scalar OR-reduction validity scan. ARM64 goes
-/// further — because payloads never exceed 15 chars, one aligned load plus one
+/// further, because payloads never exceed 15 chars, one aligned load plus one
 /// end-overlapped load cover the whole text, serving both the validity check
 /// (UMAXV) and the appends (XTN narrow; the overlapped vector's low bytes are
 /// the tail), with a 64-bit SWAR variant of the same overlap for 4-7 chars.
@@ -83,7 +83,7 @@ internal static class MicroQRBinaryEncoder
         // (M4-L), so the whole bit stream fits in two registers, MSB-first:
         //   hi = output bytes 0-7, lo = bytes 8-15,
         //   pos = bits written from the start of the stream.
-        // Both words start at zero, so all-zero fields are never written — the
+        // Both words start at zero, so all-zero fields are never written, the
         // terminator, byte alignment, the forced-zero low nibble of the M1/M3
         // half codeword, and unused tail bytes fall out by advancing pos only
         // (where the previous BitWriter design issued explicit Write(0, n) calls).
@@ -144,7 +144,7 @@ internal static class MicroQRBinaryEncoder
                     // is one AND against the per-lane high-byte mask; SwarPack4
                     // compacts the four 16-bit lanes to 4 bytes. Gated to ARM64
                     // alongside the NEON tier (measured there; x64 keeps its
-                    // shipped SSE2 shape below) — the lane math is little-endian,
+                    // shipped SSE2 shape below), the lane math is little-endian,
                     // which every AdvSimd runtime satisfies.
                     var length = text.Length;
                     ref var b0 = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(text));
@@ -169,7 +169,7 @@ internal static class MicroQRBinaryEncoder
                 // Latin-1 validity, branch-free: if every char is <= 0x00FF the
                 // OR of all code units stays <= 0xFF; any char with high bits
                 // pushes it above. The loop only ORs and the compare happens once
-                // at the end — no per-char `if (text[i] > 0xFF)` branch. Trade-off:
+                // at the end, no per-char `if (text[i] > 0xFF)` branch. Trade-off:
                 // no early exit, so a non-Latin-1 char up front still scans the
                 // whole text; Micro QR inputs are <= 15 chars, so avoiding the
                 // data-dependent branch wins over bailing out early.
@@ -196,7 +196,7 @@ internal static class MicroQRBinaryEncoder
                     // halves, and ToScalar() takes the low 64 bits we need.
                     // Saturation cannot corrupt data: the Latin-1 check above
                     // guarantees every lane is <= 0xFF. ReverseEndianness aligns
-                    // conventions — the pack result read as a ulong puts the
+                    // conventions, the pack result read as a ulong puts the
                     // FIRST char in the LOWEST byte, while Append64 emits the
                     // HIGHEST byte first.
                     for (; j + 8 <= text.Length; j += 8)
@@ -236,7 +236,7 @@ internal static class MicroQRBinaryEncoder
     ///              ->  (123 &lt;&lt; 20) | (456 &lt;&lt; 10) | 789
     /// </code>
     /// Group values come from <see cref="SwarGroup"/>, whose 8-byte load covers
-    /// 4 chars for a 3-digit group — so every SWAR grain needs one readable char
+    /// 4 chars for a 3-digit group, so every SWAR grain needs one readable char
     /// beyond it (hence the i+9 / i+3 guards); tails without that headroom use
     /// scalar group math with the '0' bias folded into one constant.
     /// </remarks>
@@ -244,7 +244,7 @@ internal static class MicroQRBinaryEncoder
     private static void WriteNumericData(ref ulong hi, ref ulong lo, ref int pos, ReadOnlySpan<char> digits)
     {
         // contract: digits must be '0'-'9' only (validated upstream). SWAR/scalar
-        // group math produces a wrong — but memory-safe — stream otherwise.
+        // group math produces a wrong, but memory-safe, stream otherwise.
         Debug.Assert(AllNumeric(digits), "caller must validate the numeric alphabet");
 
         ref var c = ref MemoryMarshal.GetReference(digits);
@@ -295,7 +295,7 @@ internal static class MicroQRBinaryEncoder
     //   into the window, and every product of the 4th lane lands at bit 48+ or
     //   overflows out of the 64-bit register, so its value never matters.
     //
-    // Only 3 digits contribute, but the 8-byte load spans 4 chars — callers must
+    // Only 3 digits contribute, but the 8-byte load spans 4 chars, callers must
     // guarantee one readable char beyond each group (see the loop guards above).
     // Debug-only contract checks (evaluated solely inside Debug.Assert).
     private static bool AllNumeric(ReadOnlySpan<char> chars)
@@ -331,7 +331,7 @@ internal static class MicroQRBinaryEncoder
         // Big-endian runtimes (e.g. s390x): the little-endian lane layout above
         // does not hold, and a whole-ulong byte reversal (the NormalizeEndianness
         // approach used for byte-lane SWAR elsewhere) would also swap the bytes
-        // INSIDE each 16-bit char lane — so fall back to scalar group math.
+        // INSIDE each 16-bit char lane, so fall back to scalar group math.
         // IsLittleEndian is a JIT-time constant; this branch vanishes from
         // little-endian codegen.
         return Unsafe.Add(ref c, i) * 100 + Unsafe.Add(ref c, i + 1) * 10 + Unsafe.Add(ref c, i + 2) - 5328; // folded bias: 5328 = '0' * 111
@@ -379,7 +379,7 @@ internal static class MicroQRBinaryEncoder
     /// <code>
     /// [pair0: 11 bits][pair1: 11 bits]  ->  (p0 &lt;&lt; 11) | p1
     /// </code>
-    /// Like the numeric 9-digit batch, the point is fewer Append calls — each
+    /// Like the numeric 9-digit batch, the point is fewer Append calls, each
     /// one is a variable-shift OR into the 128-bit accumulator, so halving the
     /// call count halves that work.
     /// </remarks>
@@ -414,7 +414,7 @@ internal static class MicroQRBinaryEncoder
 
     /// <summary>
     /// Byte segment for non-Latin-1 text: full encode on a private accumulator.
-    /// The count indicator counts encoded BYTES. Not inlined by design — see the
+    /// The count indicator counts encoded BYTES. Not inlined by design, see the
     /// class remarks on address exposure.
     /// </summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -428,7 +428,7 @@ internal static class MicroQRBinaryEncoder
         // least one byte, so text.Length <= 15 follows, and the worst-case
         // expansion (3 bytes per char: non-ASCII BMP or lone surrogates) stays
         // within 45 <= 64 buffer bytes. If the contract is ever violated the
-        // Span bounds check in EncodeUtf8 throws — the stack buffer cannot be
+        // Span bounds check in EncodeUtf8 throws, the stack buffer cannot be
         // overrun.
         Debug.Assert(text.Length <= 15, "byte payloads beyond any Micro QR capacity must be rejected by the caller");
         Span<byte> utf8 = stackalloc byte[64];
@@ -453,7 +453,7 @@ internal static class MicroQRBinaryEncoder
     /// Hand-rolled UTF-8 encoder matching Encoding.UTF8.GetBytes semantics,
     /// including U+FFFD replacement for lone surrogates. Payloads are tiny (≤ 15
     /// encoded bytes), where Encoding's fixed dispatch cost dominates. This also
-    /// replaces the old netstandard2.0 path — <c>Encoding.UTF8.GetBytes(text.ToString())</c> —
+    /// replaces the old netstandard2.0 path, <c>Encoding.UTF8.GetBytes(text.ToString())</c> —
     /// which allocated both a string and a byte array per call; this loop allocates nothing.
     /// </summary>
     private static int EncodeUtf8(ReadOnlySpan<char> text, Span<byte> utf8)
@@ -561,10 +561,10 @@ internal static class MicroQRBinaryEncoder
 
     /// <summary>
     /// Appends the low <paramref name="bitCount"/> bits (1-56) of an
-    /// already-masked ulong — Append generalized past 32 bits for the NEON byte
+    /// already-masked ulong, Append generalized past 32 bits for the NEON byte
     /// tail (up to 7 bytes in one call). Unlike Append this does not mask
     /// internally: the caller needs the mask anyway to strip the overlap bytes
-    /// of its tail load, so re-masking here would be a redundant AND — the
+    /// of its tail load, so re-masking here would be a redundant AND, the
     /// pre-masked contract is asserted instead.
     /// Internal (not private) so boundary tests can drive it directly.
     /// </summary>
@@ -653,7 +653,7 @@ internal static class MicroQRBinaryEncoder
         // codewordCount * 8 with explicit Write(0, 8) calls, but the accumulator
         // starts at zero and the pad pattern is masked to end at the last FULL
         // codeword (padEndByte), so the final 4-bit pad codeword and the
-        // forced-zero low nibble stay zero by construction — the half-codeword
+        // forced-zero low nibble stay zero by construction, the half-codeword
         // handling is expressed by NOT writing, not by a special case.
 
         // 5. Store big-endian: hi = codeword bytes 0-7, lo = bytes 8-15.

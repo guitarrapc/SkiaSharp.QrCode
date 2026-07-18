@@ -20,7 +20,7 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 /// version 40 ~30-40x, zero allocations. Bit-packing beat both Parallel.For
 /// over the 8 patterns (which allocates and still loses at every size) and
 /// early-terminating the score (5-15%): the serial 8-pattern loop was never
-/// the problem — the per-pattern representation was.
+/// the problem, the per-pattern representation was.
 /// </summary>
 internal static partial class ModulePlacer
 {
@@ -160,7 +160,7 @@ internal static partial class ModulePlacer
     /// Terminates early (returning int.MaxValue) once the running sum of rules
     /// 1-3 exceeds <paramref name="abortAbove"/>: penalty sub-scores only ever
     /// accumulate, so a pattern whose partial sum already exceeds the best total
-    /// can never be selected — the result is provably identical. Measured ~5-10%
+    /// can never be selected, the result is provably identical. Measured ~5-10%
     /// on this single-word path; the triple-word scorer intentionally has no
     /// abort because no win was measurable there (see the findings log).
     /// </remarks>
@@ -560,7 +560,7 @@ internal static partial class ModulePlacer
     // // Evaluate the multiples of 5 on both sides of the percentage and take the
     // // smaller deviation from 50%. (An earlier version of this reference used
     // // `Floor(percent / 5) * 5 - 45` for the upper side, which is wrong when the
-    // // percentage is an exact multiple of 5 — e.g. percent = 45 scored 0 instead
+    // // percentage is an exact multiple of 5, e.g. percent = 45 scored 0 instead
     // // of 10. Ceiling keeps prev == next there, matching the shipped code.)
     // var prevMultipleOf5 = Math.Abs((int)Math.Floor(percent / 5) * 5 - 50) / 5;
     // var nextMultipleOf5 = Math.Abs((int)Math.Ceiling(percent / 5) * 5 - 50) / 5;
@@ -583,7 +583,7 @@ internal static partial class ModulePlacer
     ///   run starts are isolated against the previous v5.
     /// Rule 2 (2x2 blocks): all-equal(a[x], a[x+1], b[x], b[x+1]) ⟺
     ///   eqh_a[x] &amp; eqv[x] &amp; eqv[x+1], eqh = ~(a ^ (a>>1)), eqv = ~(a ^ b).
-    /// Rule 3 (finder windows): bit-sliced 11-wide pattern match — AND together
+    /// Rule 3 (finder windows): bit-sliced 11-wide pattern match, AND together
     ///   shifted rows, taking x for required-dark offsets {4,6,7,8,10} and ~x for
     ///   required-light offsets {0,1,2,3,5,9} (forward; backward is the reverse);
     ///   the column direction applies the same selection over the last 11 packed
@@ -770,8 +770,8 @@ internal static partial class ModulePlacer
 
     /// <summary>
     /// Packed mask template rows: [pattern * 12 + (row % 12)]. Every mask formula
-    /// depends on the row only via row%2, row%3 or (row/2)%2 — periodic in
-    /// lcm(2,3,4) = 12 — and on the column with period 6, so 12 rows of 192 bits
+    /// depends on the row only via row%2, row%3 or (row/2)%2, periodic in
+    /// lcm(2,3,4) = 12, and on the column with period 6, so 12 rows of 192 bits
     /// per pattern cover every matrix size (bits beyond a row's length are removed
     /// by ANDing with the allowed mask).
     /// </summary>
@@ -855,7 +855,7 @@ internal static partial class ModulePlacer
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Row192 operator ^(in Row192 a, in Row192 b) => new(a.W0 ^ b.W0, a.W1 ^ b.W1, a.W2 ^ b.W2);
 
-        /// <summary>~(this ^ other) — equality bits. High garbage must be masked by the caller.</summary>
+        /// <summary>~(this ^ other), equality bits. High garbage must be masked by the caller.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Row192 Xnor(in Row192 other) => new(~(W0 ^ other.W0), ~(W1 ^ other.W1), ~(W2 ^ other.W2));
 
