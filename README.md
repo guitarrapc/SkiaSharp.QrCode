@@ -445,29 +445,9 @@ Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see 
 
 ### Does it support Micro QR or rMQR?
 
-Micro QR generation and matrix decoding are supported (M1–M4, Numeric/Alphanumeric/Byte, all legal ECC levels):
+Micro QR (M1–M4) is fully supported for generation and decoding. See [Micro QR](#supported-symbologies) for details.
 
-```csharp
-// Auto-selects the smallest version that fits (here: M2-L, 13x13 modules)
-var data = MicroQRCodeGenerator.CreateMicroQRCode("01234567", MicroQREccLevel.L);
-
-// Decode it back (module matrix; ISO Table 9 error correction included)
-var ok = MicroQRCodeDecoder.TryDecode(data, out var text, out var info);
-// ok == true, text == "01234567", info.Version == MicroQRVersion.M2
-```
-
-Micro QR images are rendered with `MicroQRCodeImageBuilder` (PNG/JPEG/WEBP/SVG, colors, module shapes, gradients, no icon overlay or finder styling, which Micro QR's single finder and small ECC headroom cannot afford), and scanned back with `MicroQRCodeDecoder.TryDecode(SKBitmap, ...)`:
-
-```csharp
-// Render: spec-default 2-module quiet zone, same fluent surface as QRCodeImageBuilder
-var png = MicroQRCodeImageBuilder.GetPngBytes("01234567", MicroQREccLevel.L, size: 256);
-
-// Scan a clean rendered/scanned image back
-using var bitmap = SKBitmap.Decode(png);
-var ok2 = MicroQRCodeDecoder.TryDecode(bitmap, out var scanned, out _);
-```
-
-Version constraints are enforced rather than silently degraded (M1: numeric + error detection only; ECC Q: M4 only; no ECI; Kanji not implemented). Decoding follows the spec's misdecode protection: error correction is capped at ISO/IEC 18004 Table 9 capacity per version/ECC, and M1 symbols are error-detection only. The symbology decoders stay separate on purpose: `QRCodeDecoder` reports Micro QR symbols as not detected rather than misreading them (and vice versa), so default Standard QR scanning performance is unaffected. rMQR (ISO/IEC 23941) is not supported yet.
+rMQR (R7x43–R17x139) is not supported at this time.
 
 ### What QR code style provides the best scan reliability?
 
