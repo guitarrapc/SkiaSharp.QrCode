@@ -45,8 +45,9 @@ public abstract class FinderPatternShape
     /// its color. The renderer owns <paramref name="backgroundPaint"/> and may reuse it across
     /// calls; implementations must not modify or dispose it.
     /// Custom shapes should override this overload when they need to reuse the renderer's
-    /// configured background paint; existing custom shapes may continue to override the
-    /// <see cref="Draw(SKCanvas, SKRect, SKPaint, SKColor)"/> overload.
+    /// configured background paint or when they must support non-opaque backgrounds (blend modes).
+    /// Existing custom shapes may continue to override <see cref="Draw(SKCanvas, SKRect, SKPaint, SKColor)"/>,
+    /// but that overload cannot use the renderer's blend mode.
     /// </remarks>
     /// <param name="canvas">The canvas to render on.</param>
     /// <param name="rect">The rectangular area for the finder pattern (7x7 modules).</param>
