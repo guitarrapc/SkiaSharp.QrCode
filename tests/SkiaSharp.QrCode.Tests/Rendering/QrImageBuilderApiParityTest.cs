@@ -6,9 +6,9 @@ namespace SkiaSharp.QrCode.Tests;
 /// <summary>
 /// Guards the intended 1:1 correspondence between the symbology-specific image
 /// builders: every public member of <see cref="QRCodeImageBuilder"/> must exist on
-/// <see cref="MicroQrCodeImageBuilder"/> with the symbology types swapped
-/// (QRCodeData ⇔ MicroQrCodeData, ECCLevel ⇔ MicroQrEccLevel, int version ⇔
-/// MicroQrVersion), and vice versa — except for the documented Standard QR-only
+/// <see cref="MicroQRCodeImageBuilder"/> with the symbology types swapped
+/// (QRCodeData ⇔ MicroQRCodeData, ECCLevel ⇔ MicroQREccLevel, int version ⇔
+/// MicroQRVersion), and vice versa — except for the documented Standard QR-only
 /// options. Adding an output method or static helper to one builder without the
 /// other fails here. Extend the map when the rMQR builder lands.
 /// </summary>
@@ -32,7 +32,7 @@ public class QrImageBuilderApiParityTest
         var standard = NormalizedSignatures(typeof(QRCodeImageBuilder))
             .Where(s => !standardOnlyMembers.Any(m => s.Contains($" {m}(")))
             .ToHashSet();
-        var micro = NormalizedSignatures(typeof(MicroQrCodeImageBuilder)).ToHashSet();
+        var micro = NormalizedSignatures(typeof(MicroQRCodeImageBuilder)).ToHashSet();
 
         var missingOnMicro = standard.Except(micro).OrderBy(s => s).ToArray();
         var missingOnStandard = micro.Except(standard).OrderBy(s => s).ToArray();
@@ -41,7 +41,7 @@ public class QrImageBuilderApiParityTest
         {
             Assert.Fail(
                 "Image builder surfaces drifted apart.\n" +
-                $"Missing on MicroQrCodeImageBuilder:\n  {string.Join("\n  ", missingOnMicro)}\n" +
+                $"Missing on MicroQRCodeImageBuilder:\n  {string.Join("\n  ", missingOnMicro)}\n" +
                 $"Missing on QRCodeImageBuilder:\n  {string.Join("\n  ", missingOnStandard)}");
         }
 
@@ -55,7 +55,7 @@ public class QrImageBuilderApiParityTest
         foreach (var name in standardOnlyMembers)
         {
             await Assert.That(typeof(QRCodeImageBuilder).GetMethods().Any(m => m.Name == name)).IsTrue();
-            await Assert.That(typeof(MicroQrCodeImageBuilder).GetMethods().Any(m => m.Name == name)).IsFalse();
+            await Assert.That(typeof(MicroQRCodeImageBuilder).GetMethods().Any(m => m.Name == name)).IsFalse();
         }
     }
 
@@ -83,22 +83,22 @@ public class QrImageBuilderApiParityTest
 
     /// <summary>
     /// WithVersion legitimately differs in parameter type (int sentinel vs
-    /// MicroQrVersion enum); both canonicalize to VERSION for that member only.
+    /// MicroQRVersion enum); both canonicalize to VERSION for that member only.
     /// </summary>
     private static string NormalizeParameter(Type type, string memberName)
     {
-        if (memberName == "WithVersion" && (type == typeof(int) || type == typeof(MicroQrVersion)))
+        if (memberName == "WithVersion" && (type == typeof(int) || type == typeof(MicroQRVersion)))
             return "VERSION";
         return Normalize(type);
     }
 
     private static string Normalize(Type type)
     {
-        if (type == typeof(QRCodeData) || type == typeof(MicroQrCodeData))
+        if (type == typeof(QRCodeData) || type == typeof(MicroQRCodeData))
             return "SYMBOL_DATA";
-        if (type == typeof(ECCLevel) || type == typeof(MicroQrEccLevel))
+        if (type == typeof(ECCLevel) || type == typeof(MicroQREccLevel))
             return "ECC";
-        if (type == typeof(QRCodeImageBuilder) || type == typeof(MicroQrCodeImageBuilder))
+        if (type == typeof(QRCodeImageBuilder) || type == typeof(MicroQRCodeImageBuilder))
             return "SELF";
         return type.FullName ?? type.Name;
     }

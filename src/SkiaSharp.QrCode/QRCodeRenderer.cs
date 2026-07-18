@@ -137,7 +137,7 @@ public static class QRCodeRenderer
     public static void Render(
         SKCanvas canvas,
         SKRect area,
-        MicroQrCodeData data,
+        MicroQRCodeData data,
         SKColor? codeColor,
         SKColor? backgroundColor,
         ModuleShape? moduleShape = null,
@@ -174,11 +174,11 @@ public static class QRCodeRenderer
 
         if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
         {
-            DrawModuleRuns(canvas, new MicroQrMatrixView(data), area, darkPaint, skipFinderPatterns: false);
+            DrawModuleRuns(canvas, new MicroQRMatrixView(data), area, darkPaint, skipFinderPatterns: false);
         }
         else
         {
-            DrawModules(canvas, new MicroQrMatrixView(data), area, darkPaint, shape, moduleSizePercent, skipFinderPatterns: false);
+            DrawModules(canvas, new MicroQRMatrixView(data), area, darkPaint, shape, moduleSizePercent, skipFinderPatterns: false);
         }
     }
 

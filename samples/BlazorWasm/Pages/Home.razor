@@ -27,19 +27,19 @@
                     <select title="Standard QR (versions 1-40) or Micro QR (M1-M4, tiny symbols with a single finder pattern)"
                             @bind="Options.Symbology" @bind:after="OnSymbologyChanged">
                         <option value="@SymbologyKind.QrCode">QR Code</option>
-                        <option value="@SymbologyKind.MicroQr">Micro QR</option>
+                        <option value="@SymbologyKind.MicroQR">Micro QR</option>
                     </select>
                 </label>
-                @if (Options.Symbology == SymbologyKind.MicroQr)
+                @if (Options.Symbology == SymbologyKind.MicroQR)
                 {
                     <label class="field">
                         <span class="field__label">Error correction</span>
                         <select title="Legal levels depend on the version: M1 is error detection only, M2/M3 allow L and M, M4 adds Q"
                                 @bind="Options.MicroEcc" @bind:after="Regenerate">
-                            <option value="@MicroQrEccLevel.ErrorDetectionOnly">Error detection only (M1)</option>
-                            <option value="@MicroQrEccLevel.L">L — 7%</option>
-                            <option value="@MicroQrEccLevel.M">M — 15%</option>
-                            <option value="@MicroQrEccLevel.Q">Q — 25% (M4 only)</option>
+                            <option value="@MicroQREccLevel.ErrorDetectionOnly">Error detection only (M1)</option>
+                            <option value="@MicroQREccLevel.L">L — 7%</option>
+                            <option value="@MicroQREccLevel.M">M — 15%</option>
+                            <option value="@MicroQREccLevel.Q">Q — 25% (M4 only)</option>
                         </select>
                     </label>
                     <label class="field">
@@ -265,7 +265,7 @@
     private void OnSymbologyChanged()
     {
         Options.Version = -1;
-        Options.QuietZone = Options.Symbology == SymbologyKind.MicroQr ? 2 : 4;
+        Options.QuietZone = Options.Symbology == SymbologyKind.MicroQR ? 2 : 4;
         Regenerate();
     }
 
@@ -281,9 +281,9 @@
         try
         {
             var stopwatch = Stopwatch.StartNew();
-            if (Options.Symbology == SymbologyKind.MicroQr)
+            if (Options.Symbology == SymbologyKind.MicroQR)
             {
-                var microData = QrImageFactory.CreateMicroQrData(Options);
+                var microData = QrImageFactory.CreateMicroQRData(Options);
                 QRCodeRenderer.Render(
                     canvas,
                     SKRect.Create(e.Info.Width, e.Info.Height),
@@ -331,9 +331,9 @@
         try
         {
             byte[] bytes;
-            if (Options.Symbology == SymbologyKind.MicroQr)
+            if (Options.Symbology == SymbologyKind.MicroQR)
             {
-                var microData = QrImageFactory.CreateMicroQrData(Options);
+                var microData = QrImageFactory.CreateMicroQRData(Options);
                 bytes = QrImageFactory.CreateMicroBuilder(Options, microData).ToByteArray();
             }
             else
@@ -355,9 +355,9 @@
         try
         {
             using var stream = new MemoryStream();
-            if (Options.Symbology == SymbologyKind.MicroQr)
+            if (Options.Symbology == SymbologyKind.MicroQR)
             {
-                var microData = QrImageFactory.CreateMicroQrData(Options);
+                var microData = QrImageFactory.CreateMicroQRData(Options);
                 QrImageFactory.CreateMicroBuilder(Options, microData).SaveToSvg(stream);
             }
             else

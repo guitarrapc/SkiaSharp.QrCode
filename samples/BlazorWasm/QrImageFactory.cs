@@ -27,15 +27,15 @@ public static class QrImageFactory
     }
 
     /// <summary>Encodes the content into a Micro QR module matrix.</summary>
-    public static MicroQrCodeData CreateMicroQrData(QrOptions options)
+    public static MicroQRCodeData CreateMicroQRData(QrOptions options)
     {
         if (string.IsNullOrWhiteSpace(options.Content))
             throw new ArgumentException("Content is empty.");
 
-        return MicroQrCodeGenerator.CreateMicroQrCode(
+        return MicroQRCodeGenerator.CreateMicroQRCode(
             options.Content.AsSpan(),
             options.MicroEcc,
-            options.Version is >= 1 and <= 4 ? (MicroQrVersion)options.Version : null,
+            options.Version is >= 1 and <= 4 ? (MicroQRVersion)options.Version : null,
             Math.Clamp(options.QuietZone, 0, 10));
     }
 
@@ -44,10 +44,10 @@ public static class QrImageFactory
     /// overlay or finder pattern shape options (single finder, no ECC headroom),
     /// so the page hides those controls.
     /// </summary>
-    public static MicroQrCodeImageBuilder CreateMicroBuilder(QrOptions options, MicroQrCodeData data)
+    public static MicroQRCodeImageBuilder CreateMicroBuilder(QrOptions options, MicroQRCodeData data)
     {
         var size = Math.Clamp(options.Size, 64, 2048);
-        return new MicroQrCodeImageBuilder(data)
+        return new MicroQRCodeImageBuilder(data)
             .WithSize(size, size)
             .WithColors(GetForegroundColor(options), GetBackgroundColor(options))
             .WithModuleShape(CreateModuleShape(options), Math.Clamp(options.ModuleSizePercent, 0.5f, 1.0f))

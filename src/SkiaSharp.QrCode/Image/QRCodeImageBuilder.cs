@@ -16,11 +16,11 @@ namespace SkiaSharp.QrCode.Image;
 /// </para>
 /// <para>
 /// <b>Advanced Configuration (Fluent API):</b><br/>
-/// Chain the shared options (<see cref="QrCodeImageBuilderBase{TSelf}.WithSize(int, int)"/>,
-/// <see cref="QrCodeImageBuilderBase{TSelf}.WithModulePixelSize(int)"/>,
-/// <see cref="QrCodeImageBuilderBase{TSelf}.WithColors(SKColor?, SKColor?, SKColor?)"/>,
-/// <see cref="QrCodeImageBuilderBase{TSelf}.WithModuleShape(ModuleShape?, float)"/>,
-/// <see cref="QrCodeImageBuilderBase{TSelf}.WithGradient(GradientOptions?)"/>)
+/// Chain the shared options (<see cref="QRCodeImageBuilderBase{TSelf}.WithSize(int, int)"/>,
+/// <see cref="QRCodeImageBuilderBase{TSelf}.WithModulePixelSize(int)"/>,
+/// <see cref="QRCodeImageBuilderBase{TSelf}.WithColors(SKColor?, SKColor?, SKColor?)"/>,
+/// <see cref="QRCodeImageBuilderBase{TSelf}.WithModuleShape(ModuleShape?, float)"/>,
+/// <see cref="QRCodeImageBuilderBase{TSelf}.WithGradient(GradientOptions?)"/>)
 /// with the Standard QR-specific options (<see cref="WithErrorCorrection(ECCLevel)"/>,
 /// <see cref="WithVersion(int)"/>, <see cref="WithIcon(IconData?)"/>,
 /// <see cref="WithFinderPatternShape(FinderPatternShape?)"/>) to customize appearance.
@@ -28,8 +28,8 @@ namespace SkiaSharp.QrCode.Image;
 /// </remarks>
 /// <seealso cref="QRCodeGenerator"/>
 /// <seealso cref="QRCodeRenderer"/>
-/// <seealso cref="MicroQrCodeImageBuilder"/>
-public class QRCodeImageBuilder : QrCodeImageBuilderBase<QRCodeImageBuilder>
+/// <seealso cref="MicroQRCodeImageBuilder"/>
+public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
 {
     private readonly string? _content;
     private readonly QRCodeData? _qrCodeData;

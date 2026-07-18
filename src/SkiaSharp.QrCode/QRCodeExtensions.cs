@@ -87,7 +87,7 @@ public static class QRCodeExtensions
     /// <param name="gradientOptions">Optional gradient options for the modules.</param>
     public static void Render(
         this SKCanvas canvas,
-        MicroQrCodeData data,
+        MicroQRCodeData data,
         int width,
         int height,
         SKColor? clearColor = null,
@@ -119,7 +119,7 @@ public static class QRCodeExtensions
     /// <param name="gradientOptions">Optional gradient options for the modules.</param>
     public static void Render(
         this SKCanvas canvas,
-        MicroQrCodeData data,
+        MicroQRCodeData data,
         SKRect area,
         SKColor? clearColor = null,
         SKColor? codeColor = null,

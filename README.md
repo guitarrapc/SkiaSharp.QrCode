@@ -48,7 +48,7 @@ SkiaSharp.QrCode is a modern, high-performance QR code generation library built 
 
 ## Supported Symbologies
 
-SkiaSharp.QrCode implements the Standard QR Code symbology and Micro QR generation/decoding. Unless a section says otherwise, this README — generation, decoding, styling, and the specification tables — refers to Standard QR; Micro QR is available via `MicroQrCodeGenerator` / `MicroQrCodeDecoder`.
+SkiaSharp.QrCode implements the Standard QR Code symbology and Micro QR generation/decoding. Unless a section says otherwise, this README — generation, decoding, styling, and the specification tables — refers to Standard QR; Micro QR is available via `MicroQRCodeGenerator` / `MicroQRCodeDecoder`.
 
 | Symbology | Standard | Generate (Encode) | Decode |
 |---|---|---|---|
@@ -267,18 +267,18 @@ if (QRCodeDecoder.TryDecode(moduleSpan, size, destination, out var written, out 
 
 On failure, `QRCodeDecodeInfo.Status` explains why (`NotDetected`, `FormatInformationInvalid`, `DataUncorrectable`, `UnsupportedContent`, ...). Supported content: Numeric / Alphanumeric / Byte modes, ISO-8859-1 and UTF-8 (with or without ECI), versions 1-40, all ECC levels. Kanji mode, FNC1 and Structured Append are detected and reported as unsupported rather than misdecoded.
 
-Micro QR symbols have their own decoder with the same shape (`MicroQrCodeData` / matrix / `SKBitmap` / zero-allocation span overloads):
+Micro QR symbols have their own decoder with the same shape (`MicroQRCodeData` / matrix / `SKBitmap` / zero-allocation span overloads):
 
 ```csharp
-var micro = MicroQrCodeGenerator.CreateMicroQrCode("01234567", MicroQrEccLevel.L);
-if (MicroQrCodeDecoder.TryDecode(micro, out var text, out var info))
+var micro = MicroQRCodeGenerator.CreateMicroQRCode("01234567", MicroQREccLevel.L);
+if (MicroQRCodeDecoder.TryDecode(micro, out var text, out var info))
 {
     Console.WriteLine($"{text} ({info.Version}, ECC {info.EccLevel})"); // 01234567 (M2, ECC L)
 }
 
 // Image scanning is explicitly typed — QRCodeDecoder stays Standard QR-only
 using var bitmap = SKBitmap.Decode("microqr.png");
-var found = MicroQrCodeDecoder.TryDecode(bitmap, out var scanned, out _);
+var found = MicroQRCodeDecoder.TryDecode(bitmap, out var scanned, out _);
 ```
 
 Micro QR image detection targets clean, screen-rendered or scanned images, including arbitrary rotation, mirroring, inverted colors, uniform or non-uniform scaling, translation, and mild perspective distortion. Because Micro QR has only one finder pattern and no alignment patterns, its measured perspective envelope is intentionally more conservative than Standard QR: the test suite covers 2% top-edge inset for M1/M2 and 4% for M3/M4, including rotation and mirror combinations. Strong perspective, uneven lighting, and blur remain out of scope.
@@ -439,22 +439,22 @@ Micro QR generation and matrix decoding are supported (M1–M4, Numeric/Alphanum
 
 ```csharp
 // Auto-selects the smallest version that fits (here: M2-L, 13x13 modules)
-var data = MicroQrCodeGenerator.CreateMicroQrCode("01234567", MicroQrEccLevel.L);
+var data = MicroQRCodeGenerator.CreateMicroQRCode("01234567", MicroQREccLevel.L);
 
 // Decode it back (module matrix; ISO Table 9 error correction included)
-var ok = MicroQrCodeDecoder.TryDecode(data, out var text, out var info);
-// ok == true, text == "01234567", info.Version == MicroQrVersion.M2
+var ok = MicroQRCodeDecoder.TryDecode(data, out var text, out var info);
+// ok == true, text == "01234567", info.Version == MicroQRVersion.M2
 ```
 
-Micro QR images are rendered with `MicroQrCodeImageBuilder` (PNG/JPEG/WEBP/SVG, colors, module shapes, gradients — no icon overlay or finder styling, which Micro QR's single finder and small ECC headroom cannot afford), and scanned back with `MicroQrCodeDecoder.TryDecode(SKBitmap, ...)`:
+Micro QR images are rendered with `MicroQRCodeImageBuilder` (PNG/JPEG/WEBP/SVG, colors, module shapes, gradients — no icon overlay or finder styling, which Micro QR's single finder and small ECC headroom cannot afford), and scanned back with `MicroQRCodeDecoder.TryDecode(SKBitmap, ...)`:
 
 ```csharp
 // Render: spec-default 2-module quiet zone, same fluent surface as QRCodeImageBuilder
-var png = MicroQrCodeImageBuilder.GetPngBytes("01234567", MicroQrEccLevel.L, size: 256);
+var png = MicroQRCodeImageBuilder.GetPngBytes("01234567", MicroQREccLevel.L, size: 256);
 
 // Scan a clean rendered/scanned image back
 using var bitmap = SKBitmap.Decode(png);
-var ok2 = MicroQrCodeDecoder.TryDecode(bitmap, out var scanned, out _);
+var ok2 = MicroQRCodeDecoder.TryDecode(bitmap, out var scanned, out _);
 ```
 
 Version constraints are enforced rather than silently degraded (M1: numeric + error detection only; ECC Q: M4 only; no ECI; Kanji not implemented). Decoding follows the spec's misdecode protection: error correction is capped at ISO/IEC 18004 Table 9 capacity per version/ECC, and M1 symbols are error-detection only. The symbology decoders stay separate on purpose: `QRCodeDecoder` reports Micro QR symbols as not detected rather than misreading them (and vice versa), so default Standard QR scanning performance is unaffected. rMQR (ISO/IEC 23941) is not supported yet.

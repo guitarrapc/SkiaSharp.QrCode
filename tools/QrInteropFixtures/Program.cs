@@ -11,7 +11,7 @@ var command = args.Length == 0 ? "regenerate" : args[0];
 if (command == "spot-check-microqr")
 {
     // Decodes SkiaSharp.QrCode-generated Micro QR symbols with zxing-cpp.
-    return MicroQrSpotCheck.Run();
+    return MicroQRSpotCheck.Run();
 }
 if (command == "probe-creator")
 {
@@ -64,11 +64,11 @@ foreach (var generator in generators)
 // pinned ZXingCpp package, and the pinned qrtool prebuilt binary). Every fixture
 // passes the zxing-cpp sanity gate (decode + metadata cross-check) before it is
 // written, and the gate's reader supplies the manifest mask pattern.
-var microQrRoot = Path.Combine(fixturesBase, "MicroQr");
-var microGenerators = new IMicroQrFixtureGenerator[]
+var microQrRoot = Path.Combine(fixturesBase, "MicroQR");
+var microGenerators = new IMicroQRFixtureGenerator[]
 {
-    new ZintMicroQrFixtureGenerator(),
-    new QrtoolMicroQrFixtureGenerator(repoRoot),
+    new ZintMicroQRFixtureGenerator(),
+    new QrtoolMicroQRFixtureGenerator(repoRoot),
 };
 
 foreach (var generator in microGenerators)
@@ -84,7 +84,7 @@ foreach (var generator in microGenerators)
         Directory.Delete(generatorDir, recursive: true);
     Directory.CreateDirectory(generatorDir);
 
-    foreach (var caseDefinition in MicroQrCorpus.Cases)
+    foreach (var caseDefinition in MicroQRCorpus.Cases)
     {
         if (!generator.SupportsCase(caseDefinition))
         {
@@ -93,7 +93,7 @@ foreach (var generator in microGenerators)
         }
 
         var fixture = generator.Generate(caseDefinition);
-        var mask = MicroQrSanityGate.VerifyAndGetMask(fixture);
+        var mask = MicroQRSanityGate.VerifyAndGetMask(fixture);
         fixture = fixture with { Manifest = fixture.Manifest with { MaskPattern = mask } };
 
         FixtureWriter.Write(generatorDir, fixture);

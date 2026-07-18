@@ -34,7 +34,7 @@ Internals are split into shared primitives and per-symbology pipelines.
 | `LuminanceConverter`, `PerspectiveTransform` | Image preprocessing and geometry are symbology-independent |
 | `Point`, `Rectangle` | Plain geometry types |
 
-**Per-symbology pipelines** (`Internals.StandardQr`, later `Internals.MicroQr`, `Internals.RmQr`) — knowledge specific to one symbol format:
+**Per-symbology pipelines** (`Internals.StandardQr`, later `Internals.MicroQR`, `Internals.RmQr`) — knowledge specific to one symbol format:
 
 - Capacity / ECC / interleaving tables and version selection
 - Mode indicator and character-count indicator widths
@@ -55,7 +55,7 @@ Each symbology gets its own generator entry point with symbology-typed version a
 
 Decoding: matrix-level entry points are symbology-explicit (matrix size alone distinguishes Micro QR 11–17 from Standard 21–177, but rectangular input needs width/height). Image-level decoding keeps Standard-QR-only scanning as the default; additional symbologies are opt-in so the existing detection hot path keeps its performance characteristics.
 
-Image builders: one builder per symbology, all deriving from `QrCodeImageBuilderBase<TSelf>` (self-referential generic, so fluent chains keep the concrete type). The base carries every shared option and the complete raster/SVG output surface; a symbology builder adds only its typed options (ECC/version) and connects its data model through three `private protected` hooks. Two guards keep the surfaces from drifting: the base class makes output-method omissions structurally impossible, and `QrImageBuilderApiParityTest` (reflection over the public surfaces with a documented allowed-difference list) catches asymmetry in what cannot be shared — the symbology-typed static helpers. The rMQR builder extends the same base and the same parity test.
+Image builders: one builder per symbology, all deriving from `QRCodeImageBuilderBase<TSelf>` (self-referential generic, so fluent chains keep the concrete type). The base carries every shared option and the complete raster/SVG output surface; a symbology builder adds only its typed options (ECC/version) and connects its data model through three `private protected` hooks. Two guards keep the surfaces from drifting: the base class makes output-method omissions structurally impossible, and `QrImageBuilderApiParityTest` (reflection over the public surfaces with a documented allowed-difference list) catches asymmetry in what cannot be shared — the symbology-typed static helpers. The rMQR builder extends the same base and the same parity test.
 
 Exact API names and shapes are finalized per-symbology at implementation time, spec-first, following the API-driven development principle in [DESIGN.md](../DESIGN.md).
 
@@ -98,7 +98,7 @@ The library does not implement Kanji segments for Standard QR today (detected an
 | Decision | Choice | Revisit when |
 |---|---|---|
 | Kanji mode (all symbologies) | Deferred; tables keep the column | User demand or decoder interop need |
-| Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR scanning is its own explicitly-typed entry (`MicroQrCodeDecoder`) | rMQR image detection API |
+| Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR scanning is its own explicitly-typed entry (`MicroQRCodeDecoder`) | rMQR image detection API |
 | Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) | — |
 | `QRCodeData` | Frozen for Standard QR | Never (compatibility contract) |
 

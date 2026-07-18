@@ -28,7 +28,7 @@ internal readonly struct StandardQrMatrixView(QRCodeData data) : IModuleMatrixVi
     public bool IsFinderPattern(int coreRow, int coreCol) => data.IsFinderPattern(coreRow, coreCol);
 }
 
-internal readonly struct MicroQrMatrixView(MicroQrCodeData data) : IModuleMatrixView
+internal readonly struct MicroQRMatrixView(MicroQRCodeData data) : IModuleMatrixView
 {
     public int Size => data.Size;
     public int CoreSize => data.GetCoreSize();

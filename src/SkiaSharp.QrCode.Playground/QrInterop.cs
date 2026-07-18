@@ -96,7 +96,7 @@ public static partial class QrInterop
                 throw new ArgumentException("Content is empty.");
 
             using var stream = new MemoryStream();
-            if (IsMicroQr(request))
+            if (IsMicroQR(request))
             {
                 var microData = CreateMicroData(request);
                 CreateMicroBuilder(request, microData).SaveToSvg(stream);
@@ -162,7 +162,7 @@ public static partial class QrInterop
             }
 
             // Standard QR failed: try Micro QR (separate, explicitly-typed detector)
-            var microSuccess = MicroQrCodeDecoder.TryDecode(bitmap, out var microText, out var microInfo);
+            var microSuccess = MicroQRCodeDecoder.TryDecode(bitmap, out var microText, out var microInfo);
             stopwatch.Stop();
 
             var resultPayload = microSuccess
@@ -200,7 +200,7 @@ public static partial class QrInterop
             throw new ArgumentException("Content is empty.");
 
         var stopwatch = Stopwatch.StartNew();
-        if (IsMicroQr(request))
+        if (IsMicroQR(request))
         {
             var microData = CreateMicroData(request);
             var microBytes = CreateMicroBuilder(request, microData).ToByteArray();
@@ -227,12 +227,12 @@ public static partial class QrInterop
         return bytes;
     }
 
-    private static bool IsMicroQr(QrRequest request)
+    private static bool IsMicroQR(QrRequest request)
         => string.Equals(request.Symbology, "microqr", StringComparison.OrdinalIgnoreCase);
 
-    private static MicroQrCodeData CreateMicroData(QrRequest request)
+    private static MicroQRCodeData CreateMicroData(QrRequest request)
     {
-        return MicroQrCodeGenerator.CreateMicroQrCode(
+        return MicroQRCodeGenerator.CreateMicroQRCode(
             request.Content.AsSpan(),
             ParseMicroEcc(request.Ecc),
             ParseMicroVersion(request.Version),
@@ -244,10 +244,10 @@ public static partial class QrInterop
     /// overlay or finder pattern shape options (single finder, no ECC headroom), so
     /// those request fields are ignored — the page hides the controls.
     /// </summary>
-    private static MicroQrCodeImageBuilder CreateMicroBuilder(QrRequest request, MicroQrCodeData data)
+    private static MicroQRCodeImageBuilder CreateMicroBuilder(QrRequest request, MicroQRCodeData data)
     {
         var size = Math.Clamp(request.Size, 64, 2048);
-        return new MicroQrCodeImageBuilder(data)
+        return new MicroQRCodeImageBuilder(data)
             .WithSize(size, size)
             .WithColors(
                 ParseColor(request.Foreground, SKColors.Black),
@@ -256,19 +256,19 @@ public static partial class QrInterop
             .WithGradient(CreateGradient(request.Gradient));
     }
 
-    private static MicroQrEccLevel ParseMicroEcc(string ecc) => ecc.ToUpperInvariant() switch
+    private static MicroQREccLevel ParseMicroEcc(string ecc) => ecc.ToUpperInvariant() switch
     {
-        "EDO" => MicroQrEccLevel.ErrorDetectionOnly,
-        "L" => MicroQrEccLevel.L,
-        "M" => MicroQrEccLevel.M,
-        "Q" => MicroQrEccLevel.Q,
+        "EDO" => MicroQREccLevel.ErrorDetectionOnly,
+        "L" => MicroQREccLevel.L,
+        "M" => MicroQREccLevel.M,
+        "Q" => MicroQREccLevel.Q,
         _ => throw new ArgumentException($"Unknown Micro QR ECC level '{ecc}'. Use EDO, L, M or Q."),
     };
 
-    private static MicroQrVersion? ParseMicroVersion(int version) => version switch
+    private static MicroQRVersion? ParseMicroVersion(int version) => version switch
     {
         -1 => null,
-        >= 1 and <= 4 => (MicroQrVersion)version,
+        >= 1 and <= 4 => (MicroQRVersion)version,
         _ => throw new ArgumentException($"Unknown Micro QR version '{version}'. Use 1-4 (M1-M4) or -1 for automatic selection."),
     };
 
@@ -317,7 +317,7 @@ public static partial class QrInterop
             if (count is <= 0 or > 1_000_000)
                 throw new ArgumentOutOfRangeException(nameof(count), "Batch count must be between 1 and 1,000,000.");
 
-            if (IsMicroQr(request))
+            if (IsMicroQR(request))
             {
                 return mode switch
                 {
@@ -433,7 +433,7 @@ public static partial class QrInterop
             var stopwatch = Stopwatch.StartNew();
             for (var i = 0; i < count; i++)
             {
-                written = MicroQrCodeGenerator.CreateMicroQrCode(request.Content.AsSpan(), ecc, moduleBuffer, version, quietZone);
+                written = MicroQRCodeGenerator.CreateMicroQRCode(request.Content.AsSpan(), ecc, moduleBuffer, version, quietZone);
                 bytesTotal += written;
             }
             stopwatch.Stop();

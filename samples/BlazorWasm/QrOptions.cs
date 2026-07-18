@@ -16,7 +16,7 @@ public sealed class QrOptions
     /// <summary>Error correction level. H is recommended when a logo overlays the code.</summary>
     public ECCLevel Ecc { get; set; } = ECCLevel.H;
     /// <summary>Micro QR error correction level (M1 supports error detection only).</summary>
-    public MicroQrEccLevel MicroEcc { get; set; } = MicroQrEccLevel.M;
+    public MicroQREccLevel MicroEcc { get; set; } = MicroQREccLevel.M;
     /// <summary>Exported image size in pixels (square). The on-screen preview scales to fit.</summary>
     public int Size { get; set; } = 512;
     /// <summary>Quiet zone in modules (0-10). The specification default is 4 (Micro QR: 2).</summary>
@@ -49,7 +49,7 @@ public sealed class QrOptions
 public enum SymbologyKind
 {
     QrCode,
-    MicroQr,
+    MicroQR,
 }
 
 /// <summary>Module shape choices exposed by the page.</summary>

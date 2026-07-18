@@ -49,7 +49,7 @@ public interface IFixtureGenerator
 public static class FixtureWriter
 {
     public const int QuietZoneModules = 4;
-    public const int MicroQrQuietZoneModules = 2; // ISO/IEC 18004: Micro QR quiet zone is 2 modules
+    public const int MicroQRQuietZoneModules = 2; // ISO/IEC 18004: Micro QR quiet zone is 2 modules
     public const int PixelsPerModule = 8;
 
     private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };

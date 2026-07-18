@@ -42,16 +42,16 @@ These tests should not involve SkiaSharp rendering or image decoding.
 [Test]
 [Arguments(
     "12345",
-    MicroQrVersion.M1,
+    MicroQRVersion.M1,
     ErrorCorrectionLevel.None,
     "... expected rows ...")]
 public void Encode_GeneratesExpectedMatrix(
     string value,
-    MicroQrVersion version,
+    MicroQRVersion version,
     ErrorCorrectionLevel errorCorrectionLevel,
     string expected)
 {
-    var code = MicroQrEncoder.Encode(
+    var code = MicroQREncoder.Encode(
         value,
         version,
         errorCorrectionLevel);
@@ -178,7 +178,7 @@ A separate script or tool should make fixture regeneration reproducible.
 tests/
 └── SkiaSharp.QrCode.Tests/
     └── Fixtures/
-        ├── MicroQr/
+        ├── MicroQR/
         │   ├── specification/
         │   ├── qrcode-rust2/
         │   ├── zxing-cpp/
@@ -369,9 +369,9 @@ Not every Micro QR version supports the same modes or error-correction levels. I
 
 ```csharp
 Assert.Throws<ArgumentException>(() =>
-    MicroQrEncoder.Encode(
+    MicroQREncoder.Encode(
         payload,
-        MicroQrVersion.M1,
+        MicroQRVersion.M1,
         ErrorCorrectionLevel.Q));
 ```
 
@@ -717,7 +717,7 @@ Creating fixtures before implementation prevents the implementation from becomin
 ```text
 tests/
 ├── SkiaSharp.QrCode.Encoding.Tests/
-│   ├── MicroQr/
+│   ├── MicroQR/
 │   │   ├── DataEncodingTests.cs
 │   │   ├── ReedSolomonTests.cs
 │   │   ├── PlacementTests.cs
@@ -730,7 +730,7 @@ tests/
 │       ├── MaskTests.cs
 │       └── MatrixConformanceTests.cs
 ├── SkiaSharp.QrCode.Decoding.Tests/
-│   ├── MicroQr/
+│   ├── MicroQR/
 │   │   ├── ModuleDecoderTests.cs
 │   │   ├── DetectionTests.cs
 │   │   ├── ErrorCorrectionTests.cs

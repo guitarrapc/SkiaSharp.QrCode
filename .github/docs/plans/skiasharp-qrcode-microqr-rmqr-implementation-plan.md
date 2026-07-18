@@ -16,7 +16,7 @@ The existing `QRCodeGenerator.CreateQrCode` surface does not extend cleanly:
 - `ECCLevel` (L/M/Q/H) does not map: Micro QR M1 has error detection only, M2/M3 allow L/M, M4 allows L/M/Q; rMQR allows only M/H.
 - Auto version selection, capacity tables, and mode restrictions differ per symbology.
 
-Therefore each symbology gets its own generator entry (e.g. `MicroQrCodeGenerator`, `RmQrCodeGenerator`, or new method families on `QRCodeGenerator` — decided in Phase 0) with symbology-typed version and ECC parameters. `QRCodeGenerator.CreateQrCode` stays byte-for-byte unchanged.
+Therefore each symbology gets its own generator entry (e.g. `MicroQRCodeGenerator`, `RmQrCodeGenerator`, or new method families on `QRCodeGenerator` — decided in Phase 0) with symbology-typed version and ECC parameters. `QRCodeGenerator.CreateQrCode` stays byte-for-byte unchanged.
 
 ### Split Standard-QR-specific classes from generic ones
 
@@ -35,7 +35,7 @@ Symbology-specific (new code, must NOT be forced into the Standard QR pipeline):
 - Function pattern layout and data placement (Micro QR: single finder; rMQR: finder + sub-finder, edge timing patterns, rectangular zigzag)
 - Symbol detection in images
 
-Structural approach: keep the Standard QR pipeline untouched (it is heavily perf-tuned and zero-alloc); add sibling internal namespaces (e.g. `Internals/MicroQr`, `Internals/RmQr`) that reuse the leaf primitives. Do not introduce a polymorphic abstraction over the hot path. Blast-radius check: existing Standard QR tests and benchmarks must stay green and flat through every phase.
+Structural approach: keep the Standard QR pipeline untouched (it is heavily perf-tuned and zero-alloc); add sibling internal namespaces (e.g. `Internals/MicroQR`, `Internals/RmQr`) that reuse the leaf primitives. Do not introduce a polymorphic abstraction over the hot path. Blast-radius check: existing Standard QR tests and benchmarks must stay green and flat through every phase.
 
 ### Data model must be generalized once, up front
 
@@ -92,8 +92,8 @@ Exit: decoder MVT (matrix-level rows) satisfied; round-trip regression net in pl
 
 Completes the Micro QR feature set so it can ship without waiting for rMQR. Two sub-parts, rendering first (smaller, and it is the release-blocking Image API):
 
-- 4a — Rendering integration (the Phase 2 deferral): the image-building surface (`QRCodeImageBuilder` / renderer / extension entry points) accepts `MicroQrCodeData`. Micro QR-correct defaults and restrictions per the Phase 2 lesson: 2-module quiet zone (not 4), no icon overlay / finder-styling options that assume three finder patterns or H-level masking headroom. Playground (WASM) gains Micro QR generation as the living demo; NativeAOT/WASM CI covers the path.
-- 4b — Image detection (moved up from the former Phase 6a): single-finder search strategy (different from three-finder Standard QR), sampling, `MicroQrCodeDecoder` image overloads mirroring the Standard QR image path. Clean + degraded PNG fixtures; deterministic degradation tests per test strategy §7, representative subset only. Decoder entry defaults keep Standard QR-only scanning at current performance; Micro QR scanning is opt-in or explicitly-typed.
+- 4a — Rendering integration (the Phase 2 deferral): the image-building surface (`QRCodeImageBuilder` / renderer / extension entry points) accepts `MicroQRCodeData`. Micro QR-correct defaults and restrictions per the Phase 2 lesson: 2-module quiet zone (not 4), no icon overlay / finder-styling options that assume three finder patterns or H-level masking headroom. Playground (WASM) gains Micro QR generation as the living demo; NativeAOT/WASM CI covers the path.
+- 4b — Image detection (moved up from the former Phase 6a): single-finder search strategy (different from three-finder Standard QR), sampling, `MicroQRCodeDecoder` image overloads mirroring the Standard QR image path. Clean + degraded PNG fixtures; deterministic degradation tests per test strategy §7, representative subset only. Decoder entry defaults keep Standard QR-only scanning at current performance; Micro QR scanning is opt-in or explicitly-typed.
 
 Exit: Micro QR is feature-complete (encode, render, matrix decode, image decode); decoder MVT image-level rows and degradation matrix green for Micro QR; Standard QR rendering/decoding benchmarks flat. **Micro QR releasable as a stand-alone release** (physical device acceptance per test strategy §11 runs for the Micro QR subset as release acceptance).
 
@@ -130,7 +130,7 @@ Exit: decoder MVT image-level rows satisfied; degradation matrix green for rMQR.
 
 - Test layout (decided in Phase 0): the single test assembly is organized
   symbology-first, mirroring `src` — `Shared/`, `StandardQr/`, `Rendering/`, with
-  `MicroQr/`, `RmQr/`, and `Fixtures/` added by their phases. No per-symbology test
+  `MicroQR/`, `RmQr/`, and `Fixtures/` added by their phases. No per-symbology test
   projects: `InternalsVisibleTo` targets one assembly, the suite runs in ~20s, and
   TUnit filters select by class name regardless of folders. The one planned exception
   is live interop tests with external native dependencies (zxing-cpp etc.), which get
@@ -183,8 +183,8 @@ Exit: decoder MVT image-level rows satisfied; degradation matrix green for rMQR.
 
 **Done**
 
-- Public API: `MicroQrCodeGenerator` (string/span overloads plus a zero-allocation span destination API and `GetRequiredBufferSize`), `MicroQrVersion`, `MicroQrEccLevel` (with `ErrorDetectionOnly` for M1), `MicroQrCodeData` with the new "QRX" serialization container (magic + symbol type + width + height + packed bits).
-- Pipeline in `Internals/MicroQr`: constants (capacity/codeword/format tables), bit-stream encoder (mode/count indicators, terminator, 0xEC/0x11 padding, M1/M3 half-codeword rules), module placer (single finder, edge timing, zigzag placement, 4-mask edge scoring applied on the fly without trial matrices, format info BCH+0x4445). Shared kernels reused as-is: `EccBinaryEncoder` (generator polynomials for ECC counts 2/5/6/8/10/14 build on demand), `BitWriter`, `TextAnalyzer`, `CharacterSets`. No Standard QR file was modified.
+- Public API: `MicroQRCodeGenerator` (string/span overloads plus a zero-allocation span destination API and `GetRequiredBufferSize`), `MicroQRVersion`, `MicroQREccLevel` (with `ErrorDetectionOnly` for M1), `MicroQRCodeData` with the new "QRX" serialization container (magic + symbol type + width + height + packed bits).
+- Pipeline in `Internals/MicroQR`: constants (capacity/codeword/format tables), bit-stream encoder (mode/count indicators, terminator, 0xEC/0x11 padding, M1/M3 half-codeword rules), module placer (single finder, edge timing, zigzag placement, 4-mask edge scoring applied on the fly without trial matrices, format info BCH+0x4445). Shared kernels reused as-is: `EccBinaryEncoder` (generator polynomials for ECC counts 2/5/6/8/10/14 build on demand), `BitWriter`, `TextAnalyzer`, `CharacterSets`. No Standard QR file was modified.
 - Tests (+232, total 2,688 green on net8.0 + net10.0): format info vs the 32-pattern ISO table plus naive BCH reference; M1 golden vectors and the ISO "01234567" M2-L example; naive bit-string references; version auto-selection boundaries for every mode × ECC; illegal-combination rejection (M1+L, M2+Q, EDO escalation, mode/version mismatches); matrix structure invariants; span/class API parity; QRX serialization round-trip; and a full-pipeline extraction test (inverse zigzag + unmask + ECC recompute) covering all 8 version/ECC combinations.
 - Docs: `specs/microqr-spec-map.md`, symbology status table, docs index, README (symbology table + FAQ with example), Micro QR capacity table in `docs/data-capacity.md`.
 
@@ -202,18 +202,18 @@ Exit: decoder MVT image-level rows satisfied; degradation matrix green for rMQR.
 - One widely used open-source Micro QR encoder does not apply the half-codeword rule for one of the M3 ECC levels, while the major open-source decoder expects it for both — cross-checking encoder claims against an independent decoder's *reading* code caught what a single reference would have hidden. (M1/M3's final 4-bit data codeword: high nibble carries data for RS, and only that nibble is emitted into the matrix.)
 - The Micro QR function-module region collapses to `row == 0 || col == 0 || (row ≤ 8 && col ≤ 8)`, so placement and masking need no blocked-module bitmask at all — verified by data-module counts (36/80/132/192).
 - Mask evaluation only reads the two symbol edges, so scoring all four masks needs no trial matrices: apply the mask predicate on the fly to 2·(size−1) modules and XOR.
-- End-to-end APIs must keep symbology-specific generator and image-builder entry points (`QRCodeGenerator` / `MicroQrCodeGenerator` / future `RmQrCodeGenerator`) rather than selecting a symbol through overloaded ECC types. Version domains, legal ECC combinations, auto-fit policy, quiet-zone defaults, ECI support, finder topology, and rMQR's rectangular geometry are all symbology-specific; ECC alone cannot express those constraints. Share matrix rendering infrastructure behind those explicit APIs, but do not generalize the encoding hot path or force Standard-only image options (three finder patterns, H-level icon guidance) onto Micro QR.
+- End-to-end APIs must keep symbology-specific generator and image-builder entry points (`QRCodeGenerator` / `MicroQRCodeGenerator` / future `RmQrCodeGenerator`) rather than selecting a symbol through overloaded ECC types. Version domains, legal ECC combinations, auto-fit policy, quiet-zone defaults, ECI support, finder topology, and rMQR's rectangular geometry are all symbology-specific; ECC alone cannot express those constraints. Share matrix rendering infrastructure behind those explicit APIs, but do not generalize the encoding hot path or force Standard-only image options (three finder patterns, H-level icon guidance) onto Micro QR.
 
 **Benchmarks (new path; Standard QR untouched — no regression possible, only file additions)**
 
 | Benchmark (net10.0, Release) | Mean | Allocated |
 |---|---|---|
-| MicroQr_Numeric_M2_Encode | 497 ns | 88 B (result object) |
-| MicroQr_Alphanumeric_M3_Encode | 629 ns | 96 B |
-| MicroQr_Byte_M4_Encode | 807 ns | 104 B |
-| MicroQr_Numeric_M2_Encode (Span) | 491 ns | **0 B** |
-| MicroQr_Alphanumeric_M3_Encode (Span) | 526 ns | **0 B** |
-| MicroQr_Byte_M4_Encode (Span) | 645 ns | **0 B** |
+| MicroQR_Numeric_M2_Encode | 497 ns | 88 B (result object) |
+| MicroQR_Alphanumeric_M3_Encode | 629 ns | 96 B |
+| MicroQR_Byte_M4_Encode | 807 ns | 104 B |
+| MicroQR_Numeric_M2_Encode (Span) | 491 ns | **0 B** |
+| MicroQR_Alphanumeric_M3_Encode (Span) | 526 ns | **0 B** |
+| MicroQR_Byte_M4_Encode (Span) | 645 ns | **0 B** |
 | StandardQr_Numeric_V1_Encode (Span), same payload, for scale | 2,336 ns | 0 B |
 
 ### Phase 2 follow-up — placement pipeline optimization, completed 2026-07-17
@@ -221,9 +221,9 @@ Exit: decoder MVT image-level rows satisfied; degradation matrix green for rMQR.
 **Done**
 
 - Ported the Standard QR ModulePlacer techniques to Micro QR placement as a fused
-  fast path `MicroQrModulePlacer.PlaceSymbol` (new partial file
-  `MicroQrModulePlacer.PlaceSymbol.cs`); the per-module stage methods remain as
-  the readable reference. `MicroQrCodeGenerator.WriteCoreModules` now makes one
+  fast path `MicroQRModulePlacer.PlaceSymbol` (new partial file
+  `MicroQRModulePlacer.PlaceSymbol.cs`); the per-module stage methods remain as
+  the readable reference. `MicroQRCodeGenerator.WriteCoreModules` now makes one
   placer call. Kernel-level result (private micro-benchmark loop, 14 variants,
   4 rounds): 3.1-4.0x over the per-module pipeline, zero allocations.
 - Design: <= 192-bit stream prepacked into 3 ulongs; closed-form column-pair
@@ -233,7 +233,7 @@ Exit: decoder MVT image-level rows satisfied; degradation matrix green for rMQR.
   entirely on packed rows (one ulong per row) with a single SWAR unpack, size 11
   stays byte-domain with the per-module mask apply (the unpack pass never
   amortizes on a 121-byte matrix — measured, not assumed).
-- Tests: `MicroQrModulePlacerParityTest` (fused vs naive reference, byte-identical
+- Tests: `MicroQRModulePlacerParityTest` (fused vs naive reference, byte-identical
   matrix + mask, all 8 version/ECC combos x {all-zero, all-0xFF, 3 random seeds},
   plus argument-validation negative cases). Full suite green: 2,776 tests
   (net8.0 + net10.0), 0 failed.
@@ -255,17 +255,17 @@ Exit: decoder MVT image-level rows satisfied; degradation matrix green for rMQR.
   byte-identical canary variant) — accept/refute decisions need same-run ratios
   plus cross-run consistency.
 
-**Benchmark delta (MicroQrEncode E2E, net10.0 Release, 12 iterations; before =
+**Benchmark delta (MicroQREncode E2E, net10.0 Release, 12 iterations; before =
 78405fc, after = this change; StandardQr control unchanged at ~2.6 us)**
 
 | Benchmark | Before | After | Delta |
 |---|---|---|---|
-| MicroQr_Numeric_M2_Encode (Span) | 475.2 ns | 181.2 ns | -62% (2.6x) |
-| MicroQr_Alphanumeric_M3_Encode (Span) | 627.7 ns | 258.6 ns | -59% (2.4x) |
-| MicroQr_Byte_M4_Encode (Span) | 752.0 ns | 305.2 ns | -59% (2.5x) |
-| MicroQr_Numeric_M2_Encode | 565.8 ns | 294.3 ns | -48% |
-| MicroQr_Alphanumeric_M3_Encode | 680.1 ns | 368.8 ns | -46% |
-| MicroQr_Byte_M4_Encode | 835.7 ns | 421.7 ns | -50% |
+| MicroQR_Numeric_M2_Encode (Span) | 475.2 ns | 181.2 ns | -62% (2.6x) |
+| MicroQR_Alphanumeric_M3_Encode (Span) | 627.7 ns | 258.6 ns | -59% (2.4x) |
+| MicroQR_Byte_M4_Encode (Span) | 752.0 ns | 305.2 ns | -59% (2.5x) |
+| MicroQR_Numeric_M2_Encode | 565.8 ns | 294.3 ns | -48% |
+| MicroQR_Alphanumeric_M3_Encode | 680.1 ns | 368.8 ns | -46% |
+| MicroQR_Byte_M4_Encode | 835.7 ns | 421.7 ns | -50% |
 
 Allocations unchanged (Span paths 0 B; class paths allocate the result object
 only).
@@ -279,7 +279,7 @@ only).
   Micro QR implementation, not to optimization). Kernel result vs the
   per-module baseline: 3.6-5.8x (M4-M 680 -> 118 ns), vs the scalar fast path
   another 16-27%.
-- Ship shape (`MicroQrModulePlacer.PlaceSymbol`, single code path for ALL
+- Ship shape (`MicroQRModulePlacer.PlaceSymbol`, single code path for ALL
   sizes — the size-11 byte-domain dispatch was deleted): bulk stream pack,
   2-row-unrolled placement (all segment row counts are even), packed-edge
   scoring, mask apply fused into the unpack, SSSE3 16-module expand with a
@@ -306,14 +306,14 @@ only).
   method measured 13% apart in the same run — candidate deltas below the
   identical-code layout spread are unattributable.
 
-**Benchmark delta (MicroQrEncode E2E, net10.0 Release, Span API; before =
+**Benchmark delta (MicroQREncode E2E, net10.0 Release, Span API; before =
 78405fc, scalar = first follow-up, SIMD = this change; two launches averaged)**
 
 | Benchmark | Before | Scalar port | SIMD port | Total |
 |---|---|---|---|---|
-| MicroQr_Numeric_M2 (Span) | 475.2 ns | 181.2 ns | ~179 ns | 2.7x |
-| MicroQr_Alphanumeric_M3 (Span) | 627.7 ns | 258.6 ns | ~228 ns | 2.8x |
-| MicroQr_Byte_M4 (Span) | 752.0 ns | 305.2 ns | ~279 ns | 2.7x |
+| MicroQR_Numeric_M2 (Span) | 475.2 ns | 181.2 ns | ~179 ns | 2.7x |
+| MicroQR_Alphanumeric_M3 (Span) | 627.7 ns | 258.6 ns | ~228 ns | 2.8x |
+| MicroQR_Byte_M4 (Span) | 752.0 ns | 305.2 ns | ~279 ns | 2.7x |
 
 Allocations unchanged (Span paths 0 B). StandardQr control stable across runs.
 
@@ -321,7 +321,7 @@ Allocations unchanged (Span paths 0 B). StandardQr control stable across runs.
 
 **Done**
 
-- Rewrote `MicroQrBinaryEncoder.EncodeDataCodewords`: the whole ≤ 128-bit data
+- Rewrote `MicroQRBinaryEncoder.EncodeDataCodewords`: the whole ≤ 128-bit data
   codeword stream is accumulated MSB-first in two ulong registers (`BitWriter`
   is no longer on the Micro QR path). Mode + count header fused into one append;
   numeric SWAR 3-digit groups (one 64-bit load + multiply per group, 9 digits
@@ -332,10 +332,10 @@ Allocations unchanged (Span paths 0 B). StandardQr control stable across runs.
   hand-rolled UTF-8 fallback matching `Encoding.UTF8` semantics including
   lone-surrogate U+FFFD (also removes the netstandard2.0 string + array
   allocation).
-- Tests: `MicroQrBinaryEncoderParityTest` (exhaustive vs an independent naive
+- Tests: `MicroQRBinaryEncoderParityTest` (exhaustive vs an independent naive
   bit-string reference: all 8 version/ECC combos × every length up to capacity
   × min/max/random contents, full Latin-1 range, UTF-8 fallbacks including
-  surrogate pairs and lone surrogates), `MicroQrBitAccumulatorUnitTest`
+  surrogate pairs and lone surrogates), `MicroQRBitAccumulatorUnitTest`
   (Append/Append64 at positions 0/64 and word-straddling writes). Spec map row
   updated. Full suite green: 3,010 tests (net8.0 + net10.0), 0 failed.
 
@@ -355,16 +355,16 @@ Allocations unchanged (Span paths 0 B). StandardQr control stable across runs.
 - BDN DisassemblyDiagnoser flakes ~50% on this box; tiering off +
   `DOTNET_JitDisasm` is the reliable fallback for reading codegen.
 
-**Benchmark delta** — kernel (private micro-benchmark loop, MicroQrBinaryEncode):
-1.8-2.5x (15-31 ns → 6.7-17 ns across M1-M4 payloads); E2E MicroQrEncode −4 to
+**Benchmark delta** — kernel (private micro-benchmark loop, MicroQRBinaryEncode):
+1.8-2.5x (15-31 ns → 6.7-17 ns across M1-M4 payloads); E2E MicroQREncode −4 to
 −14% (placement dominates after the earlier follow-ups). Branch-final E2E state
 (net10.0 Release, two launches averaged, 2026-07-17):
 
 | Benchmark | Mean | Allocated |
 |---|---|---|
-| MicroQr_Numeric_M2_Encode (Span) | ~175 ns | 0 B |
-| MicroQr_Alphanumeric_M3_Encode (Span) | ~230 ns | 0 B |
-| MicroQr_Byte_M4_Encode (Span) | ~293 ns | 0 B |
+| MicroQR_Numeric_M2_Encode (Span) | ~175 ns | 0 B |
+| MicroQR_Alphanumeric_M3_Encode (Span) | ~230 ns | 0 B |
+| MicroQR_Byte_M4_Encode (Span) | ~293 ns | 0 B |
 | StandardQr_Numeric_V1_Encode (Span), control | ~2.1 µs | 0 B |
 
 ### Phase 2 follow-up (4) — placement PEXT/PDEP phase, completed 2026-07-17
@@ -413,14 +413,14 @@ Allocations unchanged (Span paths 0 B). StandardQr control stable across runs.
 - De-fusing a fused pass to enable a downstream trick can cost more than the
   trick saves (V35): price the enabling plumbing, not just the headline change.
 
-**Benchmark delta (MicroQrEncode E2E, net10.0 Release, Span API; ABBA-ordered
+**Benchmark delta (MicroQREncode E2E, net10.0 Release, Span API; ABBA-ordered
 runs x (3 launches x 15 iterations), before/after averaged over 2 runs each)**
 
 | Benchmark | Before | After | Delta |
 |---|---|---|---|
-| MicroQr_Numeric_M2 (Span) | ~155 ns | ~155 ns | ±0% |
-| MicroQr_Alphanumeric_M3 (Span) | ~211 ns | ~183 ns | -13% |
-| MicroQr_Byte_M4 (Span) | ~309 ns | ~200 ns | -35% |
+| MicroQR_Numeric_M2 (Span) | ~155 ns | ~155 ns | ±0% |
+| MicroQR_Alphanumeric_M3 (Span) | ~211 ns | ~183 ns | -13% |
+| MicroQR_Byte_M4 (Span) | ~309 ns | ~200 ns | -35% |
 
 Allocations unchanged (Span paths 0 B). The StandardQr control swung ±11%
 across all four runs (machine-level noise floor); the M3/M4 wins exceed that
@@ -430,27 +430,27 @@ spread in every pairing, M2's placer share is too small to surface.
 
 **Done**
 
-- Public API: `MicroQrCodeDecoder` (`MicroQrCodeData` / module-matrix / zero-allocation
-  span overloads plus `GetMaxDecodedLength`), `MicroQrCodeDecodeInfo` (status shared
+- Public API: `MicroQRCodeDecoder` (`MicroQRCodeData` / module-matrix / zero-allocation
+  span overloads plus `GetMaxDecodedLength`), `MicroQRCodeDecodeInfo` (status shared
   with Standard QR, Micro-typed version/ECC, mask 0-3, corrected-error count).
   Uniform quiet-zone stripping via the finder corner (the Standard QR dark-bounding-box
   trick does not work — see lessons).
-- Pipeline in `Internals/MicroQr`, same internal boundary as `QRMatrixDecoder`:
-  `MicroQrFormatInformationDecoder` (single 15-bit copy, 32-candidate Hamming match,
+- Pipeline in `Internals/MicroQR`, same internal boundary as `QRMatrixDecoder`:
+  `MicroQRFormatInformationDecoder` (single 15-bit copy, 32-candidate Hamming match,
   ≤ 3 bit errors, format-version × matrix-size cross-check),
-  `MicroQrMatrixDecoder` (inverse zigzag + on-the-fly unmask reusing the encoder's own
+  `MicroQRMatrixDecoder` (inverse zigzag + on-the-fly unmask reusing the encoder's own
   `IsFunctionModule`/`GetMaskBit`, single RS block — no deinterleave, stackalloc-only),
-  `MicroQrBinaryDecoder` (mode/count framing, terminator = zero-count Numeric segment,
+  `MicroQRBinaryDecoder` (mode/count framing, terminator = zero-count Numeric segment,
   stream bounded by dataBitCount for the M1/M3 half codeword, Kanji → UnsupportedContent),
-  and a new `MicroQrConstants` ISO Table 9 error-correction-capacity table (2t + p = ecc)
+  and a new `MicroQRConstants` ISO Table 9 error-correction-capacity table (2t + p = ecc)
   enforced after RS correction. Segment payload decoding (numeric/alphanumeric/byte
   groups, UTF-8/Latin-1 heuristics) extracted from `QRBinaryDecoder` into shared
   `Internals/BinaryDecoders/SegmentDecoders` — the only Standard QR file touched,
   mechanically, verified flat by benchmark.
 - External-encoder fixtures, two independent lineages, exactly as planned:
-  `Fixtures/MicroQr/zint-libzint/` (17 cases; pinned ZXingCpp `BarcodeCreator`,
+  `Fixtures/MicroQR/zint-libzint/` (17 cases; pinned ZXingCpp `BarcodeCreator`,
   `version=`/`ecLevel=` options honored, module-exact `ToImage(Scale=1, AddQuietZones=false)`)
-  and `Fixtures/MicroQr/qrtool/` (18 cases; qrtool 0.13.2 prebuilt binary pinned by
+  and `Fixtures/MicroQR/qrtool/` (18 cases; qrtool 0.13.2 prebuilt binary pinned by
   version + SHA-256 via `tools/QrInteropFixtures/get-qrtool.ps1`, module-exact
   `--type ascii` output). Every fixture passed the zxing-cpp sanity gate
   (decode + version/ECC cross-check) before being written; the gate's reader supplies
@@ -493,15 +493,15 @@ spread in every pairing, M2's placer share is too small to surface.
   can carry externally-sourced mask metadata even when the producing encoder reports
   nothing — and reader-sourced values additionally prove the bits are on the wire.
 
-**Benchmark delta** — new decode path (MicroQrDecode E2E, net10.0 Release, 8 iterations;
+**Benchmark delta** — new decode path (MicroQRDecode E2E, net10.0 Release, 8 iterations;
 encode numbers for the same payloads shown for comparison):
 
 | Benchmark | Decode | Encode (same payload) | Allocated |
 |---|---|---|---|
-| MicroQr_Numeric_M2 (Span) | 374 ns | ~175 ns | 0 B |
-| MicroQr_Alphanumeric_M3 (Span) | 511 ns | ~230 ns | 0 B |
-| MicroQr_Byte_M4 (Span) | 684 ns | ~293 ns | 0 B |
-| MicroQr_Numeric_M2 (string) | 382 ns | — | 48 B (result string) |
+| MicroQR_Numeric_M2 (Span) | 374 ns | ~175 ns | 0 B |
+| MicroQR_Alphanumeric_M3 (Span) | 511 ns | ~230 ns | 0 B |
+| MicroQR_Byte_M4 (Span) | 684 ns | ~293 ns | 0 B |
+| MicroQR_Numeric_M2 (string) | 382 ns | — | 48 B (result string) |
 | StandardQr_Numeric_V1_Decode (Span), control | 1,148 ns | — | 0 B |
 
 Standard QR decode guard (QrCodeDecodeEndToEnd, before = 359c304 via worktree,
@@ -514,38 +514,38 @@ all measured faster on the after run), allocations 0 B on both sides — the
 
 **Done (4a — rendering integration)**
 
-- Public API: `MicroQrCodeImageBuilder` (fluent + static helpers mirroring
+- Public API: `MicroQRCodeImageBuilder` (fluent + static helpers mirroring
   `QRCodeImageBuilder`: PNG/JPEG/WEBP bytes/stream/IBufferWriter, SVG with
-  viewBox/crispEdges injection; Micro-typed `WithErrorCorrection(MicroQrEccLevel)` /
-  `WithVersion(MicroQrVersion)`; quiet zone default 2 per spec; no icon overlay or
+  viewBox/crispEdges injection; Micro-typed `WithErrorCorrection(MicroQREccLevel)` /
+  `WithVersion(MicroQRVersion)`; quiet zone default 2 per spec; no icon overlay or
   finder-styling options — single finder, no ECC headroom),
-  `QRCodeRenderer.Render(…, MicroQrCodeData, …)` low-level overload, and
-  `SKCanvas.Render(MicroQrCodeData, …)` extensions.
+  `QRCodeRenderer.Render(…, MicroQRCodeData, …)` low-level overload, and
+  `SKCanvas.Render(MicroQRCodeData, …)` extensions.
 - Sharing: draw loops generalized over an internal `IModuleMatrixView` struct view
   (generic specialization, no virtual dispatch; Standard QR call sites unchanged),
   canvas layout math extracted to `QrImageLayout` — both builders delegate.
-- Tests (+94): `MicroQrCodeImageBuilderUnitTest` — full-matrix module-to-pixel
-  parity (every module center vs `MicroQrCodeData`, all 8 version/ECC combos,
+- Tests (+94): `MicroQRCodeImageBuilderUnitTest` — full-matrix module-to-pixel
+  parity (every module center vs `MicroQRCodeData`, all 8 version/ECC combos,
   custom colors, circle shapes), quiet zone defaults/overrides, layout
   (pad/center/too-small/odd padding), SVG structure (viewBox, crispEdges on/off),
   static helper signatures, validation negatives, renderer/extension entry points.
 
 **Done (4b — image detection)**
 
-- Public API: `MicroQrCodeDecoder.TryDecode(SKBitmap, …)` and
+- Public API: `MicroQRCodeDecoder.TryDecode(SKBitmap, …)` and
   `TryDecodeImage(luminance, …)` (string and zero-allocation span-destination
   overloads). `QRCodeDecoder` remains Standard QR-only — Micro QR scanning is
   explicitly-typed, so default scanning perf is untouched.
-- Pipeline (`Internals/MicroQr/MicroQrImageDecoder`): shared Otsu threshold →
+- Pipeline (`Internals/MicroQR/MicroQRImageDecoder`): shared Otsu threshold →
   shared 1:1:3:1:1 finder scan collecting ALL cross-checked candidates (new
   `FinderPatternFinder.FindCandidates`) → module size from dark-light-dark runs
   through the single finder center → axis-aligned grid sampling trying
   sizes M4..M1 × 4 right-angle orientations × transpose (full dihedral coverage
-  for mirrored captures) → `MicroQrMatrixDecoder` arbitrates (format/RS/Table 9
+  for mirrored captures) → `MicroQRMatrixDecoder` arbitrates (format/RS/Table 9
   capacity kill wrong grids) → inverted retry for reflectance reversal.
 - Detection primitives lifted to `Internals.ImageDecoders` (`Binarizer`,
   `FinderPatternFinder`) exactly on the spec's second-consumer trigger; the
-  namespace dependency rule holds (`Internals.MicroQr` no longer references
+  namespace dependency rule holds (`Internals.MicroQR` no longer references
   `Internals.StandardQr`).
 - Tests (+130, full suite 3,866 on net8.0 + net10.0, 0 failed, 100
   skipped-by-design): clean renders all versions × ECC; module pixel sizes 3-13;
@@ -597,7 +597,7 @@ Standard QR guards — flat, allocations identical:
 | QrCodeDecodeEndToEnd Matrix_Short_M | 1.06 µs / 0 B | 1.06 µs / 0 B |
 | QrCodeDecodeEndToEnd Image_Url_M | 37.4 µs / 0 B | 38.4 µs / 0 B |
 
-New Micro QR image paths (`MicroQrImageEndToEnd`):
+New Micro QR image paths (`MicroQRImageEndToEnd`):
 
 | Benchmark | Mean | Allocated |
 |---|---|---|
@@ -613,7 +613,7 @@ Render times are PNG-encode dominated (Standard QR Small_512px is the same
 
 **Done**
 
-- `MicroQrCodeGenerator` capacity errors now state the actual length, the
+- `MicroQRCodeGenerator` capacity errors now state the actual length, the
   applicable maximum, and the remedy, in mode-appropriate units (digits /
   characters / encoded bytes): e.g. "Content is too long for Micro QR: 46 bytes
   in Byte mode, but ECC level M fits at most 13 bytes (M4). Shorten the content,
@@ -638,20 +638,20 @@ Render times are PNG-encode dominated (Standard QR Small_512px is the same
 
 **Done**
 
-- `QrCodeImageBuilderBase<TSelf>` (self-referential generic): the fluent options
+- `QRCodeImageBuilderBase<TSelf>` (self-referential generic): the fluent options
   every symbology shares (`WithSize` / `WithModulePixelSize` / `WithFormat` /
   `WithQuietZone` / `WithColors` / `WithModuleShape` / `WithGradient`) and the
   complete output surface (`SaveTo` ×2, `SaveToSvg` ×2, `ToSvgString`,
   `ToByteArray`, `ToImage`, `ToBitmap`, plus the raster/SVG pipeline with the
   opaque-surface and crispEdges logic) now exist exactly once.
-  `QRCodeImageBuilder` / `MicroQrCodeImageBuilder` keep constructors, their
+  `QRCodeImageBuilder` / `MicroQRCodeImageBuilder` keep constructors, their
   symbology-typed options, static helpers, and three `private protected` hooks
   (`ResolveSymbol`, `RenderSymbol`, `UseCrispEdgesCore`). Quiet-zone defaults
   (4 / 2) moved from parameter defaults into builder initial state;
   `WithQuietZone` no longer declares a default argument.
 - `QrImageBuilderApiParityTest`: reflection over both public surfaces asserts
   1:1 correspondence with symbology types canonicalized (QRCodeData ⇔
-  MicroQrCodeData, ECCLevel ⇔ MicroQrEccLevel, int version ⇔ MicroQrVersion)
+  MicroQRCodeData, ECCLevel ⇔ MicroQREccLevel, int version ⇔ MicroQRVersion)
   modulo the documented Standard-only options (WithIcon, WithFinderPatternShape,
   WithEciMode) — guards the statics the base class cannot share. Passed against
   the pre-refactor surfaces first (they were already symmetric), so it now locks
@@ -672,7 +672,7 @@ Render times are PNG-encode dominated (Standard QR Small_512px is the same
   output call, and a second generic parameter would leak the data type into the
   public base signature for no user benefit.
 
-**Benchmark delta (QrCodeImageEndToEnd + MicroQrImageEndToEnd, net10.0 Release,
+**Benchmark delta (QrCodeImageEndToEnd + MicroQRImageEndToEnd, net10.0 Release,
 before = pre-refactor tree, after = this change)**
 
 All scenarios within single-iteration noise, allocations byte-identical

@@ -19,7 +19,7 @@ tests/SkiaSharp.QrCode.Tests/Fixtures/
 │       ├── case-name.json       manifest
 │       ├── case-name.matrix.txt core module matrix, '1' dark / '0' light, row-major, LF, no quiet zone
 │       └── case-name.png        clean black-on-white render (quiet zone 4, 8 px/module)
-└── MicroQr/
+└── MicroQR/
     ├── zint-libzint/           (same three files; PNG quiet zone 2 per the Micro QR spec)
     └── qrtool/
 ```
@@ -47,13 +47,13 @@ Every mode (Numeric / Alphanumeric / Byte) × every ECC level at small versions,
 
 ### Corpus contents (Micro QR, 18 cases × 2 lineages)
 
-Every version × legal ECC combination (M1 detection-only, M2/M3 L+M, M4 L+M+Q), every supported mode, capacity-boundary payloads (padding-free) plus short payloads (terminator + pad paths), and a UTF-8 byte-mode case (qrtool lineage only — libzint rejects UTF-8 input). Both lineages share the case list (`MicroQrCorpus`): 17 fixtures from zint-libzint, 18 from qrtool. Version and ECC are pinned per case; the mask pattern in the manifest comes from the zxing-cpp READER during the sanity gate, so it is externally sourced.
+Every version × legal ECC combination (M1 detection-only, M2/M3 L+M, M4 L+M+Q), every supported mode, capacity-boundary payloads (padding-free) plus short payloads (terminator + pad paths), and a UTF-8 byte-mode case (qrtool lineage only — libzint rejects UTF-8 input). Both lineages share the case list (`MicroQRCorpus`): 17 fixtures from zint-libzint, 18 from qrtool. Version and ECC are pinned per case; the mask pattern in the manifest comes from the zxing-cpp READER during the sanity gate, so it is externally sourced.
 
 **Sanity gate**: every generated Micro QR fixture is rendered and decoded with the pinned zxing-cpp reader before it is written — payload, version and ECC level must match the manifest — so a broken generator cannot poison the committed corpus.
 
 ### Consuming tests
 
-`StandardQrFixtureTest` decodes every fixture twice — matrix path (`TryDecode(modules, size, …)`) and image path (`TryDecode(SKBitmap, …)`) — asserting payload, version, ECC level, and (matrix path) the generator's mask pattern. `MicroQrFixtureTest` likewise exercises both the matrix path and the PNG image path (`MicroQrCodeDecoder.TryDecode(SKBitmap, …)`, Phase 4b) and additionally asserts zero corrected errors and (matrix path) the reader-sourced mask pattern.
+`StandardQrFixtureTest` decodes every fixture twice — matrix path (`TryDecode(modules, size, …)`) and image path (`TryDecode(SKBitmap, …)`) — asserting payload, version, ECC level, and (matrix path) the generator's mask pattern. `MicroQRFixtureTest` likewise exercises both the matrix path and the PNG image path (`MicroQRCodeDecoder.TryDecode(SKBitmap, …)`, Phase 4b) and additionally asserts zero corrected errors and (matrix path) the reader-sourced mask pattern.
 
 ### Regeneration
 

@@ -26,7 +26,7 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 /// - Byte&lt;-&gt;bit edges run 16 modules per step: packing gathers per-byte bit
 ///   weights (cmeq+bic) and reduces with a uaddlp chain; unpacking broadcasts
 ///   the 16-bit delta chunk and replicates bytes with tbl + cmtst (the same
-///   sequence as MicroQrModulePlacer.Unpack16).
+///   sequence as MicroQRModulePlacer.Unpack16).
 ///
 /// This file only executes under AdvSimd.Arm64.IsSupported, so memory order is
 /// always little-endian and the SWAR tail reads skip endianness normalization.
