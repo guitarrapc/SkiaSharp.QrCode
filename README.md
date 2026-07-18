@@ -16,12 +16,17 @@ SkiaSharp.QrCode provides high-performance QR code generation/read with [SkiaSha
 
 Many existing QR code libraries rely on System.Drawing, which has well-known GDI+ limitations and cross-platform issues. SkiaSharp.QrCode was created to provide high performance, minimum memory allocation, a simpler and more intuitive API while leveraging SkiaSharp's cross-platform capabilities. Generate a QR code in a single line, or customize every detail - the choice is yours.
 
-You can create professional-looking QR codes like this with just a few lines of code:
+You can create professional-looking QR codes like this with just a few lines of code. Here's a small sample of Standard QR and Micro QR.
 
 <p float="left">
   <img src="samples/ConsoleApp/samples/pattern15_instagram_frame.png" width="250" alt="Instagram-style"/>
   <img src="samples/ConsoleApp/samples/pattern6_builder_gradient.png" width="250" alt="Gradient QR"/>
   <img src="samples/ConsoleApp/samples/pattern7_builder_icon.png" width="250" alt="Icon QR"/>
+</p>
+
+<p float="left">
+  <img src="samples/ConsoleApp/samples/pattern24_microqr_static.png" width="250" alt="MicroQR static"/>
+  <img src="samples/ConsoleApp/samples/pattern25_microqr_styled.png" width="250" alt="MicroQR styled"/>
 </p>
 
 See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these styles.
@@ -48,7 +53,7 @@ SkiaSharp.QrCode is a modern, high-performance QR code generation library built 
 
 ## Supported Symbologies
 
-SkiaSharp.QrCode implements the Standard QR Code symbology and Micro QR generation/decoding. Unless a section says otherwise, this README — generation, decoding, styling, and the specification tables — refers to Standard QR; Micro QR is available via `MicroQRCodeGenerator` / `MicroQRCodeDecoder`.
+SkiaSharp.QrCode implements the Standard QR Code symbology and Micro QR generation/decoding. Unless a section says otherwise, this README refers to Standard QR; Micro QR is available via `MicroQRCodeGenerator` / `MicroQRCodeDecoder`.
 
 | Symbology | Standard | Generate (Encode) | Decode |
 |---|---|---|---|

@@ -982,5 +982,80 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
+// Micro QR — ISO/IEC 18004 M2-L numeric example (11×11 core, 13×13 with quiet zone)
+var microContent = "01234567";
+
+Console.WriteLine("""
+    Pattern 24: Micro QR — Static Method (Simplest)
+      - Best for: Quick Micro QR generation with default settings
+      - API: MicroQRCodeImageBuilder.GetPngBytes()
+    """);
+{
+    var path = Path.Combine(outputDir, "pattern24_microqr_static.png");
+
+    var pngBytes = MicroQRCodeImageBuilder.GetPngBytes(microContent, MicroQREccLevel.L, size: 256);
+    File.WriteAllBytes(path, pngBytes);
+
+    Console.WriteLine($"  ✓ Saved to: {path}");
+}
+Console.WriteLine();
+
+Console.WriteLine("""
+    Pattern 25: Micro QR — Builder (colors, module shape, gradient)
+      - Best for: Styled Micro QR within symbology limits (no icon / finder styling)
+      - API: new MicroQRCodeImageBuilder().WithXxx()
+      - Default quiet zone is 2 modules (Standard QR uses 4)
+    """);
+{
+    var path = Path.Combine(outputDir, "pattern25_microqr_styled.png");
+    var gradient = new GradientOptions(
+        [SKColor.Parse("00B894"), SKColor.Parse("0984E3")],
+        GradientDirection.TopLeftToBottomRight);
+
+    var pngBytes = new MicroQRCodeImageBuilder("SKU-42")
+        .WithModulePixelSize(14)
+        .WithErrorCorrection(MicroQREccLevel.M)
+        .WithColors(codeColor: SKColor.Parse("2D3436"), backgroundColor: SKColors.White)
+        .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.92f)
+        .WithGradient(gradient)
+        .ToByteArray();
+
+    File.WriteAllBytes(path, pngBytes);
+
+    Console.WriteLine($"  ✓ Saved to: {path}");
+}
+Console.WriteLine();
+
+Console.WriteLine("""
+    Pattern 26: Micro QR — Decode (matrix / image round-trip)
+      - Best for: Round-trip validation, reading rendered Micro QR images
+      - API: MicroQRCodeDecoder.TryDecode()
+      - QRCodeDecoder stays Standard QR-only (cross-symbology rejection)
+    """);
+{
+    var microData = MicroQRCodeGenerator.CreateMicroQRCode(microContent, MicroQREccLevel.L);
+    if (MicroQRCodeDecoder.TryDecode(microData, out var decoded, out var info))
+    {
+        Console.WriteLine($"  ✓ Matrix decode: \"{decoded}\" (version {info.Version}, ECC {info.EccLevel})");
+    }
+
+    var pngPath = Path.Combine(outputDir, "pattern24_microqr_static.png");
+    using (var bitmap = SKBitmap.Decode(File.ReadAllBytes(pngPath)))
+    {
+        if (MicroQRCodeDecoder.TryDecode(bitmap, out var fromImage, out var imageInfo))
+        {
+            Console.WriteLine($"  ✓ Image decode ({Path.GetFileName(pngPath)}): \"{fromImage}\" (version {imageInfo.Version})");
+        }
+        else
+        {
+            Console.WriteLine($"  ✗ Image decode failed: {imageInfo.Status}");
+        }
+
+        QRCodeDecoder.TryDecode(bitmap, out _, out var stdInfo);
+        Console.WriteLine($"  ✓ Standard QR decoder on Micro QR image: {stdInfo.Status} (expected NotDetected)");
+    }
+}
+Console.WriteLine();
+
 Console.WriteLine("=== All patterns completed! ===");
 Console.WriteLine($"Output directory: {Path.GetFullPath(outputDir)}");
