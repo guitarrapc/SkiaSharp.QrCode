@@ -104,7 +104,7 @@ internal static class MicroQRBinaryEncoder
                 break;
 
             case EncodingMode.Byte:
-            {
+                {
 #if NET8_0_OR_GREATER
                 if (AdvSimd.Arm64.IsSupported && text.Length >= 8)
                 {
@@ -166,27 +166,27 @@ internal static class MicroQRBinaryEncoder
                     break;
                 }
 #endif
-                // Latin-1 validity, branch-free: if every char is <= 0x00FF the
-                // OR of all code units stays <= 0xFF; any char with high bits
-                // pushes it above. The loop only ORs and the compare happens once
-                // at the end, no per-char `if (text[i] > 0xFF)` branch. Trade-off:
-                // no early exit, so a non-Latin-1 char up front still scans the
-                // whole text; Micro QR inputs are <= 15 chars, so avoiding the
-                // data-dependent branch wins over bailing out early.
-                var acc = 0;
-                for (var i = 0; i < text.Length; i++)
-                {
-                    acc |= text[i];
-                }
-                if (acc > 0xFF)
-                {
-                    return EncodeUtf8Codewords(text, version, capacityBits, codewordCount, modeValue, headerBits, destination);
-                }
+                    // Latin-1 validity, branch-free: if every char is <= 0x00FF the
+                    // OR of all code units stays <= 0xFF; any char with high bits
+                    // pushes it above. The loop only ORs and the compare happens once
+                    // at the end, no per-char `if (text[i] > 0xFF)` branch. Trade-off:
+                    // no early exit, so a non-Latin-1 char up front still scans the
+                    // whole text; Micro QR inputs are <= 15 chars, so avoiding the
+                    // data-dependent branch wins over bailing out early.
+                    var acc = 0;
+                    for (var i = 0; i < text.Length; i++)
+                    {
+                        acc |= text[i];
+                    }
+                    if (acc > 0xFF)
+                    {
+                        return EncodeUtf8Codewords(text, version, capacityBits, codewordCount, modeValue, headerBits, destination);
+                    }
 
-                // Byte mode: the count indicator counts encoded BYTES; on the
-                // Latin-1 path every char narrows to one byte, so count = length.
-                Append(ref hi, ref lo, ref pos, modeValue | text.Length, headerBits);
-                var j = 0;
+                    // Byte mode: the count indicator counts encoded BYTES; on the
+                    // Latin-1 path every char narrows to one byte, so count = length.
+                    Append(ref hi, ref lo, ref pos, modeValue | text.Length, headerBits);
+                    var j = 0;
 #if NET8_0_OR_GREATER
                 if (Sse2.IsSupported && text.Length >= 8)
                 {
@@ -207,12 +207,12 @@ internal static class MicroQRBinaryEncoder
                     }
                 }
 #endif
-                for (; j < text.Length; j++)
-                {
-                    Append(ref hi, ref lo, ref pos, (byte)text[j], 8);
+                    for (; j < text.Length; j++)
+                    {
+                        Append(ref hi, ref lo, ref pos, (byte)text[j], 8);
+                    }
+                    break;
                 }
-                break;
-            }
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by Micro QR.");

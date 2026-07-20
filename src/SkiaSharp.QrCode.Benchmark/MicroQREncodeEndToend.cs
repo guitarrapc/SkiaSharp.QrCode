@@ -1,5 +1,3 @@
-using BenchmarkDotNet.Configs;
-
 /// <summary>
 /// End-to-end Micro QR matrix encoding through the public API (MicroQRCodeGenerator).
 /// Used to measure the user-visible impact of internal kernel changes such as the

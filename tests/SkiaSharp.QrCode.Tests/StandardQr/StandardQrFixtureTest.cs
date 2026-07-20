@@ -1,5 +1,3 @@
-using SkiaSharp;
-
 namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
