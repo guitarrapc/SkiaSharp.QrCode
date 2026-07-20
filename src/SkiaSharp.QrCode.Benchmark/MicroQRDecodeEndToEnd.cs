@@ -1,5 +1,3 @@
-using BenchmarkDotNet.Configs;
-
 /// <summary>
 /// End-to-end Micro QR matrix decoding through the public API (MicroQRCodeDecoder).
 /// Payloads mirror MicroQREncode so encode and decode costs are directly comparable;

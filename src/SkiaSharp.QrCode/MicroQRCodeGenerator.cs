@@ -224,19 +224,19 @@ public static class MicroQRCodeGenerator
         switch (mode)
         {
             case EncodingMode.Numeric:
-            {
-                // 10 bits per 3-digit group; a 2-digit tail costs 7 bits, 1 digit costs 4
-                var groups = dataBits / 10;
-                var remainder = dataBits - groups * 10;
-                return groups * 3 + (remainder >= 7 ? 2 : remainder >= 4 ? 1 : 0);
-            }
+                {
+                    // 10 bits per 3-digit group; a 2-digit tail costs 7 bits, 1 digit costs 4
+                    var groups = dataBits / 10;
+                    var remainder = dataBits - groups * 10;
+                    return groups * 3 + (remainder >= 7 ? 2 : remainder >= 4 ? 1 : 0);
+                }
             case EncodingMode.Alphanumeric:
-            {
-                // 11 bits per character pair; a single tail character costs 6 bits
-                var pairs = dataBits / 11;
-                var remainder = dataBits - pairs * 11;
-                return pairs * 2 + (remainder >= 6 ? 1 : 0);
-            }
+                {
+                    // 11 bits per character pair; a single tail character costs 6 bits
+                    var pairs = dataBits / 11;
+                    var remainder = dataBits - pairs * 11;
+                    return pairs * 2 + (remainder >= 6 ? 1 : 0);
+                }
             default:
                 return dataBits / 8;
         }

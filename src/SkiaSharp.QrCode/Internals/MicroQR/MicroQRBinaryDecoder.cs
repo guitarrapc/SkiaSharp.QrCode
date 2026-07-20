@@ -31,7 +31,6 @@ internal static class MicroQRBinaryDecoder
     // Mode indicator values (ISO/IEC 18004 Table 2, Micro QR column).
     private const int ModeNumeric = 0;
     private const int ModeAlphanumeric = 1;
-    private const int ModeByte = 2;
     private const int ModeKanji = 3;
 
     /// <summary>

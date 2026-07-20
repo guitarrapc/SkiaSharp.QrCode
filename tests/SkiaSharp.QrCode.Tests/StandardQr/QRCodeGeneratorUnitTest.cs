@@ -1,5 +1,4 @@
 using System.Text;
-using SkiaSharp.QrCode.Internals.StandardQr;
 using SkiaSharp.QrCode.Internals;
 using static SkiaSharp.QrCode.QRCodeGenerator;
 
