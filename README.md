@@ -308,8 +308,8 @@ sudo apt update && apt install -y libfontconfig1
 ```
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="0.9.0" />
-<PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="3.119.1" />
+<PackageReference Include="SkiaSharp.QrCode" Version="1.1.0" />
+<PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.148.0" />
 ```
 
 #### Option 2: No Dependencies (QR code only)
@@ -317,8 +317,8 @@ sudo apt update && apt install -y libfontconfig1
 If you don't need advanced font operations:
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="0.9.0" />
-<PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
+<PackageReference Include="SkiaSharp.QrCode" Version="1.1.0" />
+<PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
 > **Note**: `NoDependencies` can still draw text but cannot search fonts based on characters or use system fonts.
@@ -343,22 +343,22 @@ SkiaSharp.QrCode fully supports .NET NativeAOT. You need to include platform-spe
 #### Windows
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="0.9.0" />
-<PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="3.119.1" />
+<PackageReference Include="SkiaSharp.QrCode" Version="1.1.0" />
+<PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
 ```
 
 #### Linux
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="0.9.0" />
-<PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.119.1" />
+<PackageReference Include="SkiaSharp.QrCode" Version="1.1.0" />
+<PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
 #### macOS
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="0.9.0" />
-<PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="3.119.1" />
+<PackageReference Include="SkiaSharp.QrCode" Version="1.1.0" />
+<PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 
 ## Performance
