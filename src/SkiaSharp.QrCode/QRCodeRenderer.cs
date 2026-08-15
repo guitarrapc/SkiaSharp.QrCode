@@ -208,6 +208,89 @@ public static class QRCodeRenderer
     }
 
     /// <summary>
+    /// Renders an rMQR code onto the canvas. The rectangular symbol (quiet zone
+    /// included) is drawn with a uniform module scale and centered in
+    /// <paramref name="area"/> (letterbox); the whole area receives the background.
+    /// </summary>
+    /// <remarks>
+    /// rMQR has one finder pattern and no error-correction headroom for overlays, so
+    /// there are no icon or finder-shape options. Module runs are merged as for the
+    /// other symbologies (see <see cref="Render(SKCanvas, SKRect, QRCodeData, SKColor?, SKColor?, IconData?, ModuleShape?, float, GradientOptions?, FinderPatternShape?)"/>).
+    /// </remarks>
+    /// <param name="canvas">The canvas to render the rMQR code on.</param>
+    /// <param name="area">The rectangular area where the rMQR code will be rendered.</param>
+    /// <param name="data">The rMQR code data to render.</param>
+    /// <param name="codeColor">The color of the modules. If null, black is used.</param>
+    /// <param name="backgroundColor">The background color. If null, white is used.</param>
+    /// <param name="moduleShape">The shape to use for drawing modules. If null, rectangles are used.</param>
+    /// <param name="moduleSizePercent">The size of each module as a percentage of the cell size (0.0 to 1.0). Default is 1.0 (no gap).</param>
+    /// <param name="gradientOptions">Optional gradient options for the modules.</param>
+    /// <exception cref="ArgumentNullException"></exception>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public static void Render(
+        SKCanvas canvas,
+        SKRect area,
+        RmQRCodeData data,
+        SKColor? codeColor,
+        SKColor? backgroundColor,
+        ModuleShape? moduleShape = null,
+        float moduleSizePercent = 1.0f,
+        GradientOptions? gradientOptions = null)
+    {
+        if (data is null)
+            throw new ArgumentNullException(nameof(data));
+        if (moduleSizePercent is < 0f or > 1.0f)
+            throw new ArgumentOutOfRangeException(nameof(moduleSizePercent), "Module size percent must be between 0.0 and 1.0.");
+
+        var bgColor = backgroundColor ?? SKColors.White;
+        var fgColor = codeColor ?? SKColors.Black;
+        var shape = moduleShape ?? RectangleModuleShape.Default;
+
+        // Draw the background over the whole area at once
+        using var lightPaint = new SKPaint() { Color = bgColor, Style = SKPaintStyle.Fill };
+        canvas.DrawRect(area, lightPaint);
+
+        // Letterbox: uniform module scale, symbol centered in the area.
+        var symbolArea = GetLetterboxedArea(area, data.Width, data.Height);
+
+        // disable antialiasing as it causes gray border around each module.
+        using var darkPaint = new SKPaint() { Style = SKPaintStyle.Fill, IsAntialias = shape.RequiresAntialiasing };
+
+        using var gradientShader = CreateGradientShader(symbolArea, gradientOptions);
+        if (gradientShader is not null)
+        {
+            darkPaint.Shader = gradientShader;
+        }
+        else
+        {
+            darkPaint.Color = fgColor;
+        }
+
+        if (shape is RectangleModuleShape && moduleSizePercent == 1.0f)
+        {
+            DrawModuleRuns(canvas, new RmQRMatrixView(data), symbolArea, darkPaint, skipFinderPatterns: false);
+        }
+        else
+        {
+            DrawModules(canvas, new RmQRMatrixView(data), symbolArea, darkPaint, shape, moduleSizePercent, skipFinderPatterns: false);
+        }
+    }
+
+    /// <summary>
+    /// The largest rectangle with the matrix aspect ratio that fits inside
+    /// <paramref name="area"/>, centered (uniform module scale, no stretch).
+    /// </summary>
+    internal static SKRect GetLetterboxedArea(SKRect area, int matrixWidth, int matrixHeight)
+    {
+        var scale = Math.Min(area.Width / matrixWidth, area.Height / matrixHeight);
+        var width = matrixWidth * scale;
+        var height = matrixHeight * scale;
+        var left = area.Left + (area.Width - width) / 2;
+        var top = area.Top + (area.Height - height) / 2;
+        return SKRect.Create(left, top, width, height);
+    }
+
+    /// <summary>
     /// Calculates icon and border rectangles for the given QR code area.
     /// </summary>
     /// <remarks>
@@ -377,19 +460,19 @@ public static class QRCodeRenderer
     private static void DrawModuleRuns<TView>(SKCanvas canvas, TView data, SKRect area, SKPaint paint, bool skipFinderPatterns)
         where TView : struct, IModuleMatrixView
     {
-        var size = data.Size;
-        var coreSize = data.CoreSize;
-        var cellWidth = area.Width / size;
-        var cellHeight = area.Height / size;
-        var quietZone = (size - coreSize) / 2;
+        var coreWidth = data.CoreWidth;
+        var coreHeight = data.CoreHeight;
+        var cellWidth = area.Width / data.Width;
+        var cellHeight = area.Height / data.Height;
+        var quietZone = (data.Width - coreWidth) / 2;
 
         // The quiet zone is always light, so only the core area is scanned.
-        for (var coreRow = 0; coreRow < coreSize; coreRow++)
+        for (var coreRow = 0; coreRow < coreHeight; coreRow++)
         {
             var top = area.Top + (coreRow + quietZone) * cellHeight;
             var bottom = top + cellHeight;
             var coreCol = 0;
-            while (coreCol < coreSize)
+            while (coreCol < coreWidth)
             {
                 if (!data.GetCoreModule(coreRow, coreCol) || (skipFinderPatterns && data.IsFinderPattern(coreRow, coreCol)))
                 {
@@ -401,7 +484,7 @@ public static class QRCodeRenderer
                 do
                 {
                     coreCol++;
-                } while (coreCol < coreSize
+                } while (coreCol < coreWidth
                     && data.GetCoreModule(coreRow, coreCol)
                     && !(skipFinderPatterns && data.IsFinderPattern(coreRow, coreCol)));
 
@@ -419,11 +502,11 @@ public static class QRCodeRenderer
     private static void DrawModules<TView>(SKCanvas canvas, TView data, SKRect area, SKPaint paint, ModuleShape shape, float moduleSizePercent, bool skipFinderPatterns)
         where TView : struct, IModuleMatrixView
     {
-        var size = data.Size;
-        var coreSize = data.CoreSize;
-        var cellWidth = area.Width / size;
-        var cellHeight = area.Height / size;
-        var quietZone = (size - coreSize) / 2;
+        var coreWidth = data.CoreWidth;
+        var coreHeight = data.CoreHeight;
+        var cellWidth = area.Width / data.Width;
+        var cellHeight = area.Height / data.Height;
+        var quietZone = (data.Width - coreWidth) / 2;
 
         // Calculate module size with gaps
         var moduleWidth = cellWidth * moduleSizePercent;
@@ -432,10 +515,10 @@ public static class QRCodeRenderer
         var yOffset = (cellHeight - moduleHeight) / 2;
 
         // The quiet zone is always light, so only the core area is scanned.
-        for (var coreRow = 0; coreRow < coreSize; coreRow++)
+        for (var coreRow = 0; coreRow < coreHeight; coreRow++)
         {
             var y = area.Top + (coreRow + quietZone) * cellHeight + yOffset;
-            for (var coreCol = 0; coreCol < coreSize; coreCol++)
+            for (var coreCol = 0; coreCol < coreWidth; coreCol++)
             {
                 if (skipFinderPatterns && data.IsFinderPattern(coreRow, coreCol))
                     continue;

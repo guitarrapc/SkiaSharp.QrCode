@@ -49,9 +49,23 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// <summary>
     /// Resolves the symbol to render (encoding the configured content when the
     /// builder was not given pre-built data) and reports its matrix side length
-    /// including the quiet zone. Called exactly once per output operation.
+    /// including the quiet zone (width and height; equal for square symbologies).
+    /// Called exactly once per output operation.
     /// </summary>
-    private protected abstract object ResolveSymbol(out int matrixSize);
+    private protected abstract object ResolveSymbol(out int matrixWidth, out int matrixHeight);
+
+    /// <summary>
+    /// Whether an explicit canvas size fits the symbol with a uniform module scale
+    /// (letterbox) instead of filling the canvas. Square symbologies keep the
+    /// historical fill behavior; rectangular symbologies must never be stretched.
+    /// </summary>
+    private protected virtual bool PreserveAspectRatio => false;
+
+    /// <summary>
+    /// Canvas size used when neither <see cref="WithSize"/> nor
+    /// <see cref="WithModulePixelSize"/> was called (512 × 512 for square symbologies).
+    /// </summary>
+    private protected virtual Vector2Slim GetDefaultCanvasSize(int matrixWidth, int matrixHeight) => new(512, 512);
 
     /// <summary>Draws the resolved symbol into the content rectangle.</summary>
     private protected abstract void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect);
@@ -359,8 +373,8 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// </remarks>
     private void RenderSvg(Stream output)
     {
-        var symbol = ResolveSymbol(out var matrixSize);
-        var (info, contentRect) = QRImageLayout.CreateLayout(matrixSize, _explicitSize, _modulePixelSize);
+        var symbol = ResolveSymbol(out var matrixWidth, out var matrixHeight);
+        var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, PreserveAspectRatio, GetDefaultCanvasSize(matrixWidth, matrixHeight));
 
         var viewBox = $"viewBox=\"0 0 {info.Width} {info.Height}\" ";
         var rootAttributes = UseCrispEdges() ? viewBox + "shape-rendering=\"crispEdges\" " : viewBox;
@@ -393,9 +407,9 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// </summary>
     private SKImage GenerateImage()
     {
-        var symbol = ResolveSymbol(out var matrixSize);
+        var symbol = ResolveSymbol(out var matrixWidth, out var matrixHeight);
 
-        var (info, contentRect) = QRImageLayout.CreateLayout(matrixSize, _explicitSize, _modulePixelSize);
+        var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, PreserveAspectRatio, GetDefaultCanvasSize(matrixWidth, matrixHeight));
 
         var clearColor = _clearColor ?? SKColors.Transparent;
         var contentCoversCanvas = QRImageLayout.ContentCoversCanvas(contentRect, info);

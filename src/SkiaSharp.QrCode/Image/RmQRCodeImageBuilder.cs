@@ -1,0 +1,438 @@
+using System.Buffers;
+using SkiaSharp.QrCode.Internals.RmQr;
+
+namespace SkiaSharp.QrCode.Image;
+
+/// <summary>
+/// High-level builder for creating rMQR code images with fluent configuration and static methods.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This builder mirrors <see cref="QRCodeImageBuilder"/> / <see cref="MicroQRCodeImageBuilder"/>
+/// for the rMQR symbology (ISO/IEC 23941, R7x43-R17x139). Version, error correction
+/// and fit use the rMQR-typed <see cref="RmQRVersion"/> / <see cref="RmQREccLevel"/> /
+/// <see cref="RmQRFitStrategy"/> / <see cref="RmQRHeight"/>, and the default quiet zone
+/// is the 2 modules the specification requires.
+/// </para>
+/// <para>
+/// rMQR symbols are rectangular. With <see cref="QRCodeImageBuilderBase{TSelf}.WithModulePixelSize"/>
+/// the image is exactly the matrix at that scale; with <see cref="QRCodeImageBuilderBase{TSelf}.WithSize"/>
+/// the symbol is fitted into the canvas with a uniform module scale and centered
+/// (letterbox, never stretched); the static helpers' <c>size</c> is the image
+/// width, the height follows the symbol aspect ratio. Without either, the image is
+/// 512 pixels wide.
+/// </para>
+/// <para>
+/// rMQR has a single finder pattern and no error-correction headroom for overlays,
+/// so the Standard QR styling options that depend on those (icon overlays and
+/// custom finder pattern shapes) are intentionally not offered.
+/// </para>
+/// </remarks>
+/// <seealso cref="RmQRCodeGenerator"/>
+/// <seealso cref="QRCodeRenderer"/>
+public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
+{
+    private const int DefaultWidth = 512;
+
+    private readonly string? _content;
+    private readonly RmQRCodeData? _data;
+    private RmQREccLevel _eccLevel = RmQREccLevel.M;
+    private RmQRVersion? _requestedVersion;
+    private RmQRFitStrategy _fitStrategy = RmQRFitStrategy.MinimizeArea;
+    private RmQRHeight? _height;
+    private int? _widthOnly;
+
+    public RmQRCodeImageBuilder(string content) : base(defaultQuietZoneSize: RmQRConstants.QuietZoneModules)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            throw new ArgumentException("Content cannot be empty", nameof(content));
+
+        _content = content;
+    }
+
+    public RmQRCodeImageBuilder(RmQRCodeData rmQrCodeData) : base(defaultQuietZoneSize: RmQRConstants.QuietZoneModules)
+    {
+        if (rmQrCodeData is null)
+            throw new ArgumentNullException(nameof(rmQrCodeData));
+
+        _data = rmQrCodeData;
+    }
+
+    // static methods for quick generation
+
+    /// <summary>
+    /// Generate an rMQR code as PNG byte array with default settings.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    /// <returns>PNG encoded byte array.</returns>
+    public static byte[] GetPngBytes(string content, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth)
+    {
+        return GetImageBytes(content, SKEncodedImageFormat.Png, eccLevel, size, 100);
+    }
+
+    /// <summary>
+    /// Generate an rMQR code as PNG byte array with default settings.
+    /// </summary>
+    /// <param name="rmQrCodeData">The rMQR code data to render.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    /// <returns>PNG encoded byte array.</returns>
+    public static byte[] GetPngBytes(RmQRCodeData rmQrCodeData, int size = DefaultWidth)
+    {
+        return GetImageBytes(rmQrCodeData, SKEncodedImageFormat.Png, size, 100);
+    }
+
+    /// <summary>
+    /// Generate an rMQR code as image byte array with specified format.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
+    /// <returns>Encoded byte array.</returns>
+    public static byte[] GetImageBytes(string content, SKEncodedImageFormat format, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth, int quality = 100)
+    {
+        return new RmQRCodeImageBuilder(content)
+            .WithWidth(size)
+            .WithErrorCorrection(eccLevel)
+            .WithFormat(format, quality)
+            .ToByteArray();
+    }
+
+    /// <summary>
+    /// Generate an rMQR code as image byte array with specified format.
+    /// </summary>
+    /// <param name="rmQrCodeData">The rMQR code data to render.</param>
+    /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
+    /// <returns>Encoded byte array.</returns>
+    public static byte[] GetImageBytes(RmQRCodeData rmQrCodeData, SKEncodedImageFormat format, int size = DefaultWidth, int quality = 100)
+    {
+        return new RmQRCodeImageBuilder(rmQrCodeData)
+            .WithWidth(size)
+            .WithFormat(format, quality)
+            .ToByteArray();
+    }
+
+    /// <summary>
+    /// Generate an rMQR code and save as PNG to stream.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="output">Output stream.</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    public static void SavePng(string content, Stream output, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth)
+    {
+        new RmQRCodeImageBuilder(content)
+            .WithWidth(size)
+            .WithErrorCorrection(eccLevel)
+            .SaveTo(output);
+    }
+
+    /// <summary>
+    /// Generate an rMQR code and save as PNG to stream.
+    /// </summary>
+    /// <param name="rmQrCodeData">The rMQR code data to render.</param>
+    /// <param name="output">Output stream.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    public static void SavePng(RmQRCodeData rmQrCodeData, Stream output, int size = DefaultWidth)
+    {
+        new RmQRCodeImageBuilder(rmQrCodeData)
+            .WithWidth(size)
+            .SaveTo(output);
+    }
+
+    /// <summary>
+    /// Generate an rMQR code as SVG byte array.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    /// <returns>SVG document as UTF-8 bytes.</returns>
+    public static byte[] GetSvgBytes(string content, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth)
+    {
+        using var stream = new MemoryStream();
+        new RmQRCodeImageBuilder(content)
+            .WithWidth(size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToSvg(stream);
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Generate an rMQR code as SVG byte array.
+    /// </summary>
+    /// <param name="rmQrCodeData">The rMQR code data to render.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    /// <returns>SVG document as UTF-8 bytes.</returns>
+    public static byte[] GetSvgBytes(RmQRCodeData rmQrCodeData, int size = DefaultWidth)
+    {
+        using var stream = new MemoryStream();
+        new RmQRCodeImageBuilder(rmQrCodeData)
+            .WithWidth(size)
+            .SaveToSvg(stream);
+        return stream.ToArray();
+    }
+
+    /// <summary>
+    /// Generate an rMQR code and save as SVG to stream.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="output">Output stream.</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    public static void SaveSvg(string content, Stream output, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth)
+    {
+        new RmQRCodeImageBuilder(content)
+            .WithWidth(size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToSvg(output);
+    }
+
+    /// <summary>
+    /// Generate an rMQR code and save as SVG to stream.
+    /// </summary>
+    /// <param name="rmQrCodeData">The rMQR code data to render.</param>
+    /// <param name="output">Output stream.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    public static void SaveSvg(RmQRCodeData rmQrCodeData, Stream output, int size = DefaultWidth)
+    {
+        new RmQRCodeImageBuilder(rmQrCodeData)
+            .WithWidth(size)
+            .SaveToSvg(output);
+    }
+
+    /// <summary>
+    /// Generate an rMQR code as SVG string.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    /// <returns>SVG document.</returns>
+    public static string GetSvgString(string content, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth)
+    {
+        return new RmQRCodeImageBuilder(content)
+            .WithWidth(size)
+            .WithErrorCorrection(eccLevel)
+            .ToSvgString();
+    }
+
+    /// <summary>
+    /// Generate an rMQR code as SVG string.
+    /// </summary>
+    /// <param name="rmQrCodeData">The rMQR code data to render.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    /// <returns>SVG document.</returns>
+    public static string GetSvgString(RmQRCodeData rmQrCodeData, int size = DefaultWidth)
+    {
+        return new RmQRCodeImageBuilder(rmQrCodeData)
+            .WithWidth(size)
+            .ToSvgString();
+    }
+
+    /// <summary>
+    /// Generate an rMQR code and write the SVG document to a buffer writer.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="writer">Destination buffer writer.</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    public static void WriteSvg(string content, IBufferWriter<byte> writer, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth)
+    {
+        new RmQRCodeImageBuilder(content)
+            .WithWidth(size)
+            .WithErrorCorrection(eccLevel)
+            .SaveToSvg(writer);
+    }
+
+    /// <summary>
+    /// Generate an rMQR code and write the SVG document to a buffer writer.
+    /// </summary>
+    /// <param name="rmQrCodeData">The rMQR code data to render.</param>
+    /// <param name="writer">Destination buffer writer.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    public static void WriteSvg(RmQRCodeData rmQrCodeData, IBufferWriter<byte> writer, int size = DefaultWidth)
+    {
+        new RmQRCodeImageBuilder(rmQrCodeData)
+            .WithWidth(size)
+            .SaveToSvg(writer);
+    }
+
+    /// <summary>
+    /// Generate an rMQR code and write PNG bytes to a buffer writer.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="writer">Destination buffer writer.</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    public static void WritePng(string content, IBufferWriter<byte> writer, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth)
+    {
+        WriteImage(content, writer, SKEncodedImageFormat.Png, eccLevel, size, quality: 100);
+    }
+
+    /// <summary>
+    /// Generate an rMQR code and write PNG bytes to a buffer writer.
+    /// </summary>
+    /// <param name="rmQrCodeData">The rMQR code data to render.</param>
+    /// <param name="writer">Destination buffer writer.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    public static void WritePng(RmQRCodeData rmQrCodeData, IBufferWriter<byte> writer, int size = DefaultWidth)
+    {
+        WriteImage(rmQrCodeData, writer, SKEncodedImageFormat.Png, size, quality: 100);
+    }
+
+    /// <summary>
+    /// Generate an rMQR code and write encoded image bytes to a buffer writer.
+    /// </summary>
+    /// <param name="content">The content to encode.</param>
+    /// <param name="writer">Destination buffer writer.</param>
+    /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
+    /// <param name="eccLevel">Error correction level. Default is M.</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
+    public static void WriteImage(string content, IBufferWriter<byte> writer, SKEncodedImageFormat format, RmQREccLevel eccLevel = RmQREccLevel.M, int size = DefaultWidth, int quality = 100)
+    {
+        new RmQRCodeImageBuilder(content)
+            .WithWidth(size)
+            .WithErrorCorrection(eccLevel)
+            .WithFormat(format, quality)
+            .SaveTo(writer);
+    }
+
+    /// <summary>
+    /// Generate an rMQR code and write encoded image bytes to a buffer writer.
+    /// </summary>
+    /// <param name="rmQrCodeData">The rMQR code data to render.</param>
+    /// <param name="writer">Destination buffer writer.</param>
+    /// <param name="format">Image format (PNG, JPEG, WEBP, etc.).</param>
+    /// <param name="size">Image width in pixels (height follows the symbol aspect ratio). Default is 512.</param>
+    /// <param name="quality">Encoding quality (0-100). Default is 100.</param>
+    public static void WriteImage(RmQRCodeData rmQrCodeData, IBufferWriter<byte> writer, SKEncodedImageFormat format, int size = DefaultWidth, int quality = 100)
+    {
+        new RmQRCodeImageBuilder(rmQrCodeData)
+            .WithWidth(size)
+            .WithFormat(format, quality)
+            .SaveTo(writer);
+    }
+
+    // rMQR-specific builder methods
+
+    /// <summary>
+    /// Configure the error correction level (M or H).
+    /// </summary>
+    /// <param name="eccLevel">Error correction level.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="InvalidOperationException"></exception>
+    public RmQRCodeImageBuilder WithErrorCorrection(RmQREccLevel eccLevel)
+    {
+        if (_data is not null)
+            throw new InvalidOperationException("WithErrorCorrection cannot be used when RmQRCodeData is provided directly.");
+
+        _eccLevel = eccLevel;
+        return this;
+    }
+
+    /// <summary>
+    /// Configure the exact rMQR version to generate.
+    /// </summary>
+    /// <param name="version">Version to use (R7x43-R17x139). When not called, the version is chosen by <see cref="WithFitStrategy"/> (default: fewest modules), optionally within <see cref="WithHeight"/>.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <exception cref="InvalidOperationException"></exception>
+    public RmQRCodeImageBuilder WithVersion(RmQRVersion version)
+    {
+        if (_data is not null)
+            throw new InvalidOperationException("WithVersion cannot be used when RmQRCodeData is provided directly.");
+        if (!RmQRConstants.IsValidVersion(version))
+            throw new ArgumentOutOfRangeException(nameof(version), $"Invalid rMQR version: {version}");
+
+        _requestedVersion = version;
+        return this;
+    }
+
+    /// <summary>
+    /// Configure how the version is chosen among those that hold the content
+    /// (default <see cref="RmQRFitStrategy.MinimizeArea"/>, fewest modules; note it may
+    /// prefer a taller, narrower symbol, use <see cref="RmQRFitStrategy.MinimizeHeight"/>
+    /// or <see cref="WithHeight"/> for the flattest fit).
+    /// </summary>
+    /// <param name="fitStrategy">Fit strategy.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <exception cref="InvalidOperationException"></exception>
+    public RmQRCodeImageBuilder WithFitStrategy(RmQRFitStrategy fitStrategy)
+    {
+        if (_data is not null)
+            throw new InvalidOperationException("WithFitStrategy cannot be used when RmQRCodeData is provided directly.");
+        if (fitStrategy is < RmQRFitStrategy.MinimizeArea or > RmQRFitStrategy.MinimizeHeight)
+            throw new ArgumentOutOfRangeException(nameof(fitStrategy), $"Invalid rMQR fit strategy: {fitStrategy}");
+
+        _fitStrategy = fitStrategy;
+        return this;
+    }
+
+    /// <summary>
+    /// Restrict automatic version selection to one symbol height (fixed height,
+    /// automatic width). Must agree with <see cref="WithVersion"/> when both are used.
+    /// </summary>
+    /// <param name="height">Symbol height in modules.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <exception cref="InvalidOperationException"></exception>
+    public RmQRCodeImageBuilder WithHeight(RmQRHeight height)
+    {
+        if (_data is not null)
+            throw new InvalidOperationException("WithHeight cannot be used when RmQRCodeData is provided directly.");
+        if (height is not (RmQRHeight.H7 or RmQRHeight.H9 or RmQRHeight.H11 or RmQRHeight.H13 or RmQRHeight.H15 or RmQRHeight.H17))
+            throw new ArgumentOutOfRangeException(nameof(height), $"Invalid rMQR height: {height}");
+
+        _height = height;
+        return this;
+    }
+
+    /// <summary>
+    /// Image width in pixels with the height following the symbol aspect ratio
+    /// (the static helpers' sizing rule); <see cref="QRCodeImageBuilderBase{TSelf}.WithSize"/>
+    /// or <see cref="QRCodeImageBuilderBase{TSelf}.WithModulePixelSize"/> take precedence.
+    /// </summary>
+    private RmQRCodeImageBuilder WithWidth(int width)
+    {
+        if (width <= 0)
+            throw new ArgumentOutOfRangeException(nameof(width), "Width must be positive.");
+
+        _widthOnly = width;
+        return this;
+    }
+
+    // symbology hooks
+
+    private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
+    {
+        var data = _data ?? RmQRCodeGenerator.CreateRmQRCode(_content.AsSpan(), _eccLevel, _requestedVersion, _fitStrategy, _height, _quietZoneSize);
+        matrixWidth = data.Width;
+        matrixHeight = data.Height;
+        return data;
+    }
+
+    private protected override void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect)
+    {
+        QRCodeRenderer.Render(canvas, contentRect, (RmQRCodeData)symbol, _codeColor, _backgroundColor, _moduleShape, _moduleSizePercent, _gradientOptions);
+    }
+
+    /// <summary>rMQR has no finder styling or icon overlays, no extra antialiasing conditions.</summary>
+    private protected override bool UseCrispEdgesCore() => true;
+
+    /// <summary>Rectangular symbols are letterboxed into an explicit canvas, never stretched.</summary>
+    private protected override bool PreserveAspectRatio => true;
+
+    /// <summary>Default canvas: the configured (or 512) width, height from the symbol aspect ratio.</summary>
+    private protected override Vector2Slim GetDefaultCanvasSize(int matrixWidth, int matrixHeight)
+    {
+        var width = _widthOnly ?? DefaultWidth;
+        var height = Math.Max(1, (int)Math.Round((double)width * matrixHeight / matrixWidth));
+        return new Vector2Slim(width, height);
+    }
+}

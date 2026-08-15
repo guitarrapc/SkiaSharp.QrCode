@@ -384,10 +384,10 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
 
     // symbology hooks
 
-    private protected override object ResolveSymbol(out int matrixSize)
+    private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
     {
         var qrCodeData = _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, requestedVersion: _requestedVersion, quietZoneSize: _quietZoneSize);
-        matrixSize = qrCodeData.Size;
+        matrixWidth = matrixHeight = qrCodeData.Size;
         return qrCodeData;
     }
 

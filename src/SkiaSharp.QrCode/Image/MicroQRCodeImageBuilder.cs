@@ -346,10 +346,10 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
 
     // symbology hooks
 
-    private protected override object ResolveSymbol(out int matrixSize)
+    private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
     {
         var data = _data ?? MicroQRCodeGenerator.CreateMicroQRCode(_content.AsSpan(), _eccLevel, _requestedVersion, _quietZoneSize);
-        matrixSize = data.Size;
+        matrixWidth = matrixHeight = data.Size;
         return data;
     }
 
