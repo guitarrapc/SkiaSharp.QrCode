@@ -92,16 +92,28 @@ Vertical slice again: encoder (with rendering) → matrix decoder → image deco
 **5.0 Spec-first (no `src/` change)**
 
 - Done 2026-08-15 (before this phase formally opened): `specs/rmqr-spec-map.md` (planned component per spec clause) and `specs/rmqr-encoder.md` (public API, verified parameter tables, decisions, verification record) exist; qrtool `--variant rmqr` verified as an rMQR encoder oracle (dimensions, capacities, format information, bit streams for all 32 versions).
-- Remaining: finalize the exact public signatures against the design record (review), confirm what zxing-cpp's `Extra("Version")` / `Extra("EcLevel")` report for rMQR (needed for manifests) and that it reads qrtool's rMQR PNGs, confirm libzint `version=` mapping for rMQR sizes; record in `specs/qrcode-test-fixtures.md`.
-- Test folder `tests/SkiaSharp.QrCode.Tests/RmQr/`, fixture manifest gains `width` / `height` (Standard / Micro loaders unaffected).
+- Done 2026-08-15 (same day): public signatures frozen in `specs/rmqr-encoder.md` (member-for-member review against the Micro QR surface); `tools/QRInteropFixtures -- probe-rmqr` recorded the remaining oracle facts in `specs/qrcode-test-fixtures.md` (libzint `version=` mapping, zxing-cpp `Extra()` spelling, qrtool rMQR read by zxing-cpp, UTF-8 `Bytes`-vs-`Text` caveat).
+- Carried into 5.1a: test folder `tests/SkiaSharp.QrCode.Tests/RmQr/` is created by the first test; the fixture manifest already carries `width` / `height`.
 
-Exit: design record reviewed and signatures frozen; remaining oracle facts recorded; existing suite green.
+Exit: met (see Progress log).
 
-**5.1 Tables (`Internals/RmQr/RmQRConstants`)**
+**5.1a Fixture corpus (`Fixtures/RmQr/{zint-libzint,qrtool}`), moved ahead of the tables**
+
+The 5.1b oracle tests read committed external-encoder matrices, so the corpus is built first (Micro QR built its corpus in Phase 3 because its tables were small enough to pin from spec examples; rMQR's 32-version tables are the transcription risk, so external symbols enter at the table stage). No `src/` change.
+
+- `RmQRCorpus` case list: every version × M/H with a one-character payload per mode (numeric `1`, alphanumeric `A`, byte `a`: these pin the count-indicator widths from the bit stream) plus, per height, capacity-boundary and mid-length payloads in each mode; UTF-8 / Japanese payloads on the qrtool lineage only (libzint is ASCII-only, see the fixture record).
+- `ZintRmQRFixtureGenerator` (`BarcodeCreator(RMQRCode)`, `Options = "version=N,ecLevel=X"`, N = version index + 1, module-exact `ToImage(Scale=1, AddQuietZones=false)`) and `QrtoolRmQRFixtureGenerator` (`--variant rmqr -v <H> <W> -l <m|h> --mode <mode> --type ascii`); manifests carry `symbolType = rMQR`, `width` / `height`, version name `R{H}x{W}`, ECC, mode, payload text + UTF-8 hex.
+- `RmQRSanityGate`: every fixture must decode with zxing-cpp (`Formats = RMQRCode`) before it is written; compare `Bytes` to `payloadUtf8Hex` (not `Text`, see the UTF-8 caveat in the fixture record), `Extra("Version")` to `R{H}x{W}`, `Extra("EcLevel")` to the manifest.
+- `regenerate` extended; `FixtureLoader` gains an rMQR loader (rectangular matrix parser); `RmQrFixtureTest` scaffolding loads the corpus (decode assertions land with 6.4).
+- Fixture record (`specs/qrcode-test-fixtures.md`): corpus layout, case count, sanity-gate rule.
+
+Exit: corpus committed (order of 64 zint + 40 qrtool cases), every case gate-verified, loader tests green.
+
+**5.1b Tables (`Internals/RmQr/RmQRConstants`)**
 
 - Version table (height, width, alignment column positions, total codewords, RS block structure per ECC as `ECCInfo`, count-indicator widths per mode), 64-entry format word table, capacity table (with the Kanji column present, unused), transcribed from the verified tables in `specs/rmqr-encoder.md`.
 - Tests, structural first: 32 entries with the exact (height, width) set; data + ECC == total codewords for all 64 combos; total codewords × 8 == free-module count computed by a naive independent function-pattern painter (this is the check that caught the R17x59 error during pre-verification); every format word equals naive BCH(18,6) + XOR mask; pairwise Hamming distance of the 64 words ≥ the BCH minimum distance; ECC per block even and within 7..30; capacities from the table reproduce the published capacity table.
-- Oracle test (committed matrices, no toolchain in CI): for each version, one libzint symbol and one qrtool symbol have the expected width/height, and their two format regions decode (via a naive reader in the test) to the expected (version, ECC) after unmasking with our two constants, this pins the XOR masks and bit order from two independent lineages before our own placer exists. The one-character-payload symbols also pin the count-indicator widths (first codewords after inverse zigzag + unmask + deinterleave), repeating the pre-verification permanently.
+- Oracle test (the 5.1a corpus, no toolchain in CI): for each version, one libzint symbol and one qrtool symbol have the expected width/height, and their two format regions decode (via a naive reader in the test) to the expected (version, ECC) after unmasking with our two constants, this pins the XOR masks and bit order from two independent lineages before our own placer exists. The one-character-payload symbols also pin the count-indicator widths (first codewords after inverse zigzag + unmask + deinterleave), repeating the pre-verification permanently.
 
 Exit: table tests green; no other code depends on the tables yet.
 
@@ -143,11 +155,7 @@ Exit (Phase 5): encoder MVT satisfied (spot check 100%); Standard + Micro image/
 
 ### Phase 6, rMQR matrix decoder
 
-**6.1 Fixture corpus (`Fixtures/RmQr/{zint-libzint,qrtool}`)**
-
-- `ZintRmQRFixtureGenerator` (all 32 versions × M/H, ASCII payloads: numeric / alphanumeric / byte, at least one capacity-boundary payload per height) and `QrtoolRmQRFixtureGenerator` (representative sizes per test strategy: min height, min width, widest, medium, tallest, max capacity; UTF-8 and Japanese payloads ride this lineage as for Micro QR).
-- Every fixture passes the zxing-cpp sanity gate (`Formats = RMQRCode`, payload + version + ECC cross-check) before it is written; manifests carry reader-sourced version/ECC.
-- `RmQrFixtureTest` scaffolding (loads, but decode assertions land with 6.4).
+**6.1 Fixture corpus**: moved to 5.1a (built before the tables); 6.2-6.4 consume it. Anything the decoder phases find missing (extra damage cases, more UTF-8 payloads) is added to the corpus here.
 
 **6.2 Format decoder** (`RmQRFormatInformationDecoder`): both copies, 64 candidates, best Hamming within BCH distance, copies disagreeing → the closer valid one, version-vs-dimensions cross-check. Test: exhaustive vs naive nearest-candidate reference over the full 18-bit space (262,144 words, fast), copy-selection cases, contradiction rejection.
 
@@ -178,11 +186,10 @@ Exit (Phase 7): decoder MVT image rows and the representative degradation subset
 ## Dependency graph
 
 ```
-5.0 spec ─┬─ 5.1 tables ─┬─ 5.3 bit stream ─┐
-          │              ├─ 5.4 RS/interleave ┼─ 5.5 placer ─ 5.6 generator ─ 5.7 rendering
-          └─ 5.2 data ───┘                     │
-                                               └─ 6.2 format dec ─ 6.3 matrix/bit dec ─ 6.4 public decoder ─ 7.1 image
-6.1 fixtures (independent of src, may start right after 5.0)
+5.0 spec ─ 5.1a fixtures ─┬─ 5.1b tables ─┬─ 5.3 bit stream ─┐
+                          │               ├─ 5.4 RS/interleave ┼─ 5.5 placer ─ 5.6 generator ─ 5.7 rendering
+                          └─ 5.2 data ────┘                     │
+                                                                └─ 6.2 format dec ─ 6.3 matrix/bit dec ─ 6.4 public decoder ─ 7.1 image
 ```
 
 ## Cross-cutting
@@ -202,4 +209,20 @@ Exit (Phase 7): decoder MVT image rows and the representative degradation subset
 
 ## Progress log
 
-(Appended per phase: Done / Lessons learned / Benchmark delta.)
+### Phase 5.0, completed 2026-08-15
+
+**Done**
+
+- Spec-first documents: `specs/rmqr-spec-map.md` (planned component per ISO/IEC 23941 clause) and `specs/rmqr-encoder.md` (frozen public signatures, oracle-verified symbol parameter tables, decisions, verification record); docs index and this plan updated.
+- Symbol parameters verified against the pinned qrtool oracle before any implementation: 32/32 dimensions, 192/192 capacities, 32/32 total-codeword counts (geometry), 96/96 count-indicator widths (bit-stream read-back), 128/128 format-information copies, mask / zigzag start / interleaving. Two recall errors were caught and corrected (R17x59 total codewords 90 → 88; three numeric count widths).
+- `tools/QRInteropFixtures -- probe-rmqr` (new command): libzint `version=1..32` = height-major index + 1 (32/32), `33..38` = fixed-height auto-width; zxing-cpp `Extra("Version")` spells `"R7x43"`…, `Extra("EcLevel")` `"M"/"H"`, `Extra("DataMask")` `"4"`; 64/64 libzint symbols and 5/5 qrtool symbols (incl. Japanese UTF-8) read by zxing-cpp; UTF-8 without ECI must be compared on `Bytes`, not `Text`. Recorded in `specs/qrcode-test-fixtures.md`.
+
+**Lessons learned**
+
+- Capacity tables cannot pin count-indicator widths (byte-alignment slack); reading the width from an oracle bit stream can, and validates mask, zigzag start and interleaving in the same step. Multi-block versions must be deinterleaved before reading "the first bits".
+- Cross-table invariants (geometry ↔ codewords ↔ ECC-per-block bounds) catch recall errors that per-table plausibility checks pass.
+- zxing-cpp's rMQR reader labels the single mask as Standard QR pattern 4, a free consistency check on the mask formula.
+
+**Benchmarks**
+
+- Not applicable: no `src/` change (docs + a diagnostic command in `tools/`).

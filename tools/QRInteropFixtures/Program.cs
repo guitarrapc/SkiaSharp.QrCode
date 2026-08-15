@@ -18,9 +18,15 @@ if (command == "probe-creator")
     // Checks whether the pinned ZXingCpp native build can create Micro QR / rMQR.
     return CreatorProbe.Run();
 }
+if (command == "probe-rmqr")
+{
+    // rMQR oracle facts for the implementation plan's Phase 5.0: libzint version mapping,
+    // zxing-cpp Extra() naming, qrtool interop.
+    return RmQRProbe.Run(FindRepoRoot());
+}
 if (command != "regenerate")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|spot-check-microqr|probe-creator]");
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|spot-check-microqr|probe-creator|probe-rmqr]");
     return 1;
 }
 

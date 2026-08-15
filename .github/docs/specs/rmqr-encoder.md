@@ -23,19 +23,72 @@ Text
   -> RmQRCodeData or byte-per-module matrix
 ```
 
-### Public entry points (planned)
+### Public entry points (signatures frozen 2026-08-15, Phase 5.0 review)
 
-Names follow the shipped `MicroQR*` family. Exact signatures are finalized in Phase 5.0/5.6 and mirrored by `QrImageBuilderApiParityTest`.
+Names and overload sets mirror the shipped `MicroQR*` family member for member (reviewed against `MicroQRCodeGenerator`, `MicroQRCodeDecoder`, `MicroQRCodeImageBuilder`, `MicroQRCodeData`, the renderer overloads and `QrImageBuilderApiParityTest`); the only additions are the rectangular geometry and the two fit parameters. Names below are the contract the implementation phases code against; a deviation is a spec change first.
 
-| Type | Role |
-|---|---|
-| `RmQRCodeGenerator` | `CreateRmQRCode(string \| ReadOnlySpan<char>, RmQREccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = MinimizeArea, RmQRHeight? height = null, int quietZoneSize = 2)` returning `RmQRCodeData`; a zero-allocation span-destination overload (byte per module, row-major, quiet zone included) plus `GetRequiredBufferSize` returning `RmQRCodeCalculatedSize` (width, height, byte count, selected version) |
-| `RmQRVersion` | 32 named members `R7x43` … `R17x139` |
-| `RmQREccLevel` | `M`, `H` |
-| `RmQRFitStrategy` | `MinimizeArea` (default), `MinimizeWidth`, `MinimizeHeight` |
-| `RmQRHeight` | `H7`, `H9`, `H11`, `H13`, `H15`, `H17`, fixed height with automatic width |
-| `RmQRCodeData` | Bit-packed rectangular core matrix, virtual quiet zone, `Width` / `Height` / `CoreWidth` / `CoreHeight` / `Version`, `this[row, col]`, "QRX" serialization with symbol type 2 |
-| `RmQRCodeImageBuilder`, `QRCodeRenderer.Render(…, RmQRCodeData, …)`, `SKCanvas.Render(RmQRCodeData, …)` | Rendering surface, see [Rendering](#rendering) |
+Enumerations:
+
+```csharp
+public enum RmQREccLevel { M = 0, H = 1 }            // own domain like MicroQREccLevel; value = the ECC bit in the format information
+public enum RmQRVersion  { R7x43 = 1, R7x59, R7x77, R7x99, R7x139, R9x43, …, R17x139 = 32 }   // height-major, value = version index + 1 = libzint version number
+public enum RmQRFitStrategy { MinimizeArea = 0, MinimizeWidth = 1, MinimizeHeight = 2 }
+public enum RmQRHeight { H7 = 7, H9 = 9, H11 = 11, H13 = 13, H15 = 15, H17 = 17 }
+```
+
+Generator (`public static class RmQRCodeGenerator`, `DefaultQuietZone = 2`):
+
+```csharp
+RmQRCodeData CreateRmQRCode(string plainText, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone);
+RmQRCodeData CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone);
+int CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone);   // byte per module, row-major, quiet zone included, returns bytes written
+RmQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone);
+public readonly struct RmQRCodeCalculatedSize { int BufferSize; int Width; int Height; RmQRVersion Version; }   // Width/Height include the quiet zone
+```
+
+`requestedVersion` and `height` together are accepted only when they agree (else `ArgumentException`); `fitStrategy` is ignored when `requestedVersion` is given.
+
+Data model (`public class RmQRCodeData`):
+
+```csharp
+RmQRCodeData(RmQRVersion version, int quietZoneSize);
+RmQRCodeData(byte[] rawData, int quietZoneSize);
+RmQRCodeData(ReadOnlySpan<byte> rawData, int quietZoneSize);
+int Width { get; }   int Height { get; }   RmQRVersion Version { get; }     // quiet zone included
+bool this[int row, int col] { get; }                                          // quiet zone reads false
+int GetRawDataSize();  byte[] GetRawData();  int GetRawData(IBufferWriter<byte> writer);   // "QRX" + type 2 + width + height + packed core bits
+```
+
+Decoder (`public static class RmQRCodeDecoder`):
+
+```csharp
+bool TryDecode(RmQRCodeData data, out string text);
+bool TryDecode(RmQRCodeData data, out string text, out RmQRCodeDecodeInfo info);
+bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, out string text, out RmQRCodeDecodeInfo info);                          // byte per module, any uniform quiet zone
+bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info);
+bool TryDecode(SKBitmap bitmap, out string text);
+bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info);
+bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out RmQRCodeDecodeInfo info);
+bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info);
+int GetMaxDecodedLength(RmQRVersion version);
+public readonly struct RmQRCodeDecodeInfo { QRCodeDecodeStatus Status; RmQRVersion Version; RmQREccLevel EccLevel; int ErrorsCorrected; }   // no MaskPattern: rMQR has one mask
+```
+
+Rendering:
+
+```csharp
+public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
+  RmQRCodeImageBuilder(string content);  RmQRCodeImageBuilder(RmQRCodeData data);          // default quiet zone 2
+  RmQRCodeImageBuilder WithErrorCorrection(RmQREccLevel eccLevel);  WithVersion(RmQRVersion version);
+  RmQRCodeImageBuilder WithFitStrategy(RmQRFitStrategy fitStrategy);  WithHeight(RmQRHeight height);   // rMQR-only, listed in the parity test's allowed differences
+  // static helpers exactly as MicroQRCodeImageBuilder (GetPngBytes / GetImageBytes / SavePng / GetSvgBytes / SaveSvg / GetSvgString / WriteSvg / WritePng / WriteImage,
+  // string + RmQREccLevel eccLevel = RmQREccLevel.M and RmQRCodeData overloads); their `int size = 512` is the image WIDTH, height follows the symbol aspect ratio
+QRCodeRenderer.Render(SKCanvas canvas, SKRect area, RmQRCodeData data, SKColor? codeColor, SKColor? backgroundColor, ModuleShape? moduleShape = null, float moduleSizePercent = 1.0f, GradientOptions? gradientOptions = null);
+SKCanvas.Render(this SKCanvas canvas, RmQRCodeData data, int width, int height, SKColor? clearColor = null, SKColor? codeColor = null, SKColor? backgroundColor = null, ModuleShape? moduleShape = null, float moduleSizePercent = 1.0f, GradientOptions? gradientOptions = null);
+SKCanvas.Render(this SKCanvas canvas, RmQRCodeData data, SKRect area, …same tail…);
+```
+
+Rectangular geometry rule shared by every rendering entry: the symbol (quiet zone included) is drawn with a uniform module scale, centered in the target area or canvas (letterbox); `WithModulePixelSize` yields exactly `Width × Height` modules × pixels; `WithSize(w, h)` letterboxes into `w × h`. Standard and Micro QR rendering is unchanged.
 
 ### Supported (planned scope)
 
