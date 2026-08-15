@@ -122,6 +122,8 @@ Exit: met, see Progress log (1,150 table tests green, both TFMs).
 - `RmQRCodeData`, `RmQRVersion`, `RmQREccLevel`, `RmQRHeight`, `RmQRFitStrategy`, QRX type 2 serialization; `RmQRConstants.SymbolTypeRmQR = 2` registered next to Micro QR's 1.
 - Tests mirror `MicroQRCodeDataUnitTest` (indexer bounds, quiet zone virtual reads, serialization round trip for all 32 versions, header/type/dimension negatives, cross-type rejection).
 
+Exit: met, see Progress log (`RmQRVersion` / `RmQREccLevel` landed in 5.1b; `RmQRHeight` / `RmQRFitStrategy` move to 5.3 where the fit logic that gives them meaning lives).
+
 **5.3 Bit stream (`RmQRBinaryEncoder`)**
 
 - Segment building via `TextAnalyzer` (single-mode segments as in Micro QR), 3-bit mode + per-version count widths, terminator, byte alignment, 0xEC/0x11 padding; UTF-8 fallback via the shared path used by Micro QR.
@@ -260,3 +262,19 @@ Exit (Phase 7): decoder MVT image rows and the representative degradation subset
 **Benchmarks**
 
 - Not applicable: table additions only, nothing on any hot path (no Standard / Micro QR file touched).
+
+### Phase 5.2, completed 2026-08-15
+
+**Done**
+
+- `src`: public `RmQRCodeData` (frozen signature from the design record): rectangular bit-packed core (MSB-first, row-major over the core width), virtual quiet zone, `Width` / `Height` / `Version` / `this[row, col]`, "QRX" symbol type 2 serialization (`GetRawDataSize`, `GetRawData()`, `GetRawData(IBufferWriter<byte>)`), constructors (version + quiet zone; `byte[]` / `ReadOnlySpan<byte>` + quiet zone, padding bits canonicalized), internal zero-allocation accessors `GetCoreWidth` / `GetCoreHeight` / `GetCoreModule` / `GetCoreData` / `SetCoreData` mirroring `MicroQRCodeData` (the matrix decoder and placer consume these). Micro QR (type 1) and QRR containers rejected in both directions.
+- Tests (test-first, +210 on net8.0 + net10.0; full suite 5,726, 0 failed): `RmQRCodeDataUnitTest`, exercising every version with synthetic cores and corpus symbols (no encoder exists yet), all constructor / header / dimension negatives (incl. transposed sizes), quiet-zone offset indexing, `IBufferWriter` parity, and a Release-only steady-state zero-allocation assertion over `SetCoreData` / `GetCoreData` / `GetCoreModule` / `GetRawData(IBufferWriter)`.
+- Docs: spec map data-model rows link to code and tests.
+
+**Lessons learned**
+
+- With the corpus in place, a data type can be tested against real external symbols before its own encoder exists; the fixture loader's rectangular reader is the only test infrastructure the phase needed.
+
+**Benchmarks**
+
+- Not applicable: new type only, no shared or hot-path code touched (the packing loops are the Micro QR scalar shape; a fast path, if ever needed, belongs to the placer follow-up and would be measured there).

@@ -132,10 +132,10 @@ Reference tests (planned, Phase 7): `RmQRCodeDecoderImageTest`, `RmQRCodeDecoder
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
-| - | Bit-packed rectangular core matrix with virtual quiet zone (spec quiet zone: 2 modules); `Width` / `Height` include the quiet zone | `RmQRCodeData` (Phase 5.2) |
-| - | "QRX" serialization container (magic + symbol type 2 + width + height + packed bits), Micro QR (type 1) and QRR streams rejected | `RmQRCodeData.GetRawData` (Phase 5.2) |
+| - | Bit-packed rectangular core matrix with virtual quiet zone (spec quiet zone: 2 modules); `Width` / `Height` include the quiet zone | [RmQRCodeData](../../../src/SkiaSharp.QrCode/RmQRCodeData.cs) (internal `GetCoreWidth` / `GetCoreHeight` / `GetCoreModule` / `GetCoreData` / `SetCoreData`, byte-per-module row-major over the core width) |
+| - | "QRX" serialization container (magic + symbol type 2 + width + height + packed bits), Micro QR (type 1) and QRR streams rejected | [RmQRCodeData.GetRawData](../../../src/SkiaSharp.QrCode/RmQRCodeData.cs) (array and `IBufferWriter<byte>` overloads; padding bits canonicalized on read) |
 
-Reference tests (planned, Phase 5.2): `RmQRCodeDataUnitTest`.
+Reference tests: [RmQRCodeDataUnitTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQRCodeDataUnitTest.cs) (dimensions and fresh-light state for all 32 versions, `SetCoreData`/`GetCoreData`/indexer/`GetCoreModule` agreement on synthetic cores and corpus symbols, replace-not-merge, size validation, quiet-zone offset indexing and bounds, QRX round trip for every version with an independent quiet zone, header layout, `IBufferWriter` parity, header/type/dimension/truncation negatives incl. transposed sizes and the Micro QR container in both directions, padding-bit canonicalization, Release-only zero-allocation steady state).
 
 ## Maintenance Notes
 
