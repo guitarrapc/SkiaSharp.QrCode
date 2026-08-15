@@ -12,7 +12,7 @@ Design record for supporting multiple QR symbologies, Standard QR (ISO/IEC 18004
 |---|---|---|---|---|
 | Standard QR (versions 1–40) | ISO/IEC 18004 | Shipped | Shipped | Shipped (Tier 1–2) |
 | Micro QR (M1–M4) | ISO/IEC 18004 | Shipped | Shipped | Shipped (Tier 1–2, conservative measured envelope) |
-| rMQR (R7x43–R17x139) | ISO/IEC 23941 | Encode + render done (Phase 5 complete, encoder MVT met; not yet released) | Planned (Phase 6) | Planned (Phase 7) |
+| rMQR (R7x43–R17x139) | ISO/IEC 23941 | Encode + render done (Phase 5, encoder MVT met; not yet released) | Done (Phase 6, decoder MVT matrix rows met; not yet released) | Planned (Phase 7) |
 
 ### Document set
 
@@ -31,7 +31,7 @@ Internals are split into shared primitives and per-symbology pipelines.
 | `ECCInfo` | RS block structure (data codewords, ECC per block, up to two block groups) describes all three symbologies |
 | `BinaryInterleaver` | Block interleaving of data then ECC codewords depends only on the `ECCInfo` block structure; Standard QR and rMQR interleave identically (Micro QR has one block). Lifted from `Internals.StandardQr` to `Internals.BinaryEncoders` when rMQR became the second consumer (rMQR Phase 5.4); the only symbology-specific input, the remainder-bit count, is passed in by the caller |
 | `EncodingMode`, `TextAnalyzer`, `CharacterSets` | Mode alphabet definitions (Numeric / Alphanumeric / Byte character classes, alphanumeric encoding values) are shared; only indicator widths and legality differ per symbology |
-| `SegmentDecoders` | Segment payload bit groups (numeric 10/7/4, alphanumeric 11/6, byte 8·count) and the byte-charset heuristics (UTF-8 validation, BOM, Latin-1 widening) are identical across symbologies; the mode/count indicator framing that differs stays in each symbology's bitstream decoder (lifted out of `QRBinaryDecoder` in Phase 3 when the second consumer appeared) |
+| `SegmentDecoders` | Segment payload bit groups (numeric 10/7/4, alphanumeric 11/6, byte 8·count), the byte-charset heuristics (UTF-8 validation, BOM, Latin-1 widening) and the ECI designator reader (lifted from `QRBinaryDecoder` when rMQR became its second consumer, Phase 6) are identical across symbologies; the mode/count indicator framing that differs stays in each symbology's bitstream decoder (lifted out of `QRBinaryDecoder` in Phase 3 when the second consumer appeared) |
 | `LuminanceConverter`, `PerspectiveTransform` | Image preprocessing and geometry are symbology-independent |
 | `Point`, `Rectangle` | Plain geometry types |
 

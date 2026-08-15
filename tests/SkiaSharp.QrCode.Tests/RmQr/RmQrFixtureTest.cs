@@ -115,4 +115,43 @@ public class RmQrFixtureTest
         await Assert.That(bitmap.Width).IsEqualTo((manifest.Width + 2 * manifest.QuietZoneModules) * manifest.PixelsPerModule);
         await Assert.That(bitmap.Height).IsEqualTo((manifest.Height + 2 * manifest.QuietZoneModules) * manifest.PixelsPerModule);
     }
+
+    /// <summary>
+    /// Decodes every committed external symbol through the public matrix path. Payload,
+    /// version and ECC must match the manifest; libzint symbols decode with zero
+    /// corrections, qrtool symbols with at most one (its documented tail defect drops
+    /// low bits of the final ECC codeword on versions 11 modules high or taller).
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(FixtureIds))]
+    public async Task Decode_MatrixFixture_PayloadAndMetadataMatch(string fixtureId)
+    {
+        var fixture = FixtureLoader.Load("RmQr", fixtureId);
+        var manifest = fixture.Manifest;
+        var (modules, width, height) = FixtureLoader.ReadRectangularMatrix(fixture.MatrixPath);
+
+        var success = RmQRCodeDecoder.TryDecode(modules, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because(fixtureId);
+        await Assert.That(text).IsEqualTo(manifest.PayloadText);
+        await Assert.That((int)info.Version).IsEqualTo(manifest.Version);
+        await Assert.That(info.EccLevel).IsEqualTo(Enum.Parse<RmQREccLevel>(manifest.ErrorCorrectionLevel));
+        var allowedErrors = manifest.Generator == "qrtool" && height >= 11 ? 1 : 0;
+        await Assert.That(info.ErrorsCorrected).IsLessThanOrEqualTo(allowedErrors).Because(fixtureId);
+
+        // The PNG carries the same modules (rendered at 8 px/module with a 2-module quiet zone):
+        // sample the module centers back into a matrix and decode that too.
+        using var bitmap = SKBitmap.Decode(fixture.PngPath);
+        var ppm = manifest.PixelsPerModule;
+        var qz = manifest.QuietZoneModules;
+        var sampled = new byte[width * height];
+        for (var row = 0; row < height; row++)
+            for (var col = 0; col < width; col++)
+            {
+                var px = bitmap.GetPixel((qz + col) * ppm + ppm / 2, (qz + row) * ppm + ppm / 2);
+                sampled[row * width + col] = px.Red < 128 ? (byte)1 : (byte)0;
+            }
+        await Assert.That(RmQRCodeDecoder.TryDecode(sampled, width, height, out var fromPng, out _)).IsTrue();
+        await Assert.That(fromPng).IsEqualTo(manifest.PayloadText);
+    }
 }

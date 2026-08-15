@@ -113,7 +113,7 @@ internal static class QRBinaryDecoder
                         }
                     case ModeEci:
                         {
-                            var status = ReadEciDesignator(ref reader, totalBits, out var eciValue);
+                            var status = SegmentDecoders.ReadEciDesignator(ref reader, totalBits, out var eciValue);
                             if (status != QRCodeDecodeStatus.Success)
                                 return status;
                             switch (eciValue)
@@ -148,38 +148,5 @@ internal static class QRBinaryDecoder
             if (rentedBytes is not null)
                 ArrayPool<byte>.Shared.Return(rentedBytes, clearArray: false);
         }
-    }
-
-    private static QRCodeDecodeStatus ReadEciDesignator(ref BitReader reader, int totalBits, out int eciValue)
-    {
-        // ECI assignment number is 1-3 bytes, length signaled by the leading bits
-        // (ISO/IEC 18004 7.4.2): 0xxxxxxx = 8 bits, 10xxxxxx = 16, 110xxxxx = 24.
-        eciValue = 0;
-        if (totalBits - reader.BitPosition < 8)
-            return QRCodeDecodeStatus.InvalidBitstream;
-
-        var first = reader.Reads(8);
-        if ((first & 0x80) == 0)
-        {
-            eciValue = first;
-        }
-        else if ((first & 0xC0) == 0x80)
-        {
-            if (totalBits - reader.BitPosition < 8)
-                return QRCodeDecodeStatus.InvalidBitstream;
-            eciValue = ((first & 0x3F) << 8) | reader.Reads(8);
-        }
-        else if ((first & 0xE0) == 0xC0)
-        {
-            if (totalBits - reader.BitPosition < 16)
-                return QRCodeDecodeStatus.InvalidBitstream;
-            eciValue = ((first & 0x1F) << 16) | reader.Reads(16);
-        }
-        else
-        {
-            return QRCodeDecodeStatus.InvalidBitstream;
-        }
-
-        return QRCodeDecodeStatus.Success;
     }
 }

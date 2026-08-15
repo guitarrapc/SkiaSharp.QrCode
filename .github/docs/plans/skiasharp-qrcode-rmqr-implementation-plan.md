@@ -178,7 +178,7 @@ Exit (Phase 5): **met, see Progress log** (spot check 256/256 in 5.6; Standard +
 - Tests: round trips all 32 × 2 × modes × quiet zones, span parity, cross-symbology rejection in all directions (rMQR vs Standard vs Micro), committed corpus decode (both lineages, payload bytes + version + ECC).
 - Benchmark `RmQRDecodeEndToEnd`; Standard/Micro decode benchmarks flat.
 
-Exit (Phase 6): decoder MVT matrix rows satisfied; corpus green; progress log entry.
+Exit (Phase 6): **met, see Progress log** (decoder MVT matrix rows: round trips, damage classes, 144-symbol corpus green; Standard QR decode benchmark flat).
 
 ### Phase 7, rMQR image detection
 
@@ -407,3 +407,46 @@ The per-module reference placer dominates (R17x139: 2,363 modules with a predica
 | MicroQRImageEndToEnd M4_ImageDecode_Span | 15.5 µs / 0 B | 15.0 µs / 0 B |
 
 All within ms-scale PNG-encode noise (first-run Small_512 read +14% with a 0.9 ms error bar and re-measured at +3%); the draw-loop change is `data.Size` → `data.Width` / `data.Height` reads on struct views. rMQR image benchmarks (`RmQRImageEndToEnd`) land with the image decode path in Phase 7.
+
+### Phase 6 (6.2-6.4), completed 2026-08-15
+
+**Done**
+
+- 6.2 `Internals/RmQr/RmQRFormatInformationDecoder`: 64 candidates per side (finder / sub-finder XOR masks), `TryDecodeCopy` (≤ 3 bit errors, BCH(18,6) minimum distance ≥ 7) and `TryDecode` over both copies (closer valid copy wins, ties → finder side).
+- 6.3 `Internals/RmQr/RmQRMatrixDecoder` (version from dimensions, both format copies with the version cross-check, inverse zigzag + fixed unmask through the placer's own predicate / mask, block deinterleave, per-block RS via the shared `EccBinaryDecoder`, fixed stack budgets pinned by test) and `Internals/RmQr/RmQRBinaryDecoder` (3-bit modes, per-version count widths, terminator `000`, ECI parsed and mapped, Kanji → `UnsupportedContent`, reserved modes → `InvalidBitstream`, payloads through the shared `SegmentDecoders`). The ECI designator reader was lifted from `QRBinaryDecoder` into `SegmentDecoders` (second consumer; Standard QR decode benchmark flat, see below).
+- 6.4 public `RmQRCodeDecoder` (frozen surface: `RmQRCodeData` ×2, module matrix with width + height as string and zero-allocation span-destination overloads, `GetMaxDecodedLength`) and `RmQRCodeDecodeInfo` (Status / Version / EccLevel / ErrorsCorrected). Quiet-zone stripping by the dark bounding box (rMQR has dark modules at all four core corners and timing on every edge), so asymmetric borders work too. Design record `specs/rmqr-decoder.md` written.
+- Decision: no misdecode-protection cap (full RS strength ⌊ecc/2⌋ per block, as the Standard QR decoder and zxing-cpp); the ISO/IEC 23941 text could not be consulted, recorded as an open decision in the decoder record and spec map.
+- Tests (test-first, +726 on net8.0 + net10.0; full suite 9,274, 0 failed): `RmQRFormatInformationDecoderUnitTest` (both sides exhaustively over 2^18 vs naive nearest, arbitration classes), `RmQRBinaryDecoderUnitTest` (oracle golden, round trips, ECI UTF-8 / ISO-8859-1 / unsupported, Kanji, reserved modes, truncations, terminator vs empty segments), `RmQRCodeDecoderRoundTripTest` (all 32 × M/H × modes × quiet zones through every overload, asymmetric padding, stack budgets, `GetMaxDecodedLength`, non-rMQR rejection, Release-only zero allocation), `RmQRCodeDecoderRobustnessTest` (t codewords per block corrected in every block of all 64 combos, t + 1 in one block never decoding cleanly, format copies destroyed / both within / both beyond, format-vs-dimension contradiction, remainder bits), `RmQrFixtureTest.Decode_MatrixFixture` (all 144 external symbols: payload / version / ECC, `ErrorsCorrected` 0 for libzint and ≤ 1 for qrtool, plus a PNG-sampled re-decode).
+- Benchmark `RmQRDecodeEndToEnd` added; README (Decode ✅ matrix, decode example), docs index, spec map, symbology status, fixture record updated.
+
+**Lessons learned**
+
+- Two hand-built "malformed stream" cases were initially wrong (a stream starting with `000` is a valid terminator; a 5-byte claim fits in 42 bits); malformed-input tests must be constructed against the exact framing rules, not by intuition, and both were caught by running them.
+- The corpus's qrtool tail defect doubles as a robustness fixture (`ErrorsCorrected ≤ 1`), and the format-copy redundancy makes single-copy destruction a free positive class.
+
+**Benchmark delta (`QRCodeDecodeEndToEnd`, net10.0 Release, warmup 3 × 10 iterations, before = HEAD worktree, after = this change; allocations identical)**
+
+| Benchmark | Before | After |
+|---|---|---|
+| QR_Numeric_V1_L_Decode (Span) | 918 ns | 890 ns |
+| QR_Alphanumeric_V1_M_Decode (Span) | 1,074 ns | 1,056 ns |
+| QR_Byte_Url_V6_M_Decode (Span) | 5,012 ns | 4,978 ns |
+| QR_Byte_V40_L_Decode (Span) | 129.1 µs | 132.8 µs |
+| QR_Byte_V40_H_Decode (Span) | 101.0 µs | 98.2 µs |
+| Image_Byte_Url_V6_M_Decode (Span) | 38.4 µs | 37.8 µs |
+| MicroQR_Numeric_M2_Decode (Span) | 287 ns | 279 ns |
+
+All within ±3% (the ECI reader is only reached on ECI segments; the lift changed nothing on the hot path).
+
+**New rMQR decode baseline (`RmQRDecodeEndToEnd`, same job)**
+
+| Benchmark | Mean | Allocated |
+|---|---|---|
+| RmQR_Numeric_R7x43_Decode (Span) | 833 ns | **0 B** |
+| RmQR_Alphanumeric_R11x59_Decode (Span) | 2.88 µs | **0 B** |
+| RmQR_Byte_R17x139_Decode (Span) | 14.6 µs | **0 B** |
+| RmQR_Numeric_R7x43_Decode (string) | 812 ns | 48 B (result string) |
+| RmQR_Byte_R17x139_Decode (string) | 15.8 µs | 328 B (result string) |
+| StandardQr_Numeric_V1_Decode (Span), reference | 852 ns | 0 B |
+
+The per-module predicate walk dominates (as on the encode side); it is the baseline for the shared placer / extractor fast-path follow-up.

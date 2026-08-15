@@ -21,8 +21,9 @@ Design records and spec-to-code maps for shipped behavior, organized symbology-f
 | [standardqr-decoder.md](specs/standardqr-decoder.md) | Design record | Standard QR decoder scope, input tiers, lessons learned |
 | [qrcode-test-fixtures.md](specs/qrcode-test-fixtures.md) | Design record | Committed fixture corpus, manifest schema, external-oracle capability matrix |
 | [microqr-spec-map.md](specs/microqr-spec-map.md) | Spec-to-code map | Micro QR encoding pipeline vs ISO/IEC 18004 |
-| [rmqr-spec-map.md](specs/rmqr-spec-map.md) | Spec-to-code map | rMQR pipeline vs ISO/IEC 23941 (planned components, spec-first) |
+| [rmqr-spec-map.md](specs/rmqr-spec-map.md) | Spec-to-code map | rMQR pipeline vs ISO/IEC 23941 (encoder, rendering and matrix decoder implemented; image detection planned) |
 | [rmqr-encoder.md](specs/rmqr-encoder.md) | Design record | rMQR encoder API, oracle-verified symbol parameter tables, decisions, verification record (spec-first) |
+| [rmqr-decoder.md](specs/rmqr-decoder.md) | Design record | rMQR decoder scope (matrix level shipped, image level planned), decisions incl. the open misdecode-protection question, lessons |
 
 ## Plans (`plans/`)
 
