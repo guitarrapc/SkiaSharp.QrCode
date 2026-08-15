@@ -162,7 +162,7 @@ Exit: met, see Progress log (default strategy decided: MinimizeArea; spot check 
 - Playground + BlazorWasm + ConsoleApp sample gain rMQR generation (symbology selector, version/height/strategy controls, rMQR-aware stats); NativeAOT/WASM CI covers the path.
 - Docs: spec map (encoding + rendering sections), symbology status table, README (symbology table, examples, FAQ), `docs/data-capacity.md` rMQR table (64 rows).
 
-Exit (Phase 5): encoder MVT satisfied (spot check 100%); Standard + Micro image/encode benchmarks flat; rMQR encode benchmark recorded; progress log entry.
+Exit (Phase 5): **met, see Progress log** (spot check 256/256 in 5.6; Standard + Micro image benchmarks flat in 5.7; rMQR encode benchmark recorded in 5.6; rMQR image benchmark deferred to 6/7 with the decode path).
 
 ### Phase 6, rMQR matrix decoder
 
@@ -377,3 +377,33 @@ All within ±4% (single-run layout noise, both directions), allocations byte-ide
 | StandardQr_Numeric_V1_Encode (Span), reference | 2.42 µs | 0 B |
 
 The per-module reference placer dominates (R17x139: 2,363 modules with a predicate call each); this is the baseline the placement / bit-stream fast-path follow-up is measured against. Standard / Micro QR benchmarks untouched (no shared file changed in this phase).
+
+### Phase 5.7, completed 2026-08-15 (Phase 5 complete)
+
+**Done**
+
+- Shared rendering generalized (guarded by the image benchmarks below): `IModuleMatrixView` now exposes `Width` / `Height` / `CoreWidth` / `CoreHeight` (square views report both axes equal; new `RmQRMatrixView`), the run-merge and per-module draw loops iterate width × height; `QRImageLayout.CreateLayout(matrixWidth, matrixHeight, explicitSize, modulePixelSize, preserveAspectRatio, defaultSize)` (Standard / Micro keep the historical fill behavior, rMQR letterboxes on whole pixels; the square overload was removed); `QRCodeImageBuilderBase` hooks became `ResolveSymbol(out width, out height)` plus virtual `PreserveAspectRatio` / `GetDefaultCanvasSize` (both existing builders updated mechanically).
+- `src`: `RmQRCodeImageBuilder` (frozen surface: typed `WithErrorCorrection` / `WithVersion` / `WithFitStrategy` / `WithHeight`, quiet zone 2, no icon / finder styling; static helpers whose `size` is the image width with the height following the symbol aspect ratio; default canvas 512 wide), `QRCodeRenderer.Render(canvas, area, RmQRCodeData, …)` (letterboxes into the area via `GetLetterboxedArea`, background over the whole area) and the two `SKCanvas.Render(RmQRCodeData, …)` extensions.
+- Tests (+110 rendering tests; full suite 8,548, 0 failed): `RmQRCodeImageBuilderUnitTest` (module-to-pixel parity for all 32 versions × ECC, layout rules incl. letterbox in both orientations and whole-pixel centering, options and negatives, static helpers, SVG viewBox / crispEdges, renderer + extension agreement), `QrImageBuilderApiParityTest` now compares three builders (allowed differences: Standard-only `WithIcon` / `WithFinderPatternShape` / `WithEciMode`, rMQR-only `WithFitStrategy` / `WithHeight`).
+- Playground: rMQR in the symbology selector (M/H, 32 versions, fit-strategy + fixed-height controls shown only for rMQR, quiet zone 2, finder / logo controls hidden, width-based image with aspect-ratio height, rMQR-aware stats and benchmark labels, share links carry the new fields); verified in the published Debug WASM build in-browser (R11x27 31×15 default, R7x43 with "Shortest", 512×120 image). BlazorWasm sample (symbology enum, controls, live SKCanvasView preview via the renderer overload, PNG/SVG export) and ConsoleApp patterns 27–28 (static one-liner; fixed height + styling, prints the R11x27-vs-R7x43 default-fit example) added.
+- Docs: README (symbology table Encode ✅ / Decode planned, intro sample image, FAQ with the fit-strategy explanation, rMQR usage section), `docs/data-capacity.md` rMQR table (32 rows × M/H), spec map rendering rows link to code and tests, symbology status table.
+
+**Lessons learned**
+
+- One `preserveAspectRatio` flag plus a per-symbology default-canvas hook was enough to add rectangular layout without touching the square symbologies' behavior; the existing golden-pixel and builder tests stayed green unchanged, which is the real proof that "letterbox only for rMQR" is a pure addition.
+- The static-helper sizing rule ("`size` is the width") needed a private width-only mode on the builder rather than a public `WithWidth`, so the fluent surface stays 1:1 with the other builders (the parity test enforces exactly that).
+- Bulk-editing JavaScript with shell tools silently ate template literals (`${...}` → interpolated away); the in-browser check caught "rMQR Rx". Verify UI text in the running app, not just the diff.
+
+**Benchmark delta (image paths, net10.0 Release, before = HEAD worktree, after = this change; allocations byte-identical everywhere)**
+
+| Benchmark | Before | After |
+|---|---|---|
+| QrCodeImageEndToEnd Small_512px | 4.45 ms / 5.44 KB | 4.58 ms / 5.44 KB (re-measured, +3%) |
+| QrCodeImageEndToEnd Small_2048px | 69.4 ms / 20.44 KB | 71.2 ms / 20.44 KB (+2.6%) |
+| QrCodeImageEndToEnd Large_512px | 9.07 ms / 19.44 KB | 9.52 ms / 19.44 KB |
+| QrCodeImageEndToEnd Large_2048px | 72.2 ms / 41.91 KB | 72.1 ms / 41.91 KB |
+| MicroQRImageEndToEnd M2_512px | 4.91 ms / 5400 B | 4.59 ms / 5400 B |
+| MicroQRImageEndToEnd M4_128px | 343 µs / 3856 B | 317 µs / 3856 B |
+| MicroQRImageEndToEnd M4_ImageDecode_Span | 15.5 µs / 0 B | 15.0 µs / 0 B |
+
+All within ms-scale PNG-encode noise (first-run Small_512 read +14% with a 0.9 ms error bar and re-measured at +3%); the draw-loop change is `data.Size` → `data.Width` / `data.Height` reads on struct views. rMQR image benchmarks (`RmQRImageEndToEnd`) land with the image decode path in Phase 7.

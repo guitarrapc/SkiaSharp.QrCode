@@ -249,3 +249,44 @@ Character capacities per version and ECC level (ISO/IEC 18004 Table 7; `—` = m
 | M4 (17×17) | Q | 21 | 13 | 9 |
 
 Byte capacities are encoded byte counts: ISO-8859-1 text costs 1 byte per character, UTF-8 multi-byte text costs its UTF-8 length (e.g. 'あ' = 3 bytes).
+
+## rMQR Code (R7x43-R17x139)
+
+Character capacities per version and ECC level (ISO/IEC 23941, verified against external encoders; `R{height}x{width}` in modules, quiet zone excluded). rMQR supports ECC levels M and H only.
+
+| Version | M: Numeric | M: Alphanumeric | M: Byte | H: Numeric | H: Alphanumeric | H: Byte |
+|---------|-----------:|----------------:|--------:|-----------:|----------------:|--------:|
+| R7x43 | 12 | 7 | 5 | 5 | 3 | 2 |
+| R7x59 | 26 | 16 | 11 | 14 | 8 | 6 |
+| R7x77 | 45 | 27 | 19 | 21 | 13 | 9 |
+| R7x99 | 64 | 39 | 27 | 30 | 18 | 13 |
+| R7x139 | 102 | 62 | 42 | 54 | 33 | 22 |
+| R9x43 | 26 | 16 | 11 | 14 | 8 | 6 |
+| R9x59 | 47 | 29 | 20 | 23 | 14 | 10 |
+| R9x77 | 71 | 43 | 30 | 37 | 23 | 16 |
+| R9x99 | 97 | 59 | 40 | 49 | 30 | 20 |
+| R9x139 | 147 | 89 | 61 | 75 | 46 | 31 |
+| R11x27 | 14 | 8 | 6 | 9 | 6 | 4 |
+| R11x43 | 42 | 26 | 18 | 23 | 14 | 10 |
+| R11x59 | 71 | 43 | 30 | 33 | 20 | 14 |
+| R11x77 | 100 | 60 | 41 | 52 | 31 | 21 |
+| R11x99 | 133 | 81 | 55 | 66 | 40 | 27 |
+| R11x139 | 198 | 120 | 82 | 97 | 59 | 40 |
+| R13x27 | 26 | 16 | 11 | 14 | 8 | 6 |
+| R13x43 | 62 | 37 | 26 | 28 | 17 | 12 |
+| R13x59 | 88 | 53 | 36 | 45 | 27 | 18 |
+| R13x77 | 124 | 75 | 51 | 66 | 40 | 27 |
+| R13x99 | 171 | 104 | 71 | 80 | 49 | 33 |
+| R13x139 | 251 | 152 | 104 | 126 | 76 | 52 |
+| R15x43 | 76 | 46 | 31 | 33 | 20 | 13 |
+| R15x59 | 112 | 68 | 46 | 59 | 36 | 24 |
+| R15x77 | 157 | 95 | 65 | 71 | 43 | 29 |
+| R15x99 | 207 | 126 | 86 | 111 | 68 | 46 |
+| R15x139 | 301 | 182 | 125 | 162 | 98 | 67 |
+| R17x43 | 90 | 55 | 37 | 47 | 28 | 19 |
+| R17x59 | 131 | 79 | 54 | 63 | 38 | 26 |
+| R17x77 | 183 | 111 | 76 | 87 | 53 | 36 |
+| R17x99 | 236 | 143 | 98 | 131 | 79 | 54 |
+| R17x139 | 361 | 219 | 150 | 178 | 108 | 74 |
+
+Byte capacities are encoded byte counts (ISO-8859-1 text 1 byte per character, UTF-8 multi-byte text its UTF-8 length). Automatic version selection picks the fewest-modules symbol by default (`RmQRFitStrategy.MinimizeArea`, the same choice other encoders make), which can be taller and narrower than the flattest fit; use `RmQRFitStrategy.MinimizeHeight` or a fixed `RmQRHeight` for label lanes.
