@@ -2,7 +2,7 @@
 
 Design record for the rMQR Code (ISO/IEC 23941) encode feature (`RmQRCodeGenerator`, planned): what it will do, the symbol parameters it is built on, why the pipeline is structured this way, and the decisions made up front so implementation phases share one understanding. Normative details and implementation locations are indexed in the [spec-to-code map](rmqr-spec-map.md); the implementation order is the [rMQR implementation plan](../plans/skiasharp-qrcode-rmqr-implementation-plan.md). The decoder design record (`rmqr-decoder.md`) is written when Phase 6 lands.
 
-Status: **in progress, spec-first**. Written 2026-08-15 before any `src/` code existed; the tables now live in `Internals/RmQr/RmQRConstants` (Phase 5.1b) and every parameter below is pinned by `RmQRConstantsUnitTest` (structural invariants) and `RmQRConstantsOracleTest` (the committed two-lineage corpus), see the [Verification record](#verification-record). Sections that can only be filled by implementing (measured performance, lessons learned) are marked as such.
+Status: **in progress, spec-first**. Written 2026-08-15 before any `src/` code existed; the tables live in `Internals/RmQr/RmQRConstants` (Phase 5.1b), the data model in `RmQRCodeData` (5.2), the bit stream in `RmQRBinaryEncoder` and the fit logic in `RmQRVersionSelector` (5.3) and every parameter below is pinned by `RmQRConstantsUnitTest` (structural invariants) and `RmQRConstantsOracleTest` (the committed two-lineage corpus), see the [Verification record](#verification-record). Sections that can only be filled by implementing (measured performance, lessons learned) are marked as such.
 
 ---
 

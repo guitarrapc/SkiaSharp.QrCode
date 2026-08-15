@@ -12,7 +12,7 @@ Design record for supporting multiple QR symbologies, Standard QR (ISO/IEC 18004
 |---|---|---|---|---|
 | Standard QR (versions 1–40) | ISO/IEC 18004 | Shipped | Shipped | Shipped (Tier 1–2) |
 | Micro QR (M1–M4) | ISO/IEC 18004 | Shipped | Shipped | Shipped (Tier 1–2, conservative measured envelope) |
-| rMQR (R7x43–R17x139) | ISO/IEC 23941 | In progress (tables, fixtures, data model; Phase 5.2) | Planned | Planned |
+| rMQR (R7x43–R17x139) | ISO/IEC 23941 | In progress (tables, fixtures, data model, bit stream + version fit; Phase 5.3) | Planned | Planned |
 
 ### Document set
 

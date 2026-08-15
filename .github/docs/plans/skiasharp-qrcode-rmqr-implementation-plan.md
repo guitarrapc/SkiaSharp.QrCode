@@ -130,6 +130,8 @@ Exit: met, see Progress log (`RmQRVersion` / `RmQREccLevel` landed in 5.1b; `RmQ
 - Auto version selection implementing `RmQRFitStrategy` × `RmQRHeight`; capacity errors with actual length / applicable maximum / remedy in mode-appropriate units.
 - Tests: exhaustive parity against an independent naive bit-string reference (all 64 version/ECC × every mode × every length up to capacity, min/max/random contents), fit-strategy selection tables (hand-derived expected version per strategy at boundary lengths, ties), height-constrained selection, illegal combination rejection, error-message content.
 
+Exit: met, see Progress log.
+
 **5.4 RS + interleaving**
 
 - Reuse `EccBinaryEncoder`; move `BinaryInterleaver` to shared (or write `RmQRInterleaver`, see decision above). Standard QR encode benchmarks must be flat if the move happens.
@@ -278,3 +280,21 @@ Exit (Phase 7): decoder MVT image rows and the representative degradation subset
 **Benchmarks**
 
 - Not applicable: new type only, no shared or hot-path code touched (the packing loops are the Micro QR scalar shape; a fast path, if ever needed, belongs to the placer follow-up and would be measured there).
+
+### Phase 5.3, completed 2026-08-15
+
+**Done**
+
+- `src`: `Internals/RmQr/RmQRBinaryEncoder.EncodeDataCodewords(text, version, ecc, in TextAnalysisResult, destination)`: 3-bit mode, per-version count indicator, Numeric / Alphanumeric / Byte payload bits (Latin-1 narrow, UTF-8 transcode without ECI, fixed 160-byte stack budget with pool fallback), terminator shortened at capacity, byte alignment, 0xEC/0x11 pads; writes through the shared `BitWriter` into the caller's buffer (allocation-free on net8.0+/netstandard2.1; the netstandard2.0 UTF-8 path is the documented exception, as in Standard QR). Readable reference shape by design, the register-accumulator fast path is a benchmark-driven follow-up.
+- `src`: `Internals/RmQr/RmQRVersionSelector` (`GetRequiredBits`, `GetMaxDataLength`, `Fits`, `IsBetter`, `Select`) implementing the design record's fit semantics: exact `requestedVersion` (must agree with `height` when both given), else best fitting version by `RmQRFitStrategy` within the optional `RmQRHeight`; actionable capacity errors (actual length, applicable maximum in mode units, the binding version, remedy incl. "allow a taller symbol" for height-constrained fits). Public enums `RmQRFitStrategy` (MinimizeArea default / MinimizeWidth / MinimizeHeight) and `RmQRHeight` (H7…H17, value = module height).
+- Tests (test-first, +1,026 on net8.0 + net10.0; full suite 6,752, 0 failed): `RmQRBinaryEncoderUnitTest` (oracle golden `22 20 EC 11 EC 11`, terminator / alignment / empty / UTF-8 / Latin-1 references, and the encoder-side oracle over all 144 corpus symbols: our data codewords == the external symbol's deinterleaved data codewords, both lineages), `RmQRBinaryEncoderParityTest` (vs `RmQRNaiveReference.NaiveDataCodewords`: all 64 × 3 modes × every length to capacity × min/max/cyclic/random, full Latin-1, UTF-8 multi-byte + surrogates, all terminator classes), `RmQRVersionSelectorUnitTest` (inverse-capacity property for all 64 × 3, hand-derived fit tables per strategy, height constraint, requested-version paths, invalid enums, tie-break comparator incl. the R7x99 = R9x77 area tie, message content).
+- Docs: spec map rows link to code and tests.
+
+**Lessons learned**
+
+- MinimizeArea is not "the version Standard QR users expect": 12 digits at M fit R7x43 (301 modules) but R11x27 (297) is smaller, so the default picks the taller, narrower symbol. The design record's tie rule (smaller height) only applies to genuine area ties (R7x99 = R9x77 = 693); users who want the flattest symbol need MinimizeHeight. Worth a README note when the public generator lands.
+- With forced single-segment encoding, two conformant encoders must produce byte-identical data codewords, so the committed corpus doubles as an encoder-side oracle (144/144 matched on the first run); the zxing-cpp spot check in 5.6 then only has to prove placement, not the bit stream.
+
+**Benchmarks**
+
+- Not applicable yet: `src` additions are new internal components not reachable from any public path (no Standard / Micro QR file touched); the rMQR E2E benchmark lands with the public generator (5.6), and the kernel loop is deferred to the follow-up per the user's instruction.

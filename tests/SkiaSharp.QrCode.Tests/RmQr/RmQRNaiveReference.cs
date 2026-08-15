@@ -183,12 +183,26 @@ internal static class RmQRNaiveReference
     /// data codewords of block 0.
     /// </summary>
     public static byte[] DeinterleaveFirstBlock(ReadOnlySpan<byte> stream, int blockCount, int shortBlockCount, int shortLength)
+        => DeinterleaveData(stream, blockCount, shortBlockCount, shortLength).AsSpan(0, shortLength).ToArray();
+
+    /// <summary>
+    /// Undoes Standard-QR-style block interleaving of the data codewords and returns
+    /// ALL data codewords concatenated in block order (block 0 first).
+    /// </summary>
+    public static byte[] DeinterleaveData(ReadOnlySpan<byte> stream, int blockCount, int shortBlockCount, int shortLength)
     {
         var lengths = new int[blockCount];
+        var total = 0;
         for (var b = 0; b < blockCount; b++)
+        {
             lengths[b] = b < shortBlockCount ? shortLength : shortLength + 1;
+            total += lengths[b];
+        }
 
-        var block0 = new byte[lengths[0]];
+        var blocks = new byte[blockCount][];
+        for (var b = 0; b < blockCount; b++)
+            blocks[b] = new byte[lengths[b]];
+
         var k = 0;
         for (var i = 0; i < shortLength + 1; i++)
         {
@@ -196,11 +210,80 @@ internal static class RmQRNaiveReference
             {
                 if (i >= lengths[b])
                     continue;
-                if (b == 0)
-                    block0[i] = stream[k];
-                k++;
+                blocks[b][i] = stream[k++];
             }
         }
-        return block0;
+
+        var result = new byte[total];
+        var offset = 0;
+        foreach (var block in blocks)
+        {
+            block.CopyTo(result, offset);
+            offset += block.Length;
+        }
+        return result;
     }
+
+    /// <summary>
+    /// Independent naive rMQR data-codeword reference: mode indicator (3 bits),
+    /// count indicator, payload bits, terminator (up to 3 zero bits, shortened at
+    /// capacity), zero bits to the byte boundary, then alternating 0xEC / 0x11 pad
+    /// codewords up to the data codeword count. Built as a bit string on purpose.
+    /// </summary>
+    public static byte[] NaiveDataCodewords(string text, int dataCodewordCount, int modeIndicator, int countIndicatorBits, string mode, bool utf8)
+    {
+        var bits = new System.Text.StringBuilder();
+        void Append(int value, int count)
+        {
+            for (var b = count - 1; b >= 0; b--)
+                bits.Append(((value >> b) & 1) == 1 ? '1' : '0');
+        }
+
+        Append(modeIndicator, 3);
+        switch (mode)
+        {
+            case "Numeric":
+                Append(text.Length, countIndicatorBits);
+                for (var i = 0; i < text.Length; i += 3)
+                {
+                    var take = Math.Min(3, text.Length - i);
+                    var value = int.Parse(text.Substring(i, take));
+                    Append(value, take == 3 ? 10 : take == 2 ? 7 : 4);
+                }
+                break;
+            case "Alphanumeric":
+                Append(text.Length, countIndicatorBits);
+                const string alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+                for (var i = 0; i < text.Length; i += 2)
+                {
+                    if (i + 1 < text.Length)
+                        Append(alphabet.IndexOf(text[i]) * 45 + alphabet.IndexOf(text[i + 1]), 11);
+                    else
+                        Append(alphabet.IndexOf(text[i]), 6);
+                }
+                break;
+            default:
+                var bytes = utf8 ? System.Text.Encoding.UTF8.GetBytes(text) : System.Text.Encoding.Latin1.GetBytes(text);
+                Append(bytes.Length, countIndicatorBits);
+                foreach (var b in bytes)
+                    Append(b, 8);
+                break;
+        }
+
+        var capacity = dataCodewordCount * 8;
+        if (bits.Length > capacity)
+            throw new InvalidOperationException($"payload does not fit: {bits.Length} > {capacity} bits");
+        for (var t = 0; t < 3 && bits.Length < capacity; t++)
+            bits.Append('0');
+        while (bits.Length % 8 != 0)
+            bits.Append('0');
+
+        var result = new byte[dataCodewordCount];
+        for (var i = 0; i < bits.Length / 8; i++)
+            result[i] = Convert.ToByte(bits.ToString(i * 8, 8), 2);
+        for (var i = bits.Length / 8; i < dataCodewordCount; i++)
+            result[i] = (i - bits.Length / 8) % 2 == 0 ? (byte)0xEC : (byte)0x11;
+        return result;
+    }
+
 }
