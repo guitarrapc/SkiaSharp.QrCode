@@ -235,7 +235,7 @@ public static class QRCodeGenerator
         var dataBufferSize = (dataCapacity + 7) / 8; // bits to bytes, rounded up
         var totalBlocks = config.EccInfo.BlocksInGroup1 + config.EccInfo.BlocksInGroup2;
         var eccBufferSize = totalBlocks * config.EccInfo.ECCPerBlock;
-        var interleavedSize = BinaryInterleaver.CalculateInterleavedSize(config.EccInfo, config.Version);
+        var interleavedSize = BinaryInterleaver.CalculateInterleavedSize(config.EccInfo, QRCodeConstants.GetRemainderBits(config.Version));
 
         Span<byte> dataBuffer = stackalloc byte[dataBufferSize];
         Span<byte> eccBuffer = stackalloc byte[eccBufferSize];
@@ -403,7 +403,7 @@ public static class QRCodeGenerator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void InterleaveCodewords(ReadOnlySpan<byte> dataBuffer, ReadOnlySpan<byte> eccBuffer, in ECCInfo eccInfo, int version, Span<byte> output)
     {
-        BinaryInterleaver.InterleaveCodewords(dataBuffer, eccBuffer, output, version, eccInfo);
+        BinaryInterleaver.InterleaveCodewords(dataBuffer, eccBuffer, output, eccInfo);
     }
 
     /// <summary>

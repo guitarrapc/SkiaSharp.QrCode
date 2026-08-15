@@ -1,0 +1,18 @@
+{
+  "id": "r13x59-m-utf8-japanese",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 19,
+  "versionName": "R13x59",
+  "width": 59,
+  "height": 13,
+  "errorCorrectionLevel": "M",
+  "mode": "Byte",
+  "maskPattern": 4,
+  "payloadText": "\u3053\u3093\u306B\u3061\u306F\u4E16\u754C",
+  "payloadUtf8Hex": "E38193E38293E381ABE381A1E381AFE4B896E7958C",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

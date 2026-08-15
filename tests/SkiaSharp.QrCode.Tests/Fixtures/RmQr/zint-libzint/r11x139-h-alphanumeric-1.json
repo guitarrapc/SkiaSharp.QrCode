@@ -1,0 +1,18 @@
+{
+  "id": "r11x139-h-alphanumeric-1",
+  "generator": "zint-libzint",
+  "generatorVersion": "ZXingCpp 0.5.2 bundled libzint",
+  "symbolType": "rMQR",
+  "version": 16,
+  "versionName": "R11x139",
+  "width": 139,
+  "height": 11,
+  "errorCorrectionLevel": "H",
+  "mode": "Alphanumeric",
+  "maskPattern": 4,
+  "payloadText": "A",
+  "payloadUtf8Hex": "41",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

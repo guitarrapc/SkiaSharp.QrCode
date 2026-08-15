@@ -1,0 +1,18 @@
+{
+  "id": "r7x43-h-alphanumeric-1",
+  "generator": "zint-libzint",
+  "generatorVersion": "ZXingCpp 0.5.2 bundled libzint",
+  "symbolType": "rMQR",
+  "version": 1,
+  "versionName": "R7x43",
+  "width": 43,
+  "height": 7,
+  "errorCorrectionLevel": "H",
+  "mode": "Alphanumeric",
+  "maskPattern": 4,
+  "payloadText": "A",
+  "payloadUtf8Hex": "41",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

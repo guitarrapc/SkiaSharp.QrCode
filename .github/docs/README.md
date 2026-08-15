@@ -21,7 +21,9 @@ Design records and spec-to-code maps for shipped behavior, organized symbology-f
 | [standardqr-decoder.md](specs/standardqr-decoder.md) | Design record | Standard QR decoder scope, input tiers, lessons learned |
 | [qrcode-test-fixtures.md](specs/qrcode-test-fixtures.md) | Design record | Committed fixture corpus, manifest schema, external-oracle capability matrix |
 | [microqr-spec-map.md](specs/microqr-spec-map.md) | Spec-to-code map | Micro QR encoding pipeline vs ISO/IEC 18004 |
-| `rmqr-spec-map.md` | Spec-to-code map | Planned (implementation plan Phase 5) |
+| [rmqr-spec-map.md](specs/rmqr-spec-map.md) | Spec-to-code map | rMQR pipeline vs ISO/IEC 23941 (encoder, rendering, matrix decoder and image detection implemented) |
+| [rmqr-encoder.md](specs/rmqr-encoder.md) | Design record | rMQR encoder API, oracle-verified symbol parameter tables, decisions, verification record (spec-first) |
+| [rmqr-decoder.md](specs/rmqr-decoder.md) | Design record | rMQR decoder scope (matrix and image level), image detection design (format-first, sub-finder anchored, gated perspective search), decisions incl. the open misdecode-protection question, lessons |
 
 ## Plans (`plans/`)
 
@@ -30,4 +32,5 @@ Forward-looking strategy; durable decisions graduate into `specs/` after impleme
 | Document | Covers |
 |---|---|
 | [skiasharp-qrcode-microqr-rmqr-implementation-plan.md](plans/skiasharp-qrcode-microqr-rmqr-implementation-plan.md) | Micro QR / rMQR implementation order (Phase 0-8) |
+| [skiasharp-qrcode-rmqr-implementation-plan.md](plans/skiasharp-qrcode-rmqr-implementation-plan.md) | rMQR detailed plan (Phases 5-7 sub-phases, API decisions, oracles, exit gates) |
 | [skiasharp-qrcode-microqr-rmqr-test-strategy.md](plans/skiasharp-qrcode-microqr-rmqr-test-strategy.md) | Micro QR / rMQR test strategy (oracles, fixtures, CI design) |

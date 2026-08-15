@@ -1,0 +1,18 @@
+{
+  "id": "r11x77-m-alphanumeric-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 14,
+  "versionName": "R11x77",
+  "width": 77,
+  "height": 11,
+  "errorCorrectionLevel": "M",
+  "mode": "Alphanumeric",
+  "maskPattern": 4,
+  "payloadText": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 $%*\u002B-./:ABCDEFGHIJKLMNO",
+  "payloadUtf8Hex": "4142434445464748494A4B4C4D4E4F505152535455565758595A303132333435363738392024252A2B2D2E2F3A4142434445464748494A4B4C4D4E4F",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

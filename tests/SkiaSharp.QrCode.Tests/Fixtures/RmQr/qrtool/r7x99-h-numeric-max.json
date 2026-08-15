@@ -1,0 +1,18 @@
+{
+  "id": "r7x99-h-numeric-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 4,
+  "versionName": "R7x99",
+  "width": 99,
+  "height": 7,
+  "errorCorrectionLevel": "H",
+  "mode": "Numeric",
+  "maskPattern": 4,
+  "payloadText": "012345678901234567890123456789",
+  "payloadUtf8Hex": "303132333435363738393031323334353637383930313233343536373839",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

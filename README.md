@@ -16,7 +16,7 @@ SkiaSharp.QrCode provides high-performance QR code generation/read with [SkiaSha
 
 Many existing QR code libraries rely on System.Drawing, which has well-known GDI+ limitations and cross-platform issues. SkiaSharp.QrCode was created to provide high performance, minimum memory allocation, a simpler and more intuitive API while leveraging SkiaSharp's cross-platform capabilities. Generate a QR code in a single line, or customize every detail - the choice is yours.
 
-You can create professional-looking QR codes like this with just a few lines of code. Here's a small sample of Standard QR and Micro QR.
+You can create professional-looking QR codes like this with just a few lines of code. Here's a small sample of Standard QR, Micro QR and rMQR.
 
 <p float="left">
   <img src="samples/ConsoleApp/samples/pattern15_instagram_frame.png" width="250" alt="Instagram-style"/>
@@ -27,6 +27,10 @@ You can create professional-looking QR codes like this with just a few lines of 
 <p float="left">
   <img src="samples/ConsoleApp/samples/pattern24_microqr_static.png" width="250" alt="MicroQR static"/>
   <img src="samples/ConsoleApp/samples/pattern25_microqr_styled.png" width="250" alt="MicroQR styled"/>
+</p>
+
+<p float="left">
+  <img src="samples/ConsoleApp/samples/pattern28_rmqr_fixed_height.png" width="760" alt="rMQR R9x139 with a fixed 9-module height"/>
 </p>
 
 See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these styles.
@@ -53,13 +57,13 @@ SkiaSharp.QrCode is a modern, high-performance QR code generation library built 
 
 ## Supported Symbologies
 
-SkiaSharp.QrCode implements the Standard QR Code symbology and Micro QR generation/decoding. Unless a section says otherwise, this README refers to Standard QR; Micro QR is available via `MicroQRCodeGenerator` / `MicroQRCodeDecoder`.
+SkiaSharp.QrCode implements the Standard QR Code symbology, Micro QR generation/decoding, and rMQR generation/decoding. Unless a section says otherwise, this README refers to Standard QR; Micro QR is available via `MicroQRCodeGenerator` / `MicroQRCodeDecoder`, rMQR via `RmQRCodeGenerator` / `RmQRCodeImageBuilder` / `RmQRCodeDecoder`.
 
 | Symbology | Standard | Generate (Encode) | Decode |
 |---|---|---|---|
 | Standard QR (versions 1–40) | ISO/IEC 18004 | ✅ | ✅ |
 | Micro QR (M1–M4) | ISO/IEC 18004 | ✅ | ✅ |
-| rMQR (R7x43–R17x139) | ISO/IEC 23941 | NO | NO |
+| rMQR (R7x43–R17x139) | ISO/IEC 23941 | ✅ | ✅ |
 
 See the [FAQ](#does-it-support-micro-qr-or-rmqr) for the Micro QR / rMQR status.
 
@@ -447,7 +451,7 @@ Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see 
 
 Micro QR (M1–M4) is fully supported for generation and decoding. See [Micro QR](#supported-symbologies) for details.
 
-rMQR (R7x43–R17x139) is not supported at this time.
+rMQR (R7x43–R17x139, ISO/IEC 23941, rectangular symbols for narrow print lanes) is supported for generation and rendering via `RmQRCodeGenerator` and `RmQRCodeImageBuilder` (all 32 versions, ECC M/H, Numeric / Alphanumeric / Byte modes; Kanji is not implemented). Version selection is two-dimensional: pass an exact `RmQRVersion`, or let `RmQRFitStrategy` choose among the versions that fit (default `MinimizeArea`, the fewest modules, the same choice libzint and qrtool make automatically; note it can pick a taller, narrower symbol, e.g. 12 digits at M give R11x27 rather than the flatter R7x43), optionally within a fixed `RmQRHeight`. Rendering keeps the rectangular symbol's shape: `WithModulePixelSize` gives the exact matrix, `WithSize` letterboxes into the canvas (uniform module scale, never stretched), and `WithWidth` (the static helpers' `size`, default 512) sets the image width with the height following the symbol aspect ratio. `RmQRCodeDecoder` decodes rMQR module matrices (`RmQRCodeData` or byte-per-module spans with width and height, quiet zone stripped automatically) with per-block Reed-Solomon correction, and scans rMQR symbols from images (`SKBitmap` or a grayscale luminance span): clean, screen-rendered or scanned images with arbitrary rotation, mirroring, inverted colors, uniform or non-uniform scaling, translation and mild perspective (the test suite covers 2 % and 4 % keystone along either axis up to R17x139); `QRCodeDecoder` stays Standard QR-only. Capacities per version are listed in [docs/data-capacity.md](docs/data-capacity.md). See [rMQR](#rmqr) for examples.
 
 ### What QR code style provides the best scan reliability?
 
@@ -897,6 +901,72 @@ using var bitmap = SKBitmap.Decode("microqr.png");
 var ok = MicroQRCodeDecoder.TryDecode(bitmap, out var scanned, out _);
 ```
 
+
+### rMQR
+
+`RmQRCodeGenerator`, `RmQRCodeImageBuilder` and `RmQRCodeDecoder`; version/ECC/fit constraints in the [FAQ](#does-it-support-micro-qr-or-rmqr), capacities in [docs/data-capacity.md](docs/data-capacity.md). Runnable samples: [ConsoleApp patterns 27–29](samples/ConsoleApp).
+
+#### One-liner (PNG)
+
+```csharp
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
+// size is the image WIDTH; the height follows the symbol aspect ratio (default fit: fewest modules)
+var pngBytes = RmQRCodeImageBuilder.GetPngBytes("https://example.com/r/12345", RmQREccLevel.M, size: 512);
+File.WriteAllBytes("rmqr.png", pngBytes);
+```
+
+#### Builder (fixed height, fit strategy, styling)
+
+```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
+// A label lane 9 modules high: the width is chosen automatically
+var pngBytes = new RmQRCodeImageBuilder("https://example.com/r/12345")
+    .WithHeight(RmQRHeight.H9)
+    .WithErrorCorrection(RmQREccLevel.H)
+    .WithModulePixelSize(12)
+    .WithColors(codeColor: SKColor.Parse("2D3436"), backgroundColor: SKColors.White)
+    .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f)
+    .ToByteArray();
+
+// The flattest symbol that fits, instead of the fewest modules
+var flat = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, fitStrategy: RmQRFitStrategy.MinimizeHeight);
+Console.WriteLine(flat.Version); // R7x43 (the default MinimizeArea picks R11x27: 297 modules vs 301)
+
+// Exact version, zero-allocation span output (byte per module, row-major, quiet zone included)
+var size = RmQRCodeGenerator.GetRequiredBufferSize("ABC123".AsSpan(), RmQREccLevel.M, RmQRVersion.R7x59);
+Span<byte> modules = new byte[size.BufferSize];
+RmQRCodeGenerator.CreateRmQRCode("ABC123".AsSpan(), RmQREccLevel.M, modules, RmQRVersion.R7x59); // size.Width × size.Height
+```
+
+#### Decode (matrix and image)
+
+```csharp
+using SkiaSharp.QrCode;
+
+var rmqr = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M);
+if (RmQRCodeDecoder.TryDecode(rmqr, out var text, out var info))
+{
+    Console.WriteLine($"{text} ({info.Version}, ECC {info.EccLevel}, {info.ErrorsCorrected} corrections)"); // 012345678901 (R11x27, ECC M, 0 corrections)
+}
+
+// Byte-per-module matrix with width and height (any light quiet zone is stripped automatically);
+// zero-allocation variant with a caller-provided destination
+var size = RmQRCodeGenerator.GetRequiredBufferSize("012345678901".AsSpan(), RmQREccLevel.M);
+var modules = new byte[size.BufferSize];
+RmQRCodeGenerator.CreateRmQRCode("012345678901".AsSpan(), RmQREccLevel.M, modules);
+Span<char> destination = new char[RmQRCodeDecoder.GetMaxDecodedLength(size.Version)];
+var ok = RmQRCodeDecoder.TryDecode(modules, size.Width, size.Height, destination, out var written, out _);
+
+// Image scan, use RmQRCodeDecoder (QRCodeDecoder is Standard QR-only); rotation, mirroring,
+// inverted colors, scaling and mild perspective are handled
+using var bitmap = SKBitmap.Decode("rmqr.png");
+var found = RmQRCodeDecoder.TryDecode(bitmap, out var scanned, out var scanInfo);
+```
 
 ## License
 

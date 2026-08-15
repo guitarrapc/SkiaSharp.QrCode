@@ -1,0 +1,18 @@
+{
+  "id": "r17x139-h-utf8-mixed",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 32,
+  "versionName": "R17x139",
+  "width": 139,
+  "height": 17,
+  "errorCorrectionLevel": "H",
+  "mode": "Byte",
+  "maskPattern": 4,
+  "payloadText": "rMQR \u77E9\u5F62\u30B3\u30FC\u30C9 \u2713 na\u00EFve caf\u00E9",
+  "payloadUtf8Hex": "724D515220E79FA9E5BDA2E382B3E383BCE3838920E29C93206E61C3AF766520636166C3A9",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

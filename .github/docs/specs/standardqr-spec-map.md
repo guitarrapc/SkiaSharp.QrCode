@@ -45,9 +45,9 @@ Reference tests: [EccBinaryEncoderKernelParityTest](../../../tests/SkiaSharp.QrC
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
-| Section 7.6 | Data / ECC codeword interleaving across blocks, trailing remainder bits | [BinaryInterleaver.InterleaveCodewords](../../../src/SkiaSharp.QrCode/Internals/StandardQr/BinaryInterleaver.cs) |
+| Section 7.6 | Data / ECC codeword interleaving across blocks, trailing remainder bits | [BinaryInterleaver.InterleaveCodewords](../../../src/SkiaSharp.QrCode/Internals/BinaryEncoders/BinaryInterleaver.cs), shared across symbologies (lifted from `Internals.StandardQr` when rMQR became the second consumer; the Standard-QR-specific remainder-bit count is passed in) |
 
-Reference tests: [BinaryInterleaverParityTest](../../../tests/SkiaSharp.QrCode.Tests/StandardQr/BinaryInterleaverParityTest.cs).
+Reference tests: [BinaryInterleaverParityTest](../../../tests/SkiaSharp.QrCode.Tests/Shared/BinaryInterleaverParityTest.cs), [BinaryInterleaverUnitTest](../../../tests/SkiaSharp.QrCode.Tests/Shared/BinaryInterleaverUnitTest.cs).
 
 ## Module Placement
 

@@ -1,0 +1,18 @@
+{
+  "id": "r9x43-h-byte-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 6,
+  "versionName": "R9x43",
+  "width": 43,
+  "height": 9,
+  "errorCorrectionLevel": "H",
+  "mode": "Byte",
+  "maskPattern": 4,
+  "payloadText": "the qu",
+  "payloadUtf8Hex": "746865207175",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

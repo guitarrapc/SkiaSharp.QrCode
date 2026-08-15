@@ -18,7 +18,7 @@ internal enum ByteSegmentCharset
 
 /// <summary>
 /// Segment payload decoders shared by the symbology bitstream decoders
-/// (Standard QR, Micro QR). The mode/count indicator layout differs per
+/// (Standard QR, Micro QR, rMQR). The mode/count indicator layout differs per
 /// symbology and stays in the caller; the payload bit groups (ISO/IEC 18004
 /// 7.4.3-7.4.5: numeric 10/7/4, alphanumeric 11/6, byte 8·count) and the byte
 /// charset heuristics are identical.
@@ -246,5 +246,42 @@ internal static class SegmentDecoders
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Reads an ECI assignment number (ISO/IEC 18004 7.4.2, identical in ISO/IEC 23941):
+    /// 1-3 bytes, length signaled by the leading bits (0xxxxxxx = 8 bits,
+    /// 10xxxxxx = 16, 110xxxxx = 24). Lifted from the Standard QR bitstream decoder
+    /// when rMQR became the second consumer.
+    /// </summary>
+    public static QRCodeDecodeStatus ReadEciDesignator(ref BitReader reader, int totalBits, out int eciValue)
+    {
+        eciValue = 0;
+        if (totalBits - reader.BitPosition < 8)
+            return QRCodeDecodeStatus.InvalidBitstream;
+
+        var first = reader.Reads(8);
+        if ((first & 0x80) == 0)
+        {
+            eciValue = first;
+        }
+        else if ((first & 0xC0) == 0x80)
+        {
+            if (totalBits - reader.BitPosition < 8)
+                return QRCodeDecodeStatus.InvalidBitstream;
+            eciValue = ((first & 0x3F) << 8) | reader.Reads(8);
+        }
+        else if ((first & 0xE0) == 0xC0)
+        {
+            if (totalBits - reader.BitPosition < 16)
+                return QRCodeDecodeStatus.InvalidBitstream;
+            eciValue = ((first & 0x1F) << 16) | reader.Reads(16);
+        }
+        else
+        {
+            return QRCodeDecodeStatus.InvalidBitstream;
+        }
+
+        return QRCodeDecodeStatus.Success;
     }
 }

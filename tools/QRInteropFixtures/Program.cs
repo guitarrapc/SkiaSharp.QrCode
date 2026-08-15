@@ -18,9 +18,20 @@ if (command == "probe-creator")
     // Checks whether the pinned ZXingCpp native build can create Micro QR / rMQR.
     return CreatorProbe.Run();
 }
+if (command == "spot-check-rmqr")
+{
+    // Decodes SkiaSharp.QrCode-generated rMQR symbols (all versions × ECC × modes) with zxing-cpp.
+    return RmQRSpotCheck.Run();
+}
+if (command == "probe-rmqr")
+{
+    // rMQR oracle facts for the implementation plan's Phase 5.0: libzint version mapping,
+    // zxing-cpp Extra() naming, qrtool interop.
+    return RmQRProbe.Run(FindRepoRoot());
+}
 if (command != "regenerate")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|spot-check-microqr|probe-creator]");
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr]");
     return 1;
 }
 
@@ -99,6 +110,48 @@ foreach (var generator in microGenerators)
         FixtureWriter.Write(generatorDir, fixture);
         total++;
         Console.WriteLine($"wrote: {generator.Name}/{fixture.Manifest.Id} (M{fixture.Manifest.Version}, {fixture.Manifest.ErrorCorrectionLevel}, {fixture.Manifest.Mode}, mask {mask})");
+    }
+}
+
+// rMQR corpus: the same two lineages, each with its own case list (libzint carries
+// the systematic per-version sweep, qrtool the boundary + UTF-8 cases, see
+// RmQRCorpus). Every fixture passes the zxing-cpp sanity gate (raw-byte payload,
+// version, ECC cross-check) before it is written.
+var rmqrRoot = Path.Combine(fixturesBase, "RmQr");
+var rmqrGenerators = new (IRmQRFixtureGenerator Generator, RmQRFixtureCaseDefinition[] Cases)[]
+{
+    (new ZintRmQRFixtureGenerator(), RmQRCorpus.ZintCases),
+    (new QrtoolRmQRFixtureGenerator(repoRoot), RmQRCorpus.QrtoolCases),
+};
+
+foreach (var (generator, cases) in rmqrGenerators)
+{
+    if (!generator.IsAvailable)
+    {
+        Console.WriteLine($"skip: {generator.Name} (not available on this machine; see tools/QRInteropFixtures/get-qrtool.ps1 for the qrtool binary)");
+        continue;
+    }
+
+    var generatorDir = Path.Combine(rmqrRoot, generator.Name);
+    if (Directory.Exists(generatorDir))
+        Directory.Delete(generatorDir, recursive: true);
+    Directory.CreateDirectory(generatorDir);
+
+    foreach (var caseDefinition in cases)
+    {
+        if (!generator.SupportsCase(caseDefinition))
+        {
+            Console.WriteLine($"skip: {generator.Name}/{caseDefinition.Id} (unsupported by this generator)");
+            continue;
+        }
+
+        var fixture = generator.Generate(caseDefinition);
+        var mask = RmQRSanityGate.VerifyAndGetMask(fixture);
+        fixture = fixture with { Manifest = fixture.Manifest with { MaskPattern = mask } };
+
+        FixtureWriter.Write(generatorDir, fixture);
+        total++;
+        Console.WriteLine($"wrote: {generator.Name}/{fixture.Manifest.Id} ({fixture.Manifest.VersionName}, {fixture.Manifest.ErrorCorrectionLevel}, {fixture.Manifest.Mode})");
     }
 }
 

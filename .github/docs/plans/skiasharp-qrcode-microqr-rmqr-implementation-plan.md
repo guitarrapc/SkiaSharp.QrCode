@@ -99,6 +99,8 @@ Exit: Micro QR is feature-complete (encode, render, matrix decode, image decode)
 
 ### Phase 5, rMQR encoder
 
+Phases 5-7 are detailed (sub-phases, API decisions, oracle status, exit gates) in [skiasharp-qrcode-rmqr-implementation-plan.md](skiasharp-qrcode-rmqr-implementation-plan.md); their progress log entries live there.
+
 - Rectangular tables (32 sizes, ECC M/H), 18-bit format info, finder + sub-finder + edge timing placement, rectangular rendering, version auto-fit strategy (width-first / height-first preference exposed in API).
 - Matrix conformance against fixtures (all 32 sizes at least once; boundary payloads).
 

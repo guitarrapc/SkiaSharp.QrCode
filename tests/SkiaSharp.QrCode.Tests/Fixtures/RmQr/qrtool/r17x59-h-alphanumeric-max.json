@@ -1,0 +1,18 @@
+{
+  "id": "r17x59-h-alphanumeric-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 29,
+  "versionName": "R17x59",
+  "width": 59,
+  "height": 17,
+  "errorCorrectionLevel": "H",
+  "mode": "Alphanumeric",
+  "maskPattern": 4,
+  "payloadText": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 $",
+  "payloadUtf8Hex": "4142434445464748494A4B4C4D4E4F505152535455565758595A303132333435363738392024",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

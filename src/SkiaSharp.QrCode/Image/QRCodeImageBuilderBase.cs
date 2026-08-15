@@ -49,9 +49,23 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// <summary>
     /// Resolves the symbol to render (encoding the configured content when the
     /// builder was not given pre-built data) and reports its matrix side length
-    /// including the quiet zone. Called exactly once per output operation.
+    /// including the quiet zone (width and height; equal for square symbologies).
+    /// Called exactly once per output operation.
     /// </summary>
-    private protected abstract object ResolveSymbol(out int matrixSize);
+    private protected abstract object ResolveSymbol(out int matrixWidth, out int matrixHeight);
+
+    /// <summary>
+    /// Whether an explicit canvas size fits the symbol with a uniform module scale
+    /// (letterbox) instead of filling the canvas. Square symbologies keep the
+    /// historical fill behavior; rectangular symbologies must never be stretched.
+    /// </summary>
+    private protected virtual bool PreserveAspectRatio => false;
+
+    /// <summary>
+    /// Canvas size used when neither <see cref="WithSize"/> nor
+    /// <see cref="WithModulePixelSize"/> was called (512 × 512 for square symbologies).
+    /// </summary>
+    private protected virtual Vector2Slim GetDefaultCanvasSize(int matrixWidth, int matrixHeight) => new(512, 512);
 
     /// <summary>Draws the resolved symbol into the content rectangle.</summary>
     private protected abstract void RenderSymbol(SKCanvas canvas, object symbol, SKRect contentRect);
@@ -69,8 +83,11 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Used alone, this sets an exact canvas size. Module pixel size then becomes
-    /// <c>imageSize / matrixSize</c>, which may be fractional and can change when the version changes.
+    /// Used alone, this sets an exact canvas size. For the square symbologies the module
+    /// pixel size then becomes <c>imageSize / matrixSize</c>, which may be fractional and can
+    /// change when the version changes; the rectangular rMQR builder fits the symbol into
+    /// the canvas with a uniform module scale instead (letterbox, the leftover pad keeps
+    /// <c>clearColor</c>).
     /// </para>
     /// <para>
     /// Used with <see cref="WithModulePixelSize(int)"/>, this sets the canvas size while module pixels
@@ -142,7 +159,7 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// </summary>
     /// <remarks>
     /// When not called, the builder uses its symbology's specification default:
-    /// 4 modules for Standard QR, 2 for Micro QR. Ignored when the builder was
+    /// 4 modules for Standard QR, 2 for Micro QR and rMQR. Ignored when the builder was
     /// given pre-built symbol data (the data already carries its quiet zone).
     /// </remarks>
     /// <param name="size">Quiet zone size in modules (0-10).</param>
@@ -262,7 +279,7 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// <para>
     /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> is ignored, SVG is a vector format,
     /// not an <see cref="SKEncodedImageFormat"/>. Size options (<see cref="WithSize(int, int)"/>,
-    /// <see cref="WithModulePixelSize(int)"/>) define the SVG viewport in units.
+    /// <see cref="WithModulePixelSize(int)"/>, or the symbology's default canvas) define the SVG viewport in units.
     /// The stream is left open after writing.
     /// </para>
     /// </remarks>
@@ -359,8 +376,8 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// </remarks>
     private void RenderSvg(Stream output)
     {
-        var symbol = ResolveSymbol(out var matrixSize);
-        var (info, contentRect) = QRImageLayout.CreateLayout(matrixSize, _explicitSize, _modulePixelSize);
+        var symbol = ResolveSymbol(out var matrixWidth, out var matrixHeight);
+        var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, PreserveAspectRatio, GetDefaultCanvasSize(matrixWidth, matrixHeight));
 
         var viewBox = $"viewBox=\"0 0 {info.Width} {info.Height}\" ";
         var rootAttributes = UseCrispEdges() ? viewBox + "shape-rendering=\"crispEdges\" " : viewBox;
@@ -393,9 +410,9 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// </summary>
     private SKImage GenerateImage()
     {
-        var symbol = ResolveSymbol(out var matrixSize);
+        var symbol = ResolveSymbol(out var matrixWidth, out var matrixHeight);
 
-        var (info, contentRect) = QRImageLayout.CreateLayout(matrixSize, _explicitSize, _modulePixelSize);
+        var (info, contentRect) = QRImageLayout.CreateLayout(matrixWidth, matrixHeight, _explicitSize, _modulePixelSize, PreserveAspectRatio, GetDefaultCanvasSize(matrixWidth, matrixHeight));
 
         var clearColor = _clearColor ?? SKColors.Transparent;
         var contentCoversCanvas = QRImageLayout.ContentCoversCanvas(contentRect, info);

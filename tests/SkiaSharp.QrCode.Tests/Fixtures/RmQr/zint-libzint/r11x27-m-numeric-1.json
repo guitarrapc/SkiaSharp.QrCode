@@ -1,0 +1,18 @@
+{
+  "id": "r11x27-m-numeric-1",
+  "generator": "zint-libzint",
+  "generatorVersion": "ZXingCpp 0.5.2 bundled libzint",
+  "symbolType": "rMQR",
+  "version": 11,
+  "versionName": "R11x27",
+  "width": 27,
+  "height": 11,
+  "errorCorrectionLevel": "M",
+  "mode": "Numeric",
+  "maskPattern": 4,
+  "payloadText": "1",
+  "payloadUtf8Hex": "31",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

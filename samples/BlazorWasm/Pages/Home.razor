@@ -24,13 +24,55 @@
             <div class="panel__grid">
                 <label class="field">
                     <span class="field__label">Symbology</span>
-                    <select title="Standard QR (versions 1-40) or Micro QR (M1-M4, tiny symbols with a single finder pattern)"
+                    <select title="Standard QR (versions 1-40), Micro QR (M1-M4, tiny symbols with a single finder pattern) or rMQR (rectangular Micro QR, R7x43-R17x139)"
                             @bind="Options.Symbology" @bind:after="OnSymbologyChanged">
                         <option value="@SymbologyKind.QrCode">QR Code</option>
                         <option value="@SymbologyKind.MicroQR">Micro QR</option>
+                        <option value="@SymbologyKind.RmQR">rMQR</option>
                     </select>
                 </label>
-                @if (Options.Symbology == SymbologyKind.MicroQR)
+                @if (Options.Symbology == SymbologyKind.RmQR)
+                {
+                    <label class="field">
+                        <span class="field__label">Error correction</span>
+                        <select title="rMQR supports M and H" @bind="Options.RmEcc" @bind:after="Regenerate">
+                            <option value="@RmQREccLevel.M">M, 15%</option>
+                            <option value="@RmQREccLevel.H">H, 30%</option>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field__label">Version</span>
+                        <select title="rMQR symbol version R{height}x{width}. Auto picks by the fit strategy below."
+                                @bind="Options.Version" @bind:after="Regenerate">
+                            <option value="-1">Auto</option>
+                            @foreach (var version in Enum.GetValues<RmQRVersion>())
+                            {
+                                <option value="@((int)version)">@version</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field__label">Fit strategy</span>
+                        <select title="How the version is chosen among those that fit (Auto version only). Fewest modules matches other encoders; Shortest keeps the symbol as flat as possible."
+                                @bind="Options.RmFitStrategy" @bind:after="Regenerate" disabled="@(Options.Version != -1)">
+                            <option value="@RmQRFitStrategy.MinimizeArea">Fewest modules</option>
+                            <option value="@RmQRFitStrategy.MinimizeHeight">Shortest</option>
+                            <option value="@RmQRFitStrategy.MinimizeWidth">Narrowest</option>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field__label">Fixed height</span>
+                        <select title="Restrict the fit to one symbol height (modules); the width is chosen automatically (Auto version only)."
+                                @bind="Options.RmHeight" @bind:after="Regenerate" disabled="@(Options.Version != -1)">
+                            <option value="">Any</option>
+                            @foreach (var height in Enum.GetValues<RmQRHeight>())
+                            {
+                                <option value="@height">@((int)height) modules</option>
+                            }
+                        </select>
+                    </label>
+                }
+                else if (Options.Symbology == SymbologyKind.MicroQR)
                 {
                     <label class="field">
                         <span class="field__label">Error correction</span>
@@ -265,7 +307,7 @@
     private void OnSymbologyChanged()
     {
         Options.Version = -1;
-        Options.QuietZone = Options.Symbology == SymbologyKind.MicroQR ? 2 : 4;
+        Options.QuietZone = Options.Symbology is SymbologyKind.MicroQR or SymbologyKind.RmQR ? 2 : 4;
         Regenerate();
     }
 
@@ -281,7 +323,23 @@
         try
         {
             var stopwatch = Stopwatch.StartNew();
-            if (Options.Symbology == SymbologyKind.MicroQR)
+            if (Options.Symbology == SymbologyKind.RmQR)
+            {
+                var rmData = QrImageFactory.CreateRmQRData(Options);
+                QRCodeRenderer.Render(
+                    canvas,
+                    SKRect.Create(e.Info.Width, e.Info.Height),
+                    rmData,
+                    QrImageFactory.GetForegroundColor(Options),
+                    QrImageFactory.GetBackgroundColor(Options),
+                    QrImageFactory.CreateModuleShape(Options),
+                    Math.Clamp(Options.ModuleSizePercent, 0.5f, 1.0f),
+                    QrImageFactory.CreateGradient(Options));
+                stopwatch.Stop();
+
+                stats = $"rMQR {rmData.Version} · {rmData.Width}×{rmData.Height} modules · rendered in {stopwatch.Elapsed.TotalMilliseconds:F1} ms";
+            }
+            else if (Options.Symbology == SymbologyKind.MicroQR)
             {
                 var microData = QrImageFactory.CreateMicroQRData(Options);
                 QRCodeRenderer.Render(
@@ -331,7 +389,12 @@
         try
         {
             byte[] bytes;
-            if (Options.Symbology == SymbologyKind.MicroQR)
+            if (Options.Symbology == SymbologyKind.RmQR)
+            {
+                var rmData = QrImageFactory.CreateRmQRData(Options);
+                bytes = QrImageFactory.CreateRmBuilder(Options, rmData).ToByteArray();
+            }
+            else if (Options.Symbology == SymbologyKind.MicroQR)
             {
                 var microData = QrImageFactory.CreateMicroQRData(Options);
                 bytes = QrImageFactory.CreateMicroBuilder(Options, microData).ToByteArray();
@@ -355,7 +418,12 @@
         try
         {
             using var stream = new MemoryStream();
-            if (Options.Symbology == SymbologyKind.MicroQR)
+            if (Options.Symbology == SymbologyKind.RmQR)
+            {
+                var rmData = QrImageFactory.CreateRmQRData(Options);
+                QrImageFactory.CreateRmBuilder(Options, rmData).SaveToSvg(stream);
+            }
+            else if (Options.Symbology == SymbologyKind.MicroQR)
             {
                 var microData = QrImageFactory.CreateMicroQRData(Options);
                 QrImageFactory.CreateMicroBuilder(Options, microData).SaveToSvg(stream);

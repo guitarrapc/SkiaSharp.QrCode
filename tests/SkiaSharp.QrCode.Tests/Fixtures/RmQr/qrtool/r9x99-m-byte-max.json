@@ -1,0 +1,18 @@
+{
+  "id": "r9x99-m-byte-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 9,
+  "versionName": "R9x99",
+  "width": 99,
+  "height": 9,
+  "errorCorrectionLevel": "M",
+  "mode": "Byte",
+  "maskPattern": 4,
+  "payloadText": "the quick brown fox jumps over the lazy ",
+  "payloadUtf8Hex": "74686520717569636B2062726F776E20666F78206A756D7073206F76657220746865206C617A7920",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

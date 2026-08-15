@@ -8,20 +8,21 @@ namespace QRInteropFixtures;
 /// </summary>
 public static class PngRenderer
 {
-    public static byte[] Render(byte[] modules, int size, int quietZoneModules, int pixelsPerModule)
+    public static byte[] Render(byte[] modules, int width, int height, int quietZoneModules, int pixelsPerModule)
     {
-        var totalPixels = (size + quietZoneModules * 2) * pixelsPerModule;
+        var totalWidth = (width + quietZoneModules * 2) * pixelsPerModule;
+        var totalHeight = (height + quietZoneModules * 2) * pixelsPerModule;
 
-        using var bitmap = new SKBitmap(totalPixels, totalPixels, SKColorType.Rgba8888, SKAlphaType.Opaque);
+        using var bitmap = new SKBitmap(totalWidth, totalHeight, SKColorType.Rgba8888, SKAlphaType.Opaque);
         using var canvas = new SKCanvas(bitmap);
         canvas.Clear(SKColors.White);
 
         using var paint = new SKPaint { Color = SKColors.Black, IsAntialias = false, Style = SKPaintStyle.Fill };
-        for (var row = 0; row < size; row++)
+        for (var row = 0; row < height; row++)
         {
-            for (var col = 0; col < size; col++)
+            for (var col = 0; col < width; col++)
             {
-                if (modules[row * size + col] == 0)
+                if (modules[row * width + col] == 0)
                     continue;
 
                 var x = (quietZoneModules + col) * pixelsPerModule;

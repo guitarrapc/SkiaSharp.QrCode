@@ -135,6 +135,10 @@ const presetSelect = document.getElementById('preset-select');
 const symbologySelect = document.getElementById('symbology-select');
 const eccSelect = document.getElementById('ecc-select');
 const versionSelect = document.getElementById('version-select');
+const rmqrFitRow = document.getElementById('rmqr-fit-row');
+const rmqrFitSelect = document.getElementById('rmqr-fit-select');
+const rmqrHeightRow = document.getElementById('rmqr-height-row');
+const rmqrHeightSelect = document.getElementById('rmqr-height-select');
 const sizeRange = document.getElementById('size-range');
 const sizeOut = document.getElementById('size-out');
 const quietRange = document.getElementById('quiet-range');
@@ -196,17 +200,45 @@ const ECC_OPTIONS = {
     ['M', 'M, 15%'],
     ['Q', 'Q, 25% (M4 only)'],
   ],
+  rmqr: [
+    ['M', 'M, 15%'],
+    ['H', 'H, 30%'],
+  ],
 };
+
+/** The 32 rMQR versions in ISO/IEC 23941 index order (height-major); select value = index + 1 (= RmQRVersion). */
+const RMQR_VERSIONS = [
+  [7, 43], [7, 59], [7, 77], [7, 99], [7, 139],
+  [9, 43], [9, 59], [9, 77], [9, 99], [9, 139],
+  [11, 27], [11, 43], [11, 59], [11, 77], [11, 99], [11, 139],
+  [13, 27], [13, 43], [13, 59], [13, 77], [13, 99], [13, 139],
+  [15, 43], [15, 59], [15, 77], [15, 99], [15, 139],
+  [17, 43], [17, 59], [17, 77], [17, 99], [17, 139],
+];
 
 function isMicroSymbology() {
   return symbologySelect.value === 'microqr';
+}
+
+function isRmqrSymbology() {
+  return symbologySelect.value === 'rmqr';
+}
+
+/** Symbology name shown in stats / decode results. */
+function symbolLabel(symbology, qrVersion) {
+  if (symbology === 'microqr') return `Micro QR M${qrVersion}`;
+  if (symbology === 'rmqr') {
+    const v = RMQR_VERSIONS[qrVersion - 1];
+    return v ? `rMQR R${v[0]}x${v[1]}` : `rMQR version ${qrVersion}`;
+  }
+  return `QR version ${qrVersion}`;
 }
 
 /** Repopulates the ECC select for the symbology, keeping the value when still valid. */
 function populateEccSelect() {
   const prev = eccSelect.value;
   eccSelect.replaceChildren();
-  for (const [value, label] of ECC_OPTIONS[isMicroSymbology() ? 'microqr' : 'qr']) {
+  for (const [value, label] of ECC_OPTIONS[isRmqrSymbology() ? 'rmqr' : isMicroSymbology() ? 'microqr' : 'qr']) {
     const opt = document.createElement('option');
     opt.value = value;
     opt.textContent = label;
@@ -223,7 +255,14 @@ function populateVersionSelect() {
   auto.value = '-1';
   auto.textContent = 'Auto';
   versionSelect.appendChild(auto);
-  if (isMicroSymbology()) {
+  if (isRmqrSymbology()) {
+    RMQR_VERSIONS.forEach(([h, w], i) => {
+      const opt = document.createElement('option');
+      opt.value = String(i + 1);
+      opt.textContent = `R${h}x${w} (${w}×${h})`;
+      versionSelect.appendChild(opt);
+    });
+  } else if (isMicroSymbology()) {
     for (let v = 1; v <= 4; v++) {
       const side = 9 + 2 * v;
       const opt = document.createElement('option');
@@ -342,6 +381,10 @@ function collectState() {
     size: Number(sizeRange.value),
     quietZone: Number(quietRange.value),
     version: Number(versionSelect.value),
+    fitStrategy: rmqrFitSelect.value,
+    // A fixed version already pins the height; sending both would be rejected
+    // as contradictory when they disagree, so the height applies to Auto only.
+    height: versionSelect.value === '-1' ? Number(rmqrHeightSelect.value) : 0,
     moduleShape: moduleShapeSelect.value,
     moduleSizePercent: Number(moduleSizeRange.value) / 100,
     moduleCornerRadius: Number(cornerRange.value) / 100,
@@ -366,11 +409,13 @@ function applyStateToControls(state) {
   applyingState = true;
   try {
     if (typeof state.content === 'string') contentEl.value = state.content;
-    if (state.symbology === 'qr' || state.symbology === 'microqr') symbologySelect.value = state.symbology;
+    if (state.symbology === 'qr' || state.symbology === 'microqr' || state.symbology === 'rmqr') symbologySelect.value = state.symbology;
     // Symbology decides the legal ECC / version option sets, rebuild before applying values
     populateEccSelect();
     populateVersionSelect();
     if (state.ecc) eccSelect.value = state.ecc;
+    if (state.fitStrategy === 'area' || state.fitStrategy === 'height' || state.fitStrategy === 'width') rmqrFitSelect.value = state.fitStrategy;
+    if (Number.isFinite(state.height) && [0, 7, 9, 11, 13, 15, 17].includes(state.height)) rmqrHeightSelect.value = String(state.height);
     if (Number.isFinite(state.size)) sizeRange.value = String(clamp(state.size, 128, 1024));
     if (Number.isFinite(state.quietZone)) quietRange.value = String(clamp(state.quietZone, 0, 10));
     if (Number.isFinite(state.version)) versionSelect.value = String(state.version);
@@ -441,8 +486,15 @@ function syncDerivedControls() {
   cornerRow.hidden = moduleShapeSelect.value !== 'rounded';
   // Micro QR has a single finder pattern and no ECC headroom for overlays —
   // the finder shape and logo options do not apply.
-  finderRow.hidden = isMicroSymbology();
-  logoPanel.hidden = isMicroSymbology();
+  finderRow.hidden = isMicroSymbology() || isRmqrSymbology();
+  logoPanel.hidden = isMicroSymbology() || isRmqrSymbology();
+  // rMQR fit options apply only to automatic version selection.
+  rmqrFitRow.hidden = !isRmqrSymbology();
+  rmqrHeightRow.hidden = !isRmqrSymbology();
+  // A fixed version already pins both dimensions: fit strategy and fixed height
+  // only apply to automatic selection (the library rejects a disagreeing pair).
+  rmqrFitSelect.disabled = versionSelect.value !== '-1';
+  rmqrHeightSelect.disabled = versionSelect.value !== '-1';
   gradientPanel.hidden = !gradientToggle.checked;
   fgRow.classList.toggle('field--disabled', gradientToggle.checked);
   fgColor.disabled = gradientToggle.checked;
@@ -633,9 +685,10 @@ function generate() {
 
   try {
     const meta = JSON.parse(exports.SkiaSharp.QrCode.Playground.QrInterop.GetLastMeta());
-    const versionLabel = meta.symbology === 'microqr' ? `Micro QR M${meta.qrVersion}` : `QR version ${meta.qrVersion}`;
+    const versionLabel = symbolLabel(meta.symbology, meta.qrVersion);
+    const matrixLabel = `${meta.matrixSize}×${meta.matrixHeight ?? meta.matrixSize}`;
     statsEl.textContent =
-      `${versionLabel} · ${meta.matrixSize}×${meta.matrixSize} modules · `
+      `${versionLabel} · ${matrixLabel} modules · `
       + `${meta.totalMs} ms in WASM (${interopMs.toFixed(1)} ms total) · ${formatBytes(meta.bytes)}`;
   } catch {
     statsEl.textContent = '';
@@ -724,9 +777,11 @@ decodeFileEl.addEventListener('change', async () => {
       `No QR code decoded (${result.status}). The built-in decoder targets clean, screen-rendered images.`;
     return;
   }
-  const decodedLabel = result.symbology === 'microqr' ? `Micro QR M${result.qrVersion}` : `QR version ${result.qrVersion}`;
+  const decodedLabel = symbolLabel(result.symbology, result.qrVersion);
+  // rMQR has one fixed mask, so no mask pattern is reported for it.
+  const maskLabel = result.maskPattern >= 0 ? ` · mask ${result.maskPattern}` : '';
   decodeResultEl.textContent =
-    `“${result.text}” · ${decodedLabel} · ECC ${result.ecc} · mask ${result.maskPattern}`
+    `“${result.text}” · ${decodedLabel} · ECC ${result.ecc}${maskLabel}`
     + ` · ${result.errorsCorrected} codewords corrected · ${result.totalMs} ms`;
 });
 
@@ -749,7 +804,7 @@ function markCustomPreset() {
 }
 
 for (const el of [
-  contentEl, eccSelect, versionSelect, sizeRange, quietRange,
+  contentEl, eccSelect, versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
   moduleShapeSelect, moduleSizeRange, cornerRange, finderSelect,
   fgColor, bgColor, bgTransparent,
   gradientToggle, gradientDirection,
@@ -767,7 +822,7 @@ for (const el of [
 symbologySelect.addEventListener('input', () => {
   populateEccSelect();
   populateVersionSelect();
-  quietRange.value = isMicroSymbology() ? '2' : '4';
+  quietRange.value = isMicroSymbology() || isRmqrSymbology() ? '2' : '4';
   syncDerivedControls();
   markCustomPreset();
   scheduleGenerate();
@@ -1023,7 +1078,7 @@ async function runBenchmark() {
       const prefix = benchCancelled ? `Cancelled, ${done.toLocaleString()} of ${total.toLocaleString()}` : done.toLocaleString();
       benchResult.textContent =
         `${prefix} codes in ${(wasmMs / 1000).toFixed(2)} s of WASM time, ${formatRate(done, wasmMs)} `
-        + `(avg ${avgMs >= 1 ? avgMs.toFixed(2) : avgMs.toFixed(3)} ms/code, QR v${meta.qrVersion} ${meta.matrixSize}×${meta.matrixSize}, wall ${wallSeconds} s)`;
+        + `(avg ${avgMs >= 1 ? avgMs.toFixed(2) : avgMs.toFixed(3)} ms/code, ${symbolLabel(meta.symbology ?? symbologySelect.value, meta.qrVersion)} ${meta.matrixSize}×${meta.matrixHeight ?? meta.matrixSize}, wall ${wallSeconds} s)`;
     }
   } catch (err) {
     if (isRuntimeDeadError(err)) {

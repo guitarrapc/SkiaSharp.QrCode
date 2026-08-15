@@ -1,0 +1,18 @@
+{
+  "id": "r13x59-m-numeric-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 19,
+  "versionName": "R13x59",
+  "width": 59,
+  "height": 13,
+  "errorCorrectionLevel": "M",
+  "mode": "Numeric",
+  "maskPattern": 4,
+  "payloadText": "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567",
+  "payloadUtf8Hex": "30313233343536373839303132333435363738393031323334353637383930313233343536373839303132333435363738393031323334353637383930313233343536373839303132333435363738393031323334353637",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

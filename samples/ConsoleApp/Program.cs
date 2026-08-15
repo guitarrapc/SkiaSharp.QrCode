@@ -1057,5 +1057,85 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
+// rMQR (ISO/IEC 23941): rectangular symbols for narrow print lanes, R7x43-R17x139
+var rmqrContent = "https://example.com/r/12345";
+
+Console.WriteLine("""
+    Pattern 27: rMQR, Static Method (Simplest)
+      - Best for: Quick rectangular symbols with default settings
+      - API: RmQRCodeImageBuilder.GetPngBytes()
+      - size is the image WIDTH; the height follows the symbol aspect ratio
+    """);
+{
+    var path = Path.Combine(outputDir, "pattern27_rmqr_static.png");
+
+    var pngBytes = RmQRCodeImageBuilder.GetPngBytes(rmqrContent, RmQREccLevel.M, size: 512);
+    File.WriteAllBytes(path, pngBytes);
+
+    Console.WriteLine($"  ✓ Saved to: {path}");
+}
+Console.WriteLine();
+
+Console.WriteLine("""
+    Pattern 28: rMQR, Builder (fit strategy, fixed height, styling)
+      - Best for: Fitting a label lane of fixed height; styled output within symbology limits
+      - API: new RmQRCodeImageBuilder().WithHeight() / WithFitStrategy() / WithVersion()
+      - Default fit is fewest modules (matches other encoders): 12 digits at M give R11x27, not the flatter R7x43;
+        use MinimizeHeight or WithHeight for the flattest symbol
+    """);
+{
+    var path = Path.Combine(outputDir, "pattern28_rmqr_fixed_height.png");
+    var gradient = new GradientOptions(
+        [SKColor.Parse("00B894"), SKColor.Parse("0984E3")],
+        GradientDirection.LeftToRight);
+
+    var pngBytes = new RmQRCodeImageBuilder(rmqrContent)
+        .WithHeight(RmQRHeight.H9)                  // 9 modules high, width chosen automatically
+        .WithErrorCorrection(RmQREccLevel.H)
+        .WithModulePixelSize(12)
+        .WithColors(codeColor: SKColor.Parse("2D3436"), backgroundColor: SKColors.White)
+        .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f)
+        .WithGradient(gradient)
+        .ToByteArray();
+    File.WriteAllBytes(path, pngBytes);
+
+    var flat = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, fitStrategy: RmQRFitStrategy.MinimizeHeight);
+    var smallest = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M);
+    Console.WriteLine($"  ✓ Saved to: {path}");
+    Console.WriteLine($"  ✓ 12 digits at M: default fit {smallest.Version} ({smallest.Width - 4}×{smallest.Height - 4} core), MinimizeHeight {flat.Version}");
+}
+Console.WriteLine();
+
+Console.WriteLine("""
+    Pattern 29: rMQR, Decode (matrix / image round-trip)
+      - Best for: Round-trip validation, reading rendered rMQR images
+      - API: RmQRCodeDecoder.TryDecode()
+      - Explicitly typed like MicroQRCodeDecoder; QRCodeDecoder stays Standard QR-only
+    """);
+{
+    var rmData = RmQRCodeGenerator.CreateRmQRCode(rmqrContent, RmQREccLevel.M);
+    if (RmQRCodeDecoder.TryDecode(rmData, out var decoded, out var info))
+    {
+        Console.WriteLine($"  ✓ Matrix decode: \"{decoded}\" ({info.Version}, ECC {info.EccLevel})");
+    }
+
+    var pngPath = Path.Combine(outputDir, "pattern27_rmqr_static.png");
+    using (var bitmap = SKBitmap.Decode(File.ReadAllBytes(pngPath)))
+    {
+        if (RmQRCodeDecoder.TryDecode(bitmap, out var fromImage, out var imageInfo))
+        {
+            Console.WriteLine($"  ✓ Image decode ({Path.GetFileName(pngPath)}): \"{fromImage}\" ({imageInfo.Version}, {imageInfo.ErrorsCorrected} corrected)");
+        }
+        else
+        {
+            Console.WriteLine($"  ✗ Image decode failed: {imageInfo.Status}");
+        }
+
+        QRCodeDecoder.TryDecode(bitmap, out _, out var stdInfo);
+        Console.WriteLine($"  ✓ Standard QR decoder on rMQR image: {stdInfo.Status} (expected NotDetected)");
+    }
+}
+Console.WriteLine();
+
 Console.WriteLine("=== All patterns completed! ===");
 Console.WriteLine($"Output directory: {Path.GetFullPath(outputDir)}");
