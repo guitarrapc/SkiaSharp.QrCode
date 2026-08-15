@@ -12,7 +12,7 @@ Design record for supporting multiple QR symbologies, Standard QR (ISO/IEC 18004
 |---|---|---|---|---|
 | Standard QR (versions 1–40) | ISO/IEC 18004 | Shipped | Shipped | Shipped (Tier 1–2) |
 | Micro QR (M1–M4) | ISO/IEC 18004 | Shipped | Shipped | Shipped (Tier 1–2, conservative measured envelope) |
-| rMQR (R7x43–R17x139) | ISO/IEC 23941 | In progress (tables, fixtures, data model, bit stream + version fit; Phase 5.3) | Planned | Planned |
+| rMQR (R7x43–R17x139) | ISO/IEC 23941 | In progress (tables, fixtures, data model, bit stream + version fit, RS + interleave; Phase 5.4) | Planned | Planned |
 
 ### Document set
 
@@ -29,6 +29,7 @@ Internals are split into shared primitives and per-symbology pipelines.
 | `GaloisField`, `Polynom`, `EccBinaryEncoder`, `EccBinaryDecoder` | All three symbologies use Reed-Solomon over GF(256) with the same primitive polynomial (0x11D) |
 | `BitWriter`, `BitReader` | Bit-stream packing is symbology-independent |
 | `ECCInfo` | RS block structure (data codewords, ECC per block, up to two block groups) describes all three symbologies |
+| `BinaryInterleaver` | Block interleaving of data then ECC codewords depends only on the `ECCInfo` block structure; Standard QR and rMQR interleave identically (Micro QR has one block). Lifted from `Internals.StandardQr` to `Internals.BinaryEncoders` when rMQR became the second consumer (rMQR Phase 5.4); the only symbology-specific input, the remainder-bit count, is passed in by the caller |
 | `EncodingMode`, `TextAnalyzer`, `CharacterSets` | Mode alphabet definitions (Numeric / Alphanumeric / Byte character classes, alphanumeric encoding values) are shared; only indicator widths and legality differ per symbology |
 | `SegmentDecoders` | Segment payload bit groups (numeric 10/7/4, alphanumeric 11/6, byte 8·count) and the byte-charset heuristics (UTF-8 validation, BOM, Latin-1 widening) are identical across symbologies; the mode/count indicator framing that differs stays in each symbology's bitstream decoder (lifted out of `QRBinaryDecoder` in Phase 3 when the second consumer appeared) |
 | `LuminanceConverter`, `PerspectiveTransform` | Image preprocessing and geometry are symbology-independent |

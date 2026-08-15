@@ -250,10 +250,11 @@ The single mask is applied to data modules while placing. Both format copies com
 |---|---|---|
 | Naming | `RmQR*` family, `RmQRVersion` with 32 named members | Never (mirrors shipped `MicroQR*`) |
 | Version fit API | `RmQRFitStrategy` + `RmQRHeight?` | User demand for width constraints (would add `RmQRWidth?` symmetric to height) |
+| Default fit strategy | `MinimizeArea` (fewest modules) per this record; **open for review in Phase 5.6**: 12 digits at M fit R7x43 (301 modules) but the default selects R11x27 (297), a taller, narrower symbol, which may surprise users expecting the flattest fit (`MinimizeHeight`). Decide before the public signature ships and document the example in the README | Phase 5.6 |
 | Explicit-canvas layout | Uniform scale, centered (letterbox) | - |
 | ECI on encode | Not emitted | Interop demand; decoder parses ECI regardless |
 | Kanji | Deferred (tables keep the column) | Cross-symbology decision |
-| Interleaver | Lift `BinaryInterleaver` to shared if it has no Standard-QR-only assumptions, else `RmQRInterleaver` | Read at Phase 5.4 |
+| Interleaver | Lifted `BinaryInterleaver` to `Internals.BinaryEncoders` (Phase 5.4): it never used the version, only the `ECCInfo` block structure; the remainder-bit count became a parameter | - |
 | Placer performance | Reference per-module placer first; fused/SIMD fast path as a benchmark-driven follow-up | After Phase 7 |
 
 ## Verification record

@@ -137,6 +137,8 @@ Exit: met, see Progress log.
 - Reuse `EccBinaryEncoder`; move `BinaryInterleaver` to shared (or write `RmQRInterleaver`, see decision above). Standard QR encode benchmarks must be flat if the move happens.
 - Tests: interleaved codeword layout vs a naive reference for every block structure in the table (both single-group and two-group versions).
 
+Exit: met, see Progress log (`BinaryInterleaver` lifted to shared, Standard QR encode benchmark flat).
+
 **5.5 Placement (`RmQRModulePlacer`, reference implementation)**
 
 - Function pattern painter (finder, separators, sub-finder, edge timing, vertical timing columns, alignment patterns), both format copies from the table, zigzag placement over non-function modules, fixed mask applied on the fly. Per-module readable reference; fast path deferred to the follow-up.
@@ -147,6 +149,7 @@ Exit: met, see Progress log.
 - `RmQRCodeGenerator.CreateRmQRCode(...)` (string / span / span-destination) + `GetRequiredBufferSize`; span paths 0 B.
 - zxing-cpp spot check tool: `tools/QRInteropFixtures -- spot-check-rmqr` encodes every version × ECC × {numeric, alphanumeric, byte, UTF-8} with this library and requires 100% decode with matching version / ECC. This is the encoder MVT gate (only one decode lineage exists for rMQR, structural limit recorded in the fixture spec).
 - Tests: public API round trips through the extraction path, span/class parity, argument validation; benchmark `RmQREncodeEndToEnd` (numeric R7x43, alphanumeric R11x59, byte R17x139, Span + class).
+- **Decision to make here (found in 5.3): the default `RmQRFitStrategy`.** `MinimizeArea` is the design-record default, but it is not the "flattest symbol" users may expect: 12 digits at M fit R7x43 (301 modules) yet R11x27 (297) is selected, so the default picks a taller, narrower symbol whenever the area is smaller. Options: keep `MinimizeArea` (fewest modules, the printable-area argument) and document it prominently in README/FAQ with the R7x43-vs-R11x27 example; or switch the default to `MinimizeHeight` (the label-lane use case, always the flattest fitting symbol) and keep `MinimizeArea` opt-in. Decide before the public signature ships, record in the design record Decisions table, and cover the chosen default in `RmQRCodeGeneratorUnitTest` and the README example.
 
 **5.7 Rendering**
 
@@ -166,6 +169,7 @@ Exit (Phase 5): encoder MVT satisfied (spot check 100%); Standard + Micro image/
 **6.3 Matrix + bit-stream decoders** (`RmQRMatrixDecoder`, `RmQRBinaryDecoder`): as designed above, stackalloc-only, misdecode-protection check if the spec has one. Tests: golden bit-stream vectors (hand-derived R7x43 numeric; any ISO/IEC 23941 annex example), malformed-stream negatives (bad mode, truncated count, ECI then Kanji), damage tests per RS block (within t per block, beyond, format copies damaged singly and both within/beyond distance), all-versions round trip through the encoder.
 
 **6.4 Public decoder** (`RmQRCodeDecoder`: `RmQRCodeData` / module matrix with width + height / zero-allocation span overloads + `GetMaxDecodedLength`; `RmQRCodeDecodeInfo` with version, ECC, corrected-error count). Quiet-zone stripping: the finder corner is the top-left dark module and the sub-finder corner is bottom-right, so a uniform border gives core dimensions from the dark bounding box; the test suite includes quiet zones 0/1/2/4 and asymmetric padding.
+- Corpus expectations: the qrtool lineage carries a documented tail defect (fixture record: last h − 10 placement modules never written, one ECC codeword low bits lost on versions ≥ 11 high), so the corpus decode assertions expect `ErrorsCorrected` = 0 for libzint fixtures and `ErrorsCorrected` = 1 for the affected qrtool fixtures (a free "one corrupted ECC codeword" robustness class); every payload must still decode.
 
 - Tests: round trips all 32 × 2 × modes × quiet zones, span parity, cross-symbology rejection in all directions (rMQR vs Standard vs Micro), committed corpus decode (both lineages, payload bytes + version + ECC).
 - Benchmark `RmQRDecodeEndToEnd`; Standard/Micro decode benchmarks flat.
@@ -298,3 +302,28 @@ Exit (Phase 7): decoder MVT image rows and the representative degradation subset
 **Benchmarks**
 
 - Not applicable yet: `src` additions are new internal components not reachable from any public path (no Standard / Micro QR file touched); the rMQR E2E benchmark lands with the public generator (5.6), and the kernel loop is deferred to the follow-up per the user's instruction.
+
+### Phase 5.4, completed 2026-08-15
+
+**Done**
+
+- Decision (read, not policy): `BinaryInterleaver.InterleaveCodewords` never used its `version` parameter, only the `ECCInfo` block structure, and only `CalculateInterleavedSize` reached into `QRCodeConstants.GetRemainderBits`. Lifted the class to `Internals.BinaryEncoders` (shared), dropped the unused parameter and made the remainder-bit count an argument; `QRCodeGenerator` call sites changed mechanically (two lines), tests moved to `tests/Shared/`. Standard QR encode benchmark flat (see below).
+- `src`: `Internals/RmQr/RmQRCodewordEncoder` (`GetFinalMessageSize`, `AssembleFinalMessage`): per-block Reed-Solomon via the shared `EccBinaryEncoder` (group 1 shorter blocks first, uniform ECC per block, fixed 156-byte stack scratch = the R17x139-H maximum), then the shared interleaver writes data + ECC + zeroed remainder tail into the caller's buffer.
+- Tests (test-first, +546 on net8.0 + net10.0; full suite 7,298, 0 failed): `RmQRCodewordEncoderUnitTest` (final-message size for all 64 combos, data deinterleaves back via the naive reference and ECC equals the shared kernel per block on a dirty buffer, undersized-buffer negatives, and the encoder-side oracle over all 144 corpus symbols: our final message equals the interleaved stream walked out of every libzint symbol byte for byte); the shared interleaver keeps its parity + unit tests unchanged apart from the signature.
+
+**Lessons learned**
+
+- The encoder-side oracle found a real defect in the second lineage: qrtool 0.13.2 (qrcode2) never writes the last h − 10 placement modules (column 1, rows 8..h−3), so on versions ≥ 11 modules high its final ECC codeword loses the lowest (h − 10 − remainder) bits (12 of 36 corpus symbols; zxing-cpp had corrected them silently, so the sanity gate saw nothing). Arbitration: libzint matches byte for byte and the ISO codeword counts could not even fit into qrtool's layout, so the tables stand; the test tolerates exactly that difference for the qrtool lineage, the fixture record documents it, and 6.4 will expect `ErrorsCorrected` = 1 on those symbols. Recorded as a lesson in the fixture record: reader-corrected symbols pass a payload gate while still being wrong on the wire, so cross-lineage byte comparison, not decode success, is the oracle for encoder output.
+- "Second consumer appeared" was again the right lift trigger, and reading the code settled the shared-vs-copy question in seconds: the shared version was already symbology-agnostic except for one constant lookup, which became a parameter.
+
+**Benchmark delta (`QRCodeEncodeEndToEnd`, net10.0 Release, warmup 3 × 10 iterations, before = HEAD worktree, after = this change)**
+
+| Benchmark | Before | After | Allocated |
+|---|---|---|---|
+| QR_Numeric_V1_L_Encode | 1,830.6 ns | 1,791.8 ns | 120 B / 120 B |
+| QR_Alphanumeric_V1_M_Encode | 1,831.5 ns | 1,900.9 ns | 120 B / 120 B |
+| QR_Byte_Url_V6_M_Encode | 3,768.6 ns | 3,688.4 ns | 280 B / 280 B |
+| QR_Byte_V40_L_Encode | 130,143.7 ns | 133,198.1 ns | 3,984 B / 3,984 B |
+| QR_Byte_V40_H_Encode | 127,418.5 ns | 126,997.4 ns | 3,808 B / 3,808 B |
+
+All within ±4% (single-run layout noise, both directions), allocations byte-identical; the interleaver body is unchanged and the dropped parameter was dead.
