@@ -1,8 +1,17 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SkiaSharp.QrCode.Internals.StandardQr;
+namespace SkiaSharp.QrCode.Internals.BinaryEncoders;
 
+/// <summary>
+/// Reed-Solomon block interleaving (ISO/IEC 18004 7.6, ISO/IEC 23941 7.6): data
+/// codewords round-robin across blocks, then ECC codewords round-robin, then zero
+/// remainder bits. Shared across symbologies: the layout depends only on the
+/// <see cref="ECCInfo"/> block structure, never on a symbology-specific version
+/// (Standard QR and rMQR interleave identically; Micro QR has one block and no
+/// interleaving stage). Lifted from Internals.StandardQr when rMQR became the
+/// second consumer.
+/// </summary>
 internal static class BinaryInterleaver
 {
     /// <summary>
@@ -11,10 +20,9 @@ internal static class BinaryInterleaver
     /// <param name="data">Array of data codewords to interleave.</param>
     /// <param name="ecc">Array of ECC codewords to interleave.</param>
     /// <param name="output">Output buffer for interleaved bits.</param>
-    /// <param name="version">QR code version (1-40).</param>
     /// <param name="eccInfo">ECC information for the QR code version.</param>
     /// <returns></returns>
-    public static void InterleaveCodewords(ReadOnlySpan<byte> data, ReadOnlySpan<byte> ecc, Span<byte> output, int version, in ECCInfo eccInfo)
+    public static void InterleaveCodewords(ReadOnlySpan<byte> data, ReadOnlySpan<byte> ecc, Span<byte> output, in ECCInfo eccInfo)
     {
         // The interleaving process distributes data across blocks to improve error resilience:
         // 1. Data codewords are interleaved in round-robin order from all blocks
@@ -133,7 +141,7 @@ internal static class BinaryInterleaver
     /// Calculates the required buffer size for interleaved data.
     /// </summary>
     /// <param name="eccInfo">ECC information for the QR code version.</param>
-    /// <param name="version">QR code version (1-40).</param>
+    /// <param name="remainderBits">Symbology-specific remainder bits after the last codeword (0-7).</param>
     /// <remarks>
     /// Buffer includes:
     /// - Data codewords (TotalDataCodewords bytes)
@@ -141,7 +149,7 @@ internal static class BinaryInterleaver
     /// - Remainder bits space (0-7 bits, rounded up to nearest byte)
     /// </remarks>
     /// <returns></returns>
-    public static int CalculateInterleavedSize(in ECCInfo eccInfo, int version)
+    public static int CalculateInterleavedSize(in ECCInfo eccInfo, int remainderBits)
     {
         // -----------------------------------------------------
         // QR Code Interleaved data structure (ISO/IEC 18004):
@@ -181,7 +189,6 @@ internal static class BinaryInterleaver
 
         var totalDataBytes = eccInfo.TotalDataCodewords;
         var totalEccBytes = (eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock;
-        var remainderBits = QRCodeConstants.GetRemainderBits(version);
 
         // Calculate total size in bits, then round up to bytes
         var totalBits = totalDataBytes * 8 + totalEccBytes * 8 + remainderBits;

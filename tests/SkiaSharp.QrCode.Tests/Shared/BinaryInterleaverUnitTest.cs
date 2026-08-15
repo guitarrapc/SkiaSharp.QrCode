@@ -1,3 +1,4 @@
+using SkiaSharp.QrCode.Internals.BinaryEncoders;
 using SkiaSharp.QrCode.Internals.StandardQr;
 using SkiaSharp.QrCode.Internals;
 using static SkiaSharp.QrCode.Internals.StandardQr.QRCodeConstants;
@@ -20,11 +21,11 @@ public class BinaryInterleaverUnitTest
         // ecc: Block1 (E1,E2) + Block2 (E3,E4)
         byte[] allEcc = [0xE1, 0xE2, 0xE3, 0xE4];
 
-        var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, version);
+        var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(version));
         byte[] output = new byte[size];
 
         // Act
-        BinaryInterleaver.InterleaveCodewords(allData, allEcc, output, version, eccInfo);
+        BinaryInterleaver.InterleaveCodewords(allData, allEcc, output, eccInfo);
 
         // Assert
         // Expected: D1, D4, D2, D5, D3, D6 | E1, E3, E2, E4
@@ -53,11 +54,11 @@ public class BinaryInterleaverUnitTest
         // ECC: Block0 (2 bytes) + Block1 (2 bytes)
         byte[] allEcc = [0xE1, 0xE2, 0xE3, 0xE4];
 
-        var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, version);
+        var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(version));
         byte[] output = new byte[size];
 
         // Act
-        BinaryInterleaver.InterleaveCodewords(allData, allEcc, output, version, eccInfo);
+        BinaryInterleaver.InterleaveCodewords(allData, allEcc, output, eccInfo);
 
         // Assert
         // Expected: 01, 04, 02, 05, 03, 06, 07 | E1, E3, E2, E4
@@ -93,11 +94,11 @@ public class BinaryInterleaverUnitTest
             allEcc[i] = (byte)(0xE0 + i);
         }
 
-        var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, version);
+        var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(version));
         byte[] output = new byte[size];
 
         // Act
-        BinaryInterleaver.InterleaveCodewords(allData, allEcc, output, version, eccInfo);
+        BinaryInterleaver.InterleaveCodewords(allData, allEcc, output, eccInfo);
 
         // Assert - No interleaving, data and ECC remain in original order
         for (int i = 0; i < 19; i++)
@@ -130,11 +131,11 @@ public class BinaryInterleaverUnitTest
             allEcc[i] = (byte)((i + 100) % 256);
         }
 
-        var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, version);
+        var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(version));
         byte[] output = new byte[size];
 
         // Act
-        BinaryInterleaver.InterleaveCodewords(allData, allEcc, output, version, eccInfo);
+        BinaryInterleaver.InterleaveCodewords(allData, allEcc, output, eccInfo);
 
         // Assert
         await Assert.That(output.Length).IsEqualTo(size);
@@ -152,7 +153,7 @@ public class BinaryInterleaverUnitTest
         var eccInfo = GetEccInfo(version, level);
 
         // Act
-        var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, version);
+        var size = BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(version));
 
         // Assert
         int expectedDataBytes = eccInfo.TotalDataCodewords;

@@ -1,3 +1,4 @@
+using SkiaSharp.QrCode.Internals.BinaryEncoders;
 using SkiaSharp.QrCode.Internals.StandardQr;
 using SkiaSharp.QrCode.Internals;
 using static SkiaSharp.QrCode.Internals.StandardQr.QRCodeConstants;
@@ -65,7 +66,7 @@ public class BinaryInterleaverParityTest
         var eccInfo = GetEccInfo(version, level);
         var dataLen = eccInfo.TotalDataCodewords;
         var eccLen = (eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock;
-        var outputSize = BinaryInterleaver.CalculateInterleavedSize(eccInfo, version);
+        var outputSize = BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(version));
 
         var data = new byte[dataLen];
         var ecc = new byte[eccLen];
@@ -75,7 +76,7 @@ public class BinaryInterleaverParityTest
         var output = new byte[outputSize];
         output.AsSpan().Fill(0xFF); // dirty buffer
 
-        BinaryInterleaver.InterleaveCodewords(data, ecc, output, version, eccInfo);
+        BinaryInterleaver.InterleaveCodewords(data, ecc, output, eccInfo);
 
         for (var i = dataLen + eccLen; i < outputSize; i++)
         {
@@ -91,8 +92,8 @@ public class BinaryInterleaverParityTest
         {
             var data = new byte[eccInfo.TotalDataCodewords - 1];
             var ecc = new byte[(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock];
-            var output = new byte[BinaryInterleaver.CalculateInterleavedSize(eccInfo, 5)];
-            BinaryInterleaver.InterleaveCodewords(data, ecc, output, 5, eccInfo);
+            var output = new byte[BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(5))];
+            BinaryInterleaver.InterleaveCodewords(data, ecc, output, eccInfo);
         });
     }
 
@@ -104,8 +105,8 @@ public class BinaryInterleaverParityTest
         {
             var data = new byte[eccInfo.TotalDataCodewords];
             var ecc = new byte[(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock - 1];
-            var output = new byte[BinaryInterleaver.CalculateInterleavedSize(eccInfo, 5)];
-            BinaryInterleaver.InterleaveCodewords(data, ecc, output, 5, eccInfo);
+            var output = new byte[BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(5))];
+            BinaryInterleaver.InterleaveCodewords(data, ecc, output, eccInfo);
         });
     }
 
@@ -118,7 +119,7 @@ public class BinaryInterleaverParityTest
             var data = new byte[eccInfo.TotalDataCodewords];
             var ecc = new byte[(eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock];
             var output = new byte[data.Length + ecc.Length - 1];
-            BinaryInterleaver.InterleaveCodewords(data, ecc, output, 5, eccInfo);
+            BinaryInterleaver.InterleaveCodewords(data, ecc, output, eccInfo);
         });
     }
 
@@ -127,7 +128,7 @@ public class BinaryInterleaverParityTest
         var dataLen = eccInfo.BlocksInGroup1 * eccInfo.CodewordsInGroup1
                     + eccInfo.BlocksInGroup2 * eccInfo.CodewordsInGroup2;
         var eccLen = (eccInfo.BlocksInGroup1 + eccInfo.BlocksInGroup2) * eccInfo.ECCPerBlock;
-        var outputSize = BinaryInterleaver.CalculateInterleavedSize(eccInfo, version);
+        var outputSize = BinaryInterleaver.CalculateInterleavedSize(eccInfo, GetRemainderBits(version));
 
         for (var seed = 0; seed < 3; seed++)
         {
@@ -140,7 +141,7 @@ public class BinaryInterleaverParityTest
             ReferenceInterleaveCodewords(data, ecc, expected, eccInfo);
 
             var actual = new byte[outputSize];
-            BinaryInterleaver.InterleaveCodewords(data, ecc, actual, version, eccInfo);
+            BinaryInterleaver.InterleaveCodewords(data, ecc, actual, eccInfo);
 
             await Assert.That(actual).IsEquivalentTo(expected);
         }
