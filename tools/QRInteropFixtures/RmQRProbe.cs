@@ -51,6 +51,16 @@ public static class RmQRProbe
         Console.WriteLine($"mapping OK: {mappingOk}/32");
 
         Console.WriteLine();
+        Console.WriteLine("== libzint automatic version choice (no version option): which fit policy? ==");
+        foreach (var payload in new[] { "012345678901", "0123456789012", "012345678901234", new string('0', 100) })
+        {
+            var creator = new BarcodeCreator(BarcodeFormat.RMQRCode) { Options = "ecLevel=M" };
+            using var barcode = creator.From(payload);
+            using var image = barcode.ToImage(new WriterOptions { Scale = 1, AddQuietZones = false });
+            Console.WriteLine($"{payload.Length,3} digits at M -> R{image.Height}x{image.Width}");
+        }
+
+        Console.WriteLine();
         Console.WriteLine("== zxing-cpp reader Extra(...) for libzint-created rMQR (all versions x M/H, payload \"12345\") ==");
         var readOk = 0;
         for (var i = 0; i < Versions.Length; i++)

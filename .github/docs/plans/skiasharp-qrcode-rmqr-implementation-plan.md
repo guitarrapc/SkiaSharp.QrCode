@@ -153,6 +153,8 @@ Exit: met, see Progress log (module-exact against all 144 external symbols).
 - Tests: public API round trips through the extraction path, span/class parity, argument validation; benchmark `RmQREncodeEndToEnd` (numeric R7x43, alphanumeric R11x59, byte R17x139, Span + class).
 - **Decision to make here (found in 5.3): the default `RmQRFitStrategy`.** `MinimizeArea` is the design-record default, but it is not the "flattest symbol" users may expect: 12 digits at M fit R7x43 (301 modules) yet R11x27 (297) is selected, so the default picks a taller, narrower symbol whenever the area is smaller. Options: keep `MinimizeArea` (fewest modules, the printable-area argument) and document it prominently in README/FAQ with the R7x43-vs-R11x27 example; or switch the default to `MinimizeHeight` (the label-lane use case, always the flattest fitting symbol) and keep `MinimizeArea` opt-in. Decide before the public signature ships, record in the design record Decisions table, and cover the chosen default in `RmQRCodeGeneratorUnitTest` and the README example.
 
+Exit: met, see Progress log (default strategy decided: MinimizeArea; spot check 256/256; E2E benchmark recorded).
+
 **5.7 Rendering**
 
 - `IModuleMatrixView` width/height generalization; `QRImageLayout` rectangular content rect + letterbox rule; `RmQRCodeImageBuilder` on `QRCodeImageBuilderBase` (typed `WithErrorCorrection(RmQREccLevel)` / `WithVersion(RmQRVersion)` / `WithFitStrategy` / `WithHeight`, quiet zone 2, no icon / finder styling); `QRCodeRenderer.Render(…, RmQRCodeData, …)`; `SKCanvas.Render(RmQRCodeData, …)`.
@@ -345,3 +347,33 @@ All within ±4% (single-run layout noise, both directions), allocations byte-ide
 **Benchmarks**
 
 - Not applicable yet: internal component, not reachable from any public path; the rMQR E2E benchmark lands with 5.6 and the kernel/fast-path loop is the deferred follow-up.
+
+### Phase 5.6, completed 2026-08-15
+
+**Done**
+
+- Decision, default fit strategy: **`MinimizeArea` stays the default.** `probe-rmqr` now measures both reference encoders' automatic choice with no version option: libzint and qrtool both pick R11x27 for 12 digits at M, R13x27 for 15, R11x77 for 100, exactly the fewest-modules rule, so the default keeps interoperability parity (a payload yields the same version everywhere) plus the printable-area argument. The surprise case (R11x27 (297) over the flatter R7x43 (301)) is documented in the generator XML docs and pinned by `RmQRCodeGeneratorUnitTest.DefaultFit_IsMinimizeArea_MatchingExternalEncoders`; users wanting the flattest symbol use `MinimizeHeight` or a fixed `RmQRHeight`. Design record Decisions table updated; the README example lands with the rendering surface (5.7).
+- `src`: public `RmQRCodeGenerator` (frozen signatures: `CreateRmQRCode` string / span / span-destination, `GetRequiredBufferSize`) and `RmQRCodeCalculatedSize` (BufferSize / Width / Height / Version). Pipeline: `TextAnalyzer` → `RmQRVersionSelector` → `RmQRBinaryEncoder` → `RmQRCodewordEncoder` → `RmQRModulePlacer`; fixed stack budgets for data (152 B) and final message (233 B); the up-to-2,363-byte core is pooled (Standard QR policy) and never escapes; the span path with quiet zone 0 places straight into the destination.
+- Tests (test-first, +144 on net8.0 + net10.0; full suite 8,438, 0 failed): `RmQRCodeGeneratorUnitTest` (default-strategy decision, class / span / `GetRequiredBufferSize` agreement for all 64 combos incl. quiet-zone offset, quiet zone 0 direct write, oracle symbol through the public path, UTF-8 without ECI vs the qrtool oracle shape, argument validation, span sizing hint, capacity messages for auto / fixed version / fixed height, empty text, Release-only zero allocation on the span path incl. UTF-8 and auto-fit).
+- Encoder MVT gate: `tools/QRInteropFixtures -- spot-check-rmqr`: **256/256** symbols (32 versions × M/H × numeric / alphanumeric / byte / UTF-8 at capacity boundaries) decoded by zxing-cpp with matching raw bytes, `Version` and `EcLevel`.
+- Benchmark `RmQREncodeEndToEnd` added (class + span variants, auto-fit, Standard QR v1 reference).
+
+**Lessons learned**
+
+- The default-policy question was an oracle question in disguise: measuring what the two reference encoders do automatically settled it in minutes and gave a stronger reason (cross-encoder version parity) than either aesthetic argument.
+- The spot check's first "failure" was the tool comparing UTF-8 bytes for a Latin-1 payload (`é` is one ISO-8859-1 byte on the wire, which is what both we and zxing-cpp produce); external-decoder gates must encode expectations the way the encoder actually writes, per charset class.
+
+**Benchmark (`RmQREncodeEndToEnd`, net10.0 Release, warmup 3 × 10 iterations, reference-shaped pipeline, no fast paths yet)**
+
+| Benchmark | Mean | Allocated |
+|---|---|---|
+| RmQR_Numeric_R7x43_Encode | 1.05 µs | 112 B (result object) |
+| RmQR_Alphanumeric_R11x59_Encode | 2.96 µs | 160 B |
+| RmQR_Byte_R17x139_Encode | 14.4 µs | 368 B |
+| RmQR_Numeric_R7x43_Encode (Span) | 1.12 µs | **0 B** |
+| RmQR_Alphanumeric_R11x59_Encode (Span) | 3.03 µs | **0 B** |
+| RmQR_Byte_R17x139_Encode (Span) | 14.8 µs | **0 B** |
+| RmQR_Numeric_AutoFit_Encode (Span) | 1.26 µs | **0 B** |
+| StandardQr_Numeric_V1_Encode (Span), reference | 2.42 µs | 0 B |
+
+The per-module reference placer dominates (R17x139: 2,363 modules with a predicate call each); this is the baseline the placement / bit-stream fast-path follow-up is measured against. Standard / Micro QR benchmarks untouched (no shared file changed in this phase).

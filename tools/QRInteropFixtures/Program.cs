@@ -18,6 +18,11 @@ if (command == "probe-creator")
     // Checks whether the pinned ZXingCpp native build can create Micro QR / rMQR.
     return CreatorProbe.Run();
 }
+if (command == "spot-check-rmqr")
+{
+    // Decodes SkiaSharp.QrCode-generated rMQR symbols (all versions × ECC × modes) with zxing-cpp.
+    return RmQRSpotCheck.Run();
+}
 if (command == "probe-rmqr")
 {
     // rMQR oracle facts for the implementation plan's Phase 5.0: libzint version mapping,
@@ -26,7 +31,7 @@ if (command == "probe-rmqr")
 }
 if (command != "regenerate")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|spot-check-microqr|probe-creator|probe-rmqr]");
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr]");
     return 1;
 }
 
