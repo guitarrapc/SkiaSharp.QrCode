@@ -391,7 +391,7 @@ internal static partial class MicroQRModulePlacer
     /// guarantees SSSE3 or AdvSimd.Arm64; IsSupported is a JIT constant so the
     /// untaken branch is eliminated.
     /// x86: PSHUFB + PAND + PCMPEQB, beat the GFNI bit-expand in the
-    /// micro-benchmark loop (GFNI's matrix-operand preparation outweighs its
+    /// kernel benchmark loop (GFNI's matrix-operand preparation outweighs its
     /// single-instruction expand).
     /// ARM64: TBL + CMTST, CMTST (compare-test: 0xFF iff (a &amp; b) != 0)
     /// fuses the AND+CMEQ pair; x86 has no per-lane bit-test compare.
@@ -423,7 +423,7 @@ internal static partial class MicroQRModulePlacer
     /// no cross-row dependency), the stream word count is dispatched per size
     /// (M1 fits one word, M2 two), and the unpack expands 32 modules per AVX2
     /// step. Measured over the SSSE3 pipeline: M4 -29%, M3 -22%, M2 -10%,
-    /// M1 -5% (micro-benchmark rounds 8-11).
+    /// M1 -5% (kernel benchmark rounds 8-11).
     /// </summary>
     private static int PlaceCoreBmi2(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel)
     {

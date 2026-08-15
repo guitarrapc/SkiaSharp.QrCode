@@ -74,7 +74,7 @@ Rejected: encoding the strategy inside `RmQRVersion` (mixes exact sizes with pol
 
 ### Performance posture
 
-Correct-and-clear first, then measured optimization, exactly the Micro QR sequence: reference per-module placer + naive bit-string references first, parity tests, then a fused fast path in a follow-up with kernel benchmarks in the private MicroBenchmarks repo and E2E in `SkiaSharp.QrCode.Benchmark`. Note for that follow-up: rows up to 139 modules no longer fit one ulong (Micro QR's packed-row and PEXT/PDEP tricks assumed ≤ 17), and there is no mask scoring at all, so the profile will differ; do not port Micro QR kernels blindly. Zero allocation on the span paths is a Phase 5 requirement, not a follow-up.
+Correct-and-clear first, then measured optimization, exactly the Micro QR sequence: reference per-module placer + naive bit-string references first, parity tests, then a fused fast path in a follow-up with kernel benchmarks and E2E in `SkiaSharp.QrCode.Benchmark`. Note for that follow-up: rows up to 139 modules no longer fit one ulong (Micro QR's packed-row and PEXT/PDEP tricks assumed ≤ 17), and there is no mask scoring at all, so the profile will differ; do not port Micro QR kernels blindly. Zero allocation on the span paths is a Phase 5 requirement, not a follow-up.
 
 ### Decoder architecture
 
@@ -192,7 +192,7 @@ Exit (Phase 7): decoder MVT image rows and the representative degradation subset
 
 ### Follow-ups (after Phase 7, optional, benchmark-driven)
 
-- Placer / bit-stream fast paths (private MicroBenchmarks kernel loop, disassembly-read, SIMD rounds in scope), ported back with parity tests exactly as the Micro QR follow-ups.
+- Placer / bit-stream fast paths (kernel benchmark loop, disassembly-read, SIMD rounds in scope), ported back with parity tests exactly as the Micro QR follow-ups.
 - ECI emission in the encoder; Kanji mode across symbologies (single decision, three symbologies).
 
 ## Dependency graph
@@ -531,3 +531,32 @@ Three review rounds (independent reviewer agents per lens: correctness, performa
 | R17x139_ImageDecode_Span | 127 µs | 129 µs | |
 
 Allocations identical on every row (span paths 0 B). The encode / decode "after" run landed on a noisier machine state (StdErr 5-30 % vs 1-3 % before): the untouched Standard QR reference rows moved by the same +6 % (decode) / +19 % (encode) as the rMQR rows, and the fixed-version encode rows execute byte-identical code before and after (the encode-path changes are the version-selector failure scan, bypassed by a requested version and strictly less work on auto fit, and the UTF-8 branch of WriteByte, which the ASCII benchmark payloads never take), so the rMQR deltas are run-to-run noise, not the review changes; the decoder change decodes the same two format copies as before. The PNG rows are a real improvement (the width-only default is now an opaque RGB surface). Image decode is flat.
+
+### Follow-up: bit-stream fast path (`RmQRBinaryEncoder`), completed 2026-08-16
+
+The first of the post-Phase-7 kernel rounds (kernel benchmark loop: 19 variants over 3 rounds, byte-identical gate of 35,851 encodes per variant against the verbatim baseline, disassembly-read, converged when round 3 fell inside the canary band).
+
+**Done**
+
+- `src`: `RmQRBinaryEncoder` rewritten around a raw-local writer (64-bit MSB-first accumulator, pending-bit count, byte position, `ref byte` destination threaded through inlined `Append` / `AppendWide` / `Append64`; no per-flush slice checks because every stored bit is real data inside the capacity that version selection guarantees). Numeric: 64-bit SWAR 3-digit groups, 9 digits per 30-bit append, x64 SSSE3/SSE4.1 tier 12 digits per `pmaddwd` / `phaddd` / `packusdw` / `pmaddwd` → 40-bit append. Alphanumeric: unchecked value table with 2 pairs per 22-bit append, x64 tier 8 chars per `pshufb`-classified values + `pmaddubsw`(45,1) + `pmaddwd`(2048,1) → 44-bit append. Byte: SSE2 narrow 8 chars per 64-bit append; UTF-8 in a separate `NoInlining` cold function with its own writer (Micro QR's address-exposure lesson), still `Encoding.UTF8` into the 160-byte stack budget. Terminator + alignment are bit-count arithmetic; pads are 8-byte 0xEC11 stores; the mode switch computes its own header. Vector tiers are `NET8_0_OR_GREATER` + capability gated; netstandard / non-x86 take the SWAR / table paths. Allocation contract unchanged (netstandard2.0 UTF-8 remains the documented exception).
+- Tests (+40 on each TFM; full suite net10.0 5,007 / net8.0 4,995, 0 failed): `RmQRBinaryEncoderKernelParityTest` drives each internal segment writer with `vectorized` = true / false from the same pre-seeded writer state (13 header phases × every length up to R17x139-M capacity × min / max / cyclic / random contents; every alphanumeric symbol through every vector lane) and compares the logical bit stream (stored bytes + pending bits, because `AppendWide` may leave exactly 32 bits pending where `Append` flushes). The existing `RmQRBinaryEncoderParityTest` (naive reference, all 64 × 3 modes × every length) and the corpus-oracle unit tests pin the end-to-end stream unchanged.
+- Refuted along the way (kept in the kernel findings log): `Encoding.Latin1` bulk narrowing (loses to a direct SSE2 pack once the input is known Latin-1), the hand-rolled UTF-8 encoder (loses to `Encoding.UTF8` at 150 bytes; Micro QR's ≤ 15-byte finding does not transfer), a 16-char byte block with hoisted shift (neutral), and single-switch / zero-skip fixed-cost trims (neutral, shipped only as the simpler shape).
+
+**Lessons learned**
+
+- The shared `BitWriter` ref struct IS fully promoted by the JIT; what it pays for is the `Span.Slice` range check on every 32-bit flush (~6 instructions). A `ref byte` writer with a proven capacity contract halves the writer cost at rMQR sizes — worth revisiting for the Standard QR encoder, whose acc64 round stopped at the struct.
+- `pmaddwd` pairs are fixed at lanes (0,1),(2,3),…: a 3-digit group cannot straddle a pair, so "two groups per 8-char load" silently reverses every second group. The gate caught it before any measurement; the shipped shape is one group per load from four overlapping loads.
+- Layout noise dominates at 10-50 ns when every variant is a different compilation of one large method (mode switch inside): the canary moved up to ±32 % in one round, and variants that changed only the numeric path moved the byte scenario by +47 %. Read the column of the mode a variant changed; treat cross-mode swings as noise; never accept a < 3 % delta from one run.
+- Inlining hot writers is only a win once the writer body is lean: forcing the checked `GetAlphanumericValue` (two throw branches per char) inline regressed alnum 1.6-1.8x until the unchecked table replaced it.
+
+**Benchmark delta (`RmQREncodeEndToEnd`, net10.0 Release, --launchCount 3 --warmupCount 3 --iterationCount 15, before = HEAD 62c0268, after = this change; kernel numbers from the kernel benchmark loop)**
+
+| Benchmark | Before | After | Kernel before → after |
+|---|---|---|---|
+| RmQR_Numeric_R7x43_Encode (Span) | 1.125 µs | 1.047 µs | 16 → 12 ns |
+| RmQR_Alphanumeric_R11x59_Encode (Span) | 2.843 µs | 2.821 µs | 55 → 16 ns |
+| RmQR_Byte_R17x139_Encode (Span) | 14.52 µs | 14.05 µs | 177 → 23 ns |
+| RmQR_Numeric_AutoFit_Encode (Span) | 1.157 µs | 1.119 µs | |
+| StandardQr_Numeric_V1_Encode (Span) (untouched control) | 1.891 µs | 2.072 µs | |
+
+Kernel: 1.3x (12 digits) to 7.5x (150 Latin-1 bytes), 2.6x on the largest numeric (361 digits: 199 → 80 ns), 5.6x on the largest alphanumeric (219 chars: 268 → 48 ns), 0 B everywhere. E2E: the encoder is 1-2 % of the encode pipeline (placement dominates: R17x139 spends ~14 µs painting 2,363 modules), so the E2E rows move by 1-7 %, at or below the run-to-run band (the untouched control drifted +9.6 %). The next lever for the encode E2E is the placer fast path listed under Follow-ups, not the bit stream.
