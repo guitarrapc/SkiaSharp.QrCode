@@ -130,7 +130,9 @@ public static partial class QrInterop
     /// on success, <c>{"ok":false,"status":"NotDetected","totalMs":N}</c> when no QR
     /// decodes, or <c>{"error":"..."}</c> on unexpected failure.
     /// <para>
-    /// Uses the library's built-in image decoder: clean, screen-rendered images
+    /// Uses the library's built-in image decoders, Standard QR first, then Micro QR, then
+    /// rMQR (<c>"symbology"</c> reports which one matched; rMQR has a single fixed mask, so
+    /// <c>"maskPattern"</c> is -1 for it): clean, screen-rendered images
     /// (arbitrary rotation, mirroring and mild perspective included). Heavily stylized codes
     /// (low-contrast colors, inverted palettes, strong decoration) may report
     /// NotDetected even when a computer-vision grade phone scanner reads them.
@@ -166,12 +168,11 @@ public static partial class QrInterop
                 return JsonSerializer.Serialize(payload, PlaygroundJsonContext.Default.DecodePayload);
             }
 
-            // Standard QR failed: try Micro QR (separate, explicitly-typed detector)
-            var microSuccess = MicroQRCodeDecoder.TryDecode(bitmap, out var microText, out var microInfo);
-            stopwatch.Stop();
-
-            var resultPayload = microSuccess
-                ? new DecodePayload(
+            // Standard QR failed: try Micro QR, then rMQR (separate, explicitly-typed detectors)
+            if (MicroQRCodeDecoder.TryDecode(bitmap, out var microText, out var microInfo))
+            {
+                stopwatch.Stop();
+                var microPayload = new DecodePayload(
                     Ok: true,
                     Text: microText,
                     Status: microInfo.Status.ToString(),
@@ -180,6 +181,24 @@ public static partial class QrInterop
                     Ecc: microInfo.EccLevel.ToString(),
                     MaskPattern: microInfo.MaskPattern,
                     ErrorsCorrected: microInfo.ErrorsCorrected,
+                    TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1));
+                return JsonSerializer.Serialize(microPayload, PlaygroundJsonContext.Default.DecodePayload);
+            }
+
+            var rmSuccess = RmQRCodeDecoder.TryDecode(bitmap, out var rmText, out var rmInfo);
+            stopwatch.Stop();
+
+            // rMQR has a single fixed mask, so no mask pattern is reported (-1).
+            var resultPayload = rmSuccess
+                ? new DecodePayload(
+                    Ok: true,
+                    Text: rmText,
+                    Status: rmInfo.Status.ToString(),
+                    Symbology: "rmqr",
+                    QrVersion: (int)rmInfo.Version,
+                    Ecc: rmInfo.EccLevel.ToString(),
+                    MaskPattern: -1,
+                    ErrorsCorrected: rmInfo.ErrorsCorrected,
                     TotalMs: Math.Round(stopwatch.Elapsed.TotalMilliseconds, 1))
                 : new DecodePayload(
                     Ok: false,

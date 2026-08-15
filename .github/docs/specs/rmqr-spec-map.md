@@ -4,7 +4,7 @@ An index of where each part of the rMQR Code symbology specification (ISO/IEC 23
 
 This document is intentionally a **map, not a spec copy**. The normative details, bit layouts, formulas, edge-case constraints, and the reasoning behind implementation choices, live in code comments next to the implementation, where they stay in sync with the code.
 
-Status: **encoder, rendering and matrix decoder implemented (Phases 5-6); image detection planned (Phase 7)**. Remaining "(Phase 7)" entries name the components the [rMQR implementation plan](../plans/skiasharp-qrcode-rmqr-implementation-plan.md) will create; each becomes a link when it lands. Rows whose parameters were already verified against external oracles before implementation say so; the verification record is in the design record.
+Status: **encoder, rendering, matrix decoder and image detection implemented (Phases 5-7)**. Follow-ups (fused placer fast path, kernel tuning) are listed in the [rMQR implementation plan](../plans/skiasharp-qrcode-rmqr-implementation-plan.md). Rows whose parameters were already verified against external oracles before implementation say so; the verification record is in the design record.
 
 ## Encoding Pipeline Overview
 
@@ -111,22 +111,27 @@ Reference tests: [RmQRCodeImageBuilderUnitTest](../../../tests/SkiaSharp.QrCode.
 
 ```
 Luminance ──> Otsu threshold ──> Finder candidates (shared 1:1:3:1:1 scan)
-          ──> Module size from the finder ──> Format info sampled at 4 orientations × transpose ──> Version → dimensions
-          ──> Sub-finder confirmation at its expected corner ──> Projective grid sampling (finder + sub-finder corners)
-          ──> Matrix decoding (format/RS checks arbitrate) ──> Inverted retry
+          ──> Local frames around the finder: 4 right angles × transpose (mirror), then the angular axis sweep (arbitrary rotation)
+          ──> Finder-side format copy sampled in the frame ──> Version → width × height
+          ──> Sub-finder located near its predicted corner (5×5 template, ring search) ──> exact global scale + rotation
+          ──> Affine attempts (rotation + isotropic scale; anisotropic scale) ──> Matrix decoding
+          ──> Perspective search (projective coefficients × row-axis shear; scale/rotation solved from the sub-finder in closed form;
+              gated by the sub-finder-side format copy and the edge timing patterns) ──> Matrix decoding ──> Inverted retry
 ```
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
-| - | Detection pipeline orchestration; inverted retry | `Internals/RmQr/RmQRImageDecoder` (Phase 7) |
+| - | Detection pipeline orchestration; frames; format-first version identification; sub-finder anchored refinement; bounded perspective search; inverted retry | [RmQRImageDecoder](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRImageDecoder.cs) |
 | - | Binarization (Otsu), finder candidates | [Binarizer](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/Binarizer.cs), [FinderPatternFinder.FindCandidates](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/FinderPatternFinder.cs), shared across symbologies |
-| Section 6.3.2 | Sub-finder pattern (5×5) located at the corner predicted by the decoded version; used for orientation confirmation and as the fourth correspondence | `RmQRImageDecoder.TryLocateSubFinder` (Phase 7) |
-| - | Projective transform and module-center sampler | [PerspectiveTransform](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/PerspectiveTransform.cs), shared; sampler generalized to width/height |
-| - | Public image entry points (SKBitmap / luminance span / zero-allocation destination) | `RmQRCodeDecoder.TryDecode / TryDecodeImage` (Phase 7) |
+| - | Single-finder local module scale and axis recovery (axis-aligned dark-light-dark runs, angular sweep) | [FinderAxisEstimator](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/FinderAxisEstimator.cs), shared (lifted from the Micro QR image decoder in Phase 7; Micro QR image benchmark flat) |
+| Section 6.3.2 | Sub-finder pattern (5×5, dark ring / light ring / dark center) located near the corner the decoded version predicts; anchors the far end (global scale, rotation) and the perspective family | [RmQRImageDecoder.TryLocateSubFinder](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRImageDecoder.cs) |
+| Section 6.3.3 | Edge timing patterns as a far-from-anchor consistency gate for perspective candidates | [RmQRImageDecoder.TimingRowsAgree](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRImageDecoder.cs) |
+| - | Projective transform (local-frame construction) and rectangular module-center sampler | [PerspectiveTransform](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/PerspectiveTransform.cs), shared; sampler [RmQRImageDecoder.SampleGrid](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRImageDecoder.cs) (width × height) |
+| - | Public image entry points (SKBitmap / luminance span / zero-allocation destination) | [RmQRCodeDecoder](../../../src/SkiaSharp.QrCode/RmQRCodeDecoder.cs) `TryDecode(SKBitmap, …)` / `TryDecodeImage(…)` |
 
-Supported envelope (to be measured in Phase 7 and stated here): clean renders and mild optical degradation with arbitrary right-angle orientation, mirroring, reflectance reversal, scale, translation, quiet-zone variants, and mild perspective anchored on the finder and sub-finder corners; extreme aspect ratios (R7x139, R11x27) are covered explicitly. `QRCodeDecoder` remains Standard QR-only.
+Supported envelope (measured, Phase 7): clean renders of all 32 versions × 2 ECC levels at 3-13 px/module and non-integer scales (letterboxed canvases), non-square modules (8 × 12 px), translation, quiet zone 1 / 2 / 4, right-angle and arbitrary rotation (every integer degree for R7x43 and R13x77), mirroring, reflectance reversal, JPEG q60, low contrast (100-170), ±24 additive noise, the extreme aspect ratios (R7x139, R11x27, R13x27), the committed PNG corpus (144, both lineages), and mild perspective: keystone 2 % and 4 % along either symbol axis for R7x43, R11x77 and R17x139, rotation 30° + 2 % keystone, mirror + 2 % keystone. Below about 5 px/module with rounded / gradient styling the finder runs get too fuzzy (Playground observation). Standard QR and Micro QR images are rejected; `QRCodeDecoder` and `MicroQRCodeDecoder` reject rMQR images.
 
-Reference tests (planned, Phase 7): `RmQRCodeDecoderImageTest`, `RmQRCodeDecoderPerspectiveTest`, [RmQrFixtureTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQrFixtureTest.cs) (PNG corpus through the image path).
+Reference tests: [RmQRCodeDecoderImageTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQRCodeDecoderImageTest.cs), [RmQRCodeDecoderPerspectiveTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQRCodeDecoderPerspectiveTest.cs), [RmQrFixtureTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQrFixtureTest.cs) (`Decode_PngFixture_*`, the PNG corpus through the image path); Release-only zero-allocation test on the luminance-span destination overload.
 
 ## Data Model and Serialization
 

@@ -1106,5 +1106,36 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
+Console.WriteLine("""
+    Pattern 29: rMQR, Decode (matrix / image round-trip)
+      - Best for: Round-trip validation, reading rendered rMQR images
+      - API: RmQRCodeDecoder.TryDecode()
+      - Explicitly typed like MicroQRCodeDecoder; QRCodeDecoder stays Standard QR-only
+    """);
+{
+    var rmData = RmQRCodeGenerator.CreateRmQRCode(rmqrContent, RmQREccLevel.M);
+    if (RmQRCodeDecoder.TryDecode(rmData, out var decoded, out var info))
+    {
+        Console.WriteLine($"  ✓ Matrix decode: \"{decoded}\" ({info.Version}, ECC {info.EccLevel})");
+    }
+
+    var pngPath = Path.Combine(outputDir, "pattern27_rmqr_static.png");
+    using (var bitmap = SKBitmap.Decode(File.ReadAllBytes(pngPath)))
+    {
+        if (RmQRCodeDecoder.TryDecode(bitmap, out var fromImage, out var imageInfo))
+        {
+            Console.WriteLine($"  ✓ Image decode ({Path.GetFileName(pngPath)}): \"{fromImage}\" ({imageInfo.Version}, {imageInfo.ErrorsCorrected} corrected)");
+        }
+        else
+        {
+            Console.WriteLine($"  ✗ Image decode failed: {imageInfo.Status}");
+        }
+
+        QRCodeDecoder.TryDecode(bitmap, out _, out var stdInfo);
+        Console.WriteLine($"  ✓ Standard QR decoder on rMQR image: {stdInfo.Status} (expected NotDetected)");
+    }
+}
+Console.WriteLine();
+
 Console.WriteLine("=== All patterns completed! ===");
 Console.WriteLine($"Output directory: {Path.GetFullPath(outputDir)}");

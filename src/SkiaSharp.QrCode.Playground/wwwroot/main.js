@@ -773,8 +773,10 @@ decodeFileEl.addEventListener('change', async () => {
     return;
   }
   const decodedLabel = symbolLabel(result.symbology, result.qrVersion);
+  // rMQR has one fixed mask, so no mask pattern is reported for it.
+  const maskLabel = result.maskPattern >= 0 ? ` · mask ${result.maskPattern}` : '';
   decodeResultEl.textContent =
-    `“${result.text}” · ${decodedLabel} · ECC ${result.ecc} · mask ${result.maskPattern}`
+    `“${result.text}” · ${decodedLabel} · ECC ${result.ecc}${maskLabel}`
     + ` · ${result.errorsCorrected} codewords corrected · ${result.totalMs} ms`;
 });
 

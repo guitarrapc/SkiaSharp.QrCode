@@ -154,4 +154,28 @@ public class RmQrFixtureTest
         await Assert.That(RmQRCodeDecoder.TryDecode(sampled, width, height, out var fromPng, out _)).IsTrue();
         await Assert.That(fromPng).IsEqualTo(manifest.PayloadText);
     }
+
+    /// <summary>
+    /// Decodes every committed external PNG through the public image path (detection +
+    /// sampling + matrix decode). Same expectations as the matrix path.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(FixtureIds))]
+    public async Task Decode_PngFixture_PayloadAndMetadataMatch(string fixtureId)
+    {
+        var fixture = FixtureLoader.Load("RmQr", fixtureId);
+        var manifest = fixture.Manifest;
+
+        using var bitmap = SKBitmap.Decode(fixture.PngPath);
+        await Assert.That(bitmap).IsNotNull();
+
+        var success = RmQRCodeDecoder.TryDecode(bitmap, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because($"{fixtureId}: {info.Status}");
+        await Assert.That(text).IsEqualTo(manifest.PayloadText);
+        await Assert.That((int)info.Version).IsEqualTo(manifest.Version);
+        await Assert.That(info.EccLevel).IsEqualTo(Enum.Parse<RmQREccLevel>(manifest.ErrorCorrectionLevel));
+        var allowedErrors = manifest.Generator == "qrtool" && bitmap.Height / manifest.PixelsPerModule - 2 * manifest.QuietZoneModules >= 11 ? 1 : 0;
+        await Assert.That(info.ErrorsCorrected).IsLessThanOrEqualTo(allowedErrors).Because(fixtureId);
+    }
 }

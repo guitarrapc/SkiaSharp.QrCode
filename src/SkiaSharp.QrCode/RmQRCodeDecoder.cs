@@ -1,4 +1,5 @@
 using System.Buffers;
+using SkiaSharp.QrCode.Internals.ImageDecoders;
 using SkiaSharp.QrCode.Internals.RmQr;
 
 namespace SkiaSharp.QrCode;
@@ -6,8 +7,8 @@ namespace SkiaSharp.QrCode;
 /// <summary>
 /// rMQR Code (ISO/IEC 23941) decoder: module matrix → text. Sibling of
 /// <see cref="QRCodeDecoder"/> and <see cref="MicroQRCodeDecoder"/>; explicitly
-/// typed so Standard QR scanning stays unaffected. Matrix-level decoding here;
-/// image scanning follows in a later phase.
+/// typed so Standard QR scanning stays unaffected. Matrix-level and image-level
+/// decoding (<see cref="TryDecode(SKBitmap, out string)"/> / <see cref="TryDecodeImage(ReadOnlySpan{byte}, int, int, out string, out RmQRCodeDecodeInfo)"/>).
 /// </summary>
 /// <remarks>
 /// Every overload accepts an rMQR matrix with or without a light quiet zone: the
@@ -133,6 +134,112 @@ public static class RmQRCodeDecoder
         {
             ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
+    }
+
+    /// <summary>
+    /// Detects and decodes an rMQR Code from a bitmap image.
+    /// </summary>
+    /// <remarks>
+    /// Targets clean, well-lit images such as screenshots, rendered symbols and
+    /// scans: arbitrary rotation, mirroring, reflectance reversal (light-on-dark),
+    /// uniform or non-uniform scaling, translation and mild perspective distortion
+    /// are handled. Strong perspective, uneven lighting and blur are out of scope.
+    /// </remarks>
+    /// <param name="bitmap">The bitmap to scan.</param>
+    /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
+    /// <returns>True when an rMQR Code was detected and decoded.</returns>
+    /// <exception cref="ArgumentNullException"></exception>
+    public static bool TryDecode(SKBitmap bitmap, out string text)
+        => TryDecode(bitmap, out text, out _);
+
+    /// <summary>
+    /// Detects and decodes an rMQR Code from a bitmap image, with diagnostic information.
+    /// </summary>
+    /// <remarks>
+    /// See <see cref="TryDecode(SKBitmap, out string)"/> for the supported image envelope.
+    /// </remarks>
+    /// <param name="bitmap">The bitmap to scan.</param>
+    /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
+    /// <param name="info">Diagnostic information (status, version, ECC level, corrected errors).</param>
+    /// <returns>True when an rMQR Code was detected and decoded.</returns>
+    /// <exception cref="ArgumentNullException"></exception>
+    public static bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info)
+    {
+        if (bitmap is null)
+            throw new ArgumentNullException(nameof(bitmap));
+
+        var width = bitmap.Width;
+        var height = bitmap.Height;
+        // The smallest symbol is 7 modules tall and 27 wide; either axis may be the image's short side
+        if (width < 7 || height < 7 || !ImageDimensions.TryGetPixelCount(width, height, out var pixelCount))
+        {
+            text = string.Empty;
+            info = new RmQRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, default, default, 0);
+            return false;
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
+        try
+        {
+            var luminance = rented.AsSpan(0, pixelCount);
+            LuminanceConverter.Convert(bitmap, luminance);
+            return TryDecodeImage(luminance, width, height, out text, out info);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// Detects and decodes an rMQR Code from grayscale image pixels.
+    /// </summary>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
+    /// <param name="info">Diagnostic information (status, version, ECC level, corrected errors).</param>
+    /// <returns>True when an rMQR Code was detected and decoded.</returns>
+    /// <exception cref="ArgumentException"></exception>
+    public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, out string text, out RmQRCodeDecodeInfo info)
+    {
+        char[]? rentedChars = null;
+        try
+        {
+            // Version is unknown until detection completes, so size for the maximum
+            var maxChars = RmQRMatrixDecoder.GetMaxCharCount(RmQRVersion.R17x139);
+            rentedChars = ArrayPool<char>.Shared.Rent(maxChars);
+
+            var success = TryDecodeImage(luminance, width, height, rentedChars.AsSpan(0, maxChars), out var charsWritten, out info);
+            text = success ? rentedChars.AsSpan(0, charsWritten).ToString() : string.Empty;
+            return success;
+        }
+        finally
+        {
+            if (rentedChars is not null)
+                ArrayPool<char>.Shared.Return(rentedChars, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// Detects and decodes an rMQR Code from grayscale image pixels into a
+    /// caller-provided buffer without heap allocation.
+    /// </summary>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> (with <see cref="RmQRVersion.R17x139"/> when the version is unknown) to size it.</param>
+    /// <param name="charsWritten">Number of characters written to <paramref name="destination"/>.</param>
+    /// <param name="info">Diagnostic information (status, version, ECC level, corrected errors).</param>
+    /// <returns>True when an rMQR Code was detected and decoded.</returns>
+    /// <exception cref="ArgumentException"></exception>
+    public static bool TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
+    {
+        // long arithmetic: dimensions are caller-controlled and width·height can overflow int
+        if (width < 1 || height < 1 || luminance.Length < (long)width * height)
+            throw new ArgumentException($"Luminance buffer too small: required {(long)width * height}, got {luminance.Length}", nameof(luminance));
+
+        return RmQRImageDecoder.DecodeLuminance(luminance, width, height, destination, out charsWritten, out info) == QRCodeDecodeStatus.Success;
     }
 
     /// <summary>

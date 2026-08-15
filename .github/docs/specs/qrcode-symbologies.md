@@ -12,7 +12,7 @@ Design record for supporting multiple QR symbologies, Standard QR (ISO/IEC 18004
 |---|---|---|---|---|
 | Standard QR (versions 1–40) | ISO/IEC 18004 | Shipped | Shipped | Shipped (Tier 1–2) |
 | Micro QR (M1–M4) | ISO/IEC 18004 | Shipped | Shipped | Shipped (Tier 1–2, conservative measured envelope) |
-| rMQR (R7x43–R17x139) | ISO/IEC 23941 | Encode + render done (Phase 5, encoder MVT met; not yet released) | Done (Phase 6, decoder MVT matrix rows met; not yet released) | Planned (Phase 7) |
+| rMQR (R7x43–R17x139) | ISO/IEC 23941 | Encode + render done (Phase 5, encoder MVT met; not yet released) | Done (Phase 6, decoder MVT matrix rows met; not yet released) | Done (Phase 7, Tier 1–2, measured envelope incl. keystone up to 4 % on R17x139; not yet released) |
 
 ### Document set
 
@@ -48,7 +48,8 @@ Dependency rule: shared code never references a symbology namespace; symbology n
 Two detection primitives were lifted from `Internals.StandardQr` to the shared `Internals.ImageDecoders` namespace when Micro QR image detection (Phase 4b) became their second consumer, exactly the trigger this document prescribed:
 
 - `Binarizer.ComputeOtsuThreshold`, generic binarization (moved out of `QRImageDecoder`)
-- `FinderPatternFinder`, the 1:1:3:1:1 run-ratio scan and cross-checks; Micro QR uses the same finder pattern shape (single finder instead of three) via `FindCandidates` (all cross-checked candidates), while Standard QR keeps its best-three selection in `TryFind`
+- `FinderPatternFinder`, the 1:1:3:1:1 run-ratio scan and cross-checks; Micro QR and rMQR use the same finder pattern shape (single finder instead of three) via `FindCandidates` (all cross-checked candidates), while Standard QR keeps its best-three selection in `TryFind`
+- `FinderAxisEstimator`, single-finder local module scale and axis recovery (axis-aligned dark-light-dark runs, angular sweep), lifted from the Micro QR image decoder when rMQR image detection (Phase 7) became its second consumer; the Micro QR image benchmark stayed flat
 
 ### Public API direction
 
@@ -99,7 +100,7 @@ The library does not implement Kanji segments for Standard QR today (detected an
 | Decision | Choice | Revisit when |
 |---|---|---|
 | Kanji mode (all symbologies) | Deferred; tables keep the column | User demand or decoder interop need |
-| Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR scanning is its own explicitly-typed entry (`MicroQRCodeDecoder`) | rMQR image detection API |
+| Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR and rMQR scanning are their own explicitly-typed entries (`MicroQRCodeDecoder`, `RmQRCodeDecoder`); the Playground tries the three in that order | - |
 | Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) | - |
 | `QRCodeData` | Frozen for Standard QR | Never (compatibility contract) |
 

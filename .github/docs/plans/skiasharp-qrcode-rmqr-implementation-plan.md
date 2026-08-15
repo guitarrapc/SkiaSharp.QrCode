@@ -450,3 +450,44 @@ All within ±3% (the ECI reader is only reached on ECI segments; the lift change
 | StandardQr_Numeric_V1_Decode (Span), reference | 852 ns | 0 B |
 
 The per-module predicate walk dominates (as on the encode side); it is the baseline for the shared placer / extractor fast-path follow-up.
+
+### Phase 7 (7.1), completed 2026-08-16
+
+**Done**
+
+- `Internals/RmQr/RmQRImageDecoder`: shared Otsu + finder candidates → local frames around the finder (4 right angles × transpose for mirroring; then the angular finder-axis sweep for arbitrary rotation, shared) → **finder-side format copy read first** (18 modules next to the finder) → version → width × height → **sub-finder located** near its predicted corner (5×5 template on a half-module lattice with three column-axis leans, ring order, first perfect match wins, then center-module midpoint refinement) → affine attempts (rotation + isotropic scale from the sub-finder; anisotropic scale for non-square modules) → matrix decode → on a past-format failure, a bounded perspective search (projective coefficients ±12 % × row-axis shear ±20°, the sub-finder fixing Jacobian scale and rotation in closed form per candidate, gated by the sub-finder-side format copy and the edge timing patterns before any full sample) → one inverted retry. Rented module buffer (2,363 B max), attempt budget 256 full decodes per candidate, ≤ 8 candidates.
+- Shared lift: `Internals/ImageDecoders/FinderAxisEstimator` (`RefineModuleSize`, `FindOrientationCandidates`, `MeasureAxis`, `DarkLightDarkRun`, `OrientationCandidate`) out of `MicroQRImageDecoder`, second consumer rule; Micro QR image benchmark flat (below).
+- Public `RmQRCodeDecoder.TryDecode(SKBitmap, …)` ×2 and `TryDecodeImage(luminance, width, height, …)` ×2 (frozen signatures), span-destination path 0 B (Release-only test).
+- Playground: decode panel and self-check fall back Standard → Micro → rMQR (`symbology: "rmqr"`, no mask field); verified in the published app (self-check ✓ on generated rMQR, upload decode ✓ via the file input). ConsoleApp pattern 29 (rMQR decode, matrix + image + cross-symbology rejection); BlazorWasm sample has no decode panel (nothing to add).
+- Tests (test-first; +276 per TFM: `RmQRCodeDecoderImageTest` 117, `RmQRCodeDecoderPerspectiveTest` 15, `RmQrFixtureTest.Decode_PngFixture_*` 144; full suite 9,826 with 226 Release-only skips, 0 failed on net8.0 + net10.0): all 32 × M/H clean renders, module px 3-13 (R7x43, R17x139), non-integer scale (letterboxed 300 / 500 / 730 / 1000 px canvases), non-square 8×12 px modules at 0/90/180/270°, translation, quiet zone 1/2/4, extreme aspect (R7x139, R11x27, R13x27), right-angle rotations, arbitrary rotations incl. every integer degree for R7x43 and R13x77, mirror (R7x43, R17x139), inverted, JPEG q60 (R7x43, R17x139), low contrast, ±24 noise, luminance-span overloads incl. too-small negative, Standard/Micro images rejected and rMQR rejected by the other two decoders, blank / tiny / null / overflow negatives; keystone 2 % and 4 % top-shrunk and left-shrunk for R7x43, R11x77, R17x139, 30° + 2 % keystone (R7x43, R13x99), mirror + 2 % keystone; PNG corpus 144/144 through the image path (`ErrorsCorrected` 0 libzint / ≤ 1 qrtool).
+- Docs: spec map (Image Detection rows linked, measured envelope), decoder record (image level, why / decisions / lessons), symbology status (image decode Done, Phase 7), fixture record, docs index, README (Decode ✅, image example, FAQ), this log.
+
+**Lessons learned**
+
+- Everything measured at the finder is only good to a few percent, and a few percent of 139 modules is several modules; the design that worked is format-first (know the size before sampling anything big) plus a precise far anchor (the sub-finder) that overrides every locally measured quantity for scale and rotation.
+- Three concrete failures on the way to R17x139 at 4 % keystone, all found by a probe that fed the true homography into the sampler (which decoded fine, so the search was at fault): (1) the fixed sub-finder search radius was smaller than the affine prediction error at the far corner (now 6 + width/20 modules); (2) the column axis leans under a keystone (atan(shrink / height) ≈ 14° at 4 % on 17 rows) and the vertical run through a leaning finder measures the projected row spacing, so the leaning axis is measured/cos φ; (3) the far-end format-copy gate accepts any grid that is right near the pinned sub-finder, so wrong (shear, coefficient) combinations exhausted the full-decode budget before the right shear came up: a second gate on the edge timing patterns between the anchors (bent middle → alternation lost) made the search converge.
+- Thirteen "decoder failures" on the first run were the generator rejecting a 14-alphanumeric payload for R7x43-M (capacity 7); version-parameterized image tests need per-version payloads.
+- Sub-finder search order matters more than its bound: ring order with a stop at the first perfect match cut the clean-image decode from 77 µs to 20 µs (R7x43) and 262 µs to 136 µs (R17x139) with identical results, because the prediction is nearly always within a module or two.
+- Styled symbols (rounded modules + gradient) below about 5 px/module fail at the finder runs (Playground: R15x99 at 512 px wide); the same styling decodes at 1024 px. Not an rMQR-specific limit, but wide symbols reach it sooner at a given canvas width.
+
+**Benchmark delta (`MicroQRImageEndToEnd`, net10.0 Release, warmup 3 × 5 iterations, before = HEAD worktree, after = this change; allocations identical)**
+
+| Benchmark | Before | After |
+|---|---|---|
+| M2_512px | 4,697 µs | 4,521 µs |
+| M4_512px | 4,483 µs | 4,631 µs |
+| M4_128px | 327 µs | 315 µs |
+| M4_ImageDecode_Span | 14.96 µs | 13.93 µs |
+
+PNG rows are within their run-to-run noise (±5 %); the image decode row (the only one touching the lifted code) is flat/slightly better. Standard QR image and decode paths do not use `FinderAxisEstimator` and no shared file they use changed, so no Standard QR guard run was needed.
+
+**New rMQR image baseline (`RmQRImageEndToEnd`, same job)**
+
+| Benchmark | Mean | Allocated |
+|---|---|---|
+| R7x43_512px | 1.4-1.7 ms | 4,160 B (PNG) |
+| R17x139_1024px | 3.5-3.9 ms | 5,904 B (PNG) |
+| R7x43_ImageDecode_Span (376 × 88 px) | 19.9 µs | **0 B** |
+| R17x139_ImageDecode_Span (1,144 × 168 px) | 136 µs | **0 B** |
+
+Otsu + the finder scan (proportional to pixels) and the sub-finder template search dominate; a coarse-to-fine template search and the shared placer / extractor fast path are the follow-ups.
