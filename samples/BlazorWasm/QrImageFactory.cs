@@ -54,6 +54,37 @@ public static class QrImageFactory
             .WithGradient(CreateGradient(options));
     }
 
+    /// <summary>Encodes the content into an rMQR module matrix.</summary>
+    public static RmQRCodeData CreateRmQRData(QrOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.Content))
+            throw new ArgumentException("Content is empty.");
+
+        return RmQRCodeGenerator.CreateRmQRCode(
+            options.Content.AsSpan(),
+            options.RmEcc,
+            options.Version is >= 1 and <= 32 ? (RmQRVersion)options.Version : null,
+            options.RmFitStrategy,
+            options.RmHeight,
+            Math.Clamp(options.QuietZone, 0, 10));
+    }
+
+    /// <summary>
+    /// Builds the rMQR image builder for PNG/SVG export: the export size is the image
+    /// width, the height follows the rectangular symbol. rMQR has no icon overlay or
+    /// finder pattern shape options, so the page hides those controls.
+    /// </summary>
+    public static RmQRCodeImageBuilder CreateRmBuilder(QrOptions options, RmQRCodeData data)
+    {
+        var width = Math.Clamp(options.Size, 64, 2048);
+        var height = Math.Max(1, (int)Math.Round((double)width * data.Height / data.Width));
+        return new RmQRCodeImageBuilder(data)
+            .WithSize(width, height)
+            .WithColors(GetForegroundColor(options), GetBackgroundColor(options))
+            .WithModuleShape(CreateModuleShape(options), Math.Clamp(options.ModuleSizePercent, 0.5f, 1.0f))
+            .WithGradient(CreateGradient(options));
+    }
+
     /// <summary>Builds the image builder for PNG/SVG export with the current visual options.</summary>
     public static QRCodeImageBuilder CreateBuilder(QrOptions options, QRCodeData data, SKBitmap? customLogo)
     {

@@ -96,7 +96,12 @@ public static partial class QrInterop
                 throw new ArgumentException("Content is empty.");
 
             using var stream = new MemoryStream();
-            if (IsMicroQR(request))
+            if (IsRmQR(request))
+            {
+                var rmData = CreateRmData(request);
+                CreateRmBuilder(request, rmData).SaveToSvg(stream);
+            }
+            else if (IsMicroQR(request))
             {
                 var microData = CreateMicroData(request);
                 CreateMicroBuilder(request, microData).SaveToSvg(stream);
@@ -200,6 +205,19 @@ public static partial class QrInterop
             throw new ArgumentException("Content is empty.");
 
         var stopwatch = Stopwatch.StartNew();
+        if (IsRmQR(request))
+        {
+            var rmData = CreateRmData(request);
+            var rmBytes = CreateRmBuilder(request, rmData).ToByteArray();
+            stopwatch.Stop();
+
+            // matrixSize doubles as the width so older page scripts keep working; matrixHeight is the rectangular extra.
+            s_lastMeta = string.Create(
+                CultureInfo.InvariantCulture,
+                $"{{\"symbology\":\"rmqr\",\"qrVersion\":{(int)rmData.Version},\"matrixSize\":{rmData.Width},\"matrixHeight\":{rmData.Height},\"totalMs\":{stopwatch.Elapsed.TotalMilliseconds:F1},\"bytes\":{rmBytes.Length}}}");
+            return rmBytes;
+        }
+
         if (IsMicroQR(request))
         {
             var microData = CreateMicroData(request);
@@ -229,6 +247,67 @@ public static partial class QrInterop
 
     private static bool IsMicroQR(QrRequest request)
         => string.Equals(request.Symbology, "microqr", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsRmQR(QrRequest request)
+        => string.Equals(request.Symbology, "rmqr", StringComparison.OrdinalIgnoreCase);
+
+    private static RmQRCodeData CreateRmData(QrRequest request)
+    {
+        return RmQRCodeGenerator.CreateRmQRCode(
+            request.Content.AsSpan(),
+            ParseRmEcc(request.Ecc),
+            ParseRmVersion(request.Version),
+            ParseRmFitStrategy(request.FitStrategy),
+            ParseRmHeight(request.Height),
+            Math.Clamp(request.QuietZone, 0, 10));
+    }
+
+    /// <summary>
+    /// Builds the rMQR image builder from request options. The requested size is
+    /// the image width; the height follows the rectangular symbol. rMQR has no icon
+    /// overlay or finder pattern shape options, the page hides those controls.
+    /// </summary>
+    private static RmQRCodeImageBuilder CreateRmBuilder(QrRequest request, RmQRCodeData data)
+    {
+        var width = Math.Clamp(request.Size, 64, 2048);
+        var height = Math.Max(1, (int)Math.Round((double)width * data.Height / data.Width));
+        return new RmQRCodeImageBuilder(data)
+            .WithSize(width, height)
+            .WithColors(
+                ParseColor(request.Foreground, SKColors.Black),
+                ParseColor(request.Background, SKColors.White))
+            .WithModuleShape(CreateModuleShape(request), Math.Clamp(request.ModuleSizePercent, 0.5f, 1.0f))
+            .WithGradient(CreateGradient(request.Gradient));
+    }
+
+    private static RmQREccLevel ParseRmEcc(string ecc) => ecc.ToUpperInvariant() switch
+    {
+        "M" => RmQREccLevel.M,
+        "H" => RmQREccLevel.H,
+        _ => throw new ArgumentException($"Unknown rMQR ECC level '{ecc}'. Use M or H."),
+    };
+
+    private static RmQRVersion? ParseRmVersion(int version) => version switch
+    {
+        -1 => null,
+        >= 1 and <= 32 => (RmQRVersion)version,
+        _ => throw new ArgumentException($"Unknown rMQR version '{version}'. Use 1-32 (R7x43-R17x139) or -1 for automatic selection."),
+    };
+
+    private static RmQRFitStrategy ParseRmFitStrategy(string? fitStrategy) => (fitStrategy ?? "area").ToLowerInvariant() switch
+    {
+        "area" => RmQRFitStrategy.MinimizeArea,
+        "width" => RmQRFitStrategy.MinimizeWidth,
+        "height" => RmQRFitStrategy.MinimizeHeight,
+        _ => throw new ArgumentException($"Unknown rMQR fit strategy '{fitStrategy}'. Use area, width or height."),
+    };
+
+    private static RmQRHeight? ParseRmHeight(int height) => height switch
+    {
+        0 => null,
+        7 or 9 or 11 or 13 or 15 or 17 => (RmQRHeight)height,
+        _ => throw new ArgumentException($"Unknown rMQR height '{height}'. Use 7, 9, 11, 13, 15, 17 or 0 for any."),
+    };
 
     private static MicroQRCodeData CreateMicroData(QrRequest request)
     {
@@ -316,6 +395,16 @@ public static partial class QrInterop
                 throw new ArgumentException("Content is empty.");
             if (count is <= 0 or > 1_000_000)
                 throw new ArgumentOutOfRangeException(nameof(count), "Batch count must be between 1 and 1,000,000.");
+
+            if (IsRmQR(request))
+            {
+                return mode switch
+                {
+                    "encode" => BenchmarkRmEncode(request, count),
+                    "render" => BenchmarkRmRender(request, count),
+                    _ => throw new ArgumentException($"Unknown benchmark mode '{mode}'. Use 'encode' or 'render'."),
+                };
+            }
 
             if (IsMicroQR(request))
             {
@@ -448,6 +537,63 @@ public static partial class QrInterop
         {
             ArrayPool<byte>.Shared.Return(moduleBuffer, clearArray: false);
         }
+    }
+
+    /// <summary>
+    /// Tight loop over the zero-allocation rMQR span API (same content every iteration,
+    /// as for Micro QR: capacities are small).
+    /// </summary>
+    private static string BenchmarkRmEncode(QrRequest request, int count)
+    {
+        var ecc = ParseRmEcc(request.Ecc);
+        var version = ParseRmVersion(request.Version);
+        var fit = ParseRmFitStrategy(request.FitStrategy);
+        var height = ParseRmHeight(request.Height);
+        var quietZone = Math.Clamp(request.QuietZone, 0, 10);
+
+        var calculated = RmQRCodeGenerator.GetRequiredBufferSize(request.Content.AsSpan(), ecc, version, fit, height, quietZone);
+        var moduleBuffer = ArrayPool<byte>.Shared.Rent(calculated.BufferSize);
+        try
+        {
+            long bytesTotal = 0;
+            var stopwatch = Stopwatch.StartNew();
+            for (var i = 0; i < count; i++)
+            {
+                bytesTotal += RmQRCodeGenerator.CreateRmQRCode(request.Content.AsSpan(), ecc, moduleBuffer, version, fit, height, quietZone);
+            }
+            stopwatch.Stop();
+
+            return string.Create(
+                CultureInfo.InvariantCulture,
+                $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"symbology\":\"rmqr\",\"qrVersion\":{(int)calculated.Version},\"matrixSize\":{calculated.Width},\"matrixHeight\":{calculated.Height},\"bytesTotal\":{bytesTotal}}}");
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(moduleBuffer, clearArray: false);
+        }
+    }
+
+    /// <summary>Full rMQR pipeline per iteration: encode, Skia render, PNG encode.</summary>
+    private static string BenchmarkRmRender(QrRequest request, int count)
+    {
+        long bytesTotal = 0;
+        var qrVersion = 0;
+        var width = 0;
+        var height = 0;
+        var stopwatch = Stopwatch.StartNew();
+        for (var i = 0; i < count; i++)
+        {
+            var data = CreateRmData(request);
+            qrVersion = (int)data.Version;
+            width = data.Width;
+            height = data.Height;
+            bytesTotal += CreateRmBuilder(request, data).ToByteArray().Length;
+        }
+        stopwatch.Stop();
+
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"{{\"count\":{count},\"elapsedMs\":{stopwatch.Elapsed.TotalMilliseconds:F2},\"symbology\":\"rmqr\",\"qrVersion\":{qrVersion},\"matrixSize\":{width},\"matrixHeight\":{height},\"bytesTotal\":{bytesTotal}}}");
     }
 
     /// <summary>Full Micro QR pipeline per iteration: encode, Skia render, PNG encode.</summary>
@@ -625,15 +771,19 @@ public static partial class QrInterop
 public sealed record QrRequest
 {
     public string Content { get; init; } = "";
-    /// <summary>Symbology: "qr" (Standard QR) or "microqr" (Micro QR M1-M4).</summary>
+    /// <summary>Symbology: "qr" (Standard QR), "microqr" (Micro QR M1-M4) or "rmqr" (rMQR R7x43-R17x139).</summary>
     public string Symbology { get; init; } = "qr";
-    /// <summary>Error correction level: L, M, Q or H (Micro QR: EDO, L, M or Q).</summary>
+    /// <summary>rMQR automatic fit: area (fewest modules, default), width or height.</summary>
+    public string FitStrategy { get; init; } = "area";
+    /// <summary>rMQR fixed symbol height in modules (7-17), or 0 for any.</summary>
+    public int Height { get; init; }
+    /// <summary>Error correction level: L, M, Q or H (Micro QR: EDO, L, M or Q; rMQR: M or H).</summary>
     public string Ecc { get; init; } = "M";
     /// <summary>Output image size in pixels (square).</summary>
     public int Size { get; init; } = 512;
     /// <summary>Quiet zone in modules (0-10).</summary>
     public int QuietZone { get; init; } = 4;
-    /// <summary>QR version 1-40, or -1 for automatic selection.</summary>
+    /// <summary>QR version 1-40 (Micro QR 1-4, rMQR 1-32 = R7x43..R17x139), or -1 for automatic selection.</summary>
     public int Version { get; init; } = -1;
     /// <summary>Module shape: rectangle, circle or rounded.</summary>
     public string ModuleShape { get; init; } = "rectangle";

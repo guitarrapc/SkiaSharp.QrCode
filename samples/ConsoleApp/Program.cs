@@ -1057,5 +1057,54 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
+// rMQR (ISO/IEC 23941): rectangular symbols for narrow print lanes, R7x43-R17x139
+var rmqrContent = "https://example.com/r/12345";
+
+Console.WriteLine("""
+    Pattern 27: rMQR, Static Method (Simplest)
+      - Best for: Quick rectangular symbols with default settings
+      - API: RmQRCodeImageBuilder.GetPngBytes()
+      - size is the image WIDTH; the height follows the symbol aspect ratio
+    """);
+{
+    var path = Path.Combine(outputDir, "pattern27_rmqr_static.png");
+
+    var pngBytes = RmQRCodeImageBuilder.GetPngBytes(rmqrContent, RmQREccLevel.M, size: 512);
+    File.WriteAllBytes(path, pngBytes);
+
+    Console.WriteLine($"  ✓ Saved to: {path}");
+}
+Console.WriteLine();
+
+Console.WriteLine("""
+    Pattern 28: rMQR, Builder (fit strategy, fixed height, styling)
+      - Best for: Fitting a label lane of fixed height; styled output within symbology limits
+      - API: new RmQRCodeImageBuilder().WithHeight() / WithFitStrategy() / WithVersion()
+      - Default fit is fewest modules (matches other encoders): 12 digits at M give R11x27, not the flatter R7x43;
+        use MinimizeHeight or WithHeight for the flattest symbol
+    """);
+{
+    var path = Path.Combine(outputDir, "pattern28_rmqr_fixed_height.png");
+    var gradient = new GradientOptions(
+        [SKColor.Parse("00B894"), SKColor.Parse("0984E3")],
+        GradientDirection.LeftToRight);
+
+    var pngBytes = new RmQRCodeImageBuilder(rmqrContent)
+        .WithHeight(RmQRHeight.H9)                  // 9 modules high, width chosen automatically
+        .WithErrorCorrection(RmQREccLevel.H)
+        .WithModulePixelSize(12)
+        .WithColors(codeColor: SKColor.Parse("2D3436"), backgroundColor: SKColors.White)
+        .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f)
+        .WithGradient(gradient)
+        .ToByteArray();
+    File.WriteAllBytes(path, pngBytes);
+
+    var flat = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, fitStrategy: RmQRFitStrategy.MinimizeHeight);
+    var smallest = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M);
+    Console.WriteLine($"  ✓ Saved to: {path}");
+    Console.WriteLine($"  ✓ 12 digits at M: default fit {smallest.Version} ({smallest.Width - 4}×{smallest.Height - 4} core), MinimizeHeight {flat.Version}");
+}
+Console.WriteLine();
+
 Console.WriteLine("=== All patterns completed! ===");
 Console.WriteLine($"Output directory: {Path.GetFullPath(outputDir)}");
