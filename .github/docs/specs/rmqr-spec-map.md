@@ -67,31 +67,31 @@ Reference tests: [RmQRConstantsUnitTest](../../../tests/SkiaSharp.QrCode.Tests/R
 | Section 7.5 | Reed-Solomon over GF(256), 0x11D, per block; ECC codewords per block ∈ {7,8,9,10,12,14,16,18,20,22,24,26,28,30} | [EccBinaryEncoder.CalculateECC](../../../src/SkiaSharp.QrCode/Internals/BinaryEncoders/EccBinaryEncoder.cs), shared across symbologies (generator polynomials built and cached on demand), driven per block by [RmQRCodewordEncoder.AssembleFinalMessage](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRCodewordEncoder.cs) (fixed 156-byte ECC scratch, the R17x139-H maximum) |
 | Section 7.6 | Block interleaving, data then ECC, blocks differ by at most one data codeword, zero remainder bits (verified: oracle bit streams deinterleave with the Standard QR rule) | [BinaryInterleaver](../../../src/SkiaSharp.QrCode/Internals/BinaryEncoders/BinaryInterleaver.cs), shared across symbologies (lifted from `Internals.StandardQr` in Phase 5.4: it never used the version, only the `ECCInfo` block structure; the remainder-bit count is now a parameter), called by `RmQRCodewordEncoder` with `RmQRConstants.GetRemainderBitCount` |
 
-Reference tests: [RmQRCodewordEncoderUnitTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQRCodewordEncoderUnitTest.cs) (final-message size, data deinterleaves back via the naive reference and ECC equals the shared kernel per block for all 64 combos on a dirty buffer, undersized-buffer negatives, and the encoder-side oracle: our final message equals the interleaved stream walked out of every committed libzint symbol byte for byte, and out of every qrtool symbol except the documented qrtool tail defect on the last ECC codeword), [BinaryInterleaverParityTest](../../../tests/SkiaSharp.QrCode.Tests/Shared/BinaryInterleaverParityTest.cs) (shared); planned (Phase 5.5): `RmQRMatrixExtractionTest` (inverse zigzag + unmask + deinterleave + ECC recomputation, all 64 version/ECC combinations).
+Reference tests: [RmQRCodewordEncoderUnitTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQRCodewordEncoderUnitTest.cs) (final-message size, data deinterleaves back via the naive reference and ECC equals the shared kernel per block for all 64 combos on a dirty buffer, undersized-buffer negatives, and the encoder-side oracle: our final message equals the interleaved stream walked out of every committed libzint symbol byte for byte, and out of every qrtool symbol except the documented qrtool tail defect on the last ECC codeword), [BinaryInterleaverParityTest](../../../tests/SkiaSharp.QrCode.Tests/Shared/BinaryInterleaverParityTest.cs) (shared); [RmQRMatrixExtractionTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQRMatrixExtractionTest.cs) (place → inverse zigzag + unmask + deinterleave + ECC recomputation, all 64 version/ECC combinations).
 
 ## Module Placement
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
-| Section 6.3 | Function patterns: 7×7 finder with separators (top-left), 5×5 sub-finder (bottom-right), timing patterns on all four edges, corner patterns, vertical timing columns with 3×3 alignment patterns at their top and bottom ends | `Internals/RmQr/RmQRModulePlacer.PlaceFunctionModules` (Phase 5.5) |
-| - | Function region predicate (shared by placer, extraction test, and decoder) | `RmQRModulePlacer.IsFunctionModule` (Phase 5.5) |
-| Section 7.7 | Two-column zigzag data placement, starting at the column pair left of the right timing column, upward first, right column first (verified against oracle bit streams) | `RmQRModulePlacer.PlaceDataCodewords` (Phase 5.5) |
+| Section 6.3 | Function patterns: 7×7 finder with separators (top-left), 5×5 sub-finder (bottom-right), timing patterns on all four edges, corner patterns, vertical timing columns with 3×3 alignment patterns at their top and bottom ends | [RmQRModulePlacer.PlaceFunctionModules](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRModulePlacer.cs) (paint order matters once: on height 9 the finder separator row overrides the bottom-left corner cell (7,0) to light, both external lineages agree) |
+| - | Function region predicate (shared by placer, extraction test, and decoder) | [RmQRModulePlacer.IsFunctionModule](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRModulePlacer.cs) |
+| Section 7.7 | Two-column zigzag data placement, starting at the column pair left of the right timing column, upward first, right column first (verified against oracle bit streams) | [RmQRModulePlacer.PlaceData](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRModulePlacer.cs) |
 | - | Fused production pipeline (follow-up after Phase 7, benchmark-driven; rows up to 139 modules exceed one ulong, so the Micro QR packed-row kernels do not port directly) | `RmQRModulePlacer.PlaceSymbol` (follow-up) |
 
-Reference tests (planned, Phase 5.5): `RmQRCodeGeneratorUnitTest` matrix-structure invariants (finder / sub-finder / timing / alignment for representative widths), `RmQRMatrixExtractionTest`, later `RmQRModulePlacerParityTest` (fused vs reference).
+Reference tests: [RmQRModulePlacerUnitTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQRModulePlacerUnitTest.cs) (function predicate vs the naive painter on every module of every version, structural invariants of every function pattern for all 32 versions on a dirty buffer, both format copies read back, undersized-buffer negatives, and the module-exact oracle: placing the same payload reproduces every committed libzint symbol module for module and every qrtool symbol except its documented tail column), [RmQRMatrixExtractionTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQRMatrixExtractionTest.cs) (place → naive inverse walk → deinterleave → data + per-block ECC recompute + zero remainder + payload-independent function modules, all 64 version/ECC × {zero, ones, 2 × random}); planned (follow-up): `RmQRModulePlacerParityTest` (fused fast path vs this reference).
 
 ## Data Masking
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
-| Section 7.8 | Single mask pattern `((row ⁄ 2) + (col ⁄ 3)) mod 2 = 0` applied to data modules only; no evaluation, no selection (verified against oracle symbols) | `RmQRModulePlacer.GetMaskBit` (Phase 5.5) |
+| Section 7.8 | Single mask pattern `((row ⁄ 2) + (col ⁄ 3)) mod 2 = 0` applied to data modules only; no evaluation, no selection (verified against oracle symbols) | [RmQRModulePlacer.GetMaskBit](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRModulePlacer.cs) |
 
 ## Format Information
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
 | Section 7.9 | 6 data bits (ECC level bit + 5-bit version index) BCH-extended to 18 bits, two copies each XOR-masked with its own constant (verified: 128/128 copies of all 64 version × ECC oracle symbols) | [RmQRConstants.GetFormatBits](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRConstants.cs) (BCH(18,6) computed per call, generator 0x1F25, per-copy XOR constants) |
-| Section 7.9.1 | Placement: one copy adjacent to the finder separator, one adjacent to the sub-finder (verified, coordinates in code comments) | `RmQRModulePlacer.PlaceFormat` (Phase 5.5) |
+| Section 7.9.1 | Placement: one copy adjacent to the finder separator, one adjacent to the sub-finder (verified, coordinates in code comments) | [RmQRModulePlacer.PlaceFormat](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRModulePlacer.cs) |
 
 Reference tests (planned, Phase 5.1/5.5): `RmQRConstantsUnitTest` (64 words vs a naive BCH reference, pairwise Hamming distance ≥ BCH minimum), `RmQRCodeGeneratorUnitTest.CreateRmQRCode_FormatInfo_RoundTripsFromMatrix` (both copies).
 

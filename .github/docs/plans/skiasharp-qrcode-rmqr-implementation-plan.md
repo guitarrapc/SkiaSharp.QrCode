@@ -144,6 +144,8 @@ Exit: met, see Progress log (`BinaryInterleaver` lifted to shared, Standard QR e
 - Function pattern painter (finder, separators, sub-finder, edge timing, vertical timing columns, alignment patterns), both format copies from the table, zigzag placement over non-function modules, fixed mask applied on the fly. Per-module readable reference; fast path deferred to the follow-up.
 - Tests: function-module map equals the naive painter from 5.1 for all 32 versions; full-pipeline extraction test (inverse zigzag + unmask + deinterleave + RS recompute) for all 64 version/ECC combos × {zero, 0xFF, random} payloads; format regions read back to the table words.
 
+Exit: met, see Progress log (module-exact against all 144 external symbols).
+
 **5.6 Public generator API**
 
 - `RmQRCodeGenerator.CreateRmQRCode(...)` (string / span / span-destination) + `GetRequiredBufferSize`; span paths 0 B.
@@ -327,3 +329,19 @@ Exit (Phase 7): decoder MVT image rows and the representative degradation subset
 | QR_Byte_V40_H_Encode | 127,418.5 ns | 126,997.4 ns | 3,808 B / 3,808 B |
 
 All within ±4% (single-run layout noise, both directions), allocations byte-identical; the interleaver body is unchanged and the dropped parameter was dead.
+
+### Phase 5.5, completed 2026-08-15
+
+**Done**
+
+- `src`: `Internals/RmQr/RmQRModulePlacer` (readable per-module reference, allocation-free, writes every module so callers need not zero the buffer): `IsFunctionModule` (the single predicate the decoder will reuse), `GetMaskBit`, `PlaceSymbol` = `PlaceFunctionModules` (edge timing, vertical timing + 3×3 alignment, corners, finder + separators, sub-finder) + `PlaceFormat` (both copies) + `PlaceData` (zigzag with the fixed mask, remainder bits light). Geometry documented in the class remarks.
+- Tests (test-first, +996 on net8.0 + net10.0; full suite 8,294, 0 failed): `RmQRModulePlacerUnitTest` (predicate vs naive painter on every module of every version; structural invariants of every function pattern for all 32 versions on a dirty buffer; format copies read back; negatives; **module-exact oracle: our placement of the same payload reproduces all 108 libzint symbols module for module and all 36 qrtool symbols except the documented tail column**), `RmQRMatrixExtractionTest` (place → naive inverse walk → deinterleave → data + per-block ECC + zero remainder + payload-independent function modules, 64 × 4 payloads).
+
+**Lessons learned**
+
+- Paint order carries one real rule: on height 9 the finder separator row (7) contains the bottom-left corner cell (7,0), and the separator (light) wins, both external lineages agree, the module-exact oracle caught our first draft (corner painted last) on every h = 9 symbol. Recorded in the placer remarks and the structural test (`Dark(h-2,0) == (h != 9)`).
+- With the encoder-side oracle at every stage (data codewords → final message → modules), the whole encode pipeline is now proven against two independent encoders before the public API or the zxing-cpp spot check exist; 5.6's spot check becomes a redundancy check, not the first proof.
+
+**Benchmarks**
+
+- Not applicable yet: internal component, not reachable from any public path; the rMQR E2E benchmark lands with 5.6 and the kernel/fast-path loop is the deferred follow-up.
