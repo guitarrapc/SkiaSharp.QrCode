@@ -1,0 +1,18 @@
+{
+  "id": "r7x43-m-numeric-1",
+  "generator": "zint-libzint",
+  "generatorVersion": "ZXingCpp 0.5.2 bundled libzint",
+  "symbolType": "rMQR",
+  "version": 1,
+  "versionName": "R7x43",
+  "width": 43,
+  "height": 7,
+  "errorCorrectionLevel": "M",
+  "mode": "Numeric",
+  "maskPattern": 4,
+  "payloadText": "1",
+  "payloadUtf8Hex": "31",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

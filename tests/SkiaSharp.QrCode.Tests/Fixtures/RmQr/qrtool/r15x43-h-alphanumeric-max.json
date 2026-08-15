@@ -1,0 +1,18 @@
+{
+  "id": "r15x43-h-alphanumeric-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 23,
+  "versionName": "R15x43",
+  "width": 43,
+  "height": 15,
+  "errorCorrectionLevel": "H",
+  "mode": "Alphanumeric",
+  "maskPattern": 4,
+  "payloadText": "ABCDEFGHIJKLMNOPQRST",
+  "payloadUtf8Hex": "4142434445464748494A4B4C4D4E4F5051525354",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

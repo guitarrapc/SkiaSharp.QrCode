@@ -1,0 +1,18 @@
+{
+  "id": "r11x27-h-alphanumeric-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 11,
+  "versionName": "R11x27",
+  "width": 27,
+  "height": 11,
+  "errorCorrectionLevel": "H",
+  "mode": "Alphanumeric",
+  "maskPattern": 4,
+  "payloadText": "ABCDEF",
+  "payloadUtf8Hex": "414243444546",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

@@ -1,0 +1,18 @@
+{
+  "id": "r7x139-m-numeric-max",
+  "generator": "zint-libzint",
+  "generatorVersion": "ZXingCpp 0.5.2 bundled libzint",
+  "symbolType": "rMQR",
+  "version": 5,
+  "versionName": "R7x139",
+  "width": 139,
+  "height": 7,
+  "errorCorrectionLevel": "M",
+  "mode": "Numeric",
+  "maskPattern": 4,
+  "payloadText": "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901",
+  "payloadUtf8Hex": "303132333435363738393031323334353637383930313233343536373839303132333435363738393031323334353637383930313233343536373839303132333435363738393031323334353637383930313233343536373839303132333435363738393031",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

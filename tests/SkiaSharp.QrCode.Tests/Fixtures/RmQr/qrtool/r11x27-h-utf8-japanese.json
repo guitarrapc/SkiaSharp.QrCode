@@ -1,0 +1,18 @@
+{
+  "id": "r11x27-h-utf8-japanese",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 11,
+  "versionName": "R11x27",
+  "width": 27,
+  "height": 11,
+  "errorCorrectionLevel": "H",
+  "mode": "Byte",
+  "maskPattern": 4,
+  "payloadText": "\u3042",
+  "payloadUtf8Hex": "E38182",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

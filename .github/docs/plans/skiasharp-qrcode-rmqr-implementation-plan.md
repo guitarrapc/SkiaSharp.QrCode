@@ -33,7 +33,7 @@ Oracles, all under the pinned-package / prebuilt-binary policy (no C++/Python bu
 |---|---|---|
 | Decode our symbols | zxing-cpp reader (ZXingCpp 0.5.2, `BarcodeFormat.RMQRCode`) | Verified reading libzint-created rMQR (`probe-creator`, round-trip OK) |
 | Encode fixtures, lineage 1 | libzint via ZXingCpp `BarcodeCreator(RMQRCode)` | Verified creating rMQR; `version=` option and ASCII-only payloads as with Micro QR |
-| Encode fixtures, lineage 2 | qrtool 0.13.2 `--variant rmqr -v <H> <W>` (`--type ascii`, module-exact) | Binary pinned; rMQR flag confirmed in `encode --help`, output not yet exercised here |
+| Encode fixtures, lineage 2 | qrtool 0.13.2 `--variant rmqr -v <H> <W>` (`--type ascii`, module-exact) | Verified 2026-08-15 (all 32 versions × M/H; parameter tables and the 5.1a corpus derive from it) |
 | rmqrcode-python | - | Dropped (toolchain policy; two encoder lineages already available) |
 
 ## rMQR facts that shape the design
@@ -107,7 +107,7 @@ The 5.1b oracle tests read committed external-encoder matrices, so the corpus is
 - `regenerate` extended; `FixtureLoader` gains an rMQR loader (rectangular matrix parser); `RmQrFixtureTest` scaffolding loads the corpus (decode assertions land with 6.4).
 - Fixture record (`specs/qrcode-test-fixtures.md`): corpus layout, case count, sanity-gate rule.
 
-Exit: corpus committed (order of 64 zint + 40 qrtool cases), every case gate-verified, loader tests green.
+Exit: met, see Progress log (108 zint + 36 qrtool cases, all gate-verified; loader + shape tests green).
 
 **5.1b Tables (`Internals/RmQr/RmQRConstants`)**
 
@@ -226,3 +226,20 @@ Exit (Phase 7): decoder MVT image rows and the representative degradation subset
 **Benchmarks**
 
 - Not applicable: no `src/` change (docs + a diagnostic command in `tools/`).
+
+### Phase 5.1a, completed 2026-08-15
+
+**Done**
+
+- `tools/QRInteropFixtures`: `RmQRFixtureModel` (case definition, generator interface, `RmQRVersionTable` with the oracle-verified dimensions/capacities, tool-local by design), `RmQRCorpus` (108 zint-libzint cases: 32 versions × single-char N/A/B + 12 per-height capacity boundaries; 36 qrtool cases: 32 rotating-mode/ECC capacity boundaries + 4 UTF-8/Japanese), `ZintRmQRFixtureGenerator` (`version=index+1,ecLevel=`), `QrtoolRmQRFixtureGenerator` (`--variant rmqr --symbol-version H W`, payload via UTF-8 file), `RmQRSanityGate` (zxing-cpp; raw `Bytes` vs `payloadUtf8Hex`, `Extra("Version"/"EcLevel")`, records `DataMask`), wired into `regenerate`. Shared writer/renderer generalized to rectangular symbols; manifest gains an optional `versionName` (omitted when null, so Standard/Micro manifests are byte-identical to before, verified by regenerating them: no content diff).
+- Corpus committed: `Fixtures/RmQr/{zint-libzint,qrtool}`, 144 fixtures × 3 files (~1.2 MB, PNG at 8 px/module), every one passed the gate on first generation.
+- Tests: `FixtureLoader.ReadRectangularMatrix` (square `ReadMatrix` now delegates), `FixtureManifest.VersionName`; `RmQr/RmQrFixtureTest` scaffolding (both lineages present, every version in both lineages and at both ECC, one single-char libzint case per version × mode, UTF-8 present; per fixture: manifest ↔ matrix ↔ PNG consistency, `version` = index + 1, `maskPattern` = 4, table-independent structural invariants). Fixture tests across all three symbologies: 520 green (net8.0 + net10.0).
+
+**Lessons learned**
+
+- Regenerating touches every corpus, and a schema addition that serializes `null` rewrites all existing manifests; opt-out-when-null keeps unrelated corpora byte-stable and the review diff honest. Regenerate-then-`git diff --stat` on the untouched corpora is the cheap drift check.
+- Different case lists per lineage is the right shape when the lineages have different strengths (libzint: ASCII sweep for table pinning; qrtool: UTF-8 and boundaries), rather than one list with per-generator skips.
+
+**Benchmarks**
+
+- Not applicable: no `src/` change (tool, committed fixtures, test infrastructure).

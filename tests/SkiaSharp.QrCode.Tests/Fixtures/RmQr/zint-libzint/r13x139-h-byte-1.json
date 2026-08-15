@@ -1,0 +1,18 @@
+{
+  "id": "r13x139-h-byte-1",
+  "generator": "zint-libzint",
+  "generatorVersion": "ZXingCpp 0.5.2 bundled libzint",
+  "symbolType": "rMQR",
+  "version": 22,
+  "versionName": "R13x139",
+  "width": 139,
+  "height": 13,
+  "errorCorrectionLevel": "H",
+  "mode": "Byte",
+  "maskPattern": 4,
+  "payloadText": "a",
+  "payloadUtf8Hex": "61",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

@@ -1,0 +1,18 @@
+{
+  "id": "r17x43-h-numeric-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 28,
+  "versionName": "R17x43",
+  "width": 43,
+  "height": 17,
+  "errorCorrectionLevel": "H",
+  "mode": "Numeric",
+  "maskPattern": 4,
+  "payloadText": "01234567890123456789012345678901234567890123456",
+  "payloadUtf8Hex": "3031323334353637383930313233343536373839303132333435363738393031323334353637383930313233343536",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

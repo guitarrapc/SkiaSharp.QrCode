@@ -18,6 +18,9 @@ public sealed record FixtureManifest
     public required string GeneratorVersion { get; init; }
     public required string SymbolType { get; init; }
     public required int Version { get; init; }
+    /// <summary>Human-readable version name where the version is not a plain integer (rMQR: "R7x43"); omitted otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? VersionName { get; init; }
     public required int Width { get; init; }
     public required int Height { get; init; }
     public required string ErrorCorrectionLevel { get; init; }
@@ -50,6 +53,7 @@ public static class FixtureWriter
 {
     public const int QuietZoneModules = 4;
     public const int MicroQRQuietZoneModules = 2; // ISO/IEC 18004: Micro QR quiet zone is 2 modules
+    public const int RmQRQuietZoneModules = 2; // ISO/IEC 23941: rMQR quiet zone is 2 modules
     public const int PixelsPerModule = 8;
 
     private static readonly JsonSerializerOptions jsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
@@ -60,18 +64,19 @@ public static class FixtureWriter
 
         File.WriteAllText(basePath + ".json", JsonSerializer.Serialize(fixture.Manifest, jsonOptions) + "\n");
         File.WriteAllText(basePath + ".matrix.txt", RenderMatrixText(fixture));
-        File.WriteAllBytes(basePath + ".png", PngRenderer.Render(fixture.Modules, fixture.Manifest.Width, fixture.Manifest.QuietZoneModules, fixture.Manifest.PixelsPerModule));
+        File.WriteAllBytes(basePath + ".png", PngRenderer.Render(fixture.Modules, fixture.Manifest.Width, fixture.Manifest.Height, fixture.Manifest.QuietZoneModules, fixture.Manifest.PixelsPerModule));
     }
 
     private static string RenderMatrixText(GeneratedFixture fixture)
     {
-        var size = fixture.Manifest.Width;
-        var sb = new StringBuilder(size * (size + 1));
-        for (var row = 0; row < size; row++)
+        var width = fixture.Manifest.Width;
+        var height = fixture.Manifest.Height;
+        var sb = new StringBuilder(height * (width + 1));
+        for (var row = 0; row < height; row++)
         {
-            for (var col = 0; col < size; col++)
+            for (var col = 0; col < width; col++)
             {
-                sb.Append(fixture.Modules[row * size + col] != 0 ? '1' : '0');
+                sb.Append(fixture.Modules[row * width + col] != 0 ? '1' : '0');
             }
             sb.Append('\n');
         }

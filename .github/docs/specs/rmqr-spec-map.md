@@ -32,7 +32,7 @@ Same internal boundary as the Standard QR `QRMatrixDecoder` and `MicroQRMatrixDe
 | Section 7.5 / 8 | Reed-Solomon correction per block, block deinterleaving | [EccBinaryDecoder](../../../src/SkiaSharp.QrCode/Internals/BinaryDecoders/EccBinaryDecoder.cs), shared across symbologies; deinterleave in `RmQRMatrixDecoder` |
 | Table 8 | Misdecode-protection: whether ECC codeword counts reserve codewords beyond the correction capacity t (as ISO/IEC 18004 Table 9 does for Micro QR) is confirmed against the spec text in Phase 6.3; if so, the post-correction cap mirrors `MicroQRMatrixDecoder` | `RmQRConstants.GetErrorCorrectionCapacity` (Phase 6, conditional) |
 
-Reference tests (planned, Phase 6): `RmQRFormatInformationDecoderUnitTest` (exhaustive 18-bit space vs a naive nearest-candidate reference, copy selection, dimension contradiction), `RmQRBinaryDecoderUnitTest` (golden vectors, malformed streams), `RmQRCodeDecoderRoundTripTest` (all 32 versions × M/H × modes × quiet zones, span parity), `RmQRCodeDecoderRobustnessTest` (per-block damage classes, format copies damaged singly and both, cross-symbology rejection), `RmQrFixtureTest` (committed external-encoder corpus, two lineages).
+Reference tests (planned, Phase 6): `RmQRFormatInformationDecoderUnitTest` (exhaustive 18-bit space vs a naive nearest-candidate reference, copy selection, dimension contradiction), `RmQRBinaryDecoderUnitTest` (golden vectors, malformed streams), `RmQRCodeDecoderRoundTripTest` (all 32 versions × M/H × modes × quiet zones, span parity), `RmQRCodeDecoderRobustnessTest` (per-block damage classes, format copies damaged singly and both, cross-symbology rejection), [RmQrFixtureTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQrFixtureTest.cs) (committed external-encoder corpus, two lineages; the corpus and its shape tests exist since Phase 5.1a, decode assertions land in 6.4).
 
 ## Text Analysis and Encoding Modes
 
@@ -126,7 +126,7 @@ Luminance ──> Otsu threshold ──> Finder candidates (shared 1:1:3:1:1 sca
 
 Supported envelope (to be measured in Phase 7 and stated here): clean renders and mild optical degradation with arbitrary right-angle orientation, mirroring, reflectance reversal, scale, translation, quiet-zone variants, and mild perspective anchored on the finder and sub-finder corners; extreme aspect ratios (R7x139, R11x27) are covered explicitly. `QRCodeDecoder` remains Standard QR-only.
 
-Reference tests (planned, Phase 7): `RmQRCodeDecoderImageTest`, `RmQRCodeDecoderPerspectiveTest`, `RmQrFixtureTest` (PNG corpus through the image path).
+Reference tests (planned, Phase 7): `RmQRCodeDecoderImageTest`, `RmQRCodeDecoderPerspectiveTest`, [RmQrFixtureTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQrFixtureTest.cs) (PNG corpus through the image path).
 
 ## Data Model and Serialization
 

@@ -1,0 +1,18 @@
+{
+  "id": "r15x139-m-byte-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 27,
+  "versionName": "R15x139",
+  "width": 139,
+  "height": 15,
+  "errorCorrectionLevel": "M",
+  "mode": "Byte",
+  "maskPattern": 4,
+  "payloadText": "the quick brown fox jumps over the lazy dog?! the quick brown fox jumps over the lazy dog?! the quick brown fox jumps over th",
+  "payloadUtf8Hex": "74686520717569636B2062726F776E20666F78206A756D7073206F76657220746865206C617A7920646F673F212074686520717569636B2062726F776E20666F78206A756D7073206F76657220746865206C617A7920646F673F212074686520717569636B2062726F776E20666F78206A756D7073206F766572207468",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

@@ -1,0 +1,18 @@
+{
+  "id": "r7x139-h-alphanumeric-max",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 5,
+  "versionName": "R7x139",
+  "width": 139,
+  "height": 7,
+  "errorCorrectionLevel": "H",
+  "mode": "Alphanumeric",
+  "maskPattern": 4,
+  "payloadText": "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456",
+  "payloadUtf8Hex": "4142434445464748494A4B4C4D4E4F505152535455565758595A30313233343536",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

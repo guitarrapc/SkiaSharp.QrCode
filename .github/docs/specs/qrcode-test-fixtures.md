@@ -14,13 +14,16 @@ The corpus is a set of symbols produced by encoders **other than SkiaSharp.QrCod
 
 ```
 tests/SkiaSharp.QrCode.Tests/Fixtures/
-├── StandardQr/                 (later: RmQr/)
+├── StandardQr/
 │   └── zxing-net/              (one directory per generator)
 │       ├── case-name.json       manifest
 │       ├── case-name.matrix.txt core module matrix, '1' dark / '0' light, row-major, LF, no quiet zone
 │       └── case-name.png        clean black-on-white render (quiet zone 4, 8 px/module)
-└── MicroQR/
-    ├── zint-libzint/           (same three files; PNG quiet zone 2 per the Micro QR spec)
+├── MicroQR/
+│   ├── zint-libzint/           (same three files; PNG quiet zone 2 per the Micro QR spec)
+│   └── qrtool/
+└── RmQr/
+    ├── zint-libzint/           (same three files; rectangular matrix / PNG, quiet zone 2 per ISO/IEC 23941)
     └── qrtool/
 ```
 
@@ -30,11 +33,12 @@ tests/SkiaSharp.QrCode.Tests/Fixtures/
 |---|---|
 | `id` | Case name (= file stem) |
 | `generator`, `generatorVersion` | Producing implementation and its pinned version |
-| `symbolType` | `StandardQR` (later `MicroQR`, `rMQR`) |
-| `version`, `width`, `height` | Symbol version and core module dimensions |
+| `symbolType` | `StandardQR`, `MicroQR` or `rMQR` |
+| `version`, `width`, `height` | Symbol version and core module dimensions (rMQR: `version` = ISO/IEC 23941 version index + 1 = `RmQRVersion` value = libzint version number; `width` ≠ `height`) |
+| `versionName` | Human-readable version where it is not a plain integer (rMQR: `R7x43`); omitted otherwise |
 | `errorCorrectionLevel` | `L` / `M` / `Q` / `H` (requested and honored by the generator) |
 | `mode` | Data segment mode reported by the generator |
-| `maskPattern` | Mask chosen by the generator, `-1` when unknown |
+| `maskPattern` | Mask chosen by the generator, `-1` when unknown (Micro QR / rMQR: reader-sourced by the sanity gate; rMQR is always `4`, the single rMQR mask expressed as a Standard QR pattern number) |
 | `payloadText`, `payloadUtf8Hex` | Expected decode result (text and UTF-8 bytes) |
 | `eciCharset` | `UTF-8` when the generator was asked to emit an ECI segment, else null |
 | `quietZoneModules`, `pixelsPerModule` | PNG render parameters |
@@ -51,9 +55,20 @@ Every version × legal ECC combination (M1 detection-only, M2/M3 L+M, M4 L+M+Q),
 
 **Sanity gate**: every generated Micro QR fixture is rendered and decoded with the pinned zxing-cpp reader before it is written, payload, version and ECC level must match the manifest, so a broken generator cannot poison the committed corpus.
 
+### Corpus contents (rMQR, 108 zint-libzint + 36 qrtool cases)
+
+Built in implementation-plan Phase 5.1a, BEFORE the tables (its symbols are the oracle for the table tests). The two lineages carry different case lists (`RmQRCorpus`) on purpose:
+
+- **zint-libzint** (ASCII-only): the systematic sweep, every one of the 32 versions × {Numeric `1`, Alphanumeric `A`, Byte `a`} single-character cases (96; ECC alternates so every version appears at both M and H; the leading data codewords pin the count-indicator width per version × mode), plus per-height capacity boundaries (numeric max at M on the widest width, byte max at H on the narrowest, 12).
+- **qrtool**: one capacity-boundary case per version with rotating mode / ECC (32) plus UTF-8 / Japanese byte-mode cases (4; libzint rejects non-ASCII). No ECI header in either lineage.
+
+Payloads are fixed literals or fixed cyclic patterns; the tool keeps its own copy of the version / capacity table (`RmQRVersionTable`, values from [rMQR Encoder](rmqr-encoder.md)) so it never depends on the library it produces oracles for.
+
+**Sanity gate** (`RmQRSanityGate`): every fixture is rendered and decoded with the pinned zxing-cpp reader before it is written; the payload is compared on raw bytes (`Bytes` vs `payloadUtf8Hex`, because UTF-8 without ECI is exposed with a legacy-charset `Text` guess), `Extra("Version")` must equal `R{H}x{W}` and `Extra("EcLevel")` the manifest ECC; the reader's `DataMask` (4) is recorded. All 144 cases passed on first generation.
+
 ### Consuming tests
 
-`StandardQrFixtureTest` decodes every fixture twice, matrix path (`TryDecode(modules, size, …)`) and image path (`TryDecode(SKBitmap, …)`), asserting payload, version, ECC level, and (matrix path) the generator's mask pattern. `MicroQRFixtureTest` likewise exercises both the matrix path and the PNG image path (`MicroQRCodeDecoder.TryDecode(SKBitmap, …)`, Phase 4b) and additionally asserts zero corrected errors and (matrix path) the reader-sourced mask pattern.
+`StandardQrFixtureTest` decodes every fixture twice, matrix path (`TryDecode(modules, size, …)`) and image path (`TryDecode(SKBitmap, …)`), asserting payload, version, ECC level, and (matrix path) the generator's mask pattern. `MicroQRFixtureTest` likewise exercises both the matrix path and the PNG image path (`MicroQRCodeDecoder.TryDecode(SKBitmap, …)`, Phase 4b) and additionally asserts zero corrected errors and (matrix path) the reader-sourced mask pattern. `RmQrFixtureTest` (Phase 5.1a scaffolding) pins the rMQR corpus shape: both lineages, every version in both lineages and at both ECC levels, one single-character libzint case per version × mode, manifest ↔ matrix ↔ PNG consistency and table-independent structural invariants (finder / sub-finder corners, edge timing rows); the Phase 5.1b table oracle tests and the Phase 6.4 / 7 decode assertions join it as they land.
 
 ### Regeneration
 

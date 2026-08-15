@@ -14,6 +14,8 @@ public sealed record FixtureManifest
     public required string GeneratorVersion { get; init; }
     public required string SymbolType { get; init; }
     public required int Version { get; init; }
+    /// <summary>Human-readable version name where the version is not a plain integer (rMQR: "R7x43"); null otherwise.</summary>
+    public string? VersionName { get; init; }
     public required int Width { get; init; }
     public required int Height { get; init; }
     public required string ErrorCorrectionLevel { get; init; }
@@ -71,18 +73,35 @@ public static class FixtureLoader
     /// </summary>
     public static (byte[] Modules, int Size) ReadMatrix(string matrixPath)
     {
+        var (modules, width, height) = ReadRectangularMatrix(matrixPath);
+        if (width != height)
+            throw new InvalidDataException($"Matrix fixture is not square: {height} rows x {width} columns ({matrixPath})");
+
+        return (modules, width);
+    }
+
+    /// <summary>
+    /// Parses a rectangular matrix fixture ('1' = dark, '0' = light, row-major, no
+    /// quiet zone) into a byte-per-module buffer; every row must have the same width.
+    /// </summary>
+    public static (byte[] Modules, int Width, int Height) ReadRectangularMatrix(string matrixPath)
+    {
         var lines = File.ReadAllLines(matrixPath).Where(static l => l.Length > 0).ToArray();
-        var size = lines.Length;
-        var modules = new byte[size * size];
-        for (var row = 0; row < size; row++)
+        var height = lines.Length;
+        if (height == 0)
+            throw new InvalidDataException($"Matrix fixture is empty ({matrixPath})");
+
+        var width = lines[0].Length;
+        var modules = new byte[width * height];
+        for (var row = 0; row < height; row++)
         {
             var line = lines[row];
-            if (line.Length != size)
-                throw new InvalidDataException($"Matrix fixture is not square: row {row} has {line.Length} columns, expected {size} ({matrixPath})");
+            if (line.Length != width)
+                throw new InvalidDataException($"Matrix fixture is ragged: row {row} has {line.Length} columns, expected {width} ({matrixPath})");
 
-            for (var col = 0; col < size; col++)
+            for (var col = 0; col < width; col++)
             {
-                modules[row * size + col] = line[col] switch
+                modules[row * width + col] = line[col] switch
                 {
                     '1' => 1,
                     '0' => 0,
@@ -91,6 +110,6 @@ public static class FixtureLoader
             }
         }
 
-        return (modules, size);
+        return (modules, width, height);
     }
 }
