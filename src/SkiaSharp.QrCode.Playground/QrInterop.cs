@@ -288,10 +288,8 @@ public static partial class QrInterop
     /// </summary>
     private static RmQRCodeImageBuilder CreateRmBuilder(QrRequest request, RmQRCodeData data)
     {
-        var width = Math.Clamp(request.Size, 64, 2048);
-        var height = Math.Max(1, (int)Math.Round((double)width * data.Height / data.Width));
         return new RmQRCodeImageBuilder(data)
-            .WithSize(width, height)
+            .WithWidth(Math.Clamp(request.Size, 64, 2048))
             .WithColors(
                 ParseColor(request.Foreground, SKColors.Black),
                 ParseColor(request.Background, SKColors.White))
@@ -798,7 +796,7 @@ public sealed record QrRequest
     public int Height { get; init; }
     /// <summary>Error correction level: L, M, Q or H (Micro QR: EDO, L, M or Q; rMQR: M or H).</summary>
     public string Ecc { get; init; } = "M";
-    /// <summary>Output image size in pixels (square).</summary>
+    /// <summary>Output image size in pixels (square for Standard / Micro QR; the image width for rMQR, height from the symbol aspect ratio).</summary>
     public int Size { get; init; } = 512;
     /// <summary>Quiet zone in modules (0-10).</summary>
     public int QuietZone { get; init; } = 4;

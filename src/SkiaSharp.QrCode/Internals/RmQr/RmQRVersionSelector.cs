@@ -126,9 +126,23 @@ internal static class RmQRVersionSelector
         }
 
         // Candidate set: all versions, or those of the requested height. Track the
-        // best fitting version by strategy, and the most capacious candidate for
-        // the error message when nothing fits.
+        // best fitting version by strategy.
         var best = (RmQRVersion)0;
+        for (var i = 1; i <= RmQRConstants.VersionCount; i++)
+        {
+            var candidate = (RmQRVersion)i;
+            if (height is { } wanted && RmQRConstants.GetHeight(candidate) != (int)wanted)
+                continue;
+
+            if (Fits(candidate, eccLevel, mode, dataLength) && (best == 0 || IsBetter(candidate, best, fitStrategy)))
+                best = candidate;
+        }
+
+        if (best != 0)
+            return best;
+
+        // Nothing fits: find the most capacious candidate for the error message
+        // (failure path only, the success path never pays for it).
         var largest = (RmQRVersion)0;
         var largestMax = -1;
         for (var i = 1; i <= RmQRConstants.VersionCount; i++)
@@ -137,13 +151,6 @@ internal static class RmQRVersionSelector
             if (height is { } wanted && RmQRConstants.GetHeight(candidate) != (int)wanted)
                 continue;
 
-            if (Fits(candidate, eccLevel, mode, dataLength))
-            {
-                if (best == 0 || IsBetter(candidate, best, fitStrategy))
-                    best = candidate;
-                continue;
-            }
-
             var candidateMax = GetMaxDataLength(candidate, eccLevel, mode);
             if (candidateMax > largestMax)
             {
@@ -151,9 +158,6 @@ internal static class RmQRVersionSelector
                 largest = candidate;
             }
         }
-
-        if (best != 0)
-            return best;
 
         var scope = height is { } hh ? $"rMQR height {hh}" : "rMQR";
         throw new ArgumentException(

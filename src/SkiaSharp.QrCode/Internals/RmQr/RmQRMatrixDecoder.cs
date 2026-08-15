@@ -4,8 +4,9 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 
 /// <summary>
 /// rMQR matrix → payload (ISO/IEC 23941, the inverse of the encode pipeline): the
-/// two format-information copies name version and ECC (the version must agree
-/// with the physical width × height), then inverse zigzag + fixed unmask (reusing
+/// version comes from the physical width × height, the two format-information
+/// copies name the ECC level (only copies naming that version count, the closer
+/// wins), then inverse zigzag + fixed unmask (reusing
 /// the placer's own predicate and mask so both sides always agree), block
 /// deinterleave, per-block Reed-Solomon correction (full RS strength ⌊ecc/2⌋ per
 /// block, as the Standard QR decoder), and the bit-stream decode. Allocation-free:
@@ -36,10 +37,11 @@ internal static class RmQRMatrixDecoder
             return QRCodeDecodeStatus.InvalidMatrix;
         }
 
-        // 2. Format information (both copies) → version / ECC; must agree with the dimensions
+        // 2. Format information (both copies) → ECC; only copies that agree with the
+        //    dimension-derived version count, so a copy miscorrected toward another
+        //    version's word cannot veto the valid one.
         ReadFormatCopies(modules, width, height, out var finderSideRaw, out var subFinderSideRaw);
-        if (!RmQRFormatInformationDecoder.TryDecode(finderSideRaw, subFinderSideRaw, out var formatVersion, out var eccLevel, out _)
-            || formatVersion != version)
+        if (!RmQRFormatInformationDecoder.TryDecode(finderSideRaw, subFinderSideRaw, version, out var eccLevel, out _))
         {
             info = new RmQRCodeDecodeInfo(QRCodeDecodeStatus.FormatInformationInvalid, version, default, 0);
             return QRCodeDecodeStatus.FormatInformationInvalid;

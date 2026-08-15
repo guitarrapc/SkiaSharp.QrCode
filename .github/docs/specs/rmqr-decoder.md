@@ -2,7 +2,7 @@
 
 Design record for the rMQR Code (ISO/IEC 23941) decode feature (`RmQRCodeDecoder`): what it does, why it is scoped the way it is, and what was learned during implementation. Implementation locations are indexed in the [spec-to-code map](rmqr-spec-map.md); the encoder side is in [rMQR Encoder](rmqr-encoder.md); the implementation order is the [rMQR implementation plan](../plans/skiasharp-qrcode-rmqr-implementation-plan.md).
 
-Status: **matrix level shipped (Phase 6, 2026-08-15); image level shipped (Phase 7, 2026-08-16).**
+Status: **matrix level shipped (Phase 6, 2026-08-15); image level shipped (Phase 7, 2026-08-16); adversarial review 2026-08-16 (dimension-aware format arbitration, too-small destination terminal per finder, perspective quadratic fix; see the plan's Progress log).**
 
 ---
 
@@ -31,7 +31,7 @@ Behavior: shared Otsu threshold and finder candidates → local grid frames arou
 | Data modes | Numeric, Alphanumeric, Byte (UTF-8 / ISO-8859-1 heuristics as the other symbologies), ECI headers 1 / 3 / 26 / 27 |
 | Quiet zone | Matrix: any light border, uniform or not (dark bounding box = core). Image: 1, 2 and 4 modules verified; the finder scan needs some light margin around the finder |
 | Error correction | Reed-Solomon per block at full strength ⌊ecc/2⌋ codewords per block, corrections reported |
-| Format information | Either copy alone suffices; ≤ 3 bit errors per copy corrected; the closer valid copy wins |
+| Format information | Matrix: either copy alone suffices (≤ 3 bit errors per copy corrected; only copies naming the version the dimensions give count, the closer of those wins, so a copy miscorrected toward another version's word cannot veto the valid one). Image: the finder-side copy must be readable (≤ 3 bit errors); it is what names the version before any grid is sampled, the sub-finder-side copy is a consistency gate on the perspective path |
 | Output | `string` (allocates the result only) or `Span<char>` (allocation-free steady state, image path included) |
 | Image envelope | Clean renders of every version × ECC at 3-13 px/module and non-integer scales; non-square modules; translation; right-angle and arbitrary rotation (every integer degree verified for R7x43 / R13x77); mirroring; reflectance reversal; JPEG q60, low contrast, additive noise; extreme aspect ratios; keystone 2 % and 4 % along either axis up to R17x139, also combined with 30° rotation or mirroring; the 144-symbol external PNG corpus |
 
@@ -56,7 +56,7 @@ Behavior: shared Otsu threshold and finder candidates → local grid frames arou
 | Decision | Choice | Revisit when |
 |---|---|---|
 | Correction cap | Full RS strength (⌊ecc/2⌋ per block), as Standard QR | The ISO/IEC 23941 text (Table 8) is available: if it lists misdecode-protection codewords, add the post-correction cap and its false-positive test class as `MicroQRMatrixDecoder` has |
-| Format copy arbitration | Closer valid copy wins, ties → finder side; version must equal the dimensions | - |
+| Format copy arbitration | Matrix: only copies whose version equals the dimensions are candidates, the closer wins, ties → finder side (review 2026-08-16: arbitrating before the dimension check let a copy miscorrected toward another version's word veto the valid copy). Image: finder-side copy names the version; sub-finder-side copy gates the perspective path only | Image-level recovery from a damaged finder-side copy (would need a sub-finder-side read per candidate version through a frame that is only accurate near the finder; only narrow symbols would benefit) |
 | ECI on decode | Parsed (shared reader lifted to `SegmentDecoders`), mapped to ISO-8859-1 / UTF-8; others → `UnsupportedContent` | Demand for other charsets (cross-symbology decision) |
 | Corpus expectations | libzint symbols decode with 0 corrections, qrtool symbols with ≤ 1 (documented tail defect); the same through the image path | qrtool fixes the defect (regenerate, tighten to 0) |
 | Image search budgets | ≤ 8 finder candidates, ≤ 256 full-grid decodes per candidate, sub-finder search radius 6 + width/20 modules (half-module lattice, three column-axis leans), perspective grid ±12 % (1 % steps along the width, 2 % along the height) × ±20° shear | A measured input class needs more (raise the constant, add its test) or profiling shows the budget dominates a common failure |
@@ -65,7 +65,7 @@ Behavior: shared Otsu threshold and finder candidates → local grid frames arou
 ## Lessons learned
 
 - With the encoder proven module-exact against two external lineages, the decoder round trip is a weak test on its own; the strong ones were the corpus (144 external symbols, both lineages, payload + version + ECC) and the damage classes (t per block corrected in every block of every version × ECC, t + 1 in one block never decoding cleanly, format copies singly / jointly damaged, format-vs-dimension contradiction, remainder bits ignored).
-- The two format copies make the format decoder trivially robust: one copy can be destroyed outright; the useful arbitration rule is "closer valid copy wins", and it needs no extra state.
+- The two format copies make the format decoder trivially robust: one copy can be destroyed outright. The arbitration rule that holds up is "among the copies naming the version the dimensions give, the closer wins": the review found that arbitrating on distance alone first let a copy miscorrected toward another version's word (5+ errors landing within 3 of it) veto the valid copy, so the matrix decoder now feeds the dimension-derived version into the arbitration.
 - Image detection on a wide symbol is a long-baseline problem: everything measured at the finder is only good to a few percent, and a few percent of 139 modules is several modules. The design that worked was to make the far anchor (sub-finder) authoritative for scale and rotation and to keep every locally measured quantity as an approximation that the anchor overrides.
 - Test payloads must respect per-version capacity (R7x43-M holds 7 alphanumerics): 13 early "decoder failures" were the generator rejecting the payload; the decoder had passed everything.
 - The corpus's qrtool tail defect turned into a free robustness fixture: those symbols decode with exactly one corrected codeword, so the fixture test asserts `ErrorsCorrected ≤ 1` for that lineage and `0` for libzint.

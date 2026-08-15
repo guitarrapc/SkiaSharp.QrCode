@@ -30,12 +30,14 @@ public class QrImageBuilderApiParityTest
     /// <summary>
     /// rMQR-only fluent options: version fit is two-dimensional (design record
     /// specs/rmqr-encoder.md), so the rMQR builder alone exposes the fit strategy and
-    /// the fixed-height constraint.
+    /// the fixed-height constraint; and the symbol is rectangular, so the width-only
+    /// sizing rule (height from the aspect ratio) is a builder option of its own.
     /// </summary>
     private static readonly string[] rmqrOnlyMembers =
     [
         "WithFitStrategy",
         "WithHeight",
+        "WithWidth",
     ];
 
     [Test]

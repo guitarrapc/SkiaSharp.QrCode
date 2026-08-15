@@ -65,36 +65,69 @@ public class RmQRFormatInformationDecoderUnitTest
     }
 
     [Test]
-    public async Task TryDecode_TwoCopies_CloserValidCopyWins_TiesPreferFinderSide()
+    public async Task TryDecode_TwoCopies_CloserAgreeingCopyWins_TiesPreferFinderSide()
     {
         var left = RmQRConstants.GetFormatBits(RmQRVersion.R13x77, RmQREccLevel.H, false);
         var right = RmQRConstants.GetFormatBits(RmQRVersion.R13x77, RmQREccLevel.H, true);
+        var leftM = RmQRConstants.GetFormatBits(RmQRVersion.R13x77, RmQREccLevel.M, false);
+        var rightM = RmQRConstants.GetFormatBits(RmQRVersion.R13x77, RmQREccLevel.M, true);
 
         // Both clean → agree.
-        await Assert.That(RmQRFormatInformationDecoder.TryDecode(left, right, out var v, out var e, out var d)).IsTrue();
-        await Assert.That((v, e, d)).IsEqualTo((RmQRVersion.R13x77, RmQREccLevel.H, 0));
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(left, right, RmQRVersion.R13x77, out var e, out var d)).IsTrue();
+        await Assert.That((e, d)).IsEqualTo((RmQREccLevel.H, 0));
 
         // Finder side has 3 errors, sub-finder side clean → sub-finder wins with distance 0.
-        await Assert.That(RmQRFormatInformationDecoder.TryDecode(left ^ 0b111, right, out v, out e, out d)).IsTrue();
-        await Assert.That((v, e, d)).IsEqualTo((RmQRVersion.R13x77, RmQREccLevel.H, 0));
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(left ^ 0b111, right, RmQRVersion.R13x77, out e, out d)).IsTrue();
+        await Assert.That((e, d)).IsEqualTo((RmQREccLevel.H, 0));
 
         // Finder side beyond correction (4+ errors, chosen so no word is within 3), sub-finder 2 errors → sub-finder wins.
         var invalidLeft = FindUndecodable(false);
         var invalidRight = FindUndecodable(true);
-        await Assert.That(RmQRFormatInformationDecoder.TryDecode(invalidLeft, right ^ 0b11, out v, out e, out d)).IsTrue();
-        await Assert.That((v, e, d)).IsEqualTo((RmQRVersion.R13x77, RmQREccLevel.H, 2));
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(invalidLeft, right ^ 0b11, RmQRVersion.R13x77, out e, out d)).IsTrue();
+        await Assert.That((e, d)).IsEqualTo((RmQREccLevel.H, 2));
 
-        // Both copies decode to different symbols: the closer one wins.
-        var otherLeft = RmQRConstants.GetFormatBits(RmQRVersion.R7x43, RmQREccLevel.M, false);
-        await Assert.That(RmQRFormatInformationDecoder.TryDecode(otherLeft ^ 0b1, right ^ 0b111, out v, out e, out d)).IsTrue();
-        await Assert.That((v, e, d)).IsEqualTo((RmQRVersion.R7x43, RmQREccLevel.M, 1));
-
-        // Tie at equal distance and different symbols → finder side.
-        await Assert.That(RmQRFormatInformationDecoder.TryDecode(otherLeft ^ 0b1, right ^ 0b1, out v, out e, out d)).IsTrue();
-        await Assert.That((v, e, d)).IsEqualTo((RmQRVersion.R7x43, RmQREccLevel.M, 1));
+        // Both copies agree on the version but name different ECC levels: the closer copy decides …
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(leftM ^ 0b111, right ^ 0b1, RmQRVersion.R13x77, out e, out d)).IsTrue();
+        await Assert.That((e, d)).IsEqualTo((RmQREccLevel.H, 1));
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(left ^ 0b1, rightM ^ 0b111, RmQRVersion.R13x77, out e, out d)).IsTrue();
+        await Assert.That((e, d)).IsEqualTo((RmQREccLevel.H, 1));
+        // … and an exact tie goes to the finder side (the only observable tie-break among agreeing copies).
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(leftM ^ 0b1, right ^ 0b1, RmQRVersion.R13x77, out e, out d)).IsTrue();
+        await Assert.That((e, d)).IsEqualTo((RmQREccLevel.M, 1));
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(left ^ 0b1, rightM ^ 0b1, RmQRVersion.R13x77, out e, out d)).IsTrue();
+        await Assert.That((e, d)).IsEqualTo((RmQREccLevel.H, 1));
 
         // Both beyond the correction distance → fail.
-        await Assert.That(RmQRFormatInformationDecoder.TryDecode(invalidLeft, invalidRight, out _, out _, out _)).IsFalse();
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(invalidLeft, invalidRight, RmQRVersion.R13x77, out _, out _)).IsFalse();
         await Assert.That(RmQRFormatInformationDecoder.TryDecodeCopy(invalidLeft, false, out _, out _, out _)).IsFalse();
+    }
+
+    [Test]
+    public async Task TryDecode_WithExpectedVersion_OnlyAgreeingCopiesCount()
+    {
+        var left = RmQRConstants.GetFormatBits(RmQRVersion.R13x77, RmQREccLevel.H, false);
+        var right = RmQRConstants.GetFormatBits(RmQRVersion.R13x77, RmQREccLevel.H, true);
+        var otherLeft = RmQRConstants.GetFormatBits(RmQRVersion.R7x43, RmQREccLevel.M, false);
+        var otherRight = RmQRConstants.GetFormatBits(RmQRVersion.R7x43, RmQREccLevel.M, true);
+
+        // Both clean and agreeing → finder side, distance 0.
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(left, right, RmQRVersion.R13x77, out var e, out var d)).IsTrue();
+        await Assert.That((e, d)).IsEqualTo((RmQREccLevel.H, 0));
+
+        // The finder-side copy is a closer valid word of ANOTHER version: the plain
+        // arbitration would pick it, the dimension-aware one takes the agreeing copy.
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(otherLeft ^ 0b1, right ^ 0b111, RmQRVersion.R13x77, out e, out d)).IsTrue();
+        await Assert.That((e, d)).IsEqualTo((RmQREccLevel.H, 3));
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(left ^ 0b111, otherRight, RmQRVersion.R13x77, out e, out d)).IsTrue();
+        await Assert.That((e, d)).IsEqualTo((RmQREccLevel.H, 3));
+
+        // Both agree → the closer one (sub-finder here).
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(left ^ 0b111, right ^ 0b1, RmQRVersion.R13x77, out e, out d)).IsTrue();
+        await Assert.That((e, d)).IsEqualTo((RmQREccLevel.H, 1));
+
+        // Neither copy is a word of the expected version → fail (this is the
+        // format-vs-dimension contradiction, not a version override).
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(otherLeft, otherRight, RmQRVersion.R13x77, out _, out _)).IsFalse();
+        await Assert.That(RmQRFormatInformationDecoder.TryDecode(FindUndecodable(false), FindUndecodable(true), RmQRVersion.R13x77, out _, out _)).IsFalse();
     }
 }

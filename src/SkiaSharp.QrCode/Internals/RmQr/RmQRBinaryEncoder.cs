@@ -23,8 +23,9 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 internal static class RmQRBinaryEncoder
 {
     // rMQR byte-mode capacity tops out at 150 bytes (R17x139-M), so any content
-    // that passed version selection transcodes into this budget; the pool path
-    // only exists for callers that bypass selection.
+    // that passed version selection transcodes into this budget (the branch is on
+    // the analyzer's exact UTF-8 byte count, not a per-char worst case); the pool
+    // path only exists for callers that bypass selection.
     private const int StackByteBudget = 160;
 
     /// <summary>
@@ -60,7 +61,7 @@ internal static class RmQRBinaryEncoder
                 WriteAlphanumeric(ref writer, text);
                 break;
             case EncodingMode.Byte:
-                WriteByte(ref writer, text, analysis.EciMode);
+                WriteByte(ref writer, text, analysis.EciMode, analysis.DataLength);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(analysis), $"Encoding mode {mode} is not supported by rMQR.");
@@ -119,8 +120,10 @@ internal static class RmQRBinaryEncoder
     /// <summary>
     /// Byte mode: chars ≤ 0xFF narrow directly (Default / ISO-8859-1, validated by
     /// the analyzer); otherwise the text is transcoded to UTF-8 (no ECI header).
+    /// <paramref name="byteCount"/> is the analyzer's exact encoded length, which
+    /// picks the stack budget for every payload that passed version selection.
     /// </summary>
-    private static void WriteByte(ref BitWriter writer, ReadOnlySpan<char> text, EciMode eciMode)
+    private static void WriteByte(ref BitWriter writer, ReadOnlySpan<char> text, EciMode eciMode, int byteCount)
     {
         if (eciMode is EciMode.Default or EciMode.Iso8859_1)
         {
@@ -132,8 +135,7 @@ internal static class RmQRBinaryEncoder
         if (eciMode != EciMode.Utf8)
             throw new ArgumentOutOfRangeException(nameof(eciMode), $"Unsupported charset {eciMode} for rMQR Byte mode.");
 
-        var maxByteCount = text.Length * 3; // UTF-16 → UTF-8 worst case is 3 bytes per char (4-byte sequences come from surrogate pairs)
-        if (maxByteCount <= StackByteBudget)
+        if (byteCount <= StackByteBudget)
         {
             Span<byte> utf8 = stackalloc byte[StackByteBudget];
             var length = GetUtf8Bytes(text, utf8);
@@ -141,6 +143,7 @@ internal static class RmQRBinaryEncoder
         }
         else
         {
+            var maxByteCount = text.Length * 3; // UTF-16 → UTF-8 worst case is 3 bytes per char (4-byte sequences come from surrogate pairs)
             var rented = ArrayPool<byte>.Shared.Rent(maxByteCount);
             try
             {

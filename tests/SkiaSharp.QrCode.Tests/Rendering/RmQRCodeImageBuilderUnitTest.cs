@@ -110,6 +110,67 @@ public class RmQRCodeImageBuilderUnitTest
     }
 
     [Test]
+    [MethodDataSource(nameof(AllVersions))]
+    public async Task DefaultCanvas_WidthOnly_FillsTheWholeCanvas_EveryVersion(RmQRVersion version)
+    {
+        // Width-only sizing (the static helpers' rule and the no-size default) must give the
+        // symbol at exactly that width: no letterbox band from the rounded height, and an
+        // opaque image (the wide versions used to lose 1-3 columns to transparent pad).
+        var data = RmQRCodeGenerator.CreateRmQRCode("RM" + (int)version, RmQREccLevel.M, version);
+        using var bitmap = new RmQRCodeImageBuilder(data).ToBitmap();
+        await Assert.That(bitmap.Width).IsEqualTo(512);
+        await Assert.That(bitmap.Height).IsEqualTo((int)Math.Round(512d * data.Height / data.Width));
+        await Assert.That(bitmap.AlphaType).IsEqualTo(SKAlphaType.Opaque);
+        var midRow = bitmap.Height / 2;
+        for (var x = 0; x < bitmap.Width; x++)
+        {
+            if (bitmap.GetPixel(x, midRow).Alpha != byte.MaxValue)
+                Assert.Fail($"{version}: transparent pad at column {x}");
+        }
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            if (bitmap.GetPixel(bitmap.Width / 2, y).Alpha != byte.MaxValue)
+                Assert.Fail($"{version}: transparent pad at row {y}");
+        }
+        // Corners are quiet zone (symbol background), never clear color.
+        await Assert.That(bitmap.GetPixel(0, 0)).IsEqualTo(SKColors.White);
+        await Assert.That(bitmap.GetPixel(bitmap.Width - 1, bitmap.Height - 1)).IsEqualTo(SKColors.White);
+
+        // Static helper PNG is opaque as well (encoded without an alpha channel: the
+        // codec reports the decoded surface as opaque).
+        using var png = SKBitmap.Decode(RmQRCodeImageBuilder.GetPngBytes(data));
+        await Assert.That(png.Width).IsEqualTo(512);
+        await Assert.That(png.AlphaType).IsEqualTo(SKAlphaType.Opaque);
+        await Assert.That(png.GetPixel(0, png.Height / 2)).IsEqualTo(SKColors.White);
+        await Assert.That(png.GetPixel(png.Width - 1, png.Height / 2)).IsEqualTo(SKColors.White);
+    }
+
+    [Test]
+    public async Task WithWidth_IsThePublicWidthOnlyRule_AndDefersToSizeAndModulePixelSize()
+    {
+        var data = RmQRCodeGenerator.CreateRmQRCode("0123456789", RmQREccLevel.M); // 31 × 15
+        using var wide = new RmQRCodeImageBuilder(data).WithWidth(1024).ToBitmap();
+        await Assert.That(wide.Width).IsEqualTo(1024);
+        await Assert.That(wide.Height).IsEqualTo((int)Math.Round(1024d * 15 / 31));
+        await Assert.That(wide.GetPixel(0, wide.Height / 2)).IsEqualTo(SKColors.White);
+        await Assert.That(wide.GetPixel(1023, wide.Height / 2)).IsEqualTo(SKColors.White);
+
+        // Module centers land on the matrix at the uniform width scale.
+        var scale = 1024f / 31;
+        for (var row = 0; row < data.Height; row++)
+            for (var col = 0; col < data.Width; col++)
+                if (IsDark(wide.GetPixel((int)((col + 0.5f) * scale), (int)((row + 0.5f) * scale))) != data[row, col])
+                    Assert.Fail($"width-only module ({row},{col}) mismatch");
+
+        using var explicitSize = new RmQRCodeImageBuilder(data).WithWidth(1024).WithSize(200, 200).ToBitmap();
+        await Assert.That((explicitSize.Width, explicitSize.Height)).IsEqualTo((200, 200));
+        using var modulePixel = new RmQRCodeImageBuilder(data).WithWidth(1024).WithModulePixelSize(3).ToBitmap();
+        await Assert.That((modulePixel.Width, modulePixel.Height)).IsEqualTo((31 * 3, 15 * 3));
+
+        await Assert.That(() => new RmQRCodeImageBuilder(data).WithWidth(0)).Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
     public async Task WithSize_ExplicitCanvas_LetterboxesUniformly_NeverStretches()
     {
         // 31 × 15 modules into a 400 × 400 canvas: scale = min(400/31, 400/15) = 12.9;

@@ -391,7 +391,7 @@ The per-module reference placer dominates (R17x139: 2,363 modules with a predica
 **Lessons learned**
 
 - One `preserveAspectRatio` flag plus a per-symbology default-canvas hook was enough to add rectangular layout without touching the square symbologies' behavior; the existing golden-pixel and builder tests stayed green unchanged, which is the real proof that "letterbox only for rMQR" is a pure addition.
-- The static-helper sizing rule ("`size` is the width") needed a private width-only mode on the builder rather than a public `WithWidth`, so the fluent surface stays 1:1 with the other builders (the parity test enforces exactly that).
+- The static-helper sizing rule ("`size` is the width") was first kept as a private width-only mode on the builder so the fluent surface stayed 1:1 with the other builders; the 2026-08-16 review made it the public `WithWidth` (rMQR-only member in the parity allow-list, next to `WithFitStrategy` / `WithHeight`) because the Playground and the Blazor sample had to reimplement it, and their reimplementation (`WithSize` on the rounded height) hit the double-letterbox defect below.
 - Bulk-editing JavaScript with shell tools silently ate template literals (`${...}` → interpolated away); the in-browser check caught "rMQR Rx". Verify UI text in the running app, not just the diff.
 
 **Benchmark delta (image paths, net10.0 Release, before = HEAD worktree, after = this change; allocations byte-identical everywhere)**
@@ -412,7 +412,7 @@ All within ms-scale PNG-encode noise (first-run Small_512 read +14% with a 0.9 m
 
 **Done**
 
-- 6.2 `Internals/RmQr/RmQRFormatInformationDecoder`: 64 candidates per side (finder / sub-finder XOR masks), `TryDecodeCopy` (≤ 3 bit errors, BCH(18,6) minimum distance ≥ 7) and `TryDecode` over both copies (closer valid copy wins, ties → finder side).
+- 6.2 `Internals/RmQr/RmQRFormatInformationDecoder`: 64 candidates per side (finder / sub-finder XOR masks), `TryDecodeCopy` (≤ 3 bit errors, BCH(18,6) minimum distance ≥ 7) and `TryDecode` over both copies (closer valid copy wins, ties → finder side; the 2026-08-16 review made it dimension-aware, see the review entry below).
 - 6.3 `Internals/RmQr/RmQRMatrixDecoder` (version from dimensions, both format copies with the version cross-check, inverse zigzag + fixed unmask through the placer's own predicate / mask, block deinterleave, per-block RS via the shared `EccBinaryDecoder`, fixed stack budgets pinned by test) and `Internals/RmQr/RmQRBinaryDecoder` (3-bit modes, per-version count widths, terminator `000`, ECI parsed and mapped, Kanji → `UnsupportedContent`, reserved modes → `InvalidBitstream`, payloads through the shared `SegmentDecoders`). The ECI designator reader was lifted from `QRBinaryDecoder` into `SegmentDecoders` (second consumer; Standard QR decode benchmark flat, see below).
 - 6.4 public `RmQRCodeDecoder` (frozen surface: `RmQRCodeData` ×2, module matrix with width + height as string and zero-allocation span-destination overloads, `GetMaxDecodedLength`) and `RmQRCodeDecodeInfo` (Status / Version / EccLevel / ErrorsCorrected). Quiet-zone stripping by the dark bounding box (rMQR has dark modules at all four core corners and timing on every edge), so asymmetric borders work too. Design record `specs/rmqr-decoder.md` written.
 - Decision: no misdecode-protection cap (full RS strength ⌊ecc/2⌋ per block, as the Standard QR decoder and zxing-cpp); the ISO/IEC 23941 text could not be consulted, recorded as an open decision in the decoder record and spec map.
@@ -491,3 +491,43 @@ PNG rows are within their run-to-run noise (±5 %); the image decode row (the on
 | R17x139_ImageDecode_Span (1,144 × 168 px) | 136 µs | **0 B** |
 
 Otsu + the finder scan (proportional to pixels) and the sub-finder template search dominate; a coarse-to-fine template search and the shared placer / extractor fast path are the follow-ups.
+
+### Adversarial review round, completed 2026-08-16
+
+Three review rounds (independent reviewer agents per lens: correctness, performance, API usability, test coverage, spec/doc sync; every report-worthy claim voted on by three independent skeptical verifiers; fixes applied test-first) over the whole rMQR branch. Round 1 surfaced 10 validated findings, round 2 (over the round-1 fixes) 10 more, all low severity; round 3 (sign-off over the round-2 fixes) found one medium finding (a pre-existing status masking that the round-2 contract made visible, below) plus doc/sample nits.
+
+**Done**
+
+- Rendering: the width-only default (static helpers, no-size builder) letterboxed the aspect-derived canvas a second time, leaving 1-3 transparent (JPEG: black) columns on 12 of the 32 versions and a non-opaque PNG on all 32. `QRImageLayout` now fills the default canvas (the renderer paints the background over the whole image and draws the symbol at a uniform module scale inside), `RmQRCodeImageBuilder.WithWidth(int)` is public (rMQR-only in the parity allow-list; Playground and the Blazor sample use it instead of reimplementing the rounding with `WithSize`). Tests: every version at the default width is exact-width and opaque; `WithWidth` precedence vs `WithSize` / `WithModulePixelSize`.
+- Matrix decoder: format-copy arbitration is dimension-aware (`RmQRFormatInformationDecoder.TryDecode(finder, sub, expectedVersion, …)`): a copy miscorrected toward another version's word (≥ 5 flips landing within 3 of it, words are 8 apart) can no longer veto the valid copy on a distance tie; the version-agnostic overload was removed. Tests: impostor on either side (6 flips: distance 2 to the impostor, 6 to the truth; both roles regress under the old rule), agreeing copies with different ECC (closer wins, tie → finder side), neither copy agreeing.
+- Image decoder: `DestinationTooSmall` is terminal for the finder that produced it (perspective refinement, that finder's remaining frames and the inverted retry are skipped; other finder candidates still run, so a second symbol that fits is found regardless of order): a too-small caller buffer cost 250-500× a sized one (73 ms vs 0.2 ms, R13x99). The inverted pass honours the same terminal status. Round 3 found that `TrackBestFailure` ranked `DestinationTooSmall` level with `DataUncorrectable`, so on the perspective path (entered precisely after an affine attempt failed at RS around the same finder) the terminal outcome was masked and the caller saw `DataUncorrectable` (pre-existing at HEAD, verified in a detached worktree; the round-2 contract made it a broken promise): `DestinationTooSmall` now outranks every other failure, pinned by a keystone + tiny-destination test on R11x77 / R17x139. The perspective quadratic's constant term used |v|² where the Jacobian applies the sheared axis sv (|sv| = |v| / cos φ), biasing the solved anchor scale by up to ~0.65 % (~0.24 module at the anchor for R17x43 at 20°); fixed to |sv|². Tests: too-small status with a loose timing bound (`[NotInParallel]`), inverted parity, two-symbol image with an undersized destination in both layouts; the perspective suite stays green.
+- Encoder: the UTF-8 stack budget branches on the analyzer's exact byte count (payloads of 54-150 UTF-8 bytes no longer take the pool path); the version selector computes the "largest capacity" error-message scan only on the failure path.
+- Playground and Blazor sample: a fixed version disables and drops the fixed-height option (the pair used to reach the library's contradiction exception).
+- Docs: rmqr-encoder.md status / "planned" wording, non-uniform quiet-zone stripping, `WithWidth` in the API block, rendering paragraph and geometry rule; rmqr-decoder.md Supported table (matrix: either copy; image: finder-side copy names the version), Decisions row, Lessons; spec map pipeline diagram, orchestration, §7.9 and layout rows; `RmQRMatrixDecoder` summary; README FAQ; base `WithSize` / `SaveToSvg` XML; `WithQuietZone` / `QrRequest.Size` XML.
+- Accepted as documented follow-ups (verified, not fixed): image-level recovery from a damaged finder-side format copy (would need a far-end read through a frame that is only accurate near the finder); non-rMQR rejection cost (10-100 ms on finder-rich images, on par with the Micro QR decoder; the ~24 % finder-side format gate sends wrong frames into the unbudgeted sub-finder search); `RmQRCodeDataUnitTest.CoreAccessors_AreAllocationFree` is flaky under the RmQR-only test filter (pre-existing, allocation attribution under parallel test execution); the 64-word scan in the dimension-aware arbitration could check the version's 2 words (≤ 2 % of a clean decode, left as is); the |sv|² perspective fix is verified analytically (three independent verifiers) and numerically but has no discriminating test (reverting to |v|² keeps the keystone suite green, the bias is below the gates' tolerance), a synthetic sheared-frame probe of `TryPerspectiveVariants` would pin it.
+
+**Lessons learned**
+
+- Two independent letterbox stages compose into a defect neither has alone: the builder rounded the height and the layout re-fitted the rounded canvas. Any "derived canvas" must be filled, not fitted; a per-version test at the default size (all 32) would have caught it, the single R11x27 case happened to have a sub-pixel pad.
+- Arbitration between redundant copies must use every constraint already known (here the dimension-derived version); "closer copy wins" alone let a miscorrected copy win a tie.
+- A terminal-status short-circuit in a multi-candidate search must be scoped to the candidate that produced it, or it changes which symbol wins in a multi-symbol frame (verifier reproduction); the per-finder scope keeps the 250× saving and the old multi-symbol semantics.
+- Timing assertions: `Stopwatch.ElapsedTicks` is not `TimeSpan` ticks off Windows (1 GHz vs 10 MHz); use `Elapsed`, run the test alone, and bound at 50× + 250 ms when the guarded regression is two orders of magnitude.
+- The verifier step earned its cost: it corrected the premise of one claim (min inter-version format distance is 8, not 7, so a 4-flip impostor is impossible), calibrated three others down, and reproduced the multi-symbol regression in a round-1 fix.
+
+**Benchmark delta (`RmQREncodeEndToEnd` / `RmQRDecodeEndToEnd` / `RmQRImageEndToEnd`, net10.0 Release, warmup 3 × 5 iterations, before = HEAD, after = review fixes)**
+
+| Benchmark | Before | After | Reference row (untouched code), before → after |
+|---|---|---|---|
+| RmQR_Numeric_R7x43_Encode (Span) | 0.92 µs | 1.12 µs | StandardQr_Numeric_V1_Encode (Span) 1.89 → 2.25 µs |
+| RmQR_Alphanumeric_R11x59_Encode (Span) | 2.62 µs | 3.16 µs | |
+| RmQR_Byte_R17x139_Encode (Span) | 11.5 µs | 13.5 µs | |
+| RmQR_Numeric_AutoFit_Encode (Span) | 1.02 µs | 1.24 µs | |
+| RmQR_Numeric_R7x43_Decode (Span) | 871 ns | 919 ns | StandardQr_Numeric_V1_Decode (Span) 932 → 989 ns |
+| RmQR_Alphanumeric_R11x59_Decode (Span) | 2.71 µs | 3.15 µs | |
+| RmQR_Byte_R17x139_Decode (Span) | 15.4 µs | 16.6 µs | |
+| R7x43_512px (PNG) | 1,371 µs / 4,160 B | 1,177 µs / 4,072 B | opaque surface: RGB PNG, smaller and faster to encode |
+| R17x139_1024px (PNG) | 3,493 µs / 5,904 B | 3,178 µs / 5,616 B | |
+| R7x43_ImageDecode_Span | 20.6 µs | 20.1 µs | |
+| R17x139_ImageDecode_Span | 127 µs | 129 µs | |
+
+Allocations identical on every row (span paths 0 B). The encode / decode "after" run landed on a noisier machine state (StdErr 5-30 % vs 1-3 % before): the untouched Standard QR reference rows moved by the same +6 % (decode) / +19 % (encode) as the rMQR rows, and the fixed-version encode rows execute byte-identical code before and after (the encode-path changes are the version-selector failure scan, bypassed by a requested version and strictly less work on auto fit, and the UTF-8 branch of WriteByte, which the ASCII benchmark payloads never take), so the rMQR deltas are run-to-run noise, not the review changes; the decoder change decodes the same two format copies as before. The PNG rows are a real improvement (the width-only default is now an opaque RGB surface). Image decode is flat.

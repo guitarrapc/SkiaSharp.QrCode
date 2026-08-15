@@ -18,9 +18,13 @@ namespace SkiaSharp.QrCode.Image;
 /// rMQR symbols are rectangular. With <see cref="QRCodeImageBuilderBase{TSelf}.WithModulePixelSize"/>
 /// the image is exactly the matrix at that scale; with <see cref="QRCodeImageBuilderBase{TSelf}.WithSize"/>
 /// the symbol is fitted into the canvas with a uniform module scale and centered
-/// (letterbox, never stretched); the static helpers' <c>size</c> is the image
-/// width, the height follows the symbol aspect ratio. Without either, the image is
-/// 512 pixels wide.
+/// (letterbox, never stretched); with <see cref="WithWidth"/> (the static helpers'
+/// <c>size</c>, and the 512-pixel default when nothing is configured) the image is
+/// that wide, the height follows the symbol aspect ratio rounded to whole pixels,
+/// the background covers the whole image and the symbol is drawn at a uniform
+/// module scale inside it (the height rounding can leave a few pixels of
+/// background at the sides on the widest versions; there is no clear-colour pad,
+/// so an opaque background gives an opaque image).
 /// </para>
 /// <para>
 /// rMQR has a single finder pattern and no error-correction headroom for overlays,
@@ -394,11 +398,18 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
     }
 
     /// <summary>
-    /// Image width in pixels with the height following the symbol aspect ratio
-    /// (the static helpers' sizing rule); <see cref="QRCodeImageBuilderBase{TSelf}.WithSize"/>
-    /// or <see cref="QRCodeImageBuilderBase{TSelf}.WithModulePixelSize"/> take precedence.
+    /// Configure the image width in pixels; the height follows the symbol aspect
+    /// ratio (rounded to whole pixels), the background covers the whole image and
+    /// the symbol is drawn at a uniform module scale inside it. This is the static
+    /// helpers' sizing rule and the default (512) when no size is configured.
+    /// <see cref="QRCodeImageBuilderBase{TSelf}.WithSize"/> (letterbox into an exact
+    /// canvas) or <see cref="QRCodeImageBuilderBase{TSelf}.WithModulePixelSize"/>
+    /// (exact matrix) take precedence when also called.
     /// </summary>
-    private RmQRCodeImageBuilder WithWidth(int width)
+    /// <param name="width">Image width in pixels (must be positive).</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    public RmQRCodeImageBuilder WithWidth(int width)
     {
         if (width <= 0)
             throw new ArgumentOutOfRangeException(nameof(width), "Width must be positive.");

@@ -173,6 +173,66 @@ public class RmQRCodeDecoderRobustnessTest
         await Assert.That(i3.Status == QRCodeDecodeStatus.FormatInformationInvalid || i3.Status == QRCodeDecodeStatus.DataUncorrectable).IsTrue();
     }
 
+    /// <summary>
+    /// One copy miscorrected toward ANOTHER version's word (distance 2 to the impostor,
+    /// 6 to the truth; the two words are 8 apart) while the other copy carries 3
+    /// correctable errors: a "closer copy wins" arbitration would name the wrong
+    /// version whichever side carries the impostor, but the copy that agrees with the
+    /// physical dimensions is valid, so the symbol must still decode ("either copy
+    /// alone suffices"). Both roles are exercised and both regress under the old rule.
+    /// </summary>
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task FormatDamage_ImpostorCopyClaimsAnotherVersion_CopyAgreeingWithDimensionsWins(bool impostorOnFinderSide)
+    {
+        var (modules, width, height, text) = Symbol(RmQRVersion.R7x43, RmQREccLevel.M);
+        var truth = RmQRConstants.GetFormatBits(RmQRVersion.R7x43, RmQREccLevel.M, subFinderSide: !impostorOnFinderSide);
+        var impostor = RmQRConstants.GetFormatBits(RmQRVersion.R7x59, RmQREccLevel.M, subFinderSide: !impostorOnFinderSide);
+        var differing = truth ^ impostor;
+        // Flip 6 of the 8 differing bits toward the impostor: distance 6 from the truth
+        // (undecodable as such), 2 from the impostor (a valid word of another version).
+        var damaged = truth;
+        var flipped = 0;
+        for (var bit = 0; bit < 18 && flipped < 6; bit++)
+        {
+            if ((differing & (1 << bit)) != 0)
+            {
+                damaged ^= 1 << bit;
+                flipped++;
+            }
+        }
+        await Assert.That(flipped).IsEqualTo(6);
+
+        void WriteCopy(byte[] m, int word, bool subFinderSide)
+        {
+            for (var c = 0; c < 3; c++)
+                for (var r = 0; r < 5; r++)
+                {
+                    var index = subFinderSide ? (height - 6 + r) * width + width - 8 + c : (r + 1) * width + c + 8;
+                    m[index] = (byte)((word >> (c * 5 + r)) & 1);
+                }
+            for (var k = 0; k < 3; k++)
+            {
+                var index = subFinderSide ? (height - 6) * width + width - 5 + k : (k + 1) * width + 11;
+                m[index] = (byte)((word >> (15 + k)) & 1);
+            }
+        }
+
+        var otherTruth = RmQRConstants.GetFormatBits(RmQRVersion.R7x43, RmQREccLevel.M, subFinderSide: impostorOnFinderSide);
+        var otherDamaged = otherTruth ^ 0b111; // 3 correctable errors on the copy that agrees with the dimensions
+
+        var damagedModules = (byte[])modules.Clone();
+        WriteCopy(damagedModules, damaged, subFinderSide: !impostorOnFinderSide);
+        WriteCopy(damagedModules, otherDamaged, subFinderSide: impostorOnFinderSide);
+
+        await Assert.That(RmQRCodeDecoder.TryDecode(damagedModules, width, height, out var decoded, out var info)).IsTrue()
+            .Because($"impostorOnFinderSide={impostorOnFinderSide}, status={info.Status}");
+        await Assert.That(decoded).IsEqualTo(text);
+        await Assert.That(info.Version).IsEqualTo(RmQRVersion.R7x43);
+        await Assert.That(info.EccLevel).IsEqualTo(RmQREccLevel.M);
+    }
+
     [Test]
     public async Task FormatClaimingAnotherVersion_ThanTheMatrixDimensions_IsRejected()
     {

@@ -382,7 +382,9 @@ function collectState() {
     quietZone: Number(quietRange.value),
     version: Number(versionSelect.value),
     fitStrategy: rmqrFitSelect.value,
-    height: Number(rmqrHeightSelect.value),
+    // A fixed version already pins the height; sending both would be rejected
+    // as contradictory when they disagree, so the height applies to Auto only.
+    height: versionSelect.value === '-1' ? Number(rmqrHeightSelect.value) : 0,
     moduleShape: moduleShapeSelect.value,
     moduleSizePercent: Number(moduleSizeRange.value) / 100,
     moduleCornerRadius: Number(cornerRange.value) / 100,
@@ -489,7 +491,10 @@ function syncDerivedControls() {
   // rMQR fit options apply only to automatic version selection.
   rmqrFitRow.hidden = !isRmqrSymbology();
   rmqrHeightRow.hidden = !isRmqrSymbology();
+  // A fixed version already pins both dimensions: fit strategy and fixed height
+  // only apply to automatic selection (the library rejects a disagreeing pair).
   rmqrFitSelect.disabled = versionSelect.value !== '-1';
+  rmqrHeightSelect.disabled = versionSelect.value !== '-1';
   gradientPanel.hidden = !gradientToggle.checked;
   fgRow.classList.toggle('field--disabled', gradientToggle.checked);
   fgColor.disabled = gradientToggle.checked;

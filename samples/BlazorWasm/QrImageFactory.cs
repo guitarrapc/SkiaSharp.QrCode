@@ -60,12 +60,15 @@ public static class QrImageFactory
         if (string.IsNullOrWhiteSpace(options.Content))
             throw new ArgumentException("Content is empty.");
 
+        // A fixed version already pins the height; the fixed-height option applies to
+        // automatic selection only (the library rejects a disagreeing pair).
+        var fixedVersion = options.Version is >= 1 and <= 32 ? (RmQRVersion)options.Version : (RmQRVersion?)null;
         return RmQRCodeGenerator.CreateRmQRCode(
             options.Content.AsSpan(),
             options.RmEcc,
-            options.Version is >= 1 and <= 32 ? (RmQRVersion)options.Version : null,
+            fixedVersion,
             options.RmFitStrategy,
-            options.RmHeight,
+            fixedVersion is null ? options.RmHeight : null,
             Math.Clamp(options.QuietZone, 0, 10));
     }
 
@@ -76,10 +79,8 @@ public static class QrImageFactory
     /// </summary>
     public static RmQRCodeImageBuilder CreateRmBuilder(QrOptions options, RmQRCodeData data)
     {
-        var width = Math.Clamp(options.Size, 64, 2048);
-        var height = Math.Max(1, (int)Math.Round((double)width * data.Height / data.Width));
         return new RmQRCodeImageBuilder(data)
-            .WithSize(width, height)
+            .WithWidth(Math.Clamp(options.Size, 64, 2048))
             .WithColors(GetForegroundColor(options), GetBackgroundColor(options))
             .WithModuleShape(CreateModuleShape(options), Math.Clamp(options.ModuleSizePercent, 0.5f, 1.0f))
             .WithGradient(CreateGradient(options));

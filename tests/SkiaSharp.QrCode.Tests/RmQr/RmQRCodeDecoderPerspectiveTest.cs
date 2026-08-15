@@ -79,6 +79,42 @@ public class RmQRCodeDecoderPerspectiveTest
         await Assert.That(decoded).IsEqualTo(content);
     }
 
+    /// <summary>
+    /// A too-small caller destination must be reported as such on the perspective path
+    /// too: the affine attempts fail past format decoding (that is what enables the
+    /// projective search), and the attempt that finally reads the symbol reports
+    /// DestinationTooSmall. That outcome must not be masked by the earlier same-finder
+    /// failure (it ranks above every other failure), so the caller learns "grow the
+    /// buffer" rather than "damaged symbol", and the inverted retry is skipped.
+    /// </summary>
+    [Test]
+    [Arguments(RmQRVersion.R11x77, 0.02f, false)]
+    [Arguments(RmQRVersion.R11x77, 0.04f, true)]
+    [Arguments(RmQRVersion.R17x139, 0.02f, false)]
+    [Arguments(RmQRVersion.R17x139, 0.04f, false)]
+    public async Task Decode_Keystone_DestinationTooSmall_IsReportedNotMasked(RmQRVersion version, float tilt, bool horizontal)
+    {
+        var content = ContentFor(version);
+        using var bitmap = RenderKeystone(content, version, tilt, horizontal, rotateDegrees: 0);
+        var luminance = new byte[bitmap.Width * bitmap.Height];
+        for (var y = 0; y < bitmap.Height; y++)
+            for (var x = 0; x < bitmap.Width; x++)
+                luminance[y * bitmap.Width + x] = bitmap.GetPixel(x, y).Red;
+
+        // Sanity: the same image decodes with an adequate destination.
+        var sized = new char[RmQRCodeDecoder.GetMaxDecodedLength(RmQRVersion.R17x139)];
+        await Assert.That(RmQRCodeDecoder.TryDecodeImage(luminance, bitmap.Width, bitmap.Height, sized, out var written, out var sizedInfo)).IsTrue()
+            .Because($"version={version}, tilt={tilt:P0}, status={sizedInfo.Status}");
+        await Assert.That(new string(sized, 0, written)).IsEqualTo(content);
+
+        var tiny = new char[4];
+        var ok = RmQRCodeDecoder.TryDecodeImage(luminance, bitmap.Width, bitmap.Height, tiny, out _, out var info);
+        await Assert.That(ok).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall)
+            .Because($"version={version}, tilt={tilt:P0}: a read symbol with a too-small destination must not be reported as {info.Status}");
+        await Assert.That(info.Version).IsEqualTo(version);
+    }
+
     private static string ContentFor(RmQRVersion version)
         => version == RmQRVersion.R7x43 ? "RMQR 43" : "RMQR IMAGE 123";
 

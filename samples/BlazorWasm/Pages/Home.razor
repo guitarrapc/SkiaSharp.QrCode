@@ -62,8 +62,8 @@
                     </label>
                     <label class="field">
                         <span class="field__label">Fixed height</span>
-                        <select title="Restrict the fit to one symbol height (modules); the width is chosen automatically."
-                                @bind="Options.RmHeight" @bind:after="Regenerate">
+                        <select title="Restrict the fit to one symbol height (modules); the width is chosen automatically (Auto version only)."
+                                @bind="Options.RmHeight" @bind:after="Regenerate" disabled="@(Options.Version != -1)">
                             <option value="">Any</option>
                             @foreach (var height in Enum.GetValues<RmQRHeight>())
                             {

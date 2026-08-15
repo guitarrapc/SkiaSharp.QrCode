@@ -4,8 +4,12 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// rMQR format information decoding (ISO/IEC 23941 7.9): each 18-bit copy is
 /// matched against the 64 valid words of its side (the finder-side and
 /// sub-finder-side copies carry different XOR masks), correcting up to 3 bit errors
-/// (BCH(18,6) minimum distance ≥ 7, verified in RmQRConstantsUnitTest). With both
-/// copies available the closer valid one wins; ties prefer the finder side.
+/// (BCH(18,6) minimum distance ≥ 7, verified in RmQRConstantsUnitTest). The matrix
+/// decoder knows the version from the physical dimensions, so with both copies
+/// available only the copies naming that version count, the closer of those wins,
+/// ties prefer the finder side (a copy miscorrected toward another version's word
+/// cannot veto the valid one). The image decoder reads the finder-side copy alone
+/// through <see cref="TryDecodeCopy"/> to learn the version before sampling.
 /// </summary>
 internal static class RmQRFormatInformationDecoder
 {
@@ -59,17 +63,19 @@ internal static class RmQRFormatInformationDecoder
     }
 
     /// <summary>
-    /// Decodes from both copies: the closer valid copy wins (ties → finder side);
-    /// false when neither copy is within the correction distance.
+    /// Decodes from both copies when the version is already known from the physical
+    /// dimensions: only copies that agree with <paramref name="expectedVersion"/> count
+    /// (a copy miscorrected toward another version's word cannot veto the valid one),
+    /// the closer agreeing copy wins (ties → finder side); false when neither copy is a
+    /// valid word of the expected version within the correction distance.
     /// </summary>
-    public static bool TryDecode(int finderSideRaw, int subFinderSideRaw, out RmQRVersion version, out RmQREccLevel eccLevel, out int distance)
+    public static bool TryDecode(int finderSideRaw, int subFinderSideRaw, RmQRVersion expectedVersion, out RmQREccLevel eccLevel, out int distance)
     {
-        var leftOk = TryDecodeCopy(finderSideRaw, subFinderSide: false, out var leftVersion, out var leftEcc, out var leftDistance);
-        var rightOk = TryDecodeCopy(subFinderSideRaw, subFinderSide: true, out var rightVersion, out var rightEcc, out var rightDistance);
+        var leftOk = TryDecodeCopy(finderSideRaw, subFinderSide: false, out var leftVersion, out var leftEcc, out var leftDistance) && leftVersion == expectedVersion;
+        var rightOk = TryDecodeCopy(subFinderSideRaw, subFinderSide: true, out var rightVersion, out var rightEcc, out var rightDistance) && rightVersion == expectedVersion;
 
         if (leftOk && (!rightOk || leftDistance <= rightDistance))
         {
-            version = leftVersion;
             eccLevel = leftEcc;
             distance = leftDistance;
             return true;
@@ -77,13 +83,11 @@ internal static class RmQRFormatInformationDecoder
 
         if (rightOk)
         {
-            version = rightVersion;
             eccLevel = rightEcc;
             distance = rightDistance;
             return true;
         }
 
-        version = default;
         eccLevel = default;
         distance = -1;
         return false;

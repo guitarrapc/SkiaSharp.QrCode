@@ -83,8 +83,11 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Used alone, this sets an exact canvas size. Module pixel size then becomes
-    /// <c>imageSize / matrixSize</c>, which may be fractional and can change when the version changes.
+    /// Used alone, this sets an exact canvas size. For the square symbologies the module
+    /// pixel size then becomes <c>imageSize / matrixSize</c>, which may be fractional and can
+    /// change when the version changes; the rectangular rMQR builder fits the symbol into
+    /// the canvas with a uniform module scale instead (letterbox, the leftover pad keeps
+    /// <c>clearColor</c>).
     /// </para>
     /// <para>
     /// Used with <see cref="WithModulePixelSize(int)"/>, this sets the canvas size while module pixels
@@ -156,7 +159,7 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// </summary>
     /// <remarks>
     /// When not called, the builder uses its symbology's specification default:
-    /// 4 modules for Standard QR, 2 for Micro QR. Ignored when the builder was
+    /// 4 modules for Standard QR, 2 for Micro QR and rMQR. Ignored when the builder was
     /// given pre-built symbol data (the data already carries its quiet zone).
     /// </remarks>
     /// <param name="size">Quiet zone size in modules (0-10).</param>
@@ -276,7 +279,7 @@ public abstract class QRCodeImageBuilderBase<TSelf> where TSelf : QRCodeImageBui
     /// <para>
     /// <see cref="WithFormat(SKEncodedImageFormat, int)"/> is ignored, SVG is a vector format,
     /// not an <see cref="SKEncodedImageFormat"/>. Size options (<see cref="WithSize(int, int)"/>,
-    /// <see cref="WithModulePixelSize(int)"/>) define the SVG viewport in units.
+    /// <see cref="WithModulePixelSize(int)"/>, or the symbology's default canvas) define the SVG viewport in units.
     /// The stream is left open after writing.
     /// </para>
     /// </remarks>

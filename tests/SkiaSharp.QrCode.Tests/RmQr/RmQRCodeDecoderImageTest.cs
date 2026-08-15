@@ -404,6 +404,99 @@ public class RmQRCodeDecoderImageTest
     }
 
     [Test]
+    [NotInParallel]
+    public async Task DecodeImage_DestinationTooSmall_ReportsStatus_WithoutRunningTheRefinementSearch()
+    {
+        // A destination that cannot hold the payload is terminal for the finder that
+        // read the symbol: it went through format decode and RS, so no perspective
+        // variant, further frame of that finder or inverted retry can change the
+        // outcome. Before the fix the too-small call cost ~250-500× the sized one (full
+        // perspective search + inverted pass); now it must stay in the same order. The
+        // bound is deliberately loose (50× + 250 ms) and the test runs alone: the guarded
+        // regression is two orders of magnitude, a scheduling stall must not fail it.
+        const string content = "RMQR IMAGE 123";
+        var data = Create(content, RmQREccLevel.M, RmQRVersion.R13x99);
+        using var bitmap = RenderBitmap(data, modulePixelSize: 6);
+        var luminance = new byte[bitmap.Width * bitmap.Height];
+        for (var y = 0; y < bitmap.Height; y++)
+            for (var x = 0; x < bitmap.Width; x++)
+                luminance[y * bitmap.Width + x] = bitmap.GetPixel(x, y).Red;
+
+        var sized = new char[RmQRCodeDecoder.GetMaxDecodedLength(RmQRVersion.R17x139)];
+        var tiny = new char[4];
+
+        // Warm up both paths once, then time.
+        RmQRCodeDecoder.TryDecodeImage(luminance, bitmap.Width, bitmap.Height, sized, out _, out _);
+        RmQRCodeDecoder.TryDecodeImage(luminance, bitmap.Width, bitmap.Height, tiny, out _, out _);
+
+        const int iterations = 20;
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        for (var i = 0; i < iterations; i++)
+            RmQRCodeDecoder.TryDecodeImage(luminance, bitmap.Width, bitmap.Height, sized, out _, out _);
+        var sizedElapsed = stopwatch.Elapsed;
+
+        stopwatch.Restart();
+        var ok = false;
+        var info = default(RmQRCodeDecodeInfo);
+        for (var i = 0; i < iterations; i++)
+            ok = RmQRCodeDecoder.TryDecodeImage(luminance, bitmap.Width, bitmap.Height, tiny, out _, out info);
+        var tinyElapsed = stopwatch.Elapsed;
+
+        await Assert.That(ok).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall);
+        await Assert.That(info.Version).IsEqualTo(RmQRVersion.R13x99);
+        var bound = TimeSpan.FromTicks(sizedElapsed.Ticks * 50) + TimeSpan.FromMilliseconds(250);
+        await Assert.That(tinyElapsed).IsLessThan(bound)
+            .Because($"too-small destination must short-circuit: sized {sizedElapsed.TotalMilliseconds:F2} ms vs tiny {tinyElapsed.TotalMilliseconds:F2} ms over {iterations} runs");
+
+        // Same report for a reflectance-reversed symbol (the inverted pass honours the terminal status too).
+        var inverted = new byte[luminance.Length];
+        for (var i = 0; i < inverted.Length; i++)
+            inverted[i] = (byte)(255 - luminance[i]);
+        await Assert.That(RmQRCodeDecoder.TryDecodeImage(inverted, bitmap.Width, bitmap.Height, tiny, out _, out var invertedInfo)).IsFalse();
+        await Assert.That(invertedInfo.Status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall);
+        await Assert.That(invertedInfo.Version).IsEqualTo(RmQRVersion.R13x99);
+    }
+
+    [Test]
+    public async Task DecodeImage_DestinationTooSmallForOneSymbol_StillFindsAnotherThatFits()
+    {
+        // Two symbols in one image, the first (by finder confidence) too long for the
+        // caller's destination: the too-small outcome is terminal for THAT finder only,
+        // the other finder is still tried and its short payload is returned, whichever
+        // symbol comes first in the image.
+        var big = Create("RMQR IMAGE 123 LONGER PAYLOAD", RmQREccLevel.M, RmQRVersion.R13x99);
+        var small = Create("AB1", RmQREccLevel.M, RmQRVersion.R7x43);
+        using var bigBitmap = RenderBitmap(big, modulePixelSize: 6);
+        using var smallBitmap = RenderBitmap(small, modulePixelSize: 6);
+        var destination = new char[8];
+
+        foreach (var bigFirst in new[] { true, false })
+        {
+            var width = Math.Max(bigBitmap.Width, smallBitmap.Width) + 24;
+            var height = bigBitmap.Height + smallBitmap.Height + 36;
+            using var canvas = new SKBitmap(width, height);
+            using (var surface = new SKCanvas(canvas))
+            {
+                surface.Clear(SKColors.White);
+                var (top, bottom) = bigFirst ? (bigBitmap, smallBitmap) : (smallBitmap, bigBitmap);
+                surface.DrawBitmap(top, 12, 12, SKSamplingOptions.Default);
+                surface.DrawBitmap(bottom, 12, 12 + top.Height + 12, SKSamplingOptions.Default);
+            }
+
+            var luminance = new byte[width * height];
+            for (var y = 0; y < height; y++)
+                for (var x = 0; x < width; x++)
+                    luminance[y * width + x] = canvas.GetPixel(x, y).Red;
+
+            var ok = RmQRCodeDecoder.TryDecodeImage(luminance, width, height, destination, out var written, out var info);
+            await Assert.That(ok).IsTrue().Because($"bigFirst={bigFirst}, status={info.Status}, version={info.Version}");
+            await Assert.That(new string(destination, 0, written)).IsEqualTo("AB1");
+            await Assert.That(info.Version).IsEqualTo(RmQRVersion.R7x43);
+        }
+    }
+
+    [Test]
     public async Task DecodeImage_LuminanceTooSmall_Throws()
     {
         var luminance = new byte[10];

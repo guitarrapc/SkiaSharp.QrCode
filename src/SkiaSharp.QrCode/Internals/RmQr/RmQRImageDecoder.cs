@@ -71,7 +71,7 @@ internal static class RmQRImageDecoder
 
         luminance = luminance.Slice(0, pixelCount);
         var status = DecodeLuminanceCore(luminance, width, height, destination, out charsWritten, out info);
-        if (status == QRCodeDecodeStatus.Success)
+        if (IsTerminal(status))
             return status;
 
         // Reflectance reversal: invert into a rented buffer and retry once.
@@ -86,8 +86,10 @@ internal static class RmQRImageDecoder
             }
 
             var invertedStatus = DecodeLuminanceCore(inverted, width, height, destination, out charsWritten, out var invertedInfo);
-            if (invertedStatus == QRCodeDecodeStatus.Success)
+            if (IsTerminal(invertedStatus))
             {
+                // Success, or the symbol was read but the caller's destination is too
+                // small: both polarities report the same way.
                 info = invertedInfo;
                 return invertedStatus;
             }
@@ -157,6 +159,11 @@ internal static class RmQRImageDecoder
                         ref bestStatus, ref bestInfo, ref attemptsRemaining);
                     if (status == QRCodeDecodeStatus.Success)
                         return status;
+                    // Terminal for THIS finder (its symbol was read; no other frame can
+                    // change that); another finder in the frame may still carry a symbol
+                    // that fits, so the candidate loop continues.
+                    if (IsTerminal(status))
+                        continue;
                 }
 
                 // Arbitrary rotation: recover the finder's local axes from the angular sweep.
@@ -171,6 +178,8 @@ internal static class RmQRImageDecoder
                         ref bestStatus, ref bestInfo, ref attemptsRemaining);
                     if (status == QRCodeDecodeStatus.Success)
                         return status;
+                    if (IsTerminal(status))
+                        break;
                 }
             }
         }
@@ -228,7 +237,7 @@ internal static class RmQRImageDecoder
                     colX, colY, rowX, rowY,
                     modules, destination, out charsWritten, out info,
                     ref bestStatus, ref bestInfo, ref attemptsRemaining);
-                if (status == QRCodeDecodeStatus.Success)
+                if (IsTerminal(status))
                     return status;
             }
         }
@@ -301,7 +310,7 @@ internal static class RmQRImageDecoder
                 Rotate(vX, vY, cos, sin, out var rvX, out var rvY);
                 var isotropic = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, scale * ruX, scale * ruY, scale * rvX, scale * rvY, 0f, 0f);
                 var status = Attempt(luminance, width, height, threshold, isotropic, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
-                if (status == QRCodeDecodeStatus.Success)
+                if (IsTerminal(status))
                     return status;
                 frameStatus = Deeper(frameStatus, status);
 
@@ -316,7 +325,7 @@ internal static class RmQRImageDecoder
                     {
                         var anisotropic = PerspectiveTransform.FromLocalFrame(FinderCenter, FinderCenter, candidate.X, candidate.Y, a * uX, a * uY, b * vX, b * vY, 0f, 0f);
                         status = Attempt(luminance, width, height, threshold, anisotropic, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
-                        if (status == QRCodeDecodeStatus.Success)
+                        if (IsTerminal(status))
                             return status;
                         frameStatus = Deeper(frameStatus, status);
                     }
@@ -335,7 +344,7 @@ internal static class RmQRImageDecoder
                         observedX, observedY, dX, dY,
                         modules, destination, out charsWritten, out info,
                         ref bestStatus, ref bestInfo, ref attemptsRemaining);
-                    if (status == QRCodeDecodeStatus.Success)
+                    if (IsTerminal(status))
                         return status;
                 }
             }
@@ -347,7 +356,7 @@ internal static class RmQRImageDecoder
         if (!IsPlausibleRefinement(frameStatus))
         {
             var status = Attempt(luminance, width, height, threshold, affine, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
-            if (status == QRCodeDecodeStatus.Success)
+            if (IsTerminal(status))
                 return status;
         }
 
@@ -399,7 +408,6 @@ internal static class RmQRImageDecoder
         ReadOnlySpan<float> yStrengths = stackalloc float[] { 0f, -0.02f, 0.02f, -0.04f, 0.04f, -0.06f, 0.06f, -0.08f, 0.08f, -0.10f, 0.10f, -0.12f, 0.12f };
 
         var uLength = (float)Math.Sqrt(uX * uX + uY * uY);
-        var vLength = (float)Math.Sqrt(vX * vX + vY * vY);
         var observedLength = (float)Math.Sqrt(observedX * observedX + observedY * observedY);
         var farX = symbolWidth - 2.5f;
         var farY = symbolHeight - 2.5f;
@@ -442,10 +450,12 @@ internal static class RmQRImageDecoder
                     var d = perspectiveX * farX + perspectiveY * farY + 1f;
                     if (d <= 0.5f || d0 <= 0.5f)
                         continue;
+                    // |a·dX·u + dY·sv|² = required²: every term uses the SHEARED row axis
+                    // sv (its length is |v| / cos φ), the same vector the Jacobian below applies.
                     var required = observedLength * d / d0;
                     var qa = dX * dX * uLength * uLength;
                     var qb = 2f * dX * dY * uDotV;
-                    var qc = dY * dY * vLength * vLength - required * required;
+                    var qc = dY * dY * (svX * svX + svY * svY) - required * required;
                     var discriminant = qb * qb - 4f * qa * qc;
                     if (discriminant <= 0f)
                         continue;
@@ -478,7 +488,7 @@ internal static class RmQRImageDecoder
                         continue;
 
                     var status = Attempt(luminance, width, height, threshold, transform, symbolWidth, symbolHeight, samplingSlack, modules, destination, out charsWritten, out info, ref bestStatus, ref bestInfo, ref attemptsRemaining);
-                    if (status == QRCodeDecodeStatus.Success)
+                    if (IsTerminal(status))
                         return status;
                 }
             }
@@ -826,6 +836,10 @@ internal static class RmQRImageDecoder
         QRCodeDecodeStatus.NotDetected => 0,
         QRCodeDecodeStatus.InvalidMatrix => 1,
         QRCodeDecodeStatus.FormatInformationInvalid => 1,
+        // The symbol was read (format + RS) and only the caller's buffer is short:
+        // this outranks every other failure so an earlier same-finder RS failure
+        // (the usual prelude to the perspective search) can never mask it.
+        QRCodeDecodeStatus.DestinationTooSmall => 3,
         _ => 2, // got past format decoding
     };
 
@@ -833,4 +847,20 @@ internal static class RmQRImageDecoder
         => status is not QRCodeDecodeStatus.NotDetected
             and not QRCodeDecodeStatus.InvalidMatrix
             and not QRCodeDecodeStatus.FormatInformationInvalid;
+
+    /// <summary>
+    /// Outcomes no further geometry around the SAME finder can change: success, and
+    /// a caller destination too small for the payload (the symbol was already read
+    /// through format decode and RS on every block, the same evidence a success rests
+    /// on; the perspective search, the remaining frames of that finder and the
+    /// inverted retry would only rediscover the same symbol at hundreds of times the
+    /// cost). Other finder candidates of the same polarity are still tried, so a
+    /// second symbol in the frame that does fit the destination is found regardless
+    /// of candidate order; a fitting symbol of the OPPOSITE polarity next to a
+    /// too-large one is the accepted trade-off of skipping the inverted retry. The
+    /// status also outranks every other failure in <see cref="Rank"/>, so it reaches
+    /// the caller even when an earlier attempt around the same finder failed at RS.
+    /// </summary>
+    private static bool IsTerminal(QRCodeDecodeStatus status)
+        => status is QRCodeDecodeStatus.Success or QRCodeDecodeStatus.DestinationTooSmall;
 }

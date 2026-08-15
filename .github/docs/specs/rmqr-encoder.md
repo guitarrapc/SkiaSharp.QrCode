@@ -1,8 +1,8 @@
 # rMQR Encoder
 
-Design record for the rMQR Code (ISO/IEC 23941) encode feature (`RmQRCodeGenerator`, planned): what it will do, the symbol parameters it is built on, why the pipeline is structured this way, and the decisions made up front so implementation phases share one understanding. Normative details and implementation locations are indexed in the [spec-to-code map](rmqr-spec-map.md); the implementation order is the [rMQR implementation plan](../plans/skiasharp-qrcode-rmqr-implementation-plan.md). The decoder design record (`rmqr-decoder.md`) is written when Phase 6 lands.
+Design record for the rMQR Code (ISO/IEC 23941) encode feature (`RmQRCodeGenerator`): what it does, the symbol parameters it is built on, why the pipeline is structured this way, and the decisions made up front so implementation phases share one understanding. Normative details and implementation locations are indexed in the [spec-to-code map](rmqr-spec-map.md); the implementation order is the [rMQR implementation plan](../plans/skiasharp-qrcode-rmqr-implementation-plan.md). The decoder design record is [rMQR Decoder](rmqr-decoder.md).
 
-Status: **in progress, spec-first**. Written 2026-08-15 before any `src/` code existed; the tables live in `Internals/RmQr/RmQRConstants` (Phase 5.1b), the data model in `RmQRCodeData` (5.2), the bit stream in `RmQRBinaryEncoder` and the fit logic in `RmQRVersionSelector` (5.3), RS + interleave in `RmQRCodewordEncoder` (5.4), placement in `RmQRModulePlacer` (5.5) and the public `RmQRCodeGenerator` (5.6, encoder MVT met: 256/256 symbols read by zxing-cpp) and rendering in `RmQRCodeImageBuilder` / `QRCodeRenderer` (5.7); Phase 5 is complete and every parameter below is pinned by `RmQRConstantsUnitTest` (structural invariants) and `RmQRConstantsOracleTest` (the committed two-lineage corpus), see the [Verification record](#verification-record). Sections that can only be filled by implementing (measured performance, lessons learned) are marked as such.
+Status: **shipped (Phase 5, 2026-08-15; adversarial review 2026-08-16)**. Written spec-first on 2026-08-15 before any `src/` code existed; the tables live in `Internals/RmQr/RmQRConstants` (Phase 5.1b), the data model in `RmQRCodeData` (5.2), the bit stream in `RmQRBinaryEncoder` and the fit logic in `RmQRVersionSelector` (5.3), RS + interleave in `RmQRCodewordEncoder` (5.4), placement in `RmQRModulePlacer` (5.5) and the public `RmQRCodeGenerator` (5.6, encoder MVT met: 256/256 symbols read by zxing-cpp) and rendering in `RmQRCodeImageBuilder` / `QRCodeRenderer` (5.7); Phase 5 is complete and every parameter below is pinned by `RmQRConstantsUnitTest` (structural invariants) and `RmQRConstantsOracleTest` (the committed two-lineage corpus), see the [Verification record](#verification-record). Measured performance and lessons learned live in the plan's Progress log.
 
 ---
 
@@ -64,7 +64,7 @@ Decoder (`public static class RmQRCodeDecoder`):
 ```csharp
 bool TryDecode(RmQRCodeData data, out string text);
 bool TryDecode(RmQRCodeData data, out string text, out RmQRCodeDecodeInfo info);
-bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, out string text, out RmQRCodeDecodeInfo info);                          // byte per module, any uniform quiet zone
+bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, out string text, out RmQRCodeDecodeInfo info);                          // byte per module, any light border (uniform or not: the dark bounding box is the core)
 bool TryDecode(ReadOnlySpan<byte> modules, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info);
 bool TryDecode(SKBitmap bitmap, out string text);
 bool TryDecode(SKBitmap bitmap, out string text, out RmQRCodeDecodeInfo info);
@@ -80,7 +80,7 @@ Rendering:
 public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
   RmQRCodeImageBuilder(string content);  RmQRCodeImageBuilder(RmQRCodeData data);          // default quiet zone 2
   RmQRCodeImageBuilder WithErrorCorrection(RmQREccLevel eccLevel);  WithVersion(RmQRVersion version);
-  RmQRCodeImageBuilder WithFitStrategy(RmQRFitStrategy fitStrategy);  WithHeight(RmQRHeight height);   // rMQR-only, listed in the parity test's allowed differences
+  RmQRCodeImageBuilder WithFitStrategy(RmQRFitStrategy fitStrategy);  WithHeight(RmQRHeight height);  WithWidth(int width);   // rMQR-only, listed in the parity test's allowed differences (WithWidth: image width in pixels, height from the aspect ratio, background over the whole image)
   // static helpers exactly as MicroQRCodeImageBuilder (GetPngBytes / GetImageBytes / SavePng / GetSvgBytes / SaveSvg / GetSvgString / WriteSvg / WritePng / WriteImage,
   // string + RmQREccLevel eccLevel = RmQREccLevel.M and RmQRCodeData overloads); their `int size = 512` is the image WIDTH, height follows the symbol aspect ratio
 QRCodeRenderer.Render(SKCanvas canvas, SKRect area, RmQRCodeData data, SKColor? codeColor, SKColor? backgroundColor, ModuleShape? moduleShape = null, float moduleSizePercent = 1.0f, GradientOptions? gradientOptions = null);
@@ -88,9 +88,9 @@ SKCanvas.Render(this SKCanvas canvas, RmQRCodeData data, int width, int height, 
 SKCanvas.Render(this SKCanvas canvas, RmQRCodeData data, SKRect area, …same tail…);
 ```
 
-Rectangular geometry rule shared by every rendering entry: the symbol (quiet zone included) is drawn with a uniform module scale, centered in the target area or canvas (letterbox); `WithModulePixelSize` yields exactly `Width × Height` modules × pixels; `WithSize(w, h)` letterboxes into `w × h`. Standard and Micro QR rendering is unchanged.
+Rectangular geometry rule shared by every rendering entry: the symbol (quiet zone included) is drawn with a uniform module scale, centered in the target area or canvas (letterbox); `WithModulePixelSize` yields exactly `Width × Height` modules × pixels; `WithSize(w, h)` letterboxes into `w × h` (clear-colour pad); `WithWidth(w)` (the static helpers' `size`, default 512) makes the image `w` wide with the height from the aspect ratio rounded to whole pixels, the background covering the whole image and the symbol drawn at a uniform module scale inside it. Standard and Micro QR rendering is unchanged.
 
-### Supported (planned scope)
+### Supported
 
 | Area | Coverage |
 |---|---|
@@ -102,7 +102,7 @@ Rectangular geometry rule shared by every rendering entry: the symbol (quiet zon
 | Quiet zone | Configurable non-negative size, default 2 (the ISO/IEC 23941 quiet zone) |
 | Output | Bit-packed `RmQRCodeData` or byte-per-module `Span<byte>` |
 
-### Not implemented (planned scope)
+### Not implemented
 
 - Kanji mode (tables keep the column; shared scope decision in [QR Symbology Architecture](qrcode-symbologies.md))
 - ECI header emission (the decoder parses ECI segments; encoding always uses Byte mode without an ECI header, matching Micro QR)
@@ -232,7 +232,7 @@ The single mask is applied to data modules while placing. Both format copies com
 
 ## Rendering
 
-`RmQRCodeImageBuilder` derives from `QRCodeImageBuilderBase<TSelf>` and adds `WithErrorCorrection(RmQREccLevel)`, `WithVersion(RmQRVersion)`, `WithFitStrategy(RmQRFitStrategy)`, `WithHeight(RmQRHeight)`; quiet zone default 2; no icon overlay or finder styling (one finder, no ECC headroom to spend). Canvas layout is rectangular: with a module pixel size the content is `width × height` modules at that size; with only an explicit canvas size the symbol is fitted with a uniform module scale and centered on whole pixels (letterbox), never stretched non-uniformly. Standard and Micro QR layout is unchanged. Shipped in Phase 5.7 exactly so; additionally, without any size option the image is 512 pixels wide with the height following the symbol aspect ratio (the static helpers use the same rule with their `size` as the width), and the low-level `QRCodeRenderer.Render(canvas, area, RmQRCodeData, …)` / `SKCanvas.Render` overloads letterbox into the given area with the background covering the whole area.
+`RmQRCodeImageBuilder` derives from `QRCodeImageBuilderBase<TSelf>` and adds `WithErrorCorrection(RmQREccLevel)`, `WithVersion(RmQRVersion)`, `WithFitStrategy(RmQRFitStrategy)`, `WithHeight(RmQRHeight)`; quiet zone default 2; no icon overlay or finder styling (one finder, no ECC headroom to spend). Canvas layout is rectangular: with a module pixel size the content is `width × height` modules at that size; with only an explicit canvas size the symbol is fitted with a uniform module scale and centered on whole pixels (letterbox), never stretched non-uniformly. Standard and Micro QR layout is unchanged. Shipped in Phase 5.7 exactly so; additionally, `WithWidth(int)` (public since the 2026-08-16 review; the static helpers use it with their `size`, and 512 is the default when no size option is given) makes the image that wide with the height following the symbol aspect ratio rounded to whole pixels, the background covering the whole image and the symbol drawn at a uniform module scale inside it (no clear-colour pad, so the image is opaque with an opaque background; the review found that letterboxing this aspect-derived canvas again left 1-3 transparent columns on 12 of the 32 versions), and the low-level `QRCodeRenderer.Render(canvas, area, RmQRCodeData, …)` / `SKCanvas.Render` overloads letterbox into the given area with the background covering the whole area.
 
 ---
 
@@ -286,4 +286,4 @@ Implementation lessons: appended per phase (Phase 5 progress log in the [impleme
 
 ## Validation
 
-Planned, per phase (see the implementation plan): structural table tests + oracle format/dimension tests (5.1), naive-reference parity for the bit stream (5.3), interleave reference (5.4), extraction test over all 64 combinations (5.5), the `spot-check-rmqr` zxing-cpp gate over every version × ECC × mode (5.6), module-to-pixel rendering parity (5.7); Standard and Micro QR benchmarks flat at every step.
+Per phase (see the implementation plan; every exit met): structural table tests + oracle format/dimension tests (5.1), naive-reference parity for the bit stream (5.3), interleave reference (5.4), extraction test over all 64 combinations (5.5), the `spot-check-rmqr` zxing-cpp gate over every version × ECC × mode (5.6), module-to-pixel rendering parity (5.7); Standard and Micro QR benchmarks flat at every step.
