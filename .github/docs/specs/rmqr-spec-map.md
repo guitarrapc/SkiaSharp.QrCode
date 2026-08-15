@@ -39,8 +39,8 @@ Reference tests (planned, Phase 6): `RmQRFormatInformationDecoderUnitTest` (exha
 | Spec reference | Topic | Implementation |
 |---|---|---|
 | Section 7.4.1 | Mode detection (Numeric / Alphanumeric / Byte) | [TextAnalyzer.Analyze](../../../src/SkiaSharp.QrCode/Internals/TextAnalyzer.cs), shared across symbologies |
-| Table 2 | Mode indicators, 3 bits for every mode (Numeric, Alphanumeric, Byte, Kanji, ECI), terminator `000` | `RmQRConstants` (Phase 5.1) |
-| Table 3 | Character count indicator widths per version and mode (verified: 96/96 numeric/alphanumeric/byte widths read from oracle bit streams) | `RmQRConstants.GetCountIndicatorLength` (Phase 5.1) |
+| Table 2 | Mode indicators, 3 bits for every mode (Numeric, Alphanumeric, Byte, Kanji, ECI), terminator `000` | [RmQRConstants](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRConstants.cs) (`ModeIndicatorLength`, `GetModeIndicatorValue`, `TerminatorLength`) |
+| Table 3 | Character count indicator widths per version and mode (verified: 96/96 numeric/alphanumeric/byte widths read from oracle bit streams) | [RmQRConstants.GetCountIndicatorLength](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRConstants.cs) (Kanji column kept as `GetKanjiCountIndicatorLength`, spec-transcribed, unverified) |
 | Section 7.4.3-7.4.5 | Numeric / Alphanumeric / Byte segment bit streams | `Internals/RmQr/RmQRBinaryEncoder` (Phase 5.3) |
 | Section 7.4.9 | Terminator (shortened at capacity), byte alignment, pad codewords 0xEC/0x11 | `RmQRBinaryEncoder.EncodeDataCodewords` (Phase 5.3) |
 | Section 7.4.2 / 7.4.6 | ECI: parsed on decode; not emitted on encode in this plan (Byte mode carries UTF-8) | decision in [rMQR Encoder](rmqr-encoder.md) |
@@ -52,13 +52,13 @@ Reference tests (planned, Phase 5.3): `RmQRBinaryEncoderUnitTest` (golden vector
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
-| Table 1 / 6 | The 32 versions: heights 7/9/11/13/15/17 × widths 27/43/59/77/99/139 (27 only with 11 and 13); version index 0-31 in height-major order (verified: dimensions of all 32 oracle symbols) | `RmQRConstants.Versions` (Phase 5.1) |
-| Table 8 | Total codewords, data codewords and RS block structure per version × ECC (M/H) (verified: total codewords by free-module count for all 32 versions; data codewords by 192/192 capacity agreement with an oracle encoder) | `RmQRConstants` (`ECCInfo` per version × ECC) (Phase 5.1) |
+| Table 1 / 6 | The 32 versions: heights 7/9/11/13/15/17 × widths 27/43/59/77/99/139 (27 only with 11 and 13); version index 0-31 in height-major order (verified: dimensions of all 32 oracle symbols) | [RmQRConstants](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRConstants.cs) (`GetHeight` / `GetWidth` / `TryGetVersion`), public [RmQRVersion](../../../src/SkiaSharp.QrCode/RmQRVersion.cs) (value = index + 1) and [RmQREccLevel](../../../src/SkiaSharp.QrCode/RmQREccLevel.cs) (value = format ECC bit) |
+| Table 8 | Total codewords, data codewords and RS block structure per version × ECC (M/H) (verified: total codewords by free-module count for all 32 versions; data codewords by 192/192 capacity agreement with an oracle encoder) | [RmQRConstants.GetEccInfo](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRConstants.cs) (shared `ECCInfo`: shorter blocks first, uniform ECC per block), `GetTotalCodewordCount`, `GetRemainderBitCount` |
 | Table 7 | Data capacity per version × ECC × mode (verified 192/192 numeric/alphanumeric/byte against qrtool) | `RmQRConstants.GetMaxDataLength` (Phase 5.3, also error-message path) |
-| - | Vertical timing / alignment column positions per width (verified indirectly: free-module count matches total codewords × 8 + remainder for all 32 versions) | `RmQRConstants.AlignmentColumns` (Phase 5.1) |
+| - | Vertical timing / alignment column positions per width (verified indirectly: free-module count matches total codewords × 8 + remainder for all 32 versions) | [RmQRConstants.GetAlignmentColumns](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRConstants.cs) |
 | - | Version fit: exact version, `RmQRFitStrategy` (MinimizeArea / MinimizeWidth / MinimizeHeight), `RmQRHeight` constraint (fixed height, auto width) | `RmQRCodeGenerator.PrepareConfiguration` (Phase 5.3/5.6), semantics in [rMQR Encoder](rmqr-encoder.md) |
 
-Reference tests (planned, Phase 5.1): `RmQRConstantsUnitTest` (structural invariants: 32 entries with the exact dimension set, data + ECC = total for all 64 combos, total × 8 = free-module count from an independent painter, ECC per block even and in 7..30; oracle test: dimensions + both format copies of every libzint and qrtool symbol decode to the expected version/ECC), `RmQRCodeGeneratorUnitTest` (capacity boundaries per mode × ECC, fit-strategy tables, illegal combinations, error messages).
+Reference tests: [RmQRConstantsUnitTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQRConstantsUnitTest.cs) (structural invariants: 32 entries with the exact dimension set and inverse lookup, alignment columns inside the symbol, data + ECC = total for all 64 combos with block splits differing by one, ECC per block in 7..30, total × 8 + remainder = free-module count from an independent painter, published N/A/B capacities reproduced from data codewords + count widths, count widths fit their capacities, format words vs naive BCH(18,6) + XOR with pairwise distance ≥ 7 and no cross-copy collision), [RmQRConstantsOracleTest](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQRConstantsOracleTest.cs) (every committed libzint / qrtool symbol: dimensions → version, both format copies equal the table words, walked bit count = 8 × total + remainder; every single-character symbol: leading codewords after naive inverse zigzag + unmask + deinterleave give the expected mode indicator, count-indicator width and payload bits), both built on the naive helpers in [RmQRNaiveReference](../../../tests/SkiaSharp.QrCode.Tests/RmQr/RmQRNaiveReference.cs); planned (Phase 5.3): `RmQRCodeGeneratorUnitTest` (capacity boundaries per mode × ECC, fit-strategy tables, illegal combinations, error messages).
 
 ## Error Correction (Reed-Solomon)
 
@@ -90,7 +90,7 @@ Reference tests (planned, Phase 5.5): `RmQRCodeGeneratorUnitTest` matrix-structu
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
-| Section 7.9 | 6 data bits (ECC level bit + 5-bit version index) BCH-extended to 18 bits, two copies each XOR-masked with its own constant (verified: 128/128 copies of all 64 version × ECC oracle symbols) | `RmQRConstants.GetFormatBits` (static 64-entry table, Phase 5.1) |
+| Section 7.9 | 6 data bits (ECC level bit + 5-bit version index) BCH-extended to 18 bits, two copies each XOR-masked with its own constant (verified: 128/128 copies of all 64 version × ECC oracle symbols) | [RmQRConstants.GetFormatBits](../../../src/SkiaSharp.QrCode/Internals/RmQr/RmQRConstants.cs) (BCH(18,6) computed per call, generator 0x1F25, per-copy XOR constants) |
 | Section 7.9.1 | Placement: one copy adjacent to the finder separator, one adjacent to the sub-finder (verified, coordinates in code comments) | `RmQRModulePlacer.PlaceFormat` (Phase 5.5) |
 
 Reference tests (planned, Phase 5.1/5.5): `RmQRConstantsUnitTest` (64 words vs a naive BCH reference, pairwise Hamming distance ≥ BCH minimum), `RmQRCodeGeneratorUnitTest.CreateRmQRCode_FormatInfo_RoundTripsFromMatrix` (both copies).

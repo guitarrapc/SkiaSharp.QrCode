@@ -2,7 +2,7 @@
 
 Design record for the rMQR Code (ISO/IEC 23941) encode feature (`RmQRCodeGenerator`, planned): what it will do, the symbol parameters it is built on, why the pipeline is structured this way, and the decisions made up front so implementation phases share one understanding. Normative details and implementation locations are indexed in the [spec-to-code map](rmqr-spec-map.md); the implementation order is the [rMQR implementation plan](../plans/skiasharp-qrcode-rmqr-implementation-plan.md). The decoder design record (`rmqr-decoder.md`) is written when Phase 6 lands.
 
-Status: **planned, spec-first**. Written 2026-08-15 before any `src/` code exists. Every parameter table below was verified against external oracles (see [Verification record](#verification-record)); Phase 5.1 turns those checks into permanent tests. Sections that can only be filled by implementing (measured performance, lessons learned) are marked as such.
+Status: **in progress, spec-first**. Written 2026-08-15 before any `src/` code existed; the tables now live in `Internals/RmQr/RmQRConstants` (Phase 5.1b) and every parameter below is pinned by `RmQRConstantsUnitTest` (structural invariants) and `RmQRConstantsOracleTest` (the committed two-lineage corpus), see the [Verification record](#verification-record). Sections that can only be filled by implementing (measured performance, lessons learned) are marked as such.
 
 ---
 
@@ -148,7 +148,7 @@ Version index is height-major (all widths of height 7, then 9, …); it is the 5
 | 30 | R17x99 | 17 x 99 | 23, 49, 75 | 160 | 100 / 3 / 20 | 56 / 4 / 26 | 8 / 8 / 7 |
 | 31 | R17x139 | 17 x 139 | 27, 55, 83, 111 | 232 | 152 / 4 / 20 | 76 / 6 / 26 | 9 / 8 / 8 |
 
-Kanji count-indicator widths are not in this table: they cannot be verified with the available oracle command lines and the mode is deferred; Phase 5.1 transcribes them from the specification into the code table with a "spec-only, unverified" comment.
+Kanji count-indicator widths are not in this table: they cannot be verified with the available oracle command lines and the mode is deferred; `RmQRConstants.GetKanjiCountIndicatorLength` carries them spec-transcribed with an "unverified" comment (values 2-7, monotone below the byte widths).
 
 Data capacity in characters (Numeric / Alphanumeric / Byte), single segment, no ECI header:
 
@@ -258,7 +258,7 @@ The single mask is applied to data modules while placing. Both format copies com
 
 ## Verification record
 
-Performed 2026-08-15 with the pinned qrtool 0.13.2 binary (`--variant rmqr`, `--type ascii` module-exact output; second encoder lineage per the [fixture record](qrcode-test-fixtures.md)), before any implementation existed. Each item became, or becomes, a Phase 5.1 test.
+Performed 2026-08-15 with the pinned qrtool 0.13.2 binary (`--variant rmqr`, `--type ascii` module-exact output; second encoder lineage per the [fixture record](qrcode-test-fixtures.md)), before any implementation existed. Each item is now a permanent test (Phase 5.1b): the structural rows in `RmQRConstantsUnitTest`, the oracle rows in `RmQRConstantsOracleTest` over the committed corpus (both lineages, all 32 versions × M/H; 96 single-character libzint symbols for the count widths).
 
 | Fact | How verified | Result |
 |---|---|---|

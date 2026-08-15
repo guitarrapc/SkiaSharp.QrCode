@@ -112,10 +112,10 @@ Exit: met, see Progress log (108 zint + 36 qrtool cases, all gate-verified; load
 **5.1b Tables (`Internals/RmQr/RmQRConstants`)**
 
 - Version table (height, width, alignment column positions, total codewords, RS block structure per ECC as `ECCInfo`, count-indicator widths per mode), 64-entry format word table, capacity table (with the Kanji column present, unused), transcribed from the verified tables in `specs/rmqr-encoder.md`.
-- Tests, structural first: 32 entries with the exact (height, width) set; data + ECC == total codewords for all 64 combos; total codewords × 8 == free-module count computed by a naive independent function-pattern painter (this is the check that caught the R17x59 error during pre-verification); every format word equals naive BCH(18,6) + XOR mask; pairwise Hamming distance of the 64 words ≥ the BCH minimum distance; ECC per block even and within 7..30; capacities from the table reproduce the published capacity table.
+- Tests, structural first: 32 entries with the exact (height, width) set; data + ECC == total codewords for all 64 combos; total codewords × 8 == free-module count computed by a naive independent function-pattern painter (this is the check that caught the R17x59 error during pre-verification); every format word equals naive BCH(18,6) + XOR mask; pairwise Hamming distance of the 64 words ≥ the BCH minimum distance; ECC per block within 7..30; capacities from the table reproduce the published capacity table.
 - Oracle test (the 5.1a corpus, no toolchain in CI): for each version, one libzint symbol and one qrtool symbol have the expected width/height, and their two format regions decode (via a naive reader in the test) to the expected (version, ECC) after unmasking with our two constants, this pins the XOR masks and bit order from two independent lineages before our own placer exists. The one-character-payload symbols also pin the count-indicator widths (first codewords after inverse zigzag + unmask + deinterleave), repeating the pre-verification permanently.
 
-Exit: table tests green; no other code depends on the tables yet.
+Exit: met, see Progress log (1,150 table tests green, both TFMs).
 
 **5.2 Data model**
 
@@ -243,3 +243,20 @@ Exit (Phase 7): decoder MVT image rows and the representative degradation subset
 **Benchmarks**
 
 - Not applicable: no `src/` change (tool, committed fixtures, test infrastructure).
+
+### Phase 5.1b, completed 2026-08-15
+
+**Done**
+
+- `src`: public `RmQRVersion` (32 members, value = ISO index + 1) and `RmQREccLevel` (M = 0, H = 1 = format ECC bit); `Internals/RmQr/RmQRConstants` (heights / widths / `TryGetVersion`, alignment columns per width, total codewords + remainder bits, data codewords and block counts per version × ECC exposed as the shared `ECCInfo` (shorter blocks first, uniform ECC per block), count-indicator widths N/A/B plus the spec-transcribed Kanji column, 3-bit mode indicator values, terminator length, `GetFormatBits` = BCH(18,6) over (ECC bit, version index) XOR the per-copy constant, QRX symbol type 2, quiet zone 2). Tables transcribed from the verified design record; no other code depends on them yet.
+- Tests (test-first, +1,150 on net8.0 + net10.0; full suite 5,516, 0 failed): `RmQRNaiveReference` (independent painter, mask, zigzag walk, format-region reader, naive BCH, deinterleave), `RmQRConstantsUnitTest` (32 entries + inverse lookup + non-rMQR rejections; alignment columns vs width table and inside the symbol; data + ECC = total with block splits differing by one and ECC per block in 7..30; total × 8 + remainder = free-module count from the independent painter; published N/A/B capacities reproduced from data codewords + count widths for all 64 combos; count widths fit their capacities and are monotone; format words = naive BCH + XOR, pairwise distance ≥ 7, no cross-copy collision), `RmQRConstantsOracleTest` (all 144 corpus symbols: dimensions → version, BOTH format copies equal the table words, walked bit count = 8 × total + remainder; all 96 single-character libzint symbols: leading codewords after inverse zigzag + unmask + deinterleave yield the expected mode indicator, count-indicator width and payload bits).
+- Docs: spec map rows for the tables now link to code and tests; design record status → in progress; the fixture record already describes the corpus the oracle tests read.
+
+**Lessons learned**
+
+- "ECC per block is even" was a wrong generalization from the multi-block versions: single-block R7x43-M / R7x59-M use 7 and 9. The test caught it in the first run; the invariant is "7 ≤ ECC per block ≤ 30", nothing more.
+- Reading the count width from the oracle bit stream needs the block structure first (multi-block symbols interleave the leading bytes), so the oracle test exercises `GetEccInfo` for free; a wrong block count would surface as a scrambled mode indicator, not as a subtle capacity error.
+
+**Benchmarks**
+
+- Not applicable: table additions only, nothing on any hot path (no Standard / Micro QR file touched).

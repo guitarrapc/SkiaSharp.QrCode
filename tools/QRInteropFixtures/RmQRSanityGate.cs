@@ -1,4 +1,3 @@
-using System.Text;
 using ZXingCpp;
 
 namespace QRInteropFixtures;
