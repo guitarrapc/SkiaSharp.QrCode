@@ -125,21 +125,22 @@ internal static class RmQRVersionSelector
             return version;
         }
 
-        // Candidate set: all versions, or those of the requested height. Track the
-        // best fitting version by strategy.
-        var best = (RmQRVersion)0;
-        for (var i = 1; i <= RmQRConstants.VersionCount; i++)
+        // Candidate set: all versions, or those of the requested height; the best
+        // fitting version by strategy. The versions are laid out best-first per
+        // strategy with each version's capacity for the (mode, ECC) precomputed
+        // (static tables built from GetMaxDataLength / IsBetter at type init), so the
+        // fit is the first rank whose capacity holds the length and whose height is
+        // allowed — the same result as scanning all 32 versions with Fits + IsBetter
+        // (pinned by RmQRVersionSelectorUnitTest), at a fraction of the cost: the
+        // scan was about a third of a small auto-fit encode.
+        var capacities = FitCapacities[(RmQRConstants.GetModeIndex(mode) * 2 + (int)eccLevel) * 3 + (int)fitStrategy];
+        var order = FitOrders[(int)fitStrategy];
+        var heightMask = height is { } fitHeight ? FitHeightMasks[(int)fitStrategy][((int)fitHeight - 7) / 2] : uint.MaxValue;
+        for (var j = 0; j < capacities.Length; j++)
         {
-            var candidate = (RmQRVersion)i;
-            if (height is { } wanted && RmQRConstants.GetHeight(candidate) != (int)wanted)
-                continue;
-
-            if (Fits(candidate, eccLevel, mode, dataLength) && (best == 0 || IsBetter(candidate, best, fitStrategy)))
-                best = candidate;
+            if (capacities[j] >= dataLength && (heightMask & (1u << j)) != 0)
+                return (RmQRVersion)order[j];
         }
-
-        if (best != 0)
-            return best;
 
         // Nothing fits: find the most capacious candidate for the error message
         // (failure path only, the success path never pays for it).
@@ -166,6 +167,64 @@ internal static class RmQRVersionSelector
             (height is null
                 ? "Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content."
                 : "Shorten the content, lower the ECC level, allow a taller symbol, or use Standard QR (QRCodeGenerator) for longer content."));
+    }
+
+    // ---------------------------------------------------------------
+    // Auto-fit tables (built once at type init from IsBetter / GetMaxDataLength):
+    //   FitOrders[strategy][rank]                       = version (1..32), best first
+    //   FitCapacities[(mode*2+ecc)*3+strategy][rank]    = that version's max data length
+    //   FitHeightMasks[strategy][(height-7)/2]          = bit `rank` set when the version has that height
+    // 3 × 32 B + 18 × 64 B + 3 × 24 B ≈ 1.3 KB of table data. Declaration order matters:
+    // static field initializers run textually, and the two lower tables index FitOrders.
+    // ---------------------------------------------------------------
+    private static readonly byte[][] FitOrders = BuildFitOrders();
+    private static readonly ushort[][] FitCapacities = BuildFitCapacities();
+    private static readonly uint[][] FitHeightMasks = BuildFitHeightMasks();
+
+    private static byte[][] BuildFitOrders()
+    {
+        var orders = new byte[3][];
+        for (var s = 0; s < 3; s++)
+        {
+            // insertion sort under the strict IsBetter comparator: it is a total order
+            // (equal area and height means the same version), so the ranking is unique
+            var sorted = new List<byte>(RmQRConstants.VersionCount);
+            for (var v = 1; v <= RmQRConstants.VersionCount; v++)
+            {
+                var pos = 0;
+                while (pos < sorted.Count && !IsBetter((RmQRVersion)v, (RmQRVersion)sorted[pos], (RmQRFitStrategy)s)) pos++;
+                sorted.Insert(pos, (byte)v);
+            }
+            orders[s] = sorted.ToArray();
+        }
+        return orders;
+    }
+
+    private static ushort[][] BuildFitCapacities()
+    {
+        var tables = new ushort[RmQRConstants.ModeCount * 2 * 3][];
+        foreach (var mode in new[] { EncodingMode.Numeric, EncodingMode.Alphanumeric, EncodingMode.Byte })
+            for (var e = 0; e < 2; e++)
+                for (var s = 0; s < 3; s++)
+                {
+                    var t = new ushort[RmQRConstants.VersionCount];
+                    for (var rank = 0; rank < RmQRConstants.VersionCount; rank++)
+                        t[rank] = (ushort)GetMaxDataLength((RmQRVersion)FitOrders[s][rank], (RmQREccLevel)e, mode);
+                    tables[(RmQRConstants.GetModeIndex(mode) * 2 + e) * 3 + s] = t; // same index function as Select
+                }
+        return tables;
+    }
+
+    private static uint[][] BuildFitHeightMasks()
+    {
+        var masks = new uint[3][];
+        for (var s = 0; s < 3; s++)
+        {
+            masks[s] = new uint[6];
+            for (var rank = 0; rank < RmQRConstants.VersionCount; rank++)
+                masks[s][(RmQRConstants.GetHeight((RmQRVersion)FitOrders[s][rank]) - 7) / 2] |= 1u << rank;
+        }
+        return masks;
     }
 
     /// <summary>Human unit per mode: Numeric counts digits, Alphanumeric characters, Byte encoded bytes.</summary>

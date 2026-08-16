@@ -257,15 +257,31 @@ internal static class RmQRConstants
         _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by rMQR."),
     };
 
+    /// <summary>
+    /// Dense index of the encodable modes (Numeric 0, Alphanumeric 1, Byte 2) for
+    /// per-mode tables; <see cref="EncodingMode"/> values themselves are the Standard QR
+    /// mode-indicator bits (1, 2, 4) and are not contiguous.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetModeIndex(EncodingMode mode) => mode switch
+    {
+        EncodingMode.Numeric => 0,
+        EncodingMode.Alphanumeric => 1,
+        EncodingMode.Byte => 2,
+        _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by rMQR."),
+    };
+
+    /// <summary>Number of dense-indexed encodable modes (the range of <see cref="GetModeIndex"/>: Numeric, Alphanumeric, Byte); ECI / Kanji are not part of it.</summary>
+    public const int ModeCount = 3;
+
     /// <summary>Character count indicator width in bits (ISO/IEC 23941 Table 3).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int GetCountIndicatorLength(RmQRVersion version, EncodingMode mode) => mode switch
+    public static int GetCountIndicatorLength(RmQRVersion version, EncodingMode mode) => GetModeIndex(mode) switch
     {
-        EncodingMode.Numeric => numericCountBits[Index(version)],
-        EncodingMode.Alphanumeric => alphanumericCountBits[Index(version)],
-        EncodingMode.Byte => byteCountBits[Index(version)],
-        _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} has no count indicator in rMQR."),
-    };
+        0 => numericCountBits[Index(version)],
+        1 => alphanumericCountBits[Index(version)],
+        _ => byteCountBits[Index(version)],
+    }; // unsupported modes throw from GetModeIndex, the single "not supported by rMQR" message on every path
 
     /// <summary>Kanji count indicator width; spec-transcribed, unverified (Kanji mode is not implemented).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -203,7 +203,7 @@ Shared `TextAnalyzer` (Numeric / Alphanumeric / Byte, single segment). Non-Latin
 
 ### 3. Fit the version
 
-Required bits = 3 (mode) + count indicator (per version, table above) + payload bits. The terminator may shrink to the remaining capacity, including zero bits.
+Required bits = 3 (mode) + count indicator (per version, table above) + payload bits. The terminator may shrink to the remaining capacity, including zero bits. Automatic fit is a table scan (versions pre-ordered best-first per strategy with their capacity per mode × ECC, height as a bitmask); it selects exactly what the definitional "best fitting version" scan selects, and a test pins the two for every input.
 
 - `requestedVersion` given: use it or fail with an actionable capacity error (actual length, applicable maximum in mode units, remedy: shorten, lower ECC, choose a larger version, or use Standard QR).
 - Otherwise the candidate set is all 32 versions, or the versions of the constrained `height`; keep those whose data-codeword capacity holds the required bits; choose by `fitStrategy`:

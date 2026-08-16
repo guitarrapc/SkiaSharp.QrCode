@@ -166,4 +166,65 @@ public class RmQRVersionSelectorUnitTest
         await Assert.That(RmQRVersionSelector.IsBetter(candidate, incumbent, strategy)).IsEqualTo(expected);
         await Assert.That(RmQRVersionSelector.IsBetter(candidate, candidate, strategy)).IsFalse();
     }
+    /// <summary>
+    /// The table-driven auto fit (best-first version order per strategy, precomputed
+    /// capacities, height bitmask) must pick exactly what the definitional scan picks:
+    /// among all versions of the allowed height that <see cref="RmQRVersionSelector.Fits"/>,
+    /// the one no other candidate <see cref="RmQRVersionSelector.IsBetter"/> than — for
+    /// every mode × ECC × strategy × height filter × data length up to the largest
+    /// capacity plus a margin (where nothing fits, both must fail).
+    /// </summary>
+    [Test]
+    [Arguments(0)]
+    [Arguments(1)]
+    [Arguments(2)]
+    public async Task Select_AutoFit_MatchesDefinitionalScan_EveryLengthStrategyHeight(int modeIndex)
+    {
+        var mode = new[] { EncodingMode.Numeric, EncodingMode.Alphanumeric, EncodingMode.Byte }[modeIndex];
+        var maxAll = Enum.GetValues<RmQRVersion>().Max(v => RmQRVersionSelector.GetMaxDataLength(v, RmQREccLevel.M, mode));
+        var heights = new RmQRHeight?[] { null, RmQRHeight.H7, RmQRHeight.H9, RmQRHeight.H11, RmQRHeight.H13, RmQRHeight.H15, RmQRHeight.H17 };
+        var checks = 0;
+        foreach (var ecc in new[] { RmQREccLevel.M, RmQREccLevel.H })
+            foreach (var strategy in Enum.GetValues<RmQRFitStrategy>())
+                foreach (var height in heights)
+                    for (var length = 0; length <= maxAll + 3; length++)
+                    {
+                        RmQRVersion expected = 0;
+                        foreach (var candidate in Enum.GetValues<RmQRVersion>())
+                        {
+                            if (height is { } h && RmQRConstants.GetHeight(candidate) != (int)h) continue;
+                            if (RmQRVersionSelector.Fits(candidate, ecc, mode, length) && (expected == 0 || RmQRVersionSelector.IsBetter(candidate, expected, strategy)))
+                                expected = candidate;
+                        }
+
+                        if (expected == 0)
+                        {
+                            await Assert.That(() => RmQRVersionSelector.Select(mode, length, ecc, null, strategy, height)).Throws<ArgumentException>();
+                        }
+                        else
+                        {
+                            var actual = RmQRVersionSelector.Select(mode, length, ecc, null, strategy, height);
+                            if (actual != expected)
+                                Assert.Fail($"{mode} len {length} {ecc} {strategy} height {height}: expected {expected}, got {actual}");
+                        }
+                        checks++;
+                    }
+        await Assert.That(checks).IsGreaterThan(1000);
+    }
+    /// <summary>
+    /// An unsupported mode (ECI / Kanji never come out of the analyzer, but the internal
+    /// contract is one exception on every path): the auto-fit path (table index) and
+    /// the requested-version path (count-indicator lookup) must throw the same type,
+    /// parameter name and message.
+    /// </summary>
+    [Test]
+    public async Task Select_UnsupportedMode_ThrowsTheSameOnAutoFitAndRequestedVersion()
+    {
+        var auto = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRVersionSelector.Select(EncodingMode.ECI, 5, RmQREccLevel.M, null, RmQRFitStrategy.MinimizeArea, null));
+        var requested = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRVersionSelector.Select(EncodingMode.ECI, 5, RmQREccLevel.M, RmQRVersion.R7x43, RmQRFitStrategy.MinimizeArea, null));
+        await Assert.That(auto.ParamName).IsEqualTo("mode");
+        await Assert.That(requested.ParamName).IsEqualTo("mode");
+        await Assert.That(auto.Message).IsEqualTo(requested.Message);
+        await Assert.That(auto.Message).Contains("not supported by rMQR");
+    }
 }
