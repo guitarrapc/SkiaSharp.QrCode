@@ -455,7 +455,7 @@ public static class QRCodeGenerator
     /// <param name="buffer">Core matrix buffer (size × size bytes) to place patterns into.</param>
     /// <param name="size">Matrix size in modules (no quiet zone).</param>
     /// <param name="version">QR code version (1-40).</param>
-    /// <param name="blockedMask">Output bitmask buffer of at least (size*size+7)/8 bytes; cleared and rebuilt.</param>
+    /// <param name="blockedMask">Output bitmask buffer of at least (size*size+7)/8 bytes; overwritten with the version's cached blocked-module mask.</param>
     /// <remarks>
     /// Fast path: copies the version's cached template and bitmask
     /// (<see cref="ModulePlacer.GetLayout"/>), which are built once by

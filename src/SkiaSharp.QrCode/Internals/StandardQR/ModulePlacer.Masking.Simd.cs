@@ -288,6 +288,10 @@ internal static partial class ModulePlacer
 
     private static MaskLayout64 GetMaskLayout64(int version, int size)
     {
+        // The tables are cached per version, so a version/size mismatch must never
+        // reach the builder (it would poison the slot for every later caller).
+        if (version < 1 || version > 11 || size != QRCodeData.SizeFromVersion(version))
+            throw new ArgumentException($"size {size} does not match a single-word version {version} (1-11)", nameof(size));
         ref var slot = ref maskLayouts64[version];
         var layout = Volatile.Read(ref slot);
         if (layout is not null) return layout;

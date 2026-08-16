@@ -280,5 +280,11 @@ internal static class QRMatrixDecoder
     /// tables (<see cref="ModulePlacer.GetLayout"/>), built by its own function-pattern
     /// placement, so the decoder can never disagree with the encoder.
     /// </summary>
-    private static byte[] GetBlockedMask(int version, int size) => ModulePlacer.GetLayout(version).BlockedMask;
+    private static byte[] GetBlockedMask(int version, int size)
+    {
+        var layout = ModulePlacer.GetLayout(version);
+        if (layout.Size != size)
+            throw new ArgumentException($"size {size} does not match version {version} ({layout.Size} modules)", nameof(size));
+        return layout.BlockedMask;
+    }
 }

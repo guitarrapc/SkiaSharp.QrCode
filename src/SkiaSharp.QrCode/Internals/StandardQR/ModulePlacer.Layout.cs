@@ -95,7 +95,9 @@ internal static partial class ModulePlacer
         var index = new List<ushort>();
         var ops = new List<PlacementOp>();
         var up = true;
-        for (var x = size - 1; x >= 0; x -= 2)
+        // size is odd, so x walks the even columns down to 8, then (after the column-6
+        // skip) the odd columns 5, 3, 1: the pair (x, x-1) always exists, hence x > 0.
+        for (var x = size - 1; x > 0; x -= 2)
         {
             if (x == 6) x--;
             var b = up ? (size - 1) * size + x : x;
