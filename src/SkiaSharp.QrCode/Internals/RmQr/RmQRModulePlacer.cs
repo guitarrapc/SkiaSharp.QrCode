@@ -120,7 +120,13 @@ internal static class RmQRModulePlacer
     /// <param name="eccLevel">ECC level (format information only; the message is already ECC-encoded).</param>
     /// <param name="finalMessage">Interleaved final message from <see cref="RmQRCodewordEncoder"/> (at least total codewords bytes).</param>
     public static void PlaceSymbol(Span<byte> core, RmQRVersion version, RmQREccLevel eccLevel, ReadOnlySpan<byte> finalMessage)
-        => PlaceSymbol(core, RmQRConstants.GetWidth(version), version, eccLevel, finalMessage);
+    {
+        var width = RmQRConstants.GetWidth(version);
+        var height = RmQRConstants.GetHeight(version);
+        if (core.Length < width * height)
+            throw new ArgumentException($"Core buffer too small: required {width * height} bytes ({width}x{height}), got {core.Length}.", nameof(core));
+        PlaceSymbol(core, width, version, eccLevel, finalMessage);
+    }
 
     /// <summary>
     /// Strided variant: writes the symbol into a wider matrix whose rows are

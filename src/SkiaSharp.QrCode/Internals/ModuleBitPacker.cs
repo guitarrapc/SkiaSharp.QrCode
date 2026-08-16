@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 #endif
 
@@ -14,7 +15,7 @@ namespace SkiaSharp.QrCode.Internals;
 /// </summary>
 /// <remarks>
 /// Both directions run 16 (Vector128) / 32 (Vector256) modules per step on .NET 8+ —
-/// pack: non-zero compare, lane reversal within each byte group, move-mask; unpack:
+/// pack: non-zero compare, lane reversal within each byte group (pshufb / tbl), move-mask; unpack:
 /// per-lane byte broadcast, bit mask, compare — with a SWAR / unrolled scalar tail,
 /// and a portable scalar path on netstandard. Kept behind byte parity with a naive
 /// reference by <c>ModuleBitPackerParityTest</c>.
@@ -47,13 +48,17 @@ internal static class ModuleBitPacker
                 WriteLittleEndian(ref Unsafe.Add(ref dst, i >> 3), mask);
             }
         }
-        if (Vector128.IsHardwareAccelerated && count - i >= 16)
+        if ((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) && count - i >= 16)
         {
+            // explicit byte-shuffle intrinsics (pshufb / tbl): the portable Vector128.Shuffle
+            // only lowers to them when the JIT sees a constant index operand at import, which
+            // the .NET 8 JIT does not for a hoisted local (it emits a per-lane software loop)
             var reverse = Vector128.Create((byte)7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13, 12, 11, 10, 9, 8);
             for (; i + 16 <= count; i += 16)
             {
                 var dark = ~Vector128.Equals(Vector128.LoadUnsafe(ref src, (nuint)i), Vector128<byte>.Zero);
-                var mask = (ushort)Vector128.Shuffle(dark, reverse).ExtractMostSignificantBits();
+                var reversed = Ssse3.IsSupported ? Ssse3.Shuffle(dark, reverse) : AdvSimd.Arm64.VectorTableLookup(dark, reverse);
+                var mask = (ushort)reversed.ExtractMostSignificantBits();
                 WriteLittleEndian(ref Unsafe.Add(ref dst, i >> 3), mask);
             }
         }
@@ -114,7 +119,7 @@ internal static class ModuleBitPacker
                 (Vector256.Equals(m, bitm) & one).StoreUnsafe(ref dst, (nuint)i);
             }
         }
-        if (Vector128.IsHardwareAccelerated && count - i >= 16)
+        if ((Ssse3.IsSupported || AdvSimd.Arm64.IsSupported) && count - i >= 16)
         {
             var sel = Vector128.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
             var bitm = Vector128.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
@@ -122,7 +127,7 @@ internal static class ModuleBitPacker
             for (; i + 16 <= count; i += 16)
             {
                 var v = Vector128.Create(ReadLittleEndianUInt16(ref Unsafe.Add(ref src, i >> 3))).AsByte();
-                var m = Vector128.Shuffle(v, sel) & bitm;
+                var m = (Ssse3.IsSupported ? Ssse3.Shuffle(v, sel) : AdvSimd.Arm64.VectorTableLookup(v, sel)) & bitm;
                 (Vector128.Equals(m, bitm) & one).StoreUnsafe(ref dst, (nuint)i);
             }
         }

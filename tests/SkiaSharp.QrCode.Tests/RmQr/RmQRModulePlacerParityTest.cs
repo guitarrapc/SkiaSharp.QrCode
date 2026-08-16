@@ -79,6 +79,19 @@ public class RmQRModulePlacerParityTest
     }
 
     [Test]
+    public async Task UndersizedBuffers_NameTheCallersParameter()
+    {
+        // the core overload must report `core` (its own parameter), the strided overload `destination`
+        var message = new byte[RmQRCodewordEncoder.GetFinalMessageSize(RmQRVersion.R7x43)];
+        var coreError = Assert.Throws<ArgumentException>(() => RmQRModulePlacer.PlaceSymbol(new byte[7 * 43 - 1], RmQRVersion.R7x43, RmQREccLevel.M, message));
+        await Assert.That(coreError.ParamName).IsEqualTo("core");
+        var stridedError = Assert.Throws<ArgumentException>(() => RmQRModulePlacer.PlaceSymbol(new byte[50 * 6 + 42], 50, RmQRVersion.R7x43, RmQREccLevel.M, message));
+        await Assert.That(stridedError.ParamName).IsEqualTo("destination");
+        var referenceError = Assert.Throws<ArgumentException>(() => RmQRModulePlacer.PlaceSymbolReference(new byte[7 * 43 - 1], RmQRVersion.R7x43, RmQREccLevel.M, message));
+        await Assert.That(referenceError.ParamName).IsEqualTo("core");
+    }
+
+    [Test]
     public async Task FastPath_IsRepeatable_AcrossEccAndVersionsSharingTables()
     {
         // the per-version cache serves both ECC levels and repeated calls; alternate them

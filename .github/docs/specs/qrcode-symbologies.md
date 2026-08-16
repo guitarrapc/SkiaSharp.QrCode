@@ -28,6 +28,7 @@ Internals are split into shared primitives and per-symbology pipelines.
 |---|---|
 | `GaloisField`, `Polynom`, `EccBinaryEncoder`, `EccBinaryDecoder` | All three symbologies use Reed-Solomon over GF(256) with the same primitive polynomial (0x11D) |
 | `BitWriter`, `BitReader` | Bit-stream packing is symbology-independent |
+| `ModuleBitPacker` | Byte-per-module ↔ MSB-first bit-packed conversion of the Micro QR and rMQR data models (`SetCoreData` / `GetCoreData`) is the same operation for both; Standard QR's `QRCodeData` keeps its own (frozen) storage kernel |
 | `ECCInfo` | RS block structure (data codewords, ECC per block, up to two block groups) describes all three symbologies |
 | `BinaryInterleaver` | Block interleaving of data then ECC codewords depends only on the `ECCInfo` block structure; Standard QR and rMQR interleave identically (Micro QR has one block). Lifted from `Internals.StandardQr` to `Internals.BinaryEncoders` when rMQR became the second consumer (rMQR Phase 5.4); the only symbology-specific input, the remainder-bit count, is passed in by the caller |
 | `EncodingMode`, `TextAnalyzer`, `CharacterSets` | Mode alphabet definitions (Numeric / Alphanumeric / Byte character classes, alphanumeric encoding values) are shared; only indicator widths and legality differ per symbology |
