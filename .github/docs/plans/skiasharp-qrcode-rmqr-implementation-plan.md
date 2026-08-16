@@ -591,3 +591,29 @@ Second post-Phase-7 kernel round (kernel benchmark loop: 13 variants over 3 roun
 | StandardQr_Numeric_V1_Encode (Span) (untouched control) | 2.116 µs | 2.182 µs | +3 % (drift) |
 
 Kernel: 864 → 49 ns (R7x43), 2,304 → 123 ns (R11x59), 5,730 → 252 ns (R13x99-H), 12,721 → 473 ns (R17x139), 0 B; E2E 6-13x on the span paths because the placer was 80-90 % of the encode. Remaining encode-side levers, in order: automatic version selection (AutoFit 358 vs fixed 179 ns — the fit scan is now half of a small encode), the `RmQRCodeData` result object and its packing on the class API, and the quiet-zone copy of the span path.
+
+### Follow-up: result-object packing and quiet-zone placement, completed 2026-08-16
+
+The two encode-side levers left by the placer round, done test-first (parity + generator tests written and failing before the code).
+
+**Done**
+
+- `src`: `Internals/ModuleBitPacker` — shared byte-per-module ↔ MSB-first bit-packed conversion for the Micro QR and rMQR data models (`SetCoreData` / `GetCoreData` of both, replacing their per-module loops): pack = non-zero compare, in-group lane reversal, move-mask (AVX2 32 / Vector128 16 modules per step) with a SWAR 8-per-load scalar tail; unpack = byte broadcast + bit mask + compare (the placer's expand shape) with an unrolled scalar tail; portable scalar on netstandard. Pack writes every packed byte (padding bits zero), so the previous `Array.Clear` on re-pack is gone too.
+- `src`: `RmQRModulePlacer.PlaceSymbol(destination, stride, …)` — strided variant writing the core straight into a wider matrix (row-wise template copies, pair stores with the caller's pitch, row/col-coded scatter for the irregular pairs; the packed-core path keeps its offset scatter). `RmQRCodeGenerator`'s span destination with a quiet zone now clears only the light borders and places into the strided window: no intermediate core rental, no row copies.
+- Tests (+316 on each TFM; full suite net10.0 5,493 / net8.0 5,481, 0 failed): `ModuleBitPackerParityTest` (vs a naive reference: every length 0..80 + all rMQR core sizes + larger, 0/1 / any-non-zero / high-bit-only / all-dark / all-light / random contents, exact write extents, short-buffer contracts, pack↔unpack round trip); `RmQRModulePlacerStridedParityTest` (every version × ECC × three strides against the reference rows, gap bytes and tail untouched, stride / size contracts); `RmQRCodeGeneratorUnitTest.CreateSpan_QuietZones_MatchClassApiAndTouchOnlyRequiredBytes` (quiet zones 0/1/2/5, module-for-module equality with the class API, nothing written past the required size). `RmQRCodeDataUnitTest`'s SetCoreData/GetCoreData round trip and the Micro QR decoder round trip (`MicroQRCodeDecoderRoundTripTest`, which unpacks through `MicroQRCodeData.GetCoreData`) exercise both data models through the new packer.
+
+**Benchmark delta (`RmQREncodeEndToEnd` / `MicroQREncodeEndToend` / `RmQRDecodeEndToEnd`, net10.0 Release, --launchCount 2 --warmupCount 3 --iterationCount 15, before = HEAD 92dcd0c, after = this change)**
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| RmQR_Numeric_R7x43_Encode (class) | 312 ns / 112 B | 149 ns / 112 B | -52 % |
+| RmQR_Alphanumeric_R11x59_Encode (class) | 614 ns / 160 B | 269 ns / 160 B | -56 % |
+| RmQR_Byte_R17x139_Encode (class) | 2,314 ns / 368 B | 942 ns / 368 B | -59 % |
+| MicroQR_Numeric_M2 / Alnum_M3 / Byte_M4_Encode (class) | 237 / 284 / 324 ns | 135 / 166 / 179 ns | -43 / -42 / -45 % |
+| RmQR_Numeric_R7x43_Encode (Span, quiet zone 2) | 173 ns | 164 ns | -5 % |
+| RmQR_Alphanumeric_R11x59_Encode (Span) | 311 ns | 322 ns | +3 % (noise) |
+| RmQR_Byte_R17x139_Encode (Span) | 984 ns | 1,023 ns | +4 % (noise) |
+| RmQR_Numeric_R7x43 / Byte_R17x139_Decode (class, unpack) | 926 / 15,989 ns | 900 / 15,771 ns | -3 / -1 % |
+| StandardQr_Numeric_V1_Encode (Span) (untouched control) | 943 ns | 961 ns | +2 % (drift) |
+
+Allocations unchanged (the class results are the returned objects; span paths 0 B). The class-API pack was the whole gap between class and span paths (rMQR class results now cost less than the quiet-zoned span call; the Micro QR class API overtook its span path). The strided quiet-zone placement is time-neutral (the row/col-coded scatter for irregular pairs costs about what the removed pool rental and row copies did) and is kept for the contract: the generator's span destination path no longer rents an intermediate core buffer (the placer's own bit-scratch rental above 63 codewords, documented in the placer entry, is unchanged). Decode is flat (unpack was never its bottleneck).

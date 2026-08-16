@@ -79,6 +79,19 @@ public class RmQRModulePlacerParityTest
     }
 
     [Test]
+    public async Task UndersizedBuffers_NameTheCallersParameter()
+    {
+        // the core overload must report `core` (its own parameter), the strided overload `destination`
+        var message = new byte[RmQRCodewordEncoder.GetFinalMessageSize(RmQRVersion.R7x43)];
+        var coreError = Assert.Throws<ArgumentException>(() => RmQRModulePlacer.PlaceSymbol(new byte[7 * 43 - 1], RmQRVersion.R7x43, RmQREccLevel.M, message));
+        await Assert.That(coreError.ParamName).IsEqualTo("core");
+        var stridedError = Assert.Throws<ArgumentException>(() => RmQRModulePlacer.PlaceSymbol(new byte[50 * 6 + 42], 50, RmQRVersion.R7x43, RmQREccLevel.M, message));
+        await Assert.That(stridedError.ParamName).IsEqualTo("destination");
+        var referenceError = Assert.Throws<ArgumentException>(() => RmQRModulePlacer.PlaceSymbolReference(new byte[7 * 43 - 1], RmQRVersion.R7x43, RmQREccLevel.M, message));
+        await Assert.That(referenceError.ParamName).IsEqualTo("core");
+    }
+
+    [Test]
     public async Task FastPath_IsRepeatable_AcrossEccAndVersionsSharingTables()
     {
         // the per-version cache serves both ECC levels and repeated calls; alternate them
@@ -95,5 +108,64 @@ public class RmQRModulePlacerParityTest
             RmQRModulePlacer.PlaceSymbol(actual, v, ecc, message);
             await Assert.That(actual.AsSpan().SequenceEqual(expected)).IsTrue();
         }
+    }
+}
+
+public class RmQRModulePlacerStridedParityTest
+{
+    public static IEnumerable<(RmQRVersion version, RmQREccLevel ecc)> AllVersionEcc() => RmQRModulePlacerParityTest.AllVersionEcc();
+
+    private static byte[] PseudoRandom(int length, int seed)
+    {
+        var bytes = new byte[length];
+        var state = (uint)seed * 2654435761u + 7u;
+        for (var i = 0; i < length; i++)
+        {
+            state = state * 1664525u + 1013904223u;
+            bytes[i] = (byte)(state >> 16);
+        }
+        return bytes;
+    }
+
+    /// <summary>
+    /// The strided overload writes the core into a wider destination (rows `stride`
+    /// apart, e.g. a quiet-zoned buffer) and touches nothing else: every row equals
+    /// the reference core row, the gap bytes and the tail keep their poison.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(AllVersionEcc))]
+    public async Task StridedPlacement_MatchesReferenceRows_LeavesGapsUntouched(RmQRVersion version, RmQREccLevel ecc)
+    {
+        var width = RmQRConstants.GetWidth(version);
+        var height = RmQRConstants.GetHeight(version);
+        var message = PseudoRandom(RmQRConstants.GetTotalCodewordCount(version), (int)version * 3 + (int)ecc);
+        var expected = new byte[width * height];
+        RmQRModulePlacer.PlaceSymbolReference(expected, version, ecc, message);
+
+        foreach (var stride in new[] { width, width + 4, width + 13 })
+        {
+            var buffer = new byte[stride * height + 5];
+            buffer.AsSpan().Fill(0xA5);
+            RmQRModulePlacer.PlaceSymbol(buffer, stride, version, ecc, message);
+            for (var row = 0; row < height; row++)
+            {
+                if (!buffer.AsSpan(row * stride, width).SequenceEqual(expected.AsSpan(row * width, width)))
+                    Assert.Fail($"{version}-{ecc} stride {stride}: row {row} differs");
+                for (var c = width; c < stride; c++)
+                    if (buffer[row * stride + c] != 0xA5)
+                        Assert.Fail($"{version}-{ecc} stride {stride}: gap byte written at row {row} col {c}");
+            }
+            await Assert.That(buffer.AsSpan(stride * height).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5, 0xA5, 0xA5 });
+        }
+    }
+
+    [Test]
+    public async Task StridedPlacement_RejectsStrideBelowWidth_AndShortBuffers()
+    {
+        var message = new byte[RmQRCodewordEncoder.GetFinalMessageSize(RmQRVersion.R7x43)];
+        await Assert.That(() => RmQRModulePlacer.PlaceSymbol(new byte[50 * 7], 42, RmQRVersion.R7x43, RmQREccLevel.M, message)).Throws<ArgumentException>();
+        await Assert.That(() => RmQRModulePlacer.PlaceSymbol(new byte[50 * 6 + 42], 50, RmQRVersion.R7x43, RmQREccLevel.M, message)).Throws<ArgumentException>();
+        // exactly enough: last row needs only `width` bytes
+        RmQRModulePlacer.PlaceSymbol(new byte[50 * 6 + 43], 50, RmQRVersion.R7x43, RmQREccLevel.M, message);
     }
 }

@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Runtime.CompilerServices;
+using SkiaSharp.QrCode.Internals;
 using SkiaSharp.QrCode.Internals.MicroQR;
 
 namespace SkiaSharp.QrCode;
@@ -191,10 +192,7 @@ public class MicroQRCodeData
         if (destination.Length < totalModules)
             throw new ArgumentException($"Destination span too small: required {totalModules} bytes, got {destination.Length}", nameof(destination));
 
-        for (var m = 0; m < totalModules; m++)
-        {
-            destination[m] = (byte)((_bits[m >> 3] >> (7 - (m & 7))) & 1);
-        }
+        ModuleBitPacker.Unpack(_bits, destination.Slice(0, totalModules));
     }
 
     /// <summary>
@@ -207,18 +205,8 @@ public class MicroQRCodeData
         if (source.Length != totalModules)
             throw new ArgumentException($"Source span size mismatch: expected {totalModules} bytes (baseSize={_baseSize}), got {source.Length} bytes");
 
-        // Replace, don't merge: clear previous contents so repeated calls cannot
-        // leak dark modules from an earlier matrix into the new one.
-        Array.Clear(_bits, 0, _bits.Length);
-
-        // Micro QR cores are at most 17×17 = 289 modules, so a plain scalar pack
-        // is already negligible next to the encode pipeline.
-        for (var m = 0; m < totalModules; m++)
-        {
-            if (source[m] != 0)
-            {
-                _bits[m >> 3] |= (byte)(1 << (7 - (m & 7)));
-            }
-        }
+        // Replace, don't merge: Pack writes every packed byte (padding bits zero), so
+        // repeated calls cannot leak dark modules from an earlier matrix.
+        ModuleBitPacker.Pack(source, _bits);
     }
 }

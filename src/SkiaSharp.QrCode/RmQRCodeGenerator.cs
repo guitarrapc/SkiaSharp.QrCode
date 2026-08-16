@@ -63,7 +63,7 @@ public static class RmQRCodeGenerator
         try
         {
             var core = rented.AsSpan(0, coreLength);
-            WriteCoreModules(textSpan, in config, core);
+            WriteCoreModules(textSpan, in config, core, coreWidth);
             result.SetCoreData(core);
             return result;
         }
@@ -107,26 +107,22 @@ public static class RmQRCodeGenerator
         if (quietZoneSize == 0)
         {
             // The placer writes every core module, no clear needed.
-            WriteCoreModules(textSpan, in config, target);
+            WriteCoreModules(textSpan, in config, target, coreWidth);
             return requiredSize;
         }
 
-        target.Clear();
-        var coreLength = coreWidth * coreHeight;
-        var rented = ArrayPool<byte>.Shared.Rent(coreLength);
-        try
+        // Quiet zone: light rows above and below, light margins on every core row; the
+        // placer writes the core straight into the strided window in between (no
+        // intermediate core buffer, no row copies).
+        var margin = quietZoneSize * totalWidth;
+        target.Slice(0, margin + quietZoneSize).Clear();                          // top rows + first row's left margin
+        for (var row = 1; row < coreHeight; row++)
         {
-            var core = rented.AsSpan(0, coreLength);
-            WriteCoreModules(textSpan, in config, core);
-            for (var row = 0; row < coreHeight; row++)
-            {
-                core.Slice(row * coreWidth, coreWidth).CopyTo(target.Slice((row + quietZoneSize) * totalWidth + quietZoneSize, coreWidth));
-            }
+            // right margin of row - 1 and left margin of row are contiguous
+            target.Slice(margin + row * totalWidth - quietZoneSize, 2 * quietZoneSize).Clear();
         }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
-        }
+        target.Slice(margin + coreHeight * totalWidth - quietZoneSize).Clear();     // last row's right margin + bottom rows
+        WriteCoreModules(textSpan, in config, target.Slice(margin + quietZoneSize), totalWidth);
 
         return requiredSize;
     }
@@ -171,10 +167,11 @@ public static class RmQRCodeGenerator
     }
 
     /// <summary>
-    /// Runs encode → ECC + interleave → placement into a byte-per-module core buffer
-    /// (width × height, every module written). Allocation-free: fixed stack budgets.
+    /// Runs encode → ECC + interleave → placement into a byte-per-module core window
+    /// (width × height, rows <paramref name="stride"/> bytes apart, every core module
+    /// written; stride == width for a packed core). Allocation-free: fixed stack budgets.
     /// </summary>
-    private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in RmQRConfiguration config, Span<byte> core)
+    private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in RmQRConfiguration config, Span<byte> core, int stride)
     {
         Span<byte> dataCodewords = stackalloc byte[MaxDataCodewords];
         var analysis = config.Analysis;
@@ -184,7 +181,7 @@ public static class RmQRCodeGenerator
         finalMessage = finalMessage.Slice(0, RmQRCodewordEncoder.GetFinalMessageSize(config.Version));
         RmQRCodewordEncoder.AssembleFinalMessage(dataCodewords.Slice(0, dataCount), config.Version, config.EccLevel, finalMessage);
 
-        RmQRModulePlacer.PlaceSymbol(core, config.Version, config.EccLevel, finalMessage);
+        RmQRModulePlacer.PlaceSymbol(core, stride, config.Version, config.EccLevel, finalMessage);
     }
 
     private readonly record struct RmQRConfiguration(RmQRVersion Version, RmQREccLevel EccLevel, TextAnalysisResult Analysis);
