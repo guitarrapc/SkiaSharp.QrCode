@@ -560,3 +560,34 @@ The first of the post-Phase-7 kernel rounds (kernel benchmark loop: 19 variants 
 | StandardQr_Numeric_V1_Encode (Span) (untouched control) | 1.891 µs | 2.072 µs | |
 
 Kernel: 1.3x (12 digits) to 7.5x (150 Latin-1 bytes), 2.6x on the largest numeric (361 digits: 199 → 80 ns), 5.6x on the largest alphanumeric (219 chars: 268 → 48 ns), 0 B everywhere. E2E: the encoder is 1-2 % of the encode pipeline (placement dominates: R17x139 spends ~14 µs painting 2,363 modules), so the E2E rows move by 1-7 %, at or below the run-to-run band (the untouched control drifted +9.6 %). The next lever for the encode E2E is the placer fast path listed under Follow-ups, not the bit stream.
+
+### Follow-up: placer fast path (`RmQRModulePlacer`), completed 2026-08-16
+
+Second post-Phase-7 kernel round (kernel benchmark loop: 13 variants over 3 rounds, byte-identical gate of 3,840 placements per variant against the verbatim reference — all 32 versions × 2 ECC × all-zero / all-one / random / over-long messages on a poisoned core — disassembly-read, converged when round 3 fell inside 3 %).
+
+**Done**
+
+- `src`: `RmQRModulePlacer.PlaceSymbol` is now the fast path; the per-module painters (`PlaceFunctionModules`, `PlaceFormat`, `PlaceData`) stay as `PlaceSymbolReference`, the source of truth that builds the tables and that the matrix decoder's `IsFunctionModule` / `GetMaskBit` still share. Per-version `Layout` built once (lazily, `Volatile` publish): a function template plus a per-ECC template with both format copies painted (memcpy replaces ~500 pattern stores + 36 format stores + two BCH words per call), the zigzag walk as `ushort` core indices with a mask byte per position, and the column-pair segmentation (a pair is "clean" when both columns are pure data on rows 1..h-2). Placement = template copy → one vector pass expanding the message bits to bytes fused with the mask XOR (AVX2 32 modules / SSSE3 16 per step under `NET8_0_OR_GREATER`, scalar 8-per-byte otherwise; remainder positions get the mask only) → store pass: clean pairs as one byte-swapped 16-bit store per row from the bit array, the finder / format / alignment / sub-finder-neighbour pairs as an index scatter. Scratch is the repo's fixed-budget policy: 512-byte stackalloc (every version ≤ 63 codewords) with an `ArrayPool` rental above it. Zero allocations after the one-time tables (≤ 8.5 KB per version, both ECC templates included; ~120 KB if every version and ECC were ever used).
+- Tests (+40 on each TFM; full suite net10.0 5,073 / net8.0 5,061, 0 failed): `RmQRModulePlacerParityTest` (fast vs reference for all 32 × 2 ECC × six message shapes incl. the generator's buffer size and an over-long message, oversized core untouched beyond w×h, undersized-buffer contracts of both paths, ECC alternation on a shared cache). The existing structural / format read-back / extraction / module-exact oracle tests (every committed external symbol) now run through the fast path.
+- Refuted along the way (kept in the kernel findings log): band stores of up to 4 pairs as one 8-byte store per row (4x fewer stores, neutral — the strided destination, not the store count, bounds the pass), and the pure index scatter once fixed costs were gone (loses 12-17 % to the pair stores on medium/large versions).
+
+**Lessons learned**
+
+- Rung 1 (hoist everything version-derived) was 6-7x on its own before any instruction-level work: the per-module `IsFunctionModule` predicate + `col / 3` were the placer. Every later rung (bit expansion, pair stores, fused XOR) added 1.2-1.7x each; the fixed-cost trims mattered only once the loop was cheap (a ~1.9 KB stack zeroing was 25 % of the smallest version).
+- Strided byte scatter runs at ~1 store per cycle and neither wider stores per row nor AVX-512 scatter change that; the win is in touching fewer bytes per module (bit-per-byte expansion, no per-module shifts), not in wider stores.
+- Keep the reference painter: it builds the tables (correct by construction), stays the decoder's predicate, and is the parity oracle — the fast path never re-derives geometry.
+
+**Benchmark delta (`RmQREncodeEndToEnd`, net10.0 Release, --launchCount 3 --warmupCount 3 --iterationCount 15, before = HEAD 9b4a095, after = this change; kernel numbers from the kernel benchmark loop)**
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| RmQR_Numeric_R7x43_Encode | 1.191 µs / 112 B | 329 ns / 112 B | -72 % |
+| RmQR_Alphanumeric_R11x59_Encode | 3.173 µs / 160 B | 614 ns / 160 B | -81 % |
+| RmQR_Byte_R17x139_Encode | 14.67 µs / 368 B | 2.379 µs / 368 B | -84 % |
+| RmQR_Numeric_R7x43_Encode (Span) | 1.061 µs | 179 ns | -83 % |
+| RmQR_Alphanumeric_R11x59_Encode (Span) | 2.699 µs | 318 ns | -88 % |
+| RmQR_Byte_R17x139_Encode (Span) | 13.65 µs | 1.054 µs | -92 % |
+| RmQR_Numeric_AutoFit_Encode (Span) | 1.115 µs | 358 ns | -68 % |
+| StandardQr_Numeric_V1_Encode (Span) (untouched control) | 2.116 µs | 2.182 µs | +3 % (drift) |
+
+Kernel: 864 → 49 ns (R7x43), 2,304 → 123 ns (R11x59), 5,730 → 252 ns (R13x99-H), 12,721 → 473 ns (R17x139), 0 B; E2E 6-13x on the span paths because the placer was 80-90 % of the encode. Remaining encode-side levers, in order: automatic version selection (AutoFit 358 vs fixed 179 ns — the fit scan is now half of a small encode), the `RmQRCodeData` result object and its packing on the class API, and the quiet-zone copy of the span path.
