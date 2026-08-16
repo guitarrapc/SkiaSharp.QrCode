@@ -120,7 +120,7 @@ public class QRCodeData
     //   - _size == _baseSize, no coordinate translation
     //   - bitIndex = row × _size + col directly
     //
-    // Why this layout (measured, see the MatrixStorage micro-benchmark log):
+    // Why this layout (measured in the MatrixStorage kernel benchmark):
     // - 8.7x smaller per-instance allocation (34,225 -> 3,944 bytes at v40/qz4),
     //   which was essentially 100% of CreateQrCode's allocation.
     // - _bits IS the serialization payload, so GetRawData collapses to

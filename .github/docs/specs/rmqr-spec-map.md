@@ -4,7 +4,7 @@ An index of where each part of the rMQR Code symbology specification (ISO/IEC 23
 
 This document is intentionally a **map, not a spec copy**. The normative details, bit layouts, formulas, edge-case constraints, and the reasoning behind implementation choices, live in code comments next to the implementation, where they stay in sync with the code.
 
-Status: **encoder, rendering, matrix decoder and image detection implemented (Phases 5-7)**. Follow-ups (fused placer fast path, kernel tuning) are listed in the [rMQR implementation plan](../plans/skiasharp-qrcode-rmqr-implementation-plan.md). Rows whose parameters were already verified against external oracles before implementation say so; the verification record is in the design record.
+Status: **encoder, rendering, matrix decoder and image detection implemented (Phases 5-7)**. Follow-ups (remaining kernel tuning; the bit-stream and placer fast paths shipped 2026-08-16) are listed in the [rMQR implementation plan](../plans/skiasharp-qrcode-rmqr-implementation-plan.md). Rows whose parameters were already verified against external oracles before implementation say so; the verification record is in the design record.
 
 ## Encoding Pipeline Overview
 

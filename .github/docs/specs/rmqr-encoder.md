@@ -214,7 +214,7 @@ Required bits = 3 (mode) + count indicator (per version, table above) + payload 
 
 ### 4. Build the data codewords
 
-3-bit mode indicator, count indicator, payload bits, terminator `000` (shortened at capacity), zero bits to a byte boundary, alternating 0xEC / 0x11 pads to the data-codeword count.
+3-bit mode indicator, count indicator, payload bits, terminator `000` (shortened at capacity), zero bits to a byte boundary, alternating 0xEC / 0x11 pads to the data-codeword count. The stream is written straight into the caller's buffer (no intermediate copy); vectorized value kernels exist per mode on x64 (see Decisions), all producing the identical stream.
 
 ### 5. Reed-Solomon per block, 6. interleave
 
@@ -222,7 +222,7 @@ Blocks per the table (smaller data blocks first, sizes differ by at most one), E
 
 ### 7. Place function patterns and data
 
-Finder (7×7 with separators), sub-finder (5×5), four edge timing patterns, the two corner patterns, vertical timing columns with 3×3 alignment patterns at both ends, and both format regions are function modules; data fills the rest in zigzag order. Coordinates live in code comments in Phase 5.5.
+Finder (7×7 with separators), sub-finder (5×5), four edge timing patterns, the two corner patterns, vertical timing columns with 3×3 alignment patterns at both ends, and both format regions are function modules; data fills the rest in zigzag order. Coordinates live in code comments in Phase 5.5. The fast placer reproduces the reference module for module from cached per-version tables (see Decisions).
 
 ### 8. Fixed mask, 9. format information
 
@@ -255,7 +255,8 @@ The single mask is applied to data modules while placing. Both format copies com
 | ECI on encode | Not emitted | Interop demand; decoder parses ECI regardless |
 | Kanji | Deferred (tables keep the column) | Cross-symbology decision |
 | Interleaver | Lifted `BinaryInterleaver` to `Internals.BinaryEncoders` (Phase 5.4): it never used the version, only the `ECCInfo` block structure; the remainder-bit count became a parameter | - |
-| Placer performance | Reference per-module placer first; fused/SIMD fast path as a benchmark-driven follow-up | After Phase 7 |
+| Placer performance | Reference per-module placer first (Phase 5.5), then the benchmark-driven fast path (follow-up, 2026-08-16): per-version tables built once by the reference painters (painted template per version × ECC, zigzag order as core indices, mask per position, column-pair segmentation), vector bit expansion fused with the mask, 16-bit pair stores + index scatter; the reference stays the source of truth (tables, decoder predicate) and the parity test pins both | - |
+| Bit-stream performance | Reference shape first (Phase 5.3), then the benchmark-driven fast path (follow-up, 2026-08-16): raw-local writer, SWAR / SSE numeric and alphanumeric value kernels, SSE2 byte narrowing, capability-gated with scalar fallbacks; kernel-level parity tests pin vector vs scalar, the naive-reference parity pins the stream | - |
 
 ## Verification record
 
@@ -283,6 +284,8 @@ Pre-implementation (from the verification itself):
 - On multi-block versions the leading data bytes in placement order are interleaved; any "read the first bits" check must deinterleave first or it silently reads block-2 codewords.
 
 Implementation lessons: appended per phase (Phase 5 progress log in the [implementation plan](../plans/skiasharp-qrcode-rmqr-implementation-plan.md), then consolidated here).
+
+- Bit-stream fast path (follow-up, 2026-08-16): a memory-backed writer's cost is the per-flush range check, not the struct; a fixed-lane horizontal instruction (`pmaddwd`) cannot express a 3-digit group that straddles its lane pairs, so the group must own the load; at 10-50 ns per encode, code-layout noise (±30 % on identical code) is the measurement floor, and only same-run, same-mode deltas above it count. Details in the plan's progress log.
 
 ## Validation
 

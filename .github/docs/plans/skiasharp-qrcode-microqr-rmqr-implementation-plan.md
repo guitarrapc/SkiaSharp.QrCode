@@ -226,7 +226,7 @@ Exit: decoder MVT image-level rows satisfied; degradation matrix green for rMQR.
   fast path `MicroQRModulePlacer.PlaceSymbol` (new partial file
   `MicroQRModulePlacer.PlaceSymbol.cs`); the per-module stage methods remain as
   the readable reference. `MicroQRCodeGenerator.WriteCoreModules` now makes one
-  placer call. Kernel-level result (private micro-benchmark loop, 14 variants,
+  placer call. Kernel-level result (kernel benchmark loop, 14 variants,
   4 rounds): 3.1-4.0x over the per-module pipeline, zero allocations.
 - Design: <= 192-bit stream prepacked into 3 ulongs; closed-form column-pair
   segments (no per-module function predicate, no remaining-bits guard, stream
@@ -276,7 +276,7 @@ only).
 
 **Done**
 
-- Reopened the micro-benchmark loop with SIMD/CPU-instruction variants (rounds
+- Reopened the kernel benchmark loop with SIMD/CPU-instruction variants (rounds
   5-7, 25 variants total; the scalar-only constraint applied to the initial
   Micro QR implementation, not to optimization). Kernel result vs the
   per-module baseline: 3.6-5.8x (M4-M 680 -> 118 ns), vs the scalar fast path
@@ -357,7 +357,7 @@ Allocations unchanged (Span paths 0 B). StandardQr control stable across runs.
 - BDN DisassemblyDiagnoser flakes ~50% on this box; tiering off +
   `DOTNET_JitDisasm` is the reliable fallback for reading codegen.
 
-**Benchmark delta**, kernel (private micro-benchmark loop, MicroQRBinaryEncode):
+**Benchmark delta**, kernel (kernel benchmark loop, MicroQRBinaryEncode):
 1.8-2.5x (15-31 ns → 6.7-17 ns across M1-M4 payloads); E2E MicroQREncode −4 to
 −14% (placement dominates after the earlier follow-ups). Branch-final E2E state
 (net10.0 Release, two launches averaged, 2026-07-17):
@@ -373,8 +373,8 @@ Allocations unchanged (Span paths 0 B). StandardQr control stable across runs.
 
 **Done**
 
-- Reopened the placement micro-benchmark loop (rounds 8-11, variants V26-V37 in
-  the private findings log). The round-7 audit's "the placement recurrence is
+- Reopened the placement kernel benchmark loop (rounds 8-11, variants V26-V37 in
+  the kernel findings log). The round-7 audit's "the placement recurrence is
   genuinely serial" was wrong one level up: the zigzag is a FIXED bit
   permutation per size, so each row's data bits are 3x (PEXT gather + PDEP
   scatter) from static per-(size, row) masks, branch-free, no cross-row
