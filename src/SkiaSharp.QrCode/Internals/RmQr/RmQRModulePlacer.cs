@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
@@ -310,7 +311,7 @@ internal static class RmQRModulePlacer
                     ref var d = ref Unsafe.Add(ref dest, (nuint)((height - 2) * stride + seg.Col - 1));
                     for (nuint r = 0; r < rows; r++)
                     {
-                        Unsafe.WriteUnaligned(ref d, ReverseIfLittleEndian(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
+                        Unsafe.WriteUnaligned(ref d, SwapPair(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
                         k += 2;
                         d = ref Unsafe.Subtract(ref d, pitch);
                     }
@@ -320,7 +321,7 @@ internal static class RmQRModulePlacer
                     ref var d = ref Unsafe.Add(ref dest, (nuint)(stride + seg.Col - 1));
                     for (nuint r = 0; r < rows; r++)
                     {
-                        Unsafe.WriteUnaligned(ref d, ReverseIfLittleEndian(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
+                        Unsafe.WriteUnaligned(ref d, SwapPair(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
                         k += 2;
                         d = ref Unsafe.Add(ref d, pitch);
                     }
@@ -349,10 +350,11 @@ internal static class RmQRModulePlacer
     }
 
     // The bit array holds (col module, col-1 module) in walk order; memory wants
-    // col-1 first: swap the two bytes on little-endian hosts (a big-endian ushort
-    // read/write already reverses them).
+    // col-1 first. Read and write go through the same host endianness, so a
+    // ReverseEndianness in between always swaps the two BYTES in memory order,
+    // whatever the host is — the swap is unconditional by design.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ushort ReverseIfLittleEndian(ushort v) => BitConverter.IsLittleEndian ? BinaryPrimitives.ReverseEndianness(v) : v;
+    private static ushort SwapPair(ushort v) => BinaryPrimitives.ReverseEndianness(v);
 
     // ---------------------------------------------------------------
     // Per-version tables (built once from the reference painters, so they are
@@ -384,7 +386,7 @@ internal static class RmQRModulePlacer
     private sealed class Layout
     {
         public readonly ushort[] Index;      // core offset (row * width + col) per walk position
-        public readonly ushort[] RowCol;     // row << 8 | col per walk position (strided destinations)
+        public readonly ushort[] RowCol;     // row << 8 | col per walk position (strided destinations; row <= 16, col <= 138 by geometry)
         public readonly byte[] Masks;        // mask bit per walk position
         public readonly int DataModuleCount; // 8 * total codewords + remainder bits
         public readonly PairSegment[] Pairs;
@@ -457,6 +459,8 @@ internal static class RmQRModulePlacer
                         continue;
                     }
                     index.Add((ushort)(row * width + c));
+                    // 8-bit fields: rMQR geometry caps height at 17 and width at 139 (both < 256)
+                    Debug.Assert(row < 256 && c < 256, "row/col code needs 8-bit fields");
                     rowCol.Add((ushort)((row << 8) | c));
                     masks.Add((byte)(GetMaskBit(row, c) ? 1 : 0));
                 }
