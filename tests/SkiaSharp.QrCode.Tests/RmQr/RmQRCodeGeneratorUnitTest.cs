@@ -191,4 +191,27 @@ public class RmQRCodeGeneratorUnitTest
         await Assert.That(allocated).IsEqualTo(0);
     }
 #endif
+
+    // ---- span destination with a quiet zone: identical to the class API, nothing written past the required size ----
+
+    [Test]
+    [MethodDataSource(nameof(AllVersionEcc))]
+    public async Task CreateSpan_QuietZones_MatchClassApiAndTouchOnlyRequiredBytes(RmQRVersion version, RmQREccLevel ecc)
+    {
+        var text = new string('7', 3);
+        foreach (var quietZone in new[] { 0, 1, 2, 5 })
+        {
+            var data = RmQRCodeGenerator.CreateRmQRCode(text, ecc, version, quietZoneSize: quietZone);
+            var size = RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, version, quietZoneSize: quietZone);
+            var buffer = new byte[size.BufferSize + 4];
+            buffer.AsSpan().Fill(0xA5);
+            var written = RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, buffer, version, quietZoneSize: quietZone);
+            await Assert.That(written).IsEqualTo(size.BufferSize);
+            for (var row = 0; row < data.Height; row++)
+                for (var col = 0; col < data.Width; col++)
+                    if ((buffer[row * data.Width + col] != 0) != data[row, col] || buffer[row * data.Width + col] > 1)
+                        Assert.Fail($"{version}-{ecc} qz {quietZone}: module ({row},{col}) = {buffer[row * data.Width + col]}, class API {data[row, col]}");
+            await Assert.That(buffer.AsSpan(size.BufferSize).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5, 0xA5 });
+        }
+    }
 }

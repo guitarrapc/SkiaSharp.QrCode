@@ -35,7 +35,10 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// byte-swapped 16-bit store per row straight from the masked bit array, the
 /// remaining pairs (finder / format / alignment / sub-finder neighbours) as a table
 /// scatter. Bit array scratch is a fixed 512-byte stack budget with a pool fallback
-/// (versions above 63 codewords). Zero allocations after the one-time tables.</item>
+/// (versions above 63 codewords). Zero allocations after the one-time tables. The
+/// strided overload writes straight into a wider destination (rows a caller pitch
+/// apart, e.g. inside a quiet zone): row-wise template copies, the same pair stores
+/// with the caller's pitch, and a row/col-coded scatter for the irregular pairs.</item>
 /// </list>
 ///
 /// Geometry (0-based, h = height, w = width):
@@ -104,6 +107,7 @@ internal static class RmQRModulePlacer
         return false;
     }
 
+
     /// <summary>
     /// Writes the complete symbol: function patterns, both format copies, and the
     /// masked final message (data + ECC + remainder) into <paramref name="core"/>
@@ -115,31 +119,51 @@ internal static class RmQRModulePlacer
     /// <param name="eccLevel">ECC level (format information only; the message is already ECC-encoded).</param>
     /// <param name="finalMessage">Interleaved final message from <see cref="RmQRCodewordEncoder"/> (at least total codewords bytes).</param>
     public static void PlaceSymbol(Span<byte> core, RmQRVersion version, RmQREccLevel eccLevel, ReadOnlySpan<byte> finalMessage)
+        => PlaceSymbol(core, RmQRConstants.GetWidth(version), version, eccLevel, finalMessage);
+
+    /// <summary>
+    /// Strided variant: writes the symbol into a wider matrix whose rows are
+    /// <paramref name="stride"/> bytes apart (e.g. a quiet-zoned destination, with
+    /// <paramref name="destination"/> starting at the top-left core module). Only the
+    /// width × height core modules are written; the bytes between rows are untouched.
+    /// </summary>
+    /// <param name="destination">At least (height − 1) × stride + width bytes.</param>
+    /// <param name="stride">Row pitch in bytes, at least the symbol width.</param>
+    /// <param name="version">Symbol version.</param>
+    /// <param name="eccLevel">ECC level (format information only).</param>
+    /// <param name="finalMessage">Interleaved final message (at least total codewords bytes).</param>
+    public static void PlaceSymbol(Span<byte> destination, int stride, RmQRVersion version, RmQREccLevel eccLevel, ReadOnlySpan<byte> finalMessage)
     {
         var height = RmQRConstants.GetHeight(version);
         var width = RmQRConstants.GetWidth(version);
         var totalCodewords = RmQRConstants.GetTotalCodewordCount(version);
-        if (core.Length < width * height)
-            throw new ArgumentException($"Core buffer too small: required {width * height} bytes ({width}x{height}), got {core.Length}.", nameof(core));
+        if (stride < width)
+            throw new ArgumentException($"Stride {stride} is narrower than the symbol width {width}.", nameof(stride));
+        var required = (height - 1) * stride + width;
+        if (destination.Length < required)
+            throw new ArgumentException($"Destination buffer too small: required {required} bytes ({width}x{height}, stride {stride}), got {destination.Length}.", nameof(destination));
         if (finalMessage.Length < totalCodewords)
             throw new ArgumentException($"Final message too short: required {totalCodewords} codewords, got {finalMessage.Length}.", nameof(finalMessage));
 
         var layout = GetLayout(version);
         var count = layout.DataModuleCount;
+        var template = layout.GetTemplate(version, eccLevel);
+        var message = finalMessage.Slice(0, totalCodewords);
+        destination = destination.Slice(0, required);
 
         // Bit array scratch: one byte per data module (message bits, then the light
         // remainder bits), mask already applied. Fixed stack budget, pool fallback.
         if (count <= StackBitBudget)
         {
             Span<byte> bits = stackalloc byte[StackBitBudget];
-            PlaceCore(core.Slice(0, width * height), layout, layout.GetTemplate(version, eccLevel), height, width, finalMessage.Slice(0, totalCodewords), bits);
+            PlaceCore(destination, stride, layout, template, height, width, message, bits);
         }
         else
         {
             var rented = ArrayPool<byte>.Shared.Rent(count + VectorSlack);
             try
             {
-                PlaceCore(core.Slice(0, width * height), layout, layout.GetTemplate(version, eccLevel), height, width, finalMessage.Slice(0, totalCodewords), rented);
+                PlaceCore(destination, stride, layout, template, height, width, message, rented);
             }
             finally
             {
@@ -178,11 +202,24 @@ internal static class RmQRModulePlacer
     // Fast path
     // ---------------------------------------------------------------
 
-    private static void PlaceCore(Span<byte> core, Layout layout, byte[] template, int height, int width, ReadOnlySpan<byte> finalMessage, Span<byte> bits)
+    private static void PlaceCore(Span<byte> destination, int stride, Layout layout, byte[] template, int height, int width, ReadOnlySpan<byte> finalMessage, Span<byte> bits)
     {
-        template.AsSpan().CopyTo(core);
+        if (stride == width)
+        {
+            template.AsSpan().CopyTo(destination);
+        }
+        else
+        {
+            for (var row = 0; row < height; row++)
+                template.AsSpan(row * width, width).CopyTo(destination.Slice(row * stride, width));
+        }
         ExpandBitsMasked(finalMessage, layout.Masks, layout.DataModuleCount, bits);
-        ScatterPairs(ref MemoryMarshal.GetReference(core), ref MemoryMarshal.GetReference(bits), layout, height, width);
+        ref var dest = ref MemoryMarshal.GetReference(destination);
+        ref var src = ref MemoryMarshal.GetReference(bits);
+        if (stride == width)
+            ScatterPairs(ref dest, ref src, layout, height, width, strided: false);
+        else
+            ScatterPairs(ref dest, ref src, layout, height, stride, strided: true);
     }
 
     /// <summary>
@@ -250,15 +287,18 @@ internal static class RmQRModulePlacer
     /// Store pass. Clean pairs: the walk visits (row, col) then (row, col-1), so the two
     /// consecutive bit-array bytes land at core[row, col-1..col] byte-swapped, one
     /// 16-bit store per row walking the rows in the pair's direction. Other pairs:
-    /// scatter through the index table.
+    /// scatter through the index table (core offsets when the destination pitch is
+    /// the symbol width, row/col codes × the pitch otherwise; <paramref name="strided"/>
+    /// is a JIT-time constant at both call sites).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ScatterPairs(ref byte dest, ref byte src, Layout layout, int height, int width)
+    private static void ScatterPairs(ref byte dest, ref byte src, Layout layout, int height, int stride, bool strided)
     {
         ref var idx = ref MemoryMarshal.GetReference(layout.Index.AsSpan());
+        ref var rowCol = ref MemoryMarshal.GetReference(layout.RowCol.AsSpan());
         var pairs = layout.Pairs;
         var rows = (nuint)(height - 2);
-        var stride = (nuint)width;
+        var pitch = (nuint)stride;
         for (var p = 0; p < pairs.Length; p++)
         {
             var seg = pairs[p];
@@ -267,49 +307,59 @@ internal static class RmQRModulePlacer
                 var k = (nuint)seg.Start;
                 if (seg.Upward)
                 {
-                    ref var d = ref Unsafe.Add(ref dest, (nuint)((height - 2) * width + seg.Col - 1));
+                    ref var d = ref Unsafe.Add(ref dest, (nuint)((height - 2) * stride + seg.Col - 1));
                     for (nuint r = 0; r < rows; r++)
                     {
-                        Unsafe.WriteUnaligned(ref d, SwapPair(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
+                        Unsafe.WriteUnaligned(ref d, ReverseIfLittleEndian(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
                         k += 2;
-                        d = ref Unsafe.Subtract(ref d, stride);
+                        d = ref Unsafe.Subtract(ref d, pitch);
                     }
                 }
                 else
                 {
-                    ref var d = ref Unsafe.Add(ref dest, (nuint)(width + seg.Col - 1));
+                    ref var d = ref Unsafe.Add(ref dest, (nuint)(stride + seg.Col - 1));
                     for (nuint r = 0; r < rows; r++)
                     {
-                        Unsafe.WriteUnaligned(ref d, SwapPair(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
+                        Unsafe.WriteUnaligned(ref d, ReverseIfLittleEndian(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
                         k += 2;
-                        d = ref Unsafe.Add(ref d, stride);
+                        d = ref Unsafe.Add(ref d, pitch);
                     }
                 }
             }
             else
             {
                 var end = (nuint)(seg.Start + seg.Count);
-                for (var i = (nuint)seg.Start; i < end; i++)
+                if (strided)
                 {
-                    Unsafe.Add(ref dest, Unsafe.Add(ref idx, i)) = Unsafe.Add(ref src, i);
+                    for (var i = (nuint)seg.Start; i < end; i++)
+                    {
+                        uint code = Unsafe.Add(ref rowCol, i);
+                        Unsafe.Add(ref dest, (nuint)(code >> 8) * pitch + (code & 0xFF)) = Unsafe.Add(ref src, i);
+                    }
+                }
+                else
+                {
+                    for (var i = (nuint)seg.Start; i < end; i++)
+                    {
+                        Unsafe.Add(ref dest, Unsafe.Add(ref idx, i)) = Unsafe.Add(ref src, i);
+                    }
                 }
             }
         }
     }
 
     // The bit array holds (col module, col-1 module) in walk order; memory wants
-    // col-1 first. Read and write go through the same host endianness, so a
-    // ReverseEndianness in between always swaps the two BYTES in memory order,
-    // whatever the host is — the swap is unconditional by design.
+    // col-1 first: swap the two bytes on little-endian hosts (a big-endian ushort
+    // read/write already reverses them).
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ushort SwapPair(ushort v) => BinaryPrimitives.ReverseEndianness(v);
+    private static ushort ReverseIfLittleEndian(ushort v) => BitConverter.IsLittleEndian ? BinaryPrimitives.ReverseEndianness(v) : v;
 
     // ---------------------------------------------------------------
     // Per-version tables (built once from the reference painters, so they are
     // correct by construction; published with a volatile write — a benign race
     // builds identical tables twice). Memory per version: w×h bytes per ECC template
-    // used + 3 bytes per data module (index + mask) + a few pair descriptors:
-    // <= 8.5 KB for R17x139, ~120 KB if every version and ECC were ever used.
+    // used + 5 bytes per data module (core index, row/col code, mask) + a few pair
+    // descriptors: <= 12 KB for R17x139, ~150 KB if every version and ECC were ever used.
     // ---------------------------------------------------------------
 
     /// <summary>A column pair (col, col-1) of the zigzag walk.</summary>
@@ -333,7 +383,8 @@ internal static class RmQRModulePlacer
 
     private sealed class Layout
     {
-        public readonly ushort[] Index;      // core index per walk position
+        public readonly ushort[] Index;      // core offset (row * width + col) per walk position
+        public readonly ushort[] RowCol;     // row << 8 | col per walk position (strided destinations)
         public readonly byte[] Masks;        // mask bit per walk position
         public readonly int DataModuleCount; // 8 * total codewords + remainder bits
         public readonly PairSegment[] Pairs;
@@ -341,10 +392,11 @@ internal static class RmQRModulePlacer
         private byte[]? _templateM;
         private byte[]? _templateH;
 
-        public Layout(byte[] functionTemplate, ushort[] index, byte[] masks, PairSegment[] pairs)
+        public Layout(byte[] functionTemplate, ushort[] index, ushort[] rowCol, byte[] masks, PairSegment[] pairs)
         {
             _functionTemplate = functionTemplate;
             Index = index;
+            RowCol = rowCol;
             Masks = masks;
             DataModuleCount = index.Length;
             Pairs = pairs;
@@ -382,9 +434,10 @@ internal static class RmQRModulePlacer
         var functionTemplate = new byte[width * height];
         PlaceFunctionModules(functionTemplate, version, height, width);
 
-        // The same walk as PlaceData, recording core index + mask per data position and
-        // the per-pair shape.
+        // The same walk as PlaceData, recording core offset, row/col code and mask per
+        // data position and the per-pair shape.
         var index = new List<ushort>();
+        var rowCol = new List<ushort>();
         var masks = new List<byte>();
         var pairs = new List<PairSegment>();
         var upward = true;
@@ -404,6 +457,7 @@ internal static class RmQRModulePlacer
                         continue;
                     }
                     index.Add((ushort)(row * width + c));
+                    rowCol.Add((ushort)((row << 8) | c));
                     masks.Add((byte)(GetMaskBit(row, c) ? 1 : 0));
                 }
             }
@@ -411,7 +465,7 @@ internal static class RmQRModulePlacer
             upward = !upward;
         }
 
-        return new Layout(functionTemplate, index.ToArray(), masks.ToArray(), pairs.ToArray());
+        return new Layout(functionTemplate, index.ToArray(), rowCol.ToArray(), masks.ToArray(), pairs.ToArray());
     }
 
     // ---------------------------------------------------------------
