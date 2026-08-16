@@ -270,7 +270,7 @@ internal static class RmQRModulePlacer
                     ref var d = ref Unsafe.Add(ref dest, (nuint)((height - 2) * width + seg.Col - 1));
                     for (nuint r = 0; r < rows; r++)
                     {
-                        Unsafe.WriteUnaligned(ref d, ReverseIfLittleEndian(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
+                        Unsafe.WriteUnaligned(ref d, SwapPair(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
                         k += 2;
                         d = ref Unsafe.Subtract(ref d, stride);
                     }
@@ -280,7 +280,7 @@ internal static class RmQRModulePlacer
                     ref var d = ref Unsafe.Add(ref dest, (nuint)(width + seg.Col - 1));
                     for (nuint r = 0; r < rows; r++)
                     {
-                        Unsafe.WriteUnaligned(ref d, ReverseIfLittleEndian(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
+                        Unsafe.WriteUnaligned(ref d, SwapPair(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
                         k += 2;
                         d = ref Unsafe.Add(ref d, stride);
                     }
@@ -298,10 +298,11 @@ internal static class RmQRModulePlacer
     }
 
     // The bit array holds (col module, col-1 module) in walk order; memory wants
-    // col-1 first: swap the two bytes on little-endian hosts (a big-endian ushort
-    // read/write already reverses them).
+    // col-1 first. Read and write go through the same host endianness, so a
+    // ReverseEndianness in between always swaps the two BYTES in memory order,
+    // whatever the host is — the swap is unconditional by design.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ushort ReverseIfLittleEndian(ushort v) => BitConverter.IsLittleEndian ? BinaryPrimitives.ReverseEndianness(v) : v;
+    private static ushort SwapPair(ushort v) => BinaryPrimitives.ReverseEndianness(v);
 
     // ---------------------------------------------------------------
     // Per-version tables (built once from the reference painters, so they are
