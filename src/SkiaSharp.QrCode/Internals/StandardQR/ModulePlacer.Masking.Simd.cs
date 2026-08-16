@@ -12,11 +12,14 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 /// identical pattern selections to the scalar bit-packed implementation in
 /// ModulePlacer.Masking.cs (verified by ModulePlacerMaskSimdParityTest).
 ///
-/// Architecture (see the micro-optimization findings log, round 5):
-/// - The scalar scorer pays ~60 ALU ops + 7 popcounts per row; rows are
-///   independent, so the scorer runs lane-per-row (Vector256&lt;ulong&gt; = 4 rows
-///   per iteration) with per-lane shifts (vpsrlq). Column-direction rules become
-///   offset-load vector passes over materialized eq/v5 arrays.
+/// Architecture:
+/// - Versions 1-11 (one ulong per row) run lane-per-PATTERN: a Vector256&lt;ulong&gt;
+///   holds the same row of four candidates, so every scoring pass is a plain
+///   row loop with no scalar tail and no per-pattern reduction; masking and
+///   format bits are one XOR / OR per row from per-version tables (see the
+///   single-word tier below). The two SoA tiers keep the lane-per-row layout
+///   (Vector256&lt;ulong&gt; = 4 rows per iteration, per-lane shifts) with
+///   column-direction rules as offset-load passes over eq/v5 arrays.
 /// - .NET has no VPOPCNTDQ intrinsic, so vector popcount is the Mula sequence
 ///   (2x vpshufb nibble LUT + vpsadbw), accumulated in weight-grouped vector
 ///   accumulators and reduced once per score.
@@ -247,24 +250,127 @@ internal static partial class ModulePlacer
     // ---------------------------------
     // Single-word tier (versions 1-11)
     // ---------------------------------
+    //
+    // Lane-per-PATTERN layout (second round of this tier): a Vector256<ulong> holds
+    // the same row of four candidate patterns, two groups (0-3, 4-7) per call. Every
+    // scorer pass is then a plain loop over rows — no scalar tails, no per-pattern
+    // horizontal reductions (each lane is its own accumulator) — and masking + format
+    // bits become one XOR / OR per row from per-version tables:
+    //   pre[g][y]  = template[p][y % 12] & allowed[y] for the group's four patterns,
+    //   fmt[e][g][y] = the ECC level's format-information bits that land in row y
+    //                  (both copies), per lane.
+    // The tables are built once per version from the canonical blocked mask
+    // (ModulePlacer.GetLayout) and published with a volatile write. Contract shared
+    // with the scalar path: the 30 format-information modules are light on entry
+    // (they are reserved, never written by placement), so the overlay is an OR.
+    // Popcounts of provably disjoint bit sets (dark 5-run vs light 5-run markers,
+    // their run starts, the two finder-like orientations) are fused into one Mula
+    // popcount of the OR. Byte->bit packing reads 32 (rows <= 32) or 64 bytes per row
+    // for every row but the last (never past the buffer end).
+    // Measured over the previous lane-per-row tier: v1 1.86x, v2 1.87x, v6 1.64x,
+    // v10 1.58x (kernel), zero allocations after the one-time tables.
+
+    private sealed class MaskLayout64
+    {
+        public readonly Vector256<ulong>[] Pre;    // [group * size + y]
+        public readonly Vector256<ulong>[] Fmt;    // [(ecc * 2 + group) * size + y]
+        public readonly ulong[] PreScalar;         // [pattern * size + y] for the winner's unpack
+
+        public MaskLayout64(Vector256<ulong>[] pre, Vector256<ulong>[] fmt, ulong[] preScalar)
+        {
+            Pre = pre;
+            Fmt = fmt;
+            PreScalar = preScalar;
+        }
+    }
+
+    private static readonly MaskLayout64?[] maskLayouts64 = new MaskLayout64?[12];
+
+    private static MaskLayout64 GetMaskLayout64(int version, int size)
+    {
+        ref var slot = ref maskLayouts64[version];
+        var layout = Volatile.Read(ref slot);
+        if (layout is not null) return layout;
+        layout = BuildMaskLayout64(version, size);
+        Volatile.Write(ref slot, layout);
+        return layout;
+    }
+
+    private static MaskLayout64 BuildMaskLayout64(int version, int size)
+    {
+        var blockedMask = GetLayout(version).BlockedMask;
+        var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
+
+        // allowed[y] = ~blocked & rowMask, straight from the canonical bitmask
+        var allowed = new ulong[size];
+        for (var y = 0; y < size; y++)
+        {
+            ulong blocked = 0;
+            for (var x = 0; x < size; x++)
+            {
+                if (IsModuleBlocked(blockedMask, y * size + x)) blocked |= 1ul << x;
+            }
+            allowed[y] = ~blocked & rowMask;
+        }
+
+        var preScalar = new ulong[8 * size];
+        for (var p = 0; p < 8; p++)
+        {
+            for (var y = 0; y < size; y++)
+            {
+                preScalar[p * size + y] = _maskTemplates64[p * 12 + (y % 12)] & allowed[y];
+            }
+        }
+        var pre = new Vector256<ulong>[2 * size];
+        for (var g = 0; g < 2; g++)
+        {
+            for (var y = 0; y < size; y++)
+            {
+                pre[g * size + y] = Vector256.Create(preScalar[(4 * g) * size + y], preScalar[(4 * g + 1) * size + y], preScalar[(4 * g + 2) * size + y], preScalar[(4 * g + 3) * size + y]);
+            }
+        }
+
+        // format overlays: copy 1 at (FormatXs1[i], FormatYs1[i]), copy 2 at (size-1-i, 8)
+        // for i < 8 and (8, size-15+i) for i >= 8 — the same coordinates PokeFormatBits64 uses.
+        var fmt = new Vector256<ulong>[8 * size];
+        var lanes = new ulong[4][];
+        for (var e = 0; e < 4; e++)
+        {
+            for (var g = 0; g < 2; g++)
+            {
+                for (var lane = 0; lane < 4; lane++)
+                {
+                    var rowsOverlay = new ulong[size];
+                    var bits = QRCodeConstants.GetFormatBits((ECCLevel)e, 4 * g + lane);
+                    for (var i = 0; i < 15; i++)
+                    {
+                        if ((bits & (1 << i)) == 0) continue;
+                        rowsOverlay[FormatYs1[i]] |= 1ul << FormatXs1[i];
+                        if (i < 8) rowsOverlay[8] |= 1ul << (size - 1 - i);
+                        else rowsOverlay[size - 15 + i] |= 1ul << 8;
+                    }
+                    lanes[lane] = rowsOverlay;
+                }
+                for (var y = 0; y < size; y++)
+                {
+                    fmt[(e * 2 + g) * size + y] = Vector256.Create(lanes[0][y], lanes[1][y], lanes[2][y], lanes[3][y]);
+                }
+            }
+        }
+
+        return new MaskLayout64(pre, fmt, preScalar);
+    }
 
     internal static int MaskCode64Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
     {
-        Span<ulong> packed = stackalloc ulong[64];
-        Span<ulong> allowed = stackalloc ulong[64];
-        Span<ulong> masked = stackalloc ulong[64];
-        Span<ulong> nmasked = stackalloc ulong[64];
-        Span<ulong> eqScratch = stackalloc ulong[64];
-        Span<ulong> v5Scratch = stackalloc ulong[64];
-        packed = packed[..size];
-        allowed = allowed[..size];
-        masked = masked[..size];
-        nmasked = nmasked[..size];
+        // The per-version tables are derived from the canonical blocked mask; the
+        // parameter is the same mask handed to the scalar tiers (kept for signature
+        // parity with them and the ARM tier).
+        var layout = GetMaskLayout64(version, size);
 
-        for (var y = 0; y < size; y++)
-        {
-            packed[y] = PackRowBits64Simd(buffer.Slice(y * size, size));
-        }
+        Span<ulong> packed = stackalloc ulong[64];
+        packed = packed[..size];
+        PackRows64Wide(buffer, size, packed);
 
         // Version bits sit in blocked areas, hence identical for every pattern.
         if (version >= 7)
@@ -281,114 +387,98 @@ internal static partial class ModulePlacer
             }
         }
 
-        // Each allowed row (~blocked) is a contiguous bit slice of the blocked
-        // bitmask; a padded copy makes the two 8-byte slice reads always legal.
-        Span<byte> padded = stackalloc byte[blockedMask.Length + 16];
-        padded.Clear();
-        blockedMask.CopyTo(padded);
-        var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
-        for (var y = 0; y < size; y++)
-        {
-            var bitOffset = y * size;
-            var byteOff = bitOffset >> 3;
-            var sh = bitOffset & 7;
-            var u0 = Unsafe.ReadUnaligned<ulong>(ref MemoryMarshal.GetReference(padded.Slice(byteOff)));
-            var u1 = Unsafe.ReadUnaligned<ulong>(ref MemoryMarshal.GetReference(padded.Slice(byteOff + 8)));
-            var blocked = sh == 0 ? u0 : (u0 >> sh) | (u1 << (64 - sh));
-            allowed[y] = ~blocked & rowMask;
-        }
+        // rows4[y] = row y of the group's four candidates (masked, format bits in);
+        // scratch for the complements, the vertical-equality rows and the 5-run markers
+        Span<Vector256<ulong>> rows4 = stackalloc Vector256<ulong>[64];
+        Span<Vector256<ulong>> nrows4 = stackalloc Vector256<ulong>[64];
+        Span<Vector256<ulong>> eq4 = stackalloc Vector256<ulong>[64];
+        Span<Vector256<ulong>> v54 = stackalloc Vector256<ulong>[64];
 
-        var templates = _maskTemplates64;
         var bestPatternIndex = 0;
         var bestScore = int.MaxValue;
-        for (var patternIndex = 0; patternIndex < 8; patternIndex++)
+        ref var pre = ref MemoryMarshal.GetReference(layout.Pre.AsSpan());
+        ref var fmt = ref MemoryMarshal.GetReference(layout.Fmt.AsSpan());
+        for (var g = 0; g < 2; g++)
         {
-            var tplBase = patternIndex * 12;
-            for (int y = 0, tplRow = 0; y < size; y++)
+            var preBase = g * size;
+            var fmtBase = ((int)eccLevel * 2 + g) * size;
+            for (var y = 0; y < size; y++)
             {
-                masked[y] = packed[y] ^ (templates[tplBase + tplRow] & allowed[y]);
-                if (++tplRow == 12) tplRow = 0;
+                rows4[y] = (Vector256.Create(packed[y]) ^ Unsafe.Add(ref pre, preBase + y)) | Unsafe.Add(ref fmt, fmtBase + y);
             }
-            PokeFormatBits64(masked, size, QRCodeConstants.GetFormatBits(eccLevel, patternIndex));
-
-            var score = CalculateScore64Vec(masked, nmasked, eqScratch, v5Scratch, size);
-            if (score < bestScore)
+            var scores = ScoreLanes64(rows4, nrows4, eq4, v54, size);
+            for (var lane = 0; lane < 4; lane++)
             {
-                bestPatternIndex = patternIndex;
-                bestScore = score;
+                var s = scores.GetElement(lane);
+                if (s < bestScore)
+                {
+                    bestScore = s;
+                    bestPatternIndex = 4 * g + lane;
+                }
             }
         }
 
         // Apply the winner to the byte buffer: unpack the XOR delta 32 modules at a time.
+        var preScalar = layout.PreScalar;
+        var baseIdx = bestPatternIndex * size;
+        for (var y = 0; y < size; y++)
         {
-            var tplBase = bestPatternIndex * 12;
-            for (int y = 0, tplRow = 0; y < size; y++)
-            {
-                XorUnpackRow64Simd(buffer.Slice(y * size, size), _maskTemplates64[tplBase + tplRow] & allowed[y]);
-                if (++tplRow == 12) tplRow = 0;
-            }
+            XorUnpackRow64Simd(buffer.Slice(y * size, size), preScalar[baseIdx + y]);
         }
 
         return bestPatternIndex;
     }
 
     /// <summary>
-    /// Lane-per-row Vector256 penalty scorer for single-word rows.
-    /// Row-direction rules run 4 rows per iteration with per-lane shifts and
-    /// Mula vector popcount; column-direction rules materialize eq (vertical run
-    /// continuation) and v5 (4-deep AND window) arrays with vector passes, then
-    /// score them with offset loads. Scalar tails reuse the scalar expressions.
-    /// Popcounts accumulate in weight-grouped vector accumulators (rule-1 ones /
-    /// twos, rule-2 x3, rule-3 x40, balance) and reduce once at the end.
+    /// Packs every row into bits with one (size &lt;= 32) or two 32-byte
+    /// compare+movemask loads; rows 0..size-2 may read past their own end into the
+    /// next row (masked off), the last row uses the exact-length packer so nothing
+    /// is read past the buffer.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void PackRows64Wide(ReadOnlySpan<byte> buffer, int size, Span<ulong> packed)
+    {
+        ref var b = ref MemoryMarshal.GetReference(buffer);
+        var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
+        for (var y = 0; y < size - 1; y++)
+        {
+            ref var r = ref Unsafe.Add(ref b, y * size);
+            ulong w = (uint)~Avx2.MoveMask(Vector256.Equals(Vector256.LoadUnsafe(ref r), Vector256<byte>.Zero));
+            if (size > 32)
+            {
+                w |= (ulong)(uint)~Avx2.MoveMask(Vector256.Equals(Vector256.LoadUnsafe(ref r, 32), Vector256<byte>.Zero)) << 32;
+            }
+            packed[y] = w & rowMask;
+        }
+        packed[size - 1] = PackRowBits64Simd(buffer.Slice((size - 1) * size, size));
+    }
+
+    /// <summary>
+    /// Lane-per-pattern penalty scorer: <paramref name="rows"/>[y] holds row y of four
+    /// candidates; returns their four ISO/IEC 18004 penalty scores. Same rule
+    /// derivations as <see cref="CalculateScorePacked"/>; the accumulators are per
+    /// lane, so no horizontal reduction happens until the end.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    internal static int CalculateScore64Vec(ReadOnlySpan<ulong> rows, Span<ulong> nrows, Span<ulong> eqArr, Span<ulong> v5Arr, int size)
+    internal static Vector128<int> ScoreLanes64(Span<Vector256<ulong>> rows, Span<Vector256<ulong>> nrows, Span<Vector256<ulong>> eq, Span<Vector256<ulong>> v5, int size)
     {
-        var rowMask = size == 64 ? ulong.MaxValue : (1ul << size) - 1;
-        var startMaskP3 = (1ul << (size - 10)) - 1;
-        var maskN1 = (1ul << (size - 1)) - 1;
+        var rowMaskV = Vector256.Create(size == 64 ? ulong.MaxValue : (1ul << size) - 1);
+        var startMaskV = Vector256.Create((1ul << (size - 10)) - 1);
+        var maskN1V = Vector256.Create((1ul << (size - 1)) - 1);
 
-        ref var rowsRef = ref MemoryMarshal.GetReference(rows);
-        ref var nrowsRef = ref MemoryMarshal.GetReference(nrows);
-        ref var eqRef = ref MemoryMarshal.GetReference(eqArr);
-        ref var v5Ref = ref MemoryMarshal.GetReference(v5Arr);
-
-        var score1 = 0;
-        var score2 = 0;
-        var score3 = 0;
-        var blackModules = 0;
-
-        var rowMaskV = Vector256.Create(rowMask);
-        var startMaskV = Vector256.Create(startMaskP3);
-        var maskN1V = Vector256.Create(maskN1);
-
-        var accOnes = Vector256<ulong>.Zero;  // rule-1 weight-1 counts (y5 positions)
+        var accOnes = Vector256<ulong>.Zero;  // rule-1 weight-1 counts (5-run positions)
         var accTwos = Vector256<ulong>.Zero;  // rule-1 weight-2 counts (run starts)
-        var accP2 = Vector256<ulong>.Zero;    // rule-2 blocks (x3 at reduce)
-        var accP3 = Vector256<ulong>.Zero;    // rule-3 windows (x40 at reduce)
+        var accP2 = Vector256<ulong>.Zero;    // rule-2 blocks (x3)
+        var accP3 = Vector256<ulong>.Zero;    // rule-3 windows (x40)
         var accBlack = Vector256<ulong>.Zero;
 
-        // nrows = ~rows & rowMask
-        var y0 = 0;
-        for (; y0 + 4 <= size; y0 += 4)
+        // Row-direction rules 1 and 3, balance popcount, complements.
+        for (var y = 0; y < size; y++)
         {
-            var x = Vector256.LoadUnsafe(ref rowsRef, (nuint)y0);
-            Vector256.AndNot(rowMaskV, x).StoreUnsafe(ref nrowsRef, (nuint)y0);
-        }
-        for (; y0 < size; y0++)
-        {
-            nrows[y0] = ~rows[y0] & rowMask;
-        }
-
-        // Row-direction rules 1 and 3 + balance popcount, 4 rows per iteration.
-        var y = 0;
-        for (; y + 4 <= size; y += 4)
-        {
-            var x = Vector256.LoadUnsafe(ref rowsRef, (nuint)y);
-            var nx = Vector256.LoadUnsafe(ref nrowsRef, (nuint)y);
-
+            var x = rows[y];
+            var nx = Vector256.AndNot(rowMaskV, x);
+            nrows[y] = nx;
             accBlack += Pop256(x);
-
             var y2 = x & Vector256.ShiftRightLogical(x, 1);
             var y4 = y2 & Vector256.ShiftRightLogical(y2, 2);
             var y5 = y4 & Vector256.ShiftRightLogical(x, 4);
@@ -397,142 +487,55 @@ internal static partial class ModulePlacer
             var n4 = n2 & Vector256.ShiftRightLogical(n2, 2);
             var n5 = n4 & Vector256.ShiftRightLogical(nx, 4);
             var nst = Vector256.AndNot(n5, Vector256.ShiftLeft(n5, 1));
-            accOnes += Pop256(y5) + Pop256(n5);
-            accTwos += Pop256(st) + Pop256(nst);
-
+            // a position is inside a dark 5-run or a light 5-run, never both: one popcount
+            accOnes += Pop256(y5 | n5);
+            accTwos += Pop256(st | nst);
             var mf = nx & Vector256.ShiftRightLogical(nx, 1) & Vector256.ShiftRightLogical(nx, 2) & Vector256.ShiftRightLogical(nx, 3)
                    & Vector256.ShiftRightLogical(x, 4) & Vector256.ShiftRightLogical(nx, 5) & Vector256.ShiftRightLogical(x, 6) & Vector256.ShiftRightLogical(x, 7)
                    & Vector256.ShiftRightLogical(x, 8) & Vector256.ShiftRightLogical(nx, 9) & Vector256.ShiftRightLogical(x, 10) & startMaskV;
             var mb = x & Vector256.ShiftRightLogical(nx, 1) & Vector256.ShiftRightLogical(x, 2) & Vector256.ShiftRightLogical(x, 3)
                    & Vector256.ShiftRightLogical(x, 4) & Vector256.ShiftRightLogical(nx, 5) & Vector256.ShiftRightLogical(x, 6) & Vector256.ShiftRightLogical(nx, 7)
                    & Vector256.ShiftRightLogical(nx, 8) & Vector256.ShiftRightLogical(nx, 9) & Vector256.ShiftRightLogical(nx, 10) & startMaskV;
-            accP3 += Pop256(mf) + Pop256(mb);
+            // mf needs the window's first module light, mb needs it dark: disjoint
+            accP3 += Pop256(mf | mb);
         }
-        for (; y < size; y++)
+
+        // eq[y] = ~(rows[y] ^ rows[y+1]) & rowMask (vertical run continuation), rule 2 in the same pass.
+        for (var y = 0; y < size - 1; y++)
         {
             var x = rows[y];
-            var nx = nrows[y];
-
-            blackModules += PopCount(x);
-            score1 += ScoreRuns64(x) + ScoreRuns64(nx);
-
-            var mf = nx & (nx >> 1) & (nx >> 2) & (nx >> 3)
-                   & (x >> 4) & (nx >> 5) & (x >> 6) & (x >> 7)
-                   & (x >> 8) & (nx >> 9) & (x >> 10) & startMaskP3;
-            var mb = x & (nx >> 1) & (x >> 2) & (x >> 3)
-                   & (x >> 4) & (nx >> 5) & (x >> 6) & (nx >> 7)
-                   & (nx >> 8) & (nx >> 9) & (nx >> 10) & startMaskP3;
-            score3 += 40 * (PopCount(mf) + PopCount(mb));
-        }
-
-        // eqArr[i] = ~(rows[i] ^ rows[i+1]) & rowMask, i in 0..size-2
-        // (vertical run continuation between adjacent rows; reused by rules 1 and 2).
-        var i = 0;
-        for (; i + 4 <= size - 1; i += 4)
-        {
-            var a = Vector256.LoadUnsafe(ref rowsRef, (nuint)i);
-            var b = Vector256.LoadUnsafe(ref rowsRef, (nuint)(i + 1));
-            (~(a ^ b) & rowMaskV).StoreUnsafe(ref eqRef, (nuint)i);
-        }
-        for (; i < size - 1; i++)
-        {
-            eqArr[i] = ~(rows[i] ^ rows[i + 1]) & rowMask;
-        }
-
-        // Rule 2 (2x2 blocks): m = eqh & eq & (eq >> 1) & maskN1 per row pair.
-        // eqArr is masked with rowMask ⊇ maskN1, so reusing it is exact.
-        y = 0;
-        for (; y + 4 <= size - 1; y += 4)
-        {
-            var x = Vector256.LoadUnsafe(ref rowsRef, (nuint)y);
-            var eqv = Vector256.LoadUnsafe(ref eqRef, (nuint)y);
+            var eqv = ~(x ^ rows[y + 1]) & rowMaskV;
+            eq[y] = eqv;
             var eqh = ~(x ^ Vector256.ShiftRightLogical(x, 1));
-            var m = eqh & eqv & Vector256.ShiftRightLogical(eqv, 1) & maskN1V;
-            accP2 += Pop256(m);
-        }
-        for (; y < size - 1; y++)
-        {
-            var x = rows[y];
-            var eqv = eqArr[y];
-            var eqh = ~(x ^ (x >> 1));
-            var m = eqh & eqv & (eqv >> 1) & maskN1;
-            score2 += 3 * PopCount(m);
+            accP2 += Pop256(eqh & eqv & Vector256.ShiftRightLogical(eqv, 1) & maskN1V);
         }
 
-        // Column rule 1: v5Arr[y] = AND of eqArr[y-4..y-1] for y in 4..size-1
-        // (vertical 5-run marker); v5Arr[3] = 0 backs the prev-load at y = 4.
-        v5Arr[3] = 0;
-        y = 4;
-        for (; y + 4 <= size; y += 4)
+        // Column rule 1: v5[y] = AND of eq[y-4..y-1], run starts vs the previous marker.
+        var prev = Vector256<ulong>.Zero;
+        for (var y = 4; y < size; y++)
         {
-            var e1 = Vector256.LoadUnsafe(ref eqRef, (nuint)(y - 4));
-            var e2 = Vector256.LoadUnsafe(ref eqRef, (nuint)(y - 3));
-            var e3 = Vector256.LoadUnsafe(ref eqRef, (nuint)(y - 2));
-            var e4 = Vector256.LoadUnsafe(ref eqRef, (nuint)(y - 1));
-            (e1 & e2 & e3 & e4).StoreUnsafe(ref v5Ref, (nuint)y);
-        }
-        for (; y < size; y++)
-        {
-            v5Arr[y] = eqArr[y - 4] & eqArr[y - 3] & eqArr[y - 2] & eqArr[y - 1];
+            var cur = eq[y - 4] & eq[y - 3] & eq[y - 2] & eq[y - 1];
+            v5[y] = cur;
+            accOnes += Pop256(cur);
+            accTwos += Pop256(Vector256.AndNot(cur, prev));
+            prev = cur;
         }
 
-        y = 4;
-        for (; y + 4 <= size; y += 4)
+        // Column rule 3: 11-row windows.
+        for (var b0 = 0; b0 <= size - 11; b0++)
         {
-            var v5 = Vector256.LoadUnsafe(ref v5Ref, (nuint)y);
-            var prev = Vector256.LoadUnsafe(ref v5Ref, (nuint)(y - 1));
-            accOnes += Pop256(v5);
-            accTwos += Pop256(Vector256.AndNot(v5, prev));
-        }
-        for (; y < size; y++)
-        {
-            var v5 = v5Arr[y];
-            score1 += PopCount(v5) + 2 * PopCount(v5 & ~v5Arr[y - 1]);
+            var mf = nrows[b0] & nrows[b0 + 1] & nrows[b0 + 2] & nrows[b0 + 3] & rows[b0 + 4] & nrows[b0 + 5] & rows[b0 + 6] & rows[b0 + 7] & rows[b0 + 8] & nrows[b0 + 9] & rows[b0 + 10];
+            var mb = rows[b0] & nrows[b0 + 1] & rows[b0 + 2] & rows[b0 + 3] & rows[b0 + 4] & nrows[b0 + 5] & rows[b0 + 6] & nrows[b0 + 7] & nrows[b0 + 8] & nrows[b0 + 9] & nrows[b0 + 10];
+            accP3 += Pop256(mf | mb);
         }
 
-        // Column rule 3: 11-row windows, start rows b in 0..size-11.
-        var b0 = 0;
-        for (; b0 + 4 <= size - 10; b0 += 4)
+        Span<int> result = stackalloc int[4];
+        for (var lane = 0; lane < 4; lane++)
         {
-            var r0 = Vector256.LoadUnsafe(ref rowsRef, (nuint)b0);
-            var r2 = Vector256.LoadUnsafe(ref rowsRef, (nuint)(b0 + 2));
-            var r3 = Vector256.LoadUnsafe(ref rowsRef, (nuint)(b0 + 3));
-            var r4 = Vector256.LoadUnsafe(ref rowsRef, (nuint)(b0 + 4));
-            var r6 = Vector256.LoadUnsafe(ref rowsRef, (nuint)(b0 + 6));
-            var r7 = Vector256.LoadUnsafe(ref rowsRef, (nuint)(b0 + 7));
-            var r8 = Vector256.LoadUnsafe(ref rowsRef, (nuint)(b0 + 8));
-            var r10 = Vector256.LoadUnsafe(ref rowsRef, (nuint)(b0 + 10));
-            var n0 = Vector256.LoadUnsafe(ref nrowsRef, (nuint)b0);
-            var n1 = Vector256.LoadUnsafe(ref nrowsRef, (nuint)(b0 + 1));
-            var n2c = Vector256.LoadUnsafe(ref nrowsRef, (nuint)(b0 + 2));
-            var n3 = Vector256.LoadUnsafe(ref nrowsRef, (nuint)(b0 + 3));
-            var n5c = Vector256.LoadUnsafe(ref nrowsRef, (nuint)(b0 + 5));
-            var n7 = Vector256.LoadUnsafe(ref nrowsRef, (nuint)(b0 + 7));
-            var n8 = Vector256.LoadUnsafe(ref nrowsRef, (nuint)(b0 + 8));
-            var n9 = Vector256.LoadUnsafe(ref nrowsRef, (nuint)(b0 + 9));
-            var n10 = Vector256.LoadUnsafe(ref nrowsRef, (nuint)(b0 + 10));
-
-            var mf = n0 & n1 & n2c & n3 & r4 & n5c & r6 & r7 & r8 & n9 & r10;
-            var mb = r0 & n1 & r2 & r3 & r4 & n5c & r6 & n7 & n8 & n9 & n10;
-            accP3 += Pop256(mf) + Pop256(mb);
+            var s = accOnes.GetElement(lane) + 2 * accTwos.GetElement(lane) + 3 * accP2.GetElement(lane) + 40 * accP3.GetElement(lane);
+            result[lane] = (int)s + CalculateBalanceScore((int)accBlack.GetElement(lane), size);
         }
-        for (; b0 <= size - 11; b0++)
-        {
-            var mf = nrows[b0] & nrows[b0 + 1] & nrows[b0 + 2] & nrows[b0 + 3]
-                   & rows[b0 + 4] & nrows[b0 + 5] & rows[b0 + 6] & rows[b0 + 7]
-                   & rows[b0 + 8] & nrows[b0 + 9] & rows[b0 + 10];
-            var mb = rows[b0] & nrows[b0 + 1] & rows[b0 + 2] & rows[b0 + 3]
-                   & rows[b0 + 4] & nrows[b0 + 5] & rows[b0 + 6] & nrows[b0 + 7]
-                   & nrows[b0 + 8] & nrows[b0 + 9] & nrows[b0 + 10];
-            score3 += 40 * (PopCount(mf) + PopCount(mb));
-        }
-
-        score1 += (int)Vector256.Sum(accOnes) + 2 * (int)Vector256.Sum(accTwos);
-        score2 += 3 * (int)Vector256.Sum(accP2);
-        score3 += 40 * (int)Vector256.Sum(accP3);
-        blackModules += (int)Vector256.Sum(accBlack);
-
-        return score1 + score2 + score3 + CalculateBalanceScore(blackModules, size);
+        return Vector128.Create(result[0], result[1], result[2], result[3]);
     }
 
     // ---------------------------------
@@ -641,6 +644,9 @@ internal static partial class ModulePlacer
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static RV128 operator ^(in RV128 x, in RV128 y) => new(x.A ^ y.A, x.B ^ y.B);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static RV128 operator |(in RV128 x, in RV128 y) => new(x.A | y.A, x.B | y.B);
+
         /// <summary>~(this ^ other).</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public RV128 Xnor(in RV128 o) => new(~(A ^ o.A), ~(B ^ o.B));
@@ -664,7 +670,7 @@ internal static partial class ModulePlacer
         public Vector256<ulong> Pop() => Pop256(A) + Pop256(B);
     }
 
-    /// <summary>Two-word SoA Vector256 penalty scorer (structure mirrors <see cref="CalculateScore64Vec"/>).</summary>
+    /// <summary>Two-word SoA Vector256 penalty scorer (structure mirrors the single-word scorer, lane-per-row layout).</summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static int CalculateScore128Vec(
         Span<ulong> rw0, Span<ulong> rw1,
@@ -728,8 +734,8 @@ internal static partial class ModulePlacer
             var n4 = n2 & n2.ShiftRight(2);
             var n5 = n4 & nx.ShiftRight(4);
             var nst = n5.AndNotWith(n5.ShiftLeft1());
-            accOnes += y5.Pop() + n5.Pop();
-            accTwos += st.Pop() + nst.Pop();
+            accOnes += (y5 | n5).Pop(); // dark and light 5-run markers are disjoint: one popcount
+            accTwos += (st | nst).Pop();
 
             var mf = nx & nx.ShiftRight(1) & nx.ShiftRight(2) & nx.ShiftRight(3)
                    & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6) & x.ShiftRight(7)
@@ -737,7 +743,7 @@ internal static partial class ModulePlacer
             var mb = x & nx.ShiftRight(1) & x.ShiftRight(2) & x.ShiftRight(3)
                    & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6) & nx.ShiftRight(7)
                    & nx.ShiftRight(8) & nx.ShiftRight(9) & nx.ShiftRight(10) & startMaskV;
-            accP3 += mf.Pop() + mb.Pop();
+            accP3 += (mf | mb).Pop(); // the two finder-like orientations are disjoint
         }
         for (; y < size; y++)
         {
@@ -834,7 +840,7 @@ internal static partial class ModulePlacer
 
             var mf = n0 & n1 & n2c & n3 & r4 & n5c & r6 & r7 & r8 & n9 & r10;
             var mb = r0 & n1 & r2 & r3 & r4 & n5c & r6 & n7 & n8 & n9 & n10;
-            accP3 += mf.Pop() + mb.Pop();
+            accP3 += (mf | mb).Pop(); // the two finder-like orientations are disjoint
         }
         for (; b0 <= size - 11; b0++)
         {
@@ -1030,6 +1036,9 @@ internal static partial class ModulePlacer
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static RV192 operator ^(in RV192 x, in RV192 y) => new(x.A ^ y.A, x.B ^ y.B, x.C ^ y.C);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static RV192 operator |(in RV192 x, in RV192 y) => new(x.A | y.A, x.B | y.B, x.C | y.C);
+
         /// <summary>~(this ^ other).</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public RV192 Xnor(in RV192 o) => new(~(A ^ o.A), ~(B ^ o.B), ~(C ^ o.C));
@@ -1055,7 +1064,7 @@ internal static partial class ModulePlacer
         public Vector256<ulong> Pop() => Pop256(A) + Pop256(B) + Pop256(C);
     }
 
-    /// <summary>Three-word SoA Vector256 penalty scorer (structure mirrors <see cref="CalculateScore64Vec"/>).</summary>
+    /// <summary>Three-word SoA Vector256 penalty scorer (structure mirrors the single-word scorer, lane-per-row layout).</summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static int CalculateScore192Vec(
         Span<ulong> rw0, Span<ulong> rw1, Span<ulong> rw2,
@@ -1125,8 +1134,8 @@ internal static partial class ModulePlacer
             var n4 = n2 & n2.ShiftRight(2);
             var n5 = n4 & nx.ShiftRight(4);
             var nst = n5.AndNotWith(n5.ShiftLeft1());
-            accOnes += y5.Pop() + n5.Pop();
-            accTwos += st.Pop() + nst.Pop();
+            accOnes += (y5 | n5).Pop(); // dark and light 5-run markers are disjoint: one popcount
+            accTwos += (st | nst).Pop();
 
             var mf = nx & nx.ShiftRight(1) & nx.ShiftRight(2) & nx.ShiftRight(3)
                    & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6) & x.ShiftRight(7)
@@ -1134,7 +1143,7 @@ internal static partial class ModulePlacer
             var mb = x & nx.ShiftRight(1) & x.ShiftRight(2) & x.ShiftRight(3)
                    & x.ShiftRight(4) & nx.ShiftRight(5) & x.ShiftRight(6) & nx.ShiftRight(7)
                    & nx.ShiftRight(8) & nx.ShiftRight(9) & nx.ShiftRight(10) & startMaskV;
-            accP3 += mf.Pop() + mb.Pop();
+            accP3 += (mf | mb).Pop(); // the two finder-like orientations are disjoint
         }
         for (; y < size; y++)
         {
@@ -1234,7 +1243,7 @@ internal static partial class ModulePlacer
 
             var mf = n0 & n1 & n2c & n3 & r4 & n5c & r6 & r7 & r8 & n9 & r10;
             var mb = r0 & n1 & r2 & r3 & r4 & n5c & r6 & n7 & n8 & n9 & n10;
-            accP3 += mf.Pop() + mb.Pop();
+            accP3 += (mf | mb).Pop(); // the two finder-like orientations are disjoint
         }
         for (; b0 <= size - 11; b0++)
         {
