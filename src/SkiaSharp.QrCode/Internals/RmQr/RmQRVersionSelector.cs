@@ -132,18 +132,11 @@ internal static class RmQRVersionSelector
         // fit is the first rank whose capacity holds the length and whose height is
         // allowed — the same result as scanning all 32 versions with Fits + IsBetter
         // (pinned by RmQRVersionSelectorUnitTest), at a fraction of the cost: the
-        // scan was half of a small auto-fit encode.
-        var modeIndex = mode switch
-        {
-            EncodingMode.Numeric => 0,
-            EncodingMode.Alphanumeric => 1,
-            EncodingMode.Byte => 2,
-            _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by rMQR."),
-        };
-        var capacities = FitCapacities[(modeIndex * 2 + (int)eccLevel) * 3 + (int)fitStrategy];
+        // scan was about a third of a small auto-fit encode.
+        var capacities = FitCapacities[(RmQRConstants.GetModeIndex(mode) * 2 + (int)eccLevel) * 3 + (int)fitStrategy];
         var order = FitOrders[(int)fitStrategy];
         var heightMask = height is { } fitHeight ? FitHeightMasks[(int)fitStrategy][((int)fitHeight - 7) / 2] : uint.MaxValue;
-        for (var j = 0; j < RmQRConstants.VersionCount; j++)
+        for (var j = 0; j < capacities.Length; j++)
         {
             if (capacities[j] >= dataLength && (heightMask & (1u << j)) != 0)
                 return (RmQRVersion)order[j];
@@ -181,7 +174,8 @@ internal static class RmQRVersionSelector
     //   FitOrders[strategy][rank]                       = version (1..32), best first
     //   FitCapacities[(mode*2+ecc)*3+strategy][rank]    = that version's max data length
     //   FitHeightMasks[strategy][(height-7)/2]          = bit `rank` set when the version has that height
-    // 3 × 32 B + 18 × 64 B + 3 × 24 B ≈ 1.3 KB.
+    // 3 × 32 B + 18 × 64 B + 3 × 24 B ≈ 1.3 KB of table data. Declaration order matters:
+    // static field initializers run textually, and the two lower tables index FitOrders.
     // ---------------------------------------------------------------
     private static readonly byte[][] FitOrders = BuildFitOrders();
     private static readonly ushort[][] FitCapacities = BuildFitCapacities();
@@ -208,16 +202,15 @@ internal static class RmQRVersionSelector
 
     private static ushort[][] BuildFitCapacities()
     {
-        var tables = new ushort[3 * 2 * 3][];
-        var modes = new[] { EncodingMode.Numeric, EncodingMode.Alphanumeric, EncodingMode.Byte };
-        for (var m = 0; m < modes.Length; m++)
+        var tables = new ushort[RmQRConstants.ModeCount * 2 * 3][];
+        foreach (var mode in new[] { EncodingMode.Numeric, EncodingMode.Alphanumeric, EncodingMode.Byte })
             for (var e = 0; e < 2; e++)
                 for (var s = 0; s < 3; s++)
                 {
                     var t = new ushort[RmQRConstants.VersionCount];
                     for (var rank = 0; rank < RmQRConstants.VersionCount; rank++)
-                        t[rank] = (ushort)GetMaxDataLength((RmQRVersion)FitOrders[s][rank], (RmQREccLevel)e, modes[m]);
-                    tables[(m * 2 + e) * 3 + s] = t;
+                        t[rank] = (ushort)GetMaxDataLength((RmQRVersion)FitOrders[s][rank], (RmQREccLevel)e, mode);
+                    tables[(RmQRConstants.GetModeIndex(mode) * 2 + e) * 3 + s] = t; // same index function as Select
                 }
         return tables;
     }
