@@ -276,13 +276,12 @@ internal static class RmQRConstants
 
     /// <summary>Character count indicator width in bits (ISO/IEC 23941 Table 3).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static int GetCountIndicatorLength(RmQRVersion version, EncodingMode mode) => mode switch
+    public static int GetCountIndicatorLength(RmQRVersion version, EncodingMode mode) => GetModeIndex(mode) switch
     {
-        EncodingMode.Numeric => numericCountBits[Index(version)],
-        EncodingMode.Alphanumeric => alphanumericCountBits[Index(version)],
-        EncodingMode.Byte => byteCountBits[Index(version)],
-        _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} has no count indicator in rMQR."),
-    };
+        0 => numericCountBits[Index(version)],
+        1 => alphanumericCountBits[Index(version)],
+        _ => byteCountBits[Index(version)],
+    }; // unsupported modes throw from GetModeIndex, the single "not supported by rMQR" message on every path
 
     /// <summary>Kanji count indicator width; spec-transcribed, unverified (Kanji mode is not implemented).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

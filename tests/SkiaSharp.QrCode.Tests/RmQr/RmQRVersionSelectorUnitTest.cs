@@ -211,4 +211,20 @@ public class RmQRVersionSelectorUnitTest
                     }
         await Assert.That(checks).IsGreaterThan(1000);
     }
+    /// <summary>
+    /// An unsupported mode (ECI / Kanji never come out of the analyzer, but the internal
+    /// contract is one exception on every path): the auto-fit path (table index) and
+    /// the requested-version path (count-indicator lookup) must throw the same type,
+    /// parameter name and message.
+    /// </summary>
+    [Test]
+    public async Task Select_UnsupportedMode_ThrowsTheSameOnAutoFitAndRequestedVersion()
+    {
+        var auto = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRVersionSelector.Select(EncodingMode.ECI, 5, RmQREccLevel.M, null, RmQRFitStrategy.MinimizeArea, null));
+        var requested = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRVersionSelector.Select(EncodingMode.ECI, 5, RmQREccLevel.M, RmQRVersion.R7x43, RmQRFitStrategy.MinimizeArea, null));
+        await Assert.That(auto.ParamName).IsEqualTo("mode");
+        await Assert.That(requested.ParamName).IsEqualTo("mode");
+        await Assert.That(auto.Message).IsEqualTo(requested.Message);
+        await Assert.That(auto.Message).Contains("not supported by rMQR");
+    }
 }
