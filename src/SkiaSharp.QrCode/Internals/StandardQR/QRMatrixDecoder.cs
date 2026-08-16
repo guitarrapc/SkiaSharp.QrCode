@@ -23,10 +23,7 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 internal static class QRMatrixDecoder
 {
     // Steady-state decode allocates nothing: buffers are stackalloc/pooled and the
-    // blocked-module mask is cached per version (≤ 3.9 KB each, 40 versions max).
-    // Benign race: concurrent builds produce identical arrays.
-    private static readonly byte[]?[] blockedMaskCache = new byte[]?[41];
-
+    // blocked-module mask comes from the encoder's per-version placement tables.
     private const int StackAllocThreshold = 512;
 
     /// <summary>
@@ -279,29 +276,9 @@ internal static class QRMatrixDecoder
     }
 
     /// <summary>
-    /// Gets the blocked-module bitmask for a version, building and caching it on
-    /// first use via the encoder's own function-pattern placement.
+    /// Gets the blocked-module bitmask for a version: the encoder's cached placement
+    /// tables (<see cref="ModulePlacer.GetLayout"/>), built by its own function-pattern
+    /// placement, so the decoder can never disagree with the encoder.
     /// </summary>
-    private static byte[] GetBlockedMask(int version, int size)
-    {
-        var cached = blockedMaskCache[version];
-        if (cached is not null)
-            return cached;
-
-        var mask = new byte[(size * size + 7) / 8];
-        var scratch = ArrayPool<byte>.Shared.Rent(size * size);
-        try
-        {
-            var buffer = scratch.AsSpan(0, size * size);
-            buffer.Clear();
-            QRCodeGenerator.PlaceFunctionModules(buffer, size, version, mask);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(scratch, clearArray: false);
-        }
-
-        Volatile.Write(ref blockedMaskCache[version], mask);
-        return mask;
-    }
+    private static byte[] GetBlockedMask(int version, int size) => ModulePlacer.GetLayout(version).BlockedMask;
 }

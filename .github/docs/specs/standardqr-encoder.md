@@ -187,7 +187,7 @@ The implementation writes the output sequentially and accepts strided source rea
 
 ### 7. Place function patterns and data
 
-The matrix starts as a zeroed byte-per-module core. The encoder places or reserves:
+The encoder places or reserves (the byte-per-module core is fully written by the placer; no zeroing is required):
 
 - three 7×7 finder patterns;
 - one-module separators;
@@ -197,9 +197,9 @@ The matrix starts as a zeroed byte-per-module core. The encoder places or reserv
 - both format-information areas;
 - both version-information areas for version 7+.
 
-Reserved modules are represented by a compact bit mask. The same `PlaceFunctionModules` routine is reused by the decoder when it needs to distinguish function modules from data modules, keeping both directions structurally identical.
+Reserved modules are represented by a compact bit mask. Both the painted function modules and the bit mask are built once per version by the reference `PlaceFunctionModulesReference` painters and cached (`ModulePlacer.PlacementLayout`); the encoder copies them per symbol and the decoder reads the same cached mask when it needs to distinguish function modules from data modules, keeping both directions structurally identical.
 
-Interleaved bits are then consumed MSB-first in the standard two-column zigzag from bottom-right to top-left, skipping column 6 and every reserved module. The hot path handles both modules in a strip row together and keeps up to 64 pending stream bits in a register.
+Interleaved bits are then consumed MSB-first in the standard two-column zigzag from bottom-right to top-left, skipping column 6 and every reserved module. The reference walk keeps up to 64 pending stream bits in a register and handles both modules of a strip row together; the production placement uses the cached walk (core index per stream bit, rows where both strip modules are free as runs): the stream is expanded to one byte per bit and each run row is a single 16-bit store, everything else an index-table scatter (parity-tested against the reference walk for every version).
 
 ### 8. Evaluate all eight masks
 
@@ -286,7 +286,8 @@ The encoder produces a module matrix, not an image. Color, pixels-per-module, sh
 
 - **Bit-packing was the decisive mask optimization.** Parallelizing eight expensive byte-domain candidates still pays the byte-domain cost and adds scheduling/allocation overhead. Packed scalar rows measured roughly 8× at version 1, 44× at version 10, and 30–40× at version 40 over the former per-module implementation.
 - **Sequential output wins during interleaving.** Round-robin source reads with a contiguous destination measured better than sequential source reads with scattered writes, despite the strided access.
-- **The data placement stream should stay in a register.** Refilling a 64-bit MSB-aligned accumulator removes a byte load and variable shift from each module and enables a two-module fast path for the common unblocked case.
+- **The data placement stream should stay in a register.** Refilling a 64-bit MSB-aligned accumulator removes a byte load and variable shift from each module and enables a two-module fast path for the common unblocked case (the reference walk).
+- **Everything the placer derives from the version alone belongs in a per-version table.** Painting the function patterns, building the blocked bit mask and deciding the zigzag order per symbol was ~25-35 % of the encode; a cached template + mask + walk order (built by the reference painters, so correct by construction) turned the placer into a memcpy plus one vector bit expansion and a run/scatter store pass: 9x at version 1 and 4.5x at version 40 in the kernel, -26 % (v1) to -44 % (v40) on the encode E2E, and the decoder shares the cached mask. Strided byte scatter is store-issue bound; wider stores per row do not help (same finding as the rMQR placer).
 - **Reed-Solomon setup is reusable.** Generator polynomials depend only on ECC count, so caching their log-domain form removes repeated polynomial construction and reduces the scalar inner loop to table lookup and XOR.
 - **Steady-state allocation guarantees require warm-up-aware tests.** Lazy tables, JIT compilation, and `ArrayPool` initialization are one-time effects; the Release-only allocation test warms them before measuring the span API.
 
