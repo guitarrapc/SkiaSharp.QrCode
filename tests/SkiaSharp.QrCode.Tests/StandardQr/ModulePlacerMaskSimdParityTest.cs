@@ -14,10 +14,10 @@ namespace SkiaSharp.QrCode.Tests;
 public class ModulePlacerMaskSimdParityTest
 {
     // Versions covering every SIMD tier and its boundaries:
-    // 1/5/7/10/11 -> single-word (11 = size 61, last one-word version),
+    // 1..11 -> single-word (per-version lane-per-pattern tables; 11 = size 61, last one-word version),
     // 12 -> first two-word (size 65), 20/27 -> two-word interior/last (27 = size 125),
     // 28 -> first three-word (size 129), 34/40 -> three-word interior/max.
-    public static IEnumerable<int> Versions => [1, 5, 7, 10, 11, 12, 20, 27, 28, 34, 40];
+    public static IEnumerable<int> Versions => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 20, 27, 28, 34, 40];
 
     [Test]
     [MethodDataSource(nameof(Versions))]
@@ -49,6 +49,28 @@ public class ModulePlacerMaskSimdParityTest
                 await Assert.That(actualBuffer).IsEquivalentTo(expectedBuffer);
             }
         }
+    }
+
+    [Test]
+    public async Task MaskCode64Simd_RejectsSizeVersionMismatchAndShortBuffer()
+    {
+        if (!System.Runtime.Intrinsics.X86.Avx2.IsSupported)
+        {
+            Skip.Test("AVX2 not supported on this machine");
+            return;
+        }
+
+        // The single-word tier caches its tables per version, so a size that does not
+        // belong to the version (or a version outside the tier) must be rejected before
+        // the cache is touched; a short buffer must be rejected before the wide row loads.
+        var (buffer, blockedMask, size) = BuildFixture(1, seed: 0);
+        await Assert.That(() => ModulePlacer.MaskCode64Simd(buffer, 25, 1, blockedMask, ECCLevel.M)).Throws<ArgumentException>();
+        await Assert.That(() => ModulePlacer.MaskCode64Simd(buffer, size, 12, blockedMask, ECCLevel.M)).Throws<ArgumentException>();
+        await Assert.That(() => ModulePlacer.MaskCode64Simd(buffer.AsSpan(0, size * size - 1), size, 1, blockedMask, ECCLevel.M)).Throws<ArgumentException>();
+        await Assert.That(() => ModulePlacer.MaskCode64Simd(buffer, size, 1, blockedMask, (ECCLevel)4)).Throws<ArgumentOutOfRangeException>();
+        // and a valid call afterwards still works (the failed calls did not poison the cache)
+        var ok = ModulePlacer.MaskCode64Simd((byte[])buffer.Clone(), size, 1, blockedMask, ECCLevel.M);
+        await Assert.That(ok).IsBetween(0, 7);
     }
 
     [Test]

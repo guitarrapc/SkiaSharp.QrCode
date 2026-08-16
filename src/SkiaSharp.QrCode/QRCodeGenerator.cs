@@ -74,7 +74,7 @@ public static class QRCodeGenerator
         // 7. Write QR matrix:
         //    - Place fixed patterns (finder, separators, alignment, timing, dark module)
         //    - Reserve areas for format and version information
-        //    - Build blocked module bitmask for efficient lookup
+        //    - Take the version's cached function-pattern template and blocked-module bitmask
         //    - Place data modules in zigzag pattern
         //    - Apply optimal mask pattern (test all 8 patterns, select best)
         //    - Place format information (ECC level + mask pattern)
@@ -100,8 +100,8 @@ public static class QRCodeGenerator
         {
             // Work buffer (without quiet zone)
             rentedWorkBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
+            // No clear: the placement template covers every core module.
             var workBuffer = rentedWorkBuffer.AsSpan(0, dataLength);
-            workBuffer.Clear();
 
             WriteCoreModules(textSpan, config, workBuffer, coreSize);
 
@@ -155,7 +155,7 @@ public static class QRCodeGenerator
     /// </para>
     /// <para>
     /// Only the first <see cref="QRCodeCalculatedSize.BufferSize"/> bytes of <paramref name="destination"/> are written
-    /// (cleared first, so a dirty pooled buffer is fine); any remaining bytes are left untouched.
+    /// (every byte of that region is written, so a dirty pooled buffer is fine); any remaining bytes are left untouched.
     /// </para>
     /// </remarks>
     /// <param name="textSpan">The text span to encode in the QR code.</param>
@@ -182,9 +182,9 @@ public static class QRCodeGenerator
         if (destination.Length < requiredSize)
             throw new ArgumentException($"Destination buffer too small: {requiredSize} bytes required (version {config.Version}, {totalSize}x{totalSize} modules), got {destination.Length} bytes. Use {nameof(GetRequiredBufferSize)} to calculate the required size.", nameof(destination));
 
-        // Module placement and the quiet zone both assume zeroed memory.
+        // The placement template covers every core module, so only the quiet zone
+        // needs zeroed memory.
         var target = destination.Slice(0, requiredSize);
-        target.Clear();
 
         if (quietZoneSize == 0)
         {
@@ -192,6 +192,7 @@ public static class QRCodeGenerator
         }
         else
         {
+            target.Clear();
             // The placement pipeline requires a contiguous coreSize-stride matrix,
             // so build the core in a rented buffer and center it in the destination.
             byte[]? rentedWorkBuffer = null;
@@ -200,7 +201,6 @@ public static class QRCodeGenerator
                 var dataLength = coreSize * coreSize;
                 rentedWorkBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
                 var workBuffer = rentedWorkBuffer.AsSpan(0, dataLength);
-                workBuffer.Clear();
 
                 WriteCoreModules(textSpan, config, workBuffer, coreSize);
 
@@ -226,7 +226,7 @@ public static class QRCodeGenerator
     /// </summary>
     /// <param name="textSpan">The text span to encode.</param>
     /// <param name="config">Prepared QR configuration.</param>
-    /// <param name="coreBuffer">Zeroed output buffer of coreSize × coreSize bytes.</param>
+    /// <param name="coreBuffer">Output buffer of coreSize × coreSize bytes (every module is written; no zeroing required).</param>
     /// <param name="coreSize">Module count per side without quiet zone.</param>
     private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in QRConfiguration config, Span<byte> coreBuffer, int coreSize)
     {
@@ -418,36 +418,27 @@ public static class QRCodeGenerator
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteQRMatrix(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> interleavedData, ECCLevel eccLevel)
     {
-        byte[]? rentedBlockedMask = null;
+        // Function patterns, the blocked-module bitmask and the zigzag order all come
+        // from the version's cached placement tables (ModulePlacer.PlacementLayout):
+        // the template copy paints every function module and zeros the rest, the data
+        // placement writes only the stream bits, and mask selection reads the cached
+        // blocked mask directly (no per-call bitmask build).
+        var layout = ModulePlacer.GetLayout(version);
+        layout.Template.AsSpan().CopyTo(buffer);
 
-        try
+        // Place data
+        ModulePlacer.PlaceDataWords(buffer, layout, interleavedData);
+
+        // Apply mask and format
+        var maskVersion = ModulePlacer.MaskCode(buffer, size, version, layout.BlockedMask, eccLevel);
+        var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
+        ModulePlacer.PlaceFormat(buffer, size, formatBit);
+
+        // Place version information (version 7+)
+        if (version >= 7)
         {
-            // Place function patterns and build the blocked-module bitmask
-            var maskSize = (size * size + 7) / 8;
-            Span<byte> blockedMask = maskSize <= 1024
-                ? stackalloc byte[maskSize]
-                : (rentedBlockedMask = ArrayPool<byte>.Shared.Rent(maskSize)).AsSpan(0, maskSize);
-            PlaceFunctionModules(buffer, size, version, blockedMask);
-
-            // Place data
-            ModulePlacer.PlaceDataWords(buffer, size, interleavedData, blockedMask);
-
-            // Apply mask and format
-            var maskVersion = ModulePlacer.MaskCode(buffer, size, version, blockedMask, eccLevel);
-            var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
-            ModulePlacer.PlaceFormat(buffer, size, formatBit);
-
-            // Place version information (version 7+)
-            if (version >= 7)
-            {
-                var versionBits = QRCodeConstants.GetVersionBits(version);
-                ModulePlacer.PlaceVersion(buffer, size, versionBits);
-            }
-        }
-        finally
-        {
-            if (rentedBlockedMask is not null)
-                ArrayPool<byte>.Shared.Return(rentedBlockedMask, clearArray: false);
+            var versionBits = QRCodeConstants.GetVersionBits(version);
+            ModulePlacer.PlaceVersion(buffer, size, versionBits);
         }
     }
 
@@ -457,15 +448,33 @@ public static class QRCodeGenerator
     /// plus the reserved format/version areas.
     /// </summary>
     /// <remarks>
-    /// Shared by the encoder (module placement) and the decoder (identifying which
-    /// modules are function patterns vs. data), so both sides always agree on the
-    /// exact blocked region layout.
+    /// Fast path: copies the version's cached template and bitmask
+    /// (<see cref="ModulePlacer.GetLayout"/>), which are built once by
+    /// <see cref="PlaceFunctionModulesReference"/>. The same tables serve the encoder
+    /// (WriteQRMatrix) and the decoder (QRMatrixDecoder reads the cached bitmask), so
+    /// both sides always agree on the exact blocked region layout. The template covers
+    /// the whole core, so <paramref name="buffer"/> need not be zeroed; the data
+    /// modules are written as 0.
     /// </remarks>
     /// <param name="buffer">Core matrix buffer (size × size bytes) to place patterns into.</param>
     /// <param name="size">Matrix size in modules (no quiet zone).</param>
     /// <param name="version">QR code version (1-40).</param>
-    /// <param name="blockedMask">Output bitmask buffer of at least (size*size+7)/8 bytes; cleared and rebuilt.</param>
+    /// <param name="blockedMask">Output bitmask buffer of at least (size*size+7)/8 bytes; overwritten with the version's cached blocked-module mask.</param>
+
     internal static void PlaceFunctionModules(Span<byte> buffer, int size, int version, Span<byte> blockedMask)
+    {
+        var layout = ModulePlacer.GetLayout(version);
+        if (size != layout.Size)
+            throw new ArgumentException($"size {size} does not match version {version} ({layout.Size} modules)", nameof(size));
+        layout.Template.AsSpan().CopyTo(buffer);
+        layout.BlockedMask.AsSpan().CopyTo(blockedMask);
+    }
+
+    /// <summary>
+    /// Reference (per-module) function-pattern placement: the source of truth that
+    /// builds the cached tables and that the parity tests hold the fast path to.
+    /// </summary>
+    internal static void PlaceFunctionModulesReference(Span<byte> buffer, int size, int version, Span<byte> blockedMask)
     {
         // Version 1-16: stack allocation (covers 95%+ use cases)
         // Version 17+: heap allocation (large/rare QR codes)

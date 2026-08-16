@@ -245,7 +245,7 @@ finally
 }
 ```
 
-Buffer sizes are bounded: version 40 with the standard quiet zone needs 185 × 185 = 34,225 bytes, so a pooled or fixed buffer keeps memory usage constant regardless of request volume. The buffer region is cleared before writing, so dirty pooled buffers are fine; bytes beyond the written region are left untouched.
+Buffer sizes are bounded: version 40 with the standard quiet zone needs 185 × 185 = 34,225 bytes, so a pooled or fixed buffer keeps memory usage constant regardless of request volume. Every byte of the written region is overwritten, so dirty pooled buffers are fine; bytes beyond the written region are left untouched.
 
 ### QRCodeDecoder (Decoding)
 

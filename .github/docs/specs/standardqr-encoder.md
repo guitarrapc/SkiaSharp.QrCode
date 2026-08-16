@@ -43,7 +43,7 @@ The encoder exposes two output models.
 - flat row-major order;
 - quiet zone included.
 
-`GetRequiredBufferSize` returns the required matrix side, byte count, and automatically selected version. The encoder clears exactly the written region, accepts a dirty pooled destination, and leaves any tail beyond the returned byte count untouched. After JIT and pool warm-up, the span path is allocation-free in Release builds.
+`GetRequiredBufferSize` returns the required matrix side, byte count, and automatically selected version. The encoder overwrites every byte of the written region (the core comes from a per-version template copy; only a non-zero quiet zone is cleared), accepts a dirty pooled destination, and leaves any tail beyond the returned byte count untouched. After JIT and pool warm-up, the span path is allocation-free in Release builds.
 
 ### Supported
 
@@ -187,7 +187,7 @@ The implementation writes the output sequentially and accepts strided source rea
 
 ### 7. Place function patterns and data
 
-The matrix starts as a zeroed byte-per-module core. The encoder places or reserves:
+The encoder places or reserves (the byte-per-module core is fully written by the placer; no zeroing is required):
 
 - three 7×7 finder patterns;
 - one-module separators;
@@ -197,9 +197,9 @@ The matrix starts as a zeroed byte-per-module core. The encoder places or reserv
 - both format-information areas;
 - both version-information areas for version 7+.
 
-Reserved modules are represented by a compact bit mask. The same `PlaceFunctionModules` routine is reused by the decoder when it needs to distinguish function modules from data modules, keeping both directions structurally identical.
+Reserved modules are represented by a compact bit mask. Both the painted function modules and the bit mask are built once per version by the reference `PlaceFunctionModulesReference` painters and cached (`ModulePlacer.PlacementLayout`); the encoder copies them per symbol and the decoder reads the same cached mask when it needs to distinguish function modules from data modules, keeping both directions structurally identical.
 
-Interleaved bits are then consumed MSB-first in the standard two-column zigzag from bottom-right to top-left, skipping column 6 and every reserved module. The hot path handles both modules in a strip row together and keeps up to 64 pending stream bits in a register.
+Interleaved bits are then consumed MSB-first in the standard two-column zigzag from bottom-right to top-left, skipping column 6 and every reserved module. The reference walk keeps up to 64 pending stream bits in a register and handles both modules of a strip row together; the production placement uses the cached walk (core index per stream bit, rows where both strip modules are free as runs): the stream is expanded to one byte per bit and each run row is a single 16-bit store, everything else an index-table scatter (parity-tested against the reference walk for every version).
 
 ### 8. Evaluate all eight masks
 
@@ -223,7 +223,8 @@ Masking and scoring operate on packed rows rather than byte-per-module loops:
 - versions 1–11 fit each row in one `ulong`;
 - versions 12–40 use a fixed 192-bit row made from three `ulong` values.
 
-The eight formulas are precomputed as 12-row periodic templates. XOR, shifts, and popcount implement both masking and all four penalty rules without changing the reference result. Parity tests compare this representation against straightforward textbook formulas.
+The eight formulas are precomputed as 12-row periodic templates. XOR, shifts, and popcount implement both masking and all four penalty rules without changing the reference result. On AVX2 the versions 1-11 tier scores four candidates per vector (lane = pattern) with per-version tables of pre-masked templates and format-bit overlays; the larger tiers score four rows per vector. Parity tests compare every representation against straightforward textbook formulas.
+
 
 ### 9. Write format / version information and expose output
 
@@ -285,8 +286,11 @@ The encoder produces a module matrix, not an image. Color, pixels-per-module, sh
 ### Performance
 
 - **Bit-packing was the decisive mask optimization.** Parallelizing eight expensive byte-domain candidates still pays the byte-domain cost and adds scheduling/allocation overhead. Packed scalar rows measured roughly 8× at version 1, 44× at version 10, and 30–40× at version 40 over the former per-module implementation.
+- **For the small versions the eight candidates are the vector lanes, not the rows.** With one `ulong` per row (versions 1-11), scoring four candidates per vector removes every scalar tail and every per-candidate horizontal reduction, and lets the pre-masked templates and the format-bit overlays be per-version tables (one XOR / OR per row); together with fusing popcounts of provably disjoint bit sets (dark vs light 5-runs, the two finder-like orientations) this halved the mask kernel again (1.6-1.9x) after the lane-per-row round. Fusing all scoring passes into one loop lost (register pressure), and vectorizing the balance score bought nothing measurable.
+
 - **Sequential output wins during interleaving.** Round-robin source reads with a contiguous destination measured better than sequential source reads with scattered writes, despite the strided access.
-- **The data placement stream should stay in a register.** Refilling a 64-bit MSB-aligned accumulator removes a byte load and variable shift from each module and enables a two-module fast path for the common unblocked case.
+- **The data placement stream should stay in a register.** Refilling a 64-bit MSB-aligned accumulator removes a byte load and variable shift from each module and enables a two-module fast path for the common unblocked case (the reference walk).
+- **Everything the placer derives from the version alone belongs in a per-version table.** Painting the function patterns, building the blocked bit mask and deciding the zigzag order per symbol was ~25-35 % of the encode; a cached template + mask + walk order (built by the reference painters, so correct by construction) turned the placer into a memcpy plus one vector bit expansion and a run/scatter store pass: 9x at version 1 and 4.5x at version 40 in the kernel, -26 % (v1) to -44 % (v40) on the encode E2E, and the decoder shares the cached mask. Strided byte scatter is store-issue bound; wider stores per row do not help (same finding as the rMQR placer).
 - **Reed-Solomon setup is reusable.** Generator polynomials depend only on ECC count, so caching their log-domain form removes repeated polynomial construction and reduces the scalar inner loop to table lookup and XOR.
 - **Steady-state allocation guarantees require warm-up-aware tests.** Lazy tables, JIT compilation, and `ArrayPool` initialization are one-time effects; the Release-only allocation test warms them before measuring the span API.
 

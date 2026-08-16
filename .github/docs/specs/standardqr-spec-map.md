@@ -55,12 +55,12 @@ Reference tests: [BinaryInterleaverParityTest](../../../tests/SkiaSharp.QrCode.T
 |---|---|---|
 | - | Finder patterns, separators, timing patterns, dark module | [ModulePlacer](../../../src/SkiaSharp.QrCode/Internals/StandardQr/ModulePlacer.cs) (`PlaceFinderPatterns`, `ReserveSeparatorAreas`, `PlaceTimingPatterns`, `PlaceDarkModule`) |
 | Annex E | Alignment pattern placement | [ModulePlacer.PlaceAlignmentPatterns](../../../src/SkiaSharp.QrCode/Internals/StandardQr/ModulePlacer.cs) |
-| Section 7.7.3 | Zigzag data placement (bottom-right, 2-column strips) | [ModulePlacer.PlaceDataWords](../../../src/SkiaSharp.QrCode/Internals/StandardQr/ModulePlacer.cs) |
+| Section 7.7.3 | Zigzag data placement (bottom-right, 2-column strips) | [ModulePlacer.PlaceDataWords](../../../src/SkiaSharp.QrCode/Internals/StandardQr/ModulePlacer.cs) (reference walk), [ModulePlacer.Layout](../../../src/SkiaSharp.QrCode/Internals/StandardQr/ModulePlacer.Layout.cs) (cached per-version template / mask / walk order, production path) |
 | Section 7.9 | Format information placement (two redundant copies) | [ModulePlacer.PlaceFormat](../../../src/SkiaSharp.QrCode/Internals/StandardQr/ModulePlacer.cs) |
 | Section 7.8.2 | Format information bits and mask (BCH + XOR mask) | [QRCodeConstants.GetFormatBits](../../../src/SkiaSharp.QrCode/Internals/StandardQr/QRCodeConstants.cs) |
 | Section 7.10 | Version information (version 7+, two 3×6 patterns) | [ModulePlacer.PlaceVersion](../../../src/SkiaSharp.QrCode/Internals/StandardQr/ModulePlacer.cs), [QRCodeConstants.GetVersionBits](../../../src/SkiaSharp.QrCode/Internals/StandardQr/QRCodeConstants.cs) |
 
-Reference tests: [ModulePlacerPlaceDataWordsParityTest](../../../tests/SkiaSharp.QrCode.Tests/StandardQr/ModulePlacerPlaceDataWordsParityTest.cs), bit-parallel placement vs. naive per-module Section 7.7.3 reference.
+Reference tests: [ModulePlacerPlaceDataWordsParityTest](../../../tests/SkiaSharp.QrCode.Tests/StandardQr/ModulePlacerPlaceDataWordsParityTest.cs), bit-parallel placement vs. naive per-module Section 7.7.3 reference; [ModulePlacerLayoutParityTest](../../../tests/SkiaSharp.QrCode.Tests/StandardQr/ModulePlacerLayoutParityTest.cs), the cached-table placer (function modules, blocked mask, data placement) vs. the reference painters and walk for every version.
 
 ## Data Masking
 
