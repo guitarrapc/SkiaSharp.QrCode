@@ -617,3 +617,29 @@ The two encode-side levers left by the placer round, done test-first (parity + g
 | StandardQr_Numeric_V1_Encode (Span) (untouched control) | 943 ns | 961 ns | +2 % (drift) |
 
 Allocations unchanged (the class results are the returned objects; span paths 0 B). The class-API pack was the whole gap between class and span paths (rMQR class results now cost less than the quiet-zoned span call; the Micro QR class API overtook its span path). The strided quiet-zone placement is time-neutral (the row/col-coded scatter for irregular pairs costs about what the removed pool rental and row copies did) and is kept for the contract: the generator's span destination path no longer rents an intermediate core buffer (the placer's own bit-scratch rental above 63 codewords, documented in the placer entry, is unchanged). Decode is flat (unpack was never its bottleneck).
+
+### Follow-up: table-driven automatic version fit (`RmQRVersionSelector`), completed 2026-08-17
+
+Third post-Phase-7 kernel round, one round only (kernel benchmark loop: 4 variants, gate of 93,492 selections per variant against the definitional scan for every mode × ECC × strategy × height filter × length).
+
+**Done**
+
+- `src`: the auto-fit path of `RmQRVersionSelector.Select` no longer evaluates `Fits` + `IsBetter` for all 32 versions per call. Three static tables (~1.3 KB, built at type init from `IsBetter` and `GetMaxDataLength`, so they cannot drift from the definitions): the versions in best-first order per strategy, each version's capacity per (mode, ECC) at that rank, and a per-strategy height bitmask; the fit is the first rank whose capacity holds the length and whose height is allowed. Kernel 27-108 ns → 1.3-8.3 ns (a constant-time SIMD compare/movemask variant measured ~1.8 ns but was not shipped: ≤ 6.5 ns on a ≥ 300 ns encode, and the scalar scan needs no intrinsics). Requested-version and failure-message paths unchanged.
+- Tests (+3; full suite net10.0 5,496 / net8.0 5,484, 0 failed): `RmQRVersionSelectorUnitTest.Select_AutoFit_MatchesDefinitionalScan_EveryLengthStrategyHeight` — every mode × ECC × strategy × height filter × length 0..max+3 against the definitional "best fitting version" scan (Fits + IsBetter), including the nothing-fits exception; the existing hand-derived fit tables, tie-break and interop-default tests keep passing.
+
+**Lessons learned**
+
+- A benchmark harness that copies internals also copies its own enums: the harness numbered the modes 0/1/2 while the library's `EncodingMode` is 1/2/4, and the first port indexed the capacity table with the raw enum value — every table-driven port needs a definitional test in the library, because the harness gate cannot see a mapping bug that only exists in the port.
+- With the placer at ~50-500 ns, second-order fixed costs (a 32-candidate fit scan, ~110 ns for numeric) become the largest remaining item; keep re-reading the E2E table after each round rather than the original profile.
+
+**Benchmark delta (`RmQREncodeEndToEnd`, net10.0 Release, --launchCount 3 --warmupCount 3 --iterationCount 15, before = HEAD f6a3816, after = this change)**
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| RmQR_Numeric_AutoFit_Encode (Span) | 318.3 ns | 211.7 ns | -33 % |
+| RmQR_Numeric_R7x43_Encode (Span) (fixed version, code-identical) | 148.8 ns | 169.7 ns | +14 % (noise) |
+| RmQR_Alphanumeric_R11x59_Encode (Span) (fixed) | 289.4 ns | 328.2 ns | +13 % (noise) |
+| RmQR_Byte_R17x139_Encode (Span) (fixed) | 927.8 ns | 1,044 ns | +13 % (noise) |
+| StandardQr_Numeric_V1_Encode (Span) (untouched control) | 850.3 ns | 955.6 ns | +12 % (drift) |
+
+The after run landed on a noisier machine state (StdDev 5-7 % vs < 1 % before): every fixed-version row and the untouched control moved by the same +12-14 %, so the true auto-fit gain is ~-40 % (the fit scan was ~110 ns of 318). Auto fit of 12 digits selects R11x27 (297 modules), so it is not directly comparable with the fixed R7x43 row.
