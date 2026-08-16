@@ -16,9 +16,10 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 /// 5. Reed-Solomon error correction per block
 /// 6. Bitstream decoding (mode segments → text)
 /// </code>
-/// The function-pattern layout is built by the encoder's own
-/// <see cref="QRCodeGenerator.PlaceFunctionModules"/> (cached per version), so the
-/// decoder can never disagree with the encoder about which modules carry data.
+/// The function-pattern layout comes from the encoder's own per-version placement
+/// tables (<see cref="ModulePlacer.GetLayout"/>, built by
+/// <see cref="QRCodeGenerator.PlaceFunctionModulesReference"/>), so the decoder can
+/// never disagree with the encoder about which modules carry data.
 /// </remarks>
 internal static class QRMatrixDecoder
 {

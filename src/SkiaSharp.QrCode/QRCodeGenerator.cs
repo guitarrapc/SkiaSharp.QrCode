@@ -74,7 +74,7 @@ public static class QRCodeGenerator
         // 7. Write QR matrix:
         //    - Place fixed patterns (finder, separators, alignment, timing, dark module)
         //    - Reserve areas for format and version information
-        //    - Build blocked module bitmask for efficient lookup
+        //    - Take the version's cached function-pattern template and blocked-module bitmask
         //    - Place data modules in zigzag pattern
         //    - Apply optimal mask pattern (test all 8 patterns, select best)
         //    - Place format information (ECC level + mask pattern)
@@ -155,7 +155,7 @@ public static class QRCodeGenerator
     /// </para>
     /// <para>
     /// Only the first <see cref="QRCodeCalculatedSize.BufferSize"/> bytes of <paramref name="destination"/> are written
-    /// (cleared first, so a dirty pooled buffer is fine); any remaining bytes are left untouched.
+    /// (every byte of that region is written, so a dirty pooled buffer is fine); any remaining bytes are left untouched.
     /// </para>
     /// </remarks>
     /// <param name="textSpan">The text span to encode in the QR code.</param>
@@ -448,21 +448,19 @@ public static class QRCodeGenerator
     /// plus the reserved format/version areas.
     /// </summary>
     /// <remarks>
-    /// Shared by the encoder (module placement) and the decoder (identifying which
-    /// modules are function patterns vs. data), so both sides always agree on the
-    /// exact blocked region layout.
+    /// Fast path: copies the version's cached template and bitmask
+    /// (<see cref="ModulePlacer.GetLayout"/>), which are built once by
+    /// <see cref="PlaceFunctionModulesReference"/>. The same tables serve the encoder
+    /// (WriteQRMatrix) and the decoder (QRMatrixDecoder reads the cached bitmask), so
+    /// both sides always agree on the exact blocked region layout. The template covers
+    /// the whole core, so <paramref name="buffer"/> need not be zeroed; the data
+    /// modules are written as 0.
     /// </remarks>
     /// <param name="buffer">Core matrix buffer (size × size bytes) to place patterns into.</param>
     /// <param name="size">Matrix size in modules (no quiet zone).</param>
     /// <param name="version">QR code version (1-40).</param>
     /// <param name="blockedMask">Output bitmask buffer of at least (size*size+7)/8 bytes; overwritten with the version's cached blocked-module mask.</param>
-    /// <remarks>
-    /// Fast path: copies the version's cached template and bitmask
-    /// (<see cref="ModulePlacer.GetLayout"/>), which are built once by
-    /// <see cref="PlaceFunctionModulesReference"/>. The template covers the whole
-    /// core, so <paramref name="buffer"/> need not be zeroed; the data modules are
-    /// written as 0.
-    /// </remarks>
+
     internal static void PlaceFunctionModules(Span<byte> buffer, int size, int version, Span<byte> blockedMask)
     {
         var layout = ModulePlacer.GetLayout(version);

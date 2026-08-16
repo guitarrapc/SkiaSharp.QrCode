@@ -260,9 +260,11 @@ internal static partial class ModulePlacer
     //   fmt[e][g][y] = the ECC level's format-information bits that land in row y
     //                  (both copies), per lane.
     // The tables are built once per version from the canonical blocked mask
-    // (ModulePlacer.GetLayout) and published with a volatile write. Contract shared
-    // with the scalar path: the 30 format-information modules are light on entry
-    // (they are reserved, never written by placement), so the overlay is an OR.
+    // (ModulePlacer.GetLayout) and published with a volatile write. Precondition of
+    // this tier (guaranteed by the placement pipeline, not by the scalar tiers, which
+    // set-or-clear these bits): the 30 format-information modules are light on entry
+    // — they are reserved modules that no painter or data placement writes — so the
+    // overlay is an OR.
     // Popcounts of provably disjoint bit sets (dark 5-run vs light 5-run markers,
     // their run starts, the two finder-like orientations) are fused into one Mula
     // popcount of the OR. Byte->bit packing reads 32 (rows <= 32) or 64 bytes per row
@@ -367,10 +369,19 @@ internal static partial class ModulePlacer
 
     internal static int MaskCode64Simd(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> blockedMask, ECCLevel eccLevel)
     {
-        // The per-version tables are derived from the canonical blocked mask; the
-        // parameter is the same mask handed to the scalar tiers (kept for signature
-        // parity with them and the ARM tier).
+        // The per-version tables are derived from the version's canonical blocked mask,
+        // not from the parameter (kept for signature parity with the scalar and ARM
+        // tiers, which do read it): callers must pass that same mask, which every
+        // production caller does (WriteQRMatrix hands over layout.BlockedMask).
         var layout = GetMaskLayout64(version, size);
+        System.Diagnostics.Debug.Assert(blockedMask.SequenceEqual(GetLayout(version).BlockedMask), "MaskCode64Simd requires the version's canonical blocked mask");
+
+        // Defense in depth for the unchecked wide loads / table indexing below; the
+        // production caller already guarantees both.
+        if (buffer.Length < size * size)
+            throw new ArgumentException($"buffer too small: required {size * size}, got {buffer.Length}", nameof(buffer));
+        if ((uint)eccLevel > 3)
+            throw new ArgumentOutOfRangeException(nameof(eccLevel), eccLevel, "ECCLevel was out of range");
 
         Span<ulong> packed = stackalloc ulong[64];
         packed = packed[..size];
@@ -392,11 +403,11 @@ internal static partial class ModulePlacer
         }
 
         // rows4[y] = row y of the group's four candidates (masked, format bits in);
-        // scratch for the complements, the vertical-equality rows and the 5-run markers
+        // scratch for the complements and the vertical-equality rows (the 5-run marker
+        // is a rolling register in the scorer)
         Span<Vector256<ulong>> rows4 = stackalloc Vector256<ulong>[64];
         Span<Vector256<ulong>> nrows4 = stackalloc Vector256<ulong>[64];
         Span<Vector256<ulong>> eq4 = stackalloc Vector256<ulong>[64];
-        Span<Vector256<ulong>> v54 = stackalloc Vector256<ulong>[64];
 
         var bestPatternIndex = 0;
         var bestScore = int.MaxValue;
@@ -410,7 +421,7 @@ internal static partial class ModulePlacer
             {
                 rows4[y] = (Vector256.Create(packed[y]) ^ Unsafe.Add(ref pre, preBase + y)) | Unsafe.Add(ref fmt, fmtBase + y);
             }
-            var scores = ScoreLanes64(rows4, nrows4, eq4, v54, size);
+            var scores = ScoreLanes64(rows4, nrows4, eq4, size);
             for (var lane = 0; lane < 4; lane++)
             {
                 var s = scores.GetElement(lane);
@@ -464,7 +475,7 @@ internal static partial class ModulePlacer
     /// lane, so no horizontal reduction happens until the end.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    internal static Vector128<int> ScoreLanes64(Span<Vector256<ulong>> rows, Span<Vector256<ulong>> nrows, Span<Vector256<ulong>> eq, Span<Vector256<ulong>> v5, int size)
+    internal static Vector128<int> ScoreLanes64(Span<Vector256<ulong>> rows, Span<Vector256<ulong>> nrows, Span<Vector256<ulong>> eq, int size)
     {
         var rowMaskV = Vector256.Create(size == 64 ? ulong.MaxValue : (1ul << size) - 1);
         var startMaskV = Vector256.Create((1ul << (size - 10)) - 1);
@@ -519,7 +530,6 @@ internal static partial class ModulePlacer
         for (var y = 4; y < size; y++)
         {
             var cur = eq[y - 4] & eq[y - 3] & eq[y - 2] & eq[y - 1];
-            v5[y] = cur;
             accOnes += Pop256(cur);
             accTwos += Pop256(Vector256.AndNot(cur, prev));
             prev = cur;

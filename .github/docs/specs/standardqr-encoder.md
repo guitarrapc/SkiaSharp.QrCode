@@ -43,7 +43,7 @@ The encoder exposes two output models.
 - flat row-major order;
 - quiet zone included.
 
-`GetRequiredBufferSize` returns the required matrix side, byte count, and automatically selected version. The encoder clears exactly the written region, accepts a dirty pooled destination, and leaves any tail beyond the returned byte count untouched. After JIT and pool warm-up, the span path is allocation-free in Release builds.
+`GetRequiredBufferSize` returns the required matrix side, byte count, and automatically selected version. The encoder overwrites every byte of the written region (the core comes from a per-version template copy; only a non-zero quiet zone is cleared), accepts a dirty pooled destination, and leaves any tail beyond the returned byte count untouched. After JIT and pool warm-up, the span path is allocation-free in Release builds.
 
 ### Supported
 

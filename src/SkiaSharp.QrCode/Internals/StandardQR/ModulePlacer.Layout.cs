@@ -269,7 +269,7 @@ internal static partial class ModulePlacer
                 for (var r = 0; r < rows; r++)
                 {
                     // walk order: right module (bit k) then left (bit k + 1); memory order is left, right
-                    Unsafe.WriteUnaligned(ref d, ReverseIfLittleEndian(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
+                    Unsafe.WriteUnaligned(ref d, SwapPair(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))));
                     k += 2;
                     d = ref Unsafe.Add(ref d, stride);
                 }
@@ -287,6 +287,10 @@ internal static partial class ModulePlacer
         }
     }
 
+    // The bit array holds (right module, left module) in walk order; memory wants the
+    // left module first. Read and write go through the same host endianness, so a
+    // ReverseEndianness in between always swaps the two BYTES in memory order,
+    // whatever the host is — the swap is unconditional by design.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ushort ReverseIfLittleEndian(ushort v) => BitConverter.IsLittleEndian ? BinaryPrimitives.ReverseEndianness(v) : v;
+    private static ushort SwapPair(ushort v) => BinaryPrimitives.ReverseEndianness(v);
 }

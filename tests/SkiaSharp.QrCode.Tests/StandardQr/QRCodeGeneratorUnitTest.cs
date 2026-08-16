@@ -621,6 +621,66 @@ public class QRCodeGeneratorUnitTest
         }
     }
 
+    // Placement writes every core module from a per-version template (no destination
+    // clear on the quiet-zone-0 path, no clear of the pooled work buffer on the class
+    // path), so a dirty destination must come out identical to a clean one for every
+    // placer / mask tier: v1-2 (stack bit scratch), v3+ (pooled), v7+ (version bits),
+    // v12 / v28 (two- and three-word mask tiers), and both quiet-zone branches.
+    public static IEnumerable<(string text, int quietZone)> DirtyDestinationCases()
+    {
+        string[] texts =
+        [
+            "HELLO WORLD",                                                    // v1
+            new string('A', 40),                                              // v3
+            new string('7', 300),                                             // v8 (numeric, version bits)
+            new string('Q', 500),                                             // v12+
+            new string('z', 1500),                                            // v28+ (byte)
+        ];
+        foreach (var text in texts)
+        {
+            yield return (text, 0);
+            yield return (text, 4);
+        }
+    }
+
+    [Test]
+    [MethodDataSource(nameof(DirtyDestinationCases))]
+    public async Task CreateQrCode_SpanDestination_DirtyBuffer_MatchesCleanBuffer_AllQuietZones(string text, int quietZone)
+    {
+        var calculated = GetRequiredBufferSize(text.AsSpan(), ECCLevel.M, quietZoneSize: quietZone);
+        var clean = new byte[calculated.BufferSize];
+        var written = CreateQrCode(text.AsSpan(), ECCLevel.M, clean, quietZoneSize: quietZone);
+        await Assert.That(written).IsEqualTo(calculated.BufferSize);
+
+        foreach (var fill in new byte[] { 0xFF, 0xA5, 0x01 })
+        {
+            var dirty = new byte[calculated.BufferSize + 7];
+            dirty.AsSpan().Fill(fill);
+            var writtenDirty = CreateQrCode(text.AsSpan(), ECCLevel.M, dirty, quietZoneSize: quietZone);
+            await Assert.That(writtenDirty).IsEqualTo(written);
+            await Assert.That(dirty.AsSpan(0, written).SequenceEqual(clean)).IsTrue()
+                .Because($"dirty fill 0x{fill:X2}, quiet zone {quietZone}, version {calculated.Version} must reproduce the clean matrix byte for byte");
+            for (var i = written; i < dirty.Length; i++)
+                await Assert.That(dirty[i]).IsEqualTo(fill);
+        }
+
+        // Class API: its pooled work buffer is deliberately not cleared; the result must
+        // agree with the span path module for module. Poison the pool bucket the generator
+        // will rent (same length, returned dirty) so a fresh pool cannot hide an unwritten
+        // module.
+        var coreSize = calculated.QrSize - 2 * quietZone;
+        var poison = System.Buffers.ArrayPool<byte>.Shared.Rent(coreSize * coreSize);
+        poison.AsSpan().Fill(0xFF);
+        System.Buffers.ArrayPool<byte>.Shared.Return(poison, clearArray: false);
+        var data = CreateQrCode(text.AsSpan(), ECCLevel.M, quietZoneSize: quietZone);
+        await Assert.That(data.Version).IsEqualTo(calculated.Version);
+        var side = calculated.QrSize;
+        for (var row = 0; row < side; row++)
+            for (var col = 0; col < side; col++)
+                if (data[row, col] != (clean[row * side + col] != 0))
+                    Assert.Fail($"class API differs from span API at ({row},{col}) for version {calculated.Version}, quiet zone {quietZone}");
+    }
+
     [Test]
     public async Task CreateQrCode_SpanDestination_StringOverload_MatchesSpanOverload()
     {

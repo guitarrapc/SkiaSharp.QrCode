@@ -325,7 +325,7 @@ internal static partial class ModulePlacer
 
     /// <summary>
     /// Lane-per-row Vector128 penalty scorer for single-word rows (structure
-    /// mirrors the AVX2 CalculateScore64Vec, 2 rows per iteration). Row-direction
+    /// mirrors the AVX2 tier's row-lane scorer, 2 rows per iteration). Row-direction
     /// rules run with per-lane shifts and native popcount; column-direction rules
     /// materialize eq (vertical run continuation) and v5 (4-deep AND window)
     /// arrays with vector passes, then score them with offset loads. Scalar tails
