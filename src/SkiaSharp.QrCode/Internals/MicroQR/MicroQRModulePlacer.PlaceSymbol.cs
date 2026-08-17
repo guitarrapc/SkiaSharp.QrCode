@@ -557,26 +557,9 @@ internal static partial class MicroQRModulePlacer
     /// PDEP/PEXT are microcoded on AMD before Zen 3 (hundreds of cycles per
     /// instruction), which would turn the BMI2 kernel into a large regression
     /// there: allow it only on non-AMD vendors or AMD family 0x19 (Zen 3)+.
+    /// Shared with the rMQR extraction kernel.
     /// </summary>
-    private static readonly bool s_hasFastPext = DetectFastPext();
-
-    private static bool DetectFastPext()
-    {
-        if (!Bmi2.X64.IsSupported)
-        {
-            return false;
-        }
-        var (_, ebx, ecx, edx) = X86Base.CpuId(0, 0);
-        var isAmd = ebx == 0x68747541 && edx == 0x69746E65 && ecx == 0x444D4163; // "AuthenticAMD"
-        if (!isAmd)
-        {
-            return true;
-        }
-        var (eax, _, _, _) = X86Base.CpuId(1, 0);
-        var baseFamily = (eax >> 8) & 0xF;
-        var family = baseFamily == 0xF ? baseFamily + ((eax >> 20) & 0xFF) : baseFamily;
-        return family >= 0x19;
-    }
+    private static readonly bool s_hasFastPext = HardwareCapabilities.HasFastPext;
 
     /// <summary>
     /// Per-(size, row) PEXT/PDEP masks, 6 ulongs per row:

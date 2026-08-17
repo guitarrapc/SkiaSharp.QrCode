@@ -643,3 +643,87 @@ Third post-Phase-7 kernel round, one round only (kernel benchmark loop: 4 varian
 | StandardQr_Numeric_V1_Encode (Span) (untouched control) | 850.3 ns | 955.6 ns | +12 % (drift) |
 
 The after run landed on a noisier machine state (StdDev 5-7 % vs < 1 % before): every fixed-version row and the untouched control moved by the same +12-14 %, so the true auto-fit gain is ~-40 % (the fit scan was ~110 ns of 318). Auto fit of 12 digits selects R11x27 (297 modules), so it is not directly comparable with the fixed R7x43 row.
+
+---
+
+### Follow-up: codeword extraction fast path (2026-08-17)
+
+`RmQRMatrixDecoder.ExtractCodewords` was the last per-module walk left in the rMQR
+pipeline, and profiling put it at 70-91 % of `DecodeMatrix` (Reed-Solomon correction
+is under 1 %) and ~10-15 % of the image path. The decode direction now gets the same
+treatment the placer got on the encode side.
+
+**Done**
+
+- Per-version extraction tables, lazily built from `RmQRModulePlacer.IsFunctionModule`
+  and `GetMaskBit` so encode and decode cannot drift apart, published with a volatile
+  write. Two forms: the walk order with the mask fused into the top bit of each entry,
+  and a PEXT/PDEP descriptor per column pair. The walk is truncated to whole codewords
+  at build time, so neither kernel needs a remainder check.
+- Bit-plane kernel (`RmQRMatrixDecoder.Simd.cs`, x64 with AVX2 and fast BMI2): the byte
+  grid is transposed once into per-column bit planes (16-bit lanes, 16 columns per
+  vector step, a forward and a row-reversed plane in the same pass), then each column
+  pair of the zigzag is emitted with one PEXT + PDEP per column and one XOR for the
+  data mask. No module byte is read twice and no output bit is handled individually.
+- Portable kernel for every other target: the walk-order table gathered into a register
+  accumulator, one store per output byte, branchless.
+- `stream.Clear()` dropped from `DecodeMatrix`: both kernels write every byte.
+- The fast-PDEP CPUID probe (AMD is microcoded before Zen 3) moved out of
+  `MicroQRModulePlacer.PlaceSymbol` into a shared `HardwareCapabilities`, now used by
+  both symbologies.
+- `RmQRExtractCodewordsParityTest`: both tiers against `RmQRNaiveReference`
+  .`ExtractInterleavedStream` for all 32 versions over all-light, all-dark written as
+  1 / 0xFF / 2, and pseudo-random grids, on a poisoned destination; plus a test that
+  pins the transpose's deliberate overread to stay inside `width * height`.
+  Full suite green on net8.0 and net10.0 (5,561 / 5,549 tests).
+
+**Lessons learned**
+
+- The per-module `IsFunctionModule` predicate alone was 40-70 % of the baseline, and
+  its share grew with width because it loops over the alignment columns. Hoisting
+  version-derived work into tables was worth more than every instruction-level trick
+  that followed; the vector work added ~5x on top of the ~12x the tables gave.
+- A fast path that only handles the regular case leaves its own guard as the
+  bottleneck. Splitting column pairs into "clean" and "irregular" covered 82-94 % of
+  the bits at width 139 but only 39-45 % at width 27 (3 of 13 pairs), so those versions
+  paid the full transpose and still ran most bits through a per-bit loop, regressing
+  against the plain table walk. PEXT and PDEP take arbitrary masks, so an irregular
+  pair is the same two instructions with different constants; deleting the split was
+  the largest single win after the tables (-33 % to -41 %) and removed the regression.
+- Lane width beat vector width: 512-bit steps landed inside noise of 256-bit ones twice
+  (Zen 4 double-pumps them), while narrowing the plane lanes from 32 to 16 bits at the
+  same vector width was worth 15-18 %. A column needs h-2 <= 15 bits, so a `ushort`
+  lane doubles the columns per step for free. No AVX-512 tier shipped.
+- An overread beat a tail: rows 1..h-2 always have a row below them, so the transpose
+  can run past the end of a row instead of peeling scalar tail columns. Worth 10-25 %,
+  most on narrow symbols where 3 of 27 columns were the tail.
+- At 40-600 ns per call the prologue is the hot loop: two `stackalloc` zero-inits and a
+  `Span<uint>` argument that rematerialized on the stack were 20 % of the runtime on
+  small symbols. `[SkipLocalsInit]` would still buy 1.5-10 % but needs
+  `AllowUnsafeBlocks`, which the library does not set; left as a one-line opt-in.
+
+**Benchmark delta (net10.0 Release, --launchCount 3 --warmupCount 3 --iterationCount 15, before = HEAD a62812a, after = this change)**
+
+`RmQRDecodeEndToEnd`:
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| RmQR_Numeric_R7x43_Decode (Span) | 892.1 ns | 177.8 ns | **-80 % (5.0x)** |
+| RmQR_Alphanumeric_R11x59_Decode (Span) | 3,024.6 ns | 554.8 ns | **-82 % (5.5x)** |
+| RmQR_Byte_R17x139_Decode (Span) | 17,706.2 ns | 2,223.1 ns | **-87 % (8.0x)** |
+| RmQR_Numeric_R7x43_Decode (string) | 953.4 ns | 203.5 ns | -79 % |
+| RmQR_Byte_R17x139_Decode (string) | 17,540.4 ns | 2,494.7 ns | -86 % |
+| StandardQr_Numeric_V1_Decode (Span) (untouched control) | 915.7 ns | 923.7 ns | +0.9 % (unchanged) |
+
+`RmQRImageEndToEnd`:
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| R7x43_ImageDecode_Span | 19.93 us | 17.20 us | **-14 %** |
+| R17x139_ImageDecode_Span | 114.70 us | 97.59 us | **-15 %** |
+
+Span variants stay at 0 B allocated; the string overloads keep their existing 48 B /
+328 B result allocations. The image path is capped by Amdahl: extraction is only
+10-15 % of it, with the Otsu histogram and the finder scan dominating — those are the
+next targets, along with `LuminanceConverter` (measured at 66 % of a full
+`TryDecode(SKBitmap)` call, and shared by all three symbologies).
