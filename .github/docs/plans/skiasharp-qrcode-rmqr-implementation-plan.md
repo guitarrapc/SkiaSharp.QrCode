@@ -810,3 +810,80 @@ which is one `pmulhuw` - at roughly 3x the ops of the opaque path, so still arou
 
 Next in the image path, now that conversion is 7-15 %: the Otsu histogram and
 `FinderPatternFinder`, whose scalar cross-checks measured 90 % of `FindCandidates`.
+
+---
+
+### Follow-up: finder candidate scan stride (2026-08-17)
+
+With conversion down to 7-15 % of the bitmap path, `FinderPatternFinder.FindCandidates`
+was ~75 % of `TryDecodeImage(span)` and ~64 % of `TryDecode(SKBitmap)`. It is the other
+finder entry point: `TryFind` (Standard QR) already shipped the SIMD row bitmask **and**
+a row stride with a complementary rescan, while `FindCandidates` — used by the Micro QR
+and rMQR image decoders — kept the strideless full sweep. That was sized for Micro QR
+(17 modules square); rMQR at 8 px/module makes it a 1144 × 168 sweep.
+
+**Done**
+
+- Row stride 6 for `FindCandidates`, with the complementary pass over the skipped rows
+  triggered when **no candidate was confirmed on two or more rows**, rather than when
+  none was found at all. That is the whole idea: the stride stops being a correctness
+  parameter. A stride too coarse for the symbol's module size leaves the true finder at
+  Count 1, the fallback runs, and the union is exactly a full sweep — so a bad stride
+  costs time, never a detection. `TryFind` is untouched.
+- `FindCandidatesFullSweep` exposed internally for the parity test.
+- `FinderCandidatesStrideTest`: across 3-13 px/module and the narrowest, widest and
+  smallest rMQR shapes, every candidate a full sweep confirms must survive the strided
+  path within 1 px; plus a noise image where nothing is confirmed, so the two paths must
+  agree exactly. Full suite green on net8.0 and net10.0 (5,573 / 5,561 tests), including
+  the per-degree rotation sweep, the 144-symbol PNG corpus, perspective, JPEG q60,
+  ±24 noise and low contrast.
+
+**Lessons learned**
+
+- A per-call cost measured on a synthetic worst case does not tell you what the real
+  case is bound by. A 2 px stripe image put the run walk at ~17 cycles per dark run and
+  ~8.5 per `NextBit`, which predicted a solid win from registerizing the walk; it bought
+  4-10 %, inside the canary spread. The real image's walk is bound by data-dependent
+  branches over unpredictable run lengths, which that rewrite does not change.
+- Two changes that are each inside the noise do not add up to a signal: combining the
+  integer ratio pre-filter with the registerized walk was *worse* than either alone on
+  two scenarios.
+- Row count beat every instruction-level idea by an order of magnitude, and once the
+  stride landed the micro-optimizations contributed nothing measurable at all.
+- Do not re-litigate a prior round's refutation without a new mechanism. The `TryFind`
+  round had already rejected aggressive strides on envelope-safety grounds and this
+  round reproduced that conclusion; what made the wider stride legitimate was not a
+  better argument but a different fallback trigger that changes its failure mode.
+
+**Benchmark delta (net10.0 Release, --launchCount 3 --warmupCount 3 --iterationCount 15)**
+
+`RmQRImageEndToEnd`:
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| R7x43_ImageDecode_Span | 18.86 µs | 7.07 µs | **-63 % (2.7x)** |
+| R17x139_ImageDecode_Span | 99.76 µs | 38.62 µs | **-61 % (2.6x)** |
+| R7x43_BitmapDecode | 20.38 µs | 9.89 µs | **-51 % (2.1x)** |
+| R17x139_BitmapDecode | 117.72 µs | 52.94 µs | **-55 % (2.2x)** |
+| R7x43_512px / R17x139_1024px (renders, untouched) | 1,021 / 2,661 µs | 1,012 / 2,678 µs | -1 % / +1 % |
+
+`MicroQRImageEndToEnd` (the scan is shared):
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| M4_ImageDecode_Span | 13.80 µs | 6.20 µs | **-55 % (2.2x)** |
+| M2_512px / M4_512px (renders, untouched) | 4,486 / 4,480 µs | 4,471 / 4,503 µs | -0.3 % / +0.5 % |
+
+Kernel gain was 5.3-6.7x; the span decode gained 2.6x, the Amdahl gap being the
+remaining Otsu, grid sampling and matrix decode. Across the three decode rounds the
+R17x139 span decode has gone **115 → 99.8 → 38.6 µs**.
+
+**Open**
+
+The inverted-retry path still redoes everything on a second buffer: the reflectance
+retry inverts the luminance (a full pass, measured at 115 µs on 192k px) and rescans.
+The dark bitmask of the inverted image is the exact complement of the first pass's, so
+keeping the per-row masks (width × height bits, 24 KB for 192k px) would let the second
+polarity skip both the inversion and the mask build. That is a change in
+`RmQRImageDecoder`, not in the finder, and it is now the largest remaining item on the
+failure path.
