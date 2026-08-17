@@ -727,3 +727,86 @@ Span variants stay at 0 B allocated; the string overloads keep their existing 48
 10-15 % of it, with the Otsu histogram and the finder scan dominating — those are the
 next targets, along with `LuminanceConverter` (measured at 66 % of a full
 `TryDecode(SKBitmap)` call, and shared by all three symbologies).
+
+---
+
+### Follow-up: luminance conversion fast path (2026-08-17)
+
+With extraction fixed, `LuminanceConverter.ConvertRgba` was the largest single item in
+the whole decode: differencing `TryDecode(SKBitmap)` against `TryDecodeImage(span)`
+(which skips the conversion) put it at **69 %** of the bitmap path on both R7x43 and
+R17x139. It is shared by all three symbologies.
+
+**Done**
+
+- AVX2 kernel (`LuminanceConverter.Simd.cs`), 32 pixels per iteration, bit-identical to
+  the per-pixel loop. Each pixel is shuffled into the byte quad `[R, G, G, B]` and run
+  through `pmaddubsw` against `[77, 51, 99, 29]` then `pmaddwd` with ones. The split of
+  green into 51 + 99 is what makes it exact: `pmaddubsw` sums adjacent byte pairs into
+  signed 16-bit lanes, so each pair weight must stay at or under 128, and the BT.601
+  weights sum to exactly 256.
+- Row remainders take 8-pixel blocks plus one overlapping block (which redoes a few
+  pixels with identical values) instead of dropping to the scalar loop: worth 23-60 %,
+  most on narrow symbols where the tail was 6 % of the pixels running 30x slower.
+- Alpha handled without leaving the vector path in both shapes that occur:
+  straight alpha replaces fully transparent pixels with white (exact, since
+  `(c·0 + 255·255)/255 = 255` and white is exactly luminance 255), and premultiplied
+  adds 255 − a to the luminance, which is exact for *every* alpha because the composite
+  adds 256 · (255 − a) to a sum whose low 8 bits are then shifted away. The
+  premultiplied path never falls back.
+- One loop per alpha mode, dispatched once outside the row loop. Fusing them into a
+  single method measured 2-3x *slower* on code size alone (5.7 KB against 1.4 KB).
+- `LuminanceConverterParityTest`: both tiers against each other over all three pixel
+  layouts, premultiplied and straight, four alpha shapes, widths straddling the 8 and
+  32-pixel steps, padded and tight rows, plus a test pinning that the vector loads stay
+  inside the caller's pixel span. Full suite green on net8.0 and net10.0.
+- `RmQRImageEndToEnd` gained `R7x43_BitmapDecode` / `R17x139_BitmapDecode`: no existing
+  benchmark went through the `SKBitmap` entry point, so the conversion was invisible.
+
+**Lessons learned**
+
+- A noise canary has to be the same *kind* of code as the variants it calibrates. A copy
+  of the scalar baseline reported a 2-14 % noise floor while the vector variants on the
+  same large scenarios were swinging 60 % between process launches - the baseline is
+  compute-bound, the vector kernels are memory-bound. Two rounds of verdicts were
+  artifacts of that, and one sent a whole round chasing a loop-rotation theory that the
+  disassembly appeared to support. Adding a byte-identical copy of a *vector* variant
+  made the real floor visible and retired both false findings.
+- Identical disassembly is evidence that a difference is not in the code. Two loops that
+  matched instruction for instruction were credited with a 34 % gap; that should have
+  been read as "this cannot be a code effect".
+- The textbook first move was the weakest one: specialising the runtime channel offsets
+  bought 2-13 %, mostly inside noise, for +640 B of code, because the JIT was already
+  hoisting the address arithmetic.
+- The correctness gate turned a wrong optimisation into a better one. Whitening
+  transparent pixels is exact for straight alpha but not for premultiplied buffers that
+  violate c ≤ a; the gate rejected it, and asking why produced the identity that makes
+  the premultiplied composite a single add with no fallback at all.
+
+**Benchmark delta (net10.0 Release, --launchCount 3 --warmupCount 3 --iterationCount 15)**
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| R7x43_BitmapDecode | 66.27 µs | 20.38 µs | **-69 % (3.25x)** |
+| R17x139_BitmapDecode | 371.23 µs | 117.72 µs | **-68 % (3.15x)** |
+| R7x43_ImageDecode_Span (control, does not call the converter) | 20.56 µs | 18.86 µs | -8 % (drift) |
+| R17x139_ImageDecode_Span (control) | 115.06 µs | 99.76 µs | -13 % (drift) |
+
+The controls moved, so the raw deltas are not clean: the before run sat on a noisier
+machine (StdDev 8-14 % against 0.9-5 % after) and the untouched render scenarios in the
+same report drifted 12-28 %. The drift-free reading is the within-run difference, since
+bitmap decode is luminance decode plus the conversion: **45.71 → 1.52 µs (30x)** on
+R7x43 and **256.17 → 17.96 µs (14.3x)** on R17x139, matching the kernel measurements
+once `PeekPixels` and the tier dispatch are included. The converter's share of
+`TryDecode(SKBitmap)` falls from 69 % to 7 % / 15 %.
+
+**Open**
+
+Arbitrary partial alpha on the straight-alpha branch still runs the scalar formula
+(a transparent-background PNG with anti-aliased module edges has exactly that shape).
+It is vectorizable exactly - for 0 ≤ x ≤ 65535, `x / 255 == ((x + 1) * 257) >> 16`,
+which is one `pmulhuw` - at roughly 3x the ops of the opaque path, so still around
+5-8x the scalar loop. Left open rather than declared converged.
+
+Next in the image path, now that conversion is 7-15 %: the Otsu histogram and
+`FinderPatternFinder`, whose scalar cross-checks measured 90 % of `FindCandidates`.

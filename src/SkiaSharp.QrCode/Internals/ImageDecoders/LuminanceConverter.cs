@@ -9,7 +9,7 @@ namespace SkiaSharp.QrCode.Internals.ImageDecoders;
 /// pixels are composited against white, QR quiet zones are white by definition,
 /// and transparent-background PNGs are a common input.
 /// </remarks>
-internal static class LuminanceConverter
+internal static partial class LuminanceConverter
 {
     /// <summary>
     /// Converts bitmap pixels to luminance (width × height bytes, row-major).
@@ -71,7 +71,45 @@ internal static class LuminanceConverter
         }
     }
 
+    /// <summary>
+    /// Pixel buffer to BT.601 luminance. Two tiers: an AVX2 kernel at 32 pixels per
+    /// iteration (see LuminanceConverter.Simd.cs) and this per-pixel loop everywhere
+    /// else. Both produce identical bytes; see LuminanceConverterParityTest.
+    /// </summary>
     private static void ConvertRgba(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied)
+    {
+#if NET8_0_OR_GREATER
+        // The only layouts reaching here are BGRA (2,1,0) and RGBA / RGB888x (0,1,2),
+        // which is what the vector shuffle masks cover.
+        if (System.Runtime.Intrinsics.X86.Avx2.IsSupported && greenOffset == 1 && (redOffset == 2 ? blueOffset == 0 : redOffset == 0 && blueOffset == 2))
+        {
+            ConvertRgbaAvx2(pixels, luminance, width, height, rowBytes, bgra: redOffset == 2, hasAlpha: alphaOffset >= 0, premultiplied);
+            return;
+        }
+#endif
+        ConvertRgbaScalar(pixels, luminance, width, height, rowBytes, redOffset, greenOffset, blueOffset, alphaOffset, premultiplied);
+    }
+
+    /// <summary>Whether the AVX2 tier runs on this machine (parity tests skip it otherwise).</summary>
+    internal static bool IsAvx2TierSupported =>
+#if NET8_0_OR_GREATER
+        System.Runtime.Intrinsics.X86.Avx2.IsSupported;
+#else
+        false;
+#endif
+
+    /// <summary>Tier-selecting entry for parity tests; behavior-identical to <see cref="ConvertRgba"/>.</summary>
+    internal static void ConvertRgbaForTest(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied, bool forceScalar)
+    {
+        if (forceScalar)
+        {
+            ConvertRgbaScalar(pixels, luminance, width, height, rowBytes, redOffset, greenOffset, blueOffset, alphaOffset, premultiplied);
+            return;
+        }
+        ConvertRgba(pixels, luminance, width, height, rowBytes, redOffset, greenOffset, blueOffset, alphaOffset, premultiplied);
+    }
+
+    private static void ConvertRgbaScalar(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied)
     {
         for (var y = 0; y < height; y++)
         {
