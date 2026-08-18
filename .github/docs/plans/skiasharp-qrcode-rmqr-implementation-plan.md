@@ -643,3 +643,495 @@ Third post-Phase-7 kernel round, one round only (kernel benchmark loop: 4 varian
 | StandardQr_Numeric_V1_Encode (Span) (untouched control) | 850.3 ns | 955.6 ns | +12 % (drift) |
 
 The after run landed on a noisier machine state (StdDev 5-7 % vs < 1 % before): every fixed-version row and the untouched control moved by the same +12-14 %, so the true auto-fit gain is ~-40 % (the fit scan was ~110 ns of 318). Auto fit of 12 digits selects R11x27 (297 modules), so it is not directly comparable with the fixed R7x43 row.
+
+---
+
+### Follow-up: codeword extraction fast path (2026-08-17)
+
+`RmQRMatrixDecoder.ExtractCodewords` was the last per-module walk left in the rMQR
+pipeline, and profiling put it at 70-91 % of `DecodeMatrix` (Reed-Solomon correction
+is under 1 %) and ~10-15 % of the image path. The decode direction now gets the same
+treatment the placer got on the encode side.
+
+**Done**
+
+- Per-version extraction tables, lazily built from `RmQRModulePlacer.IsFunctionModule`
+  and `GetMaskBit` so encode and decode cannot drift apart, published with a volatile
+  write. Two forms: the walk order with the mask fused into the top bit of each entry,
+  and a PEXT/PDEP descriptor per column pair. The walk is truncated to whole codewords
+  at build time, so neither kernel needs a remainder check.
+- Bit-plane kernel (`RmQRMatrixDecoder.Simd.cs`, x64 with AVX2 and fast BMI2): the byte
+  grid is transposed once into per-column bit planes (16-bit lanes, 16 columns per
+  vector step, a forward and a row-reversed plane in the same pass), then each column
+  pair of the zigzag is emitted with one PEXT + PDEP per column and one XOR for the
+  data mask. No module byte is read twice and no output bit is handled individually.
+- Portable kernel for every other target: the walk-order table gathered into a register
+  accumulator, one store per output byte, branchless.
+- `stream.Clear()` dropped from `DecodeMatrix`: both kernels write every byte.
+- The fast-PDEP CPUID probe (AMD is microcoded before Zen 3) moved out of
+  `MicroQRModulePlacer.PlaceSymbol` into a shared `HardwareCapabilities`, now used by
+  both symbologies.
+- `RmQRExtractCodewordsParityTest`: both tiers against `RmQRNaiveReference`
+  .`ExtractInterleavedStream` for all 32 versions over all-light, all-dark written as
+  1 / 0xFF / 2, and pseudo-random grids, on a poisoned destination; plus a test that
+  pins the transpose's deliberate overread to stay inside `width * height`.
+  Full suite green on net8.0 and net10.0 (5,561 / 5,549 tests).
+
+**Lessons learned**
+
+- The per-module `IsFunctionModule` predicate alone was 40-70 % of the baseline, and
+  its share grew with width because it loops over the alignment columns. Hoisting
+  version-derived work into tables was worth more than every instruction-level trick
+  that followed; the vector work added ~5x on top of the ~12x the tables gave.
+- A fast path that only handles the regular case leaves its own guard as the
+  bottleneck. Splitting column pairs into "clean" and "irregular" covered 82-94 % of
+  the bits at width 139 but only 39-45 % at width 27 (3 of 13 pairs), so those versions
+  paid the full transpose and still ran most bits through a per-bit loop, regressing
+  against the plain table walk. PEXT and PDEP take arbitrary masks, so an irregular
+  pair is the same two instructions with different constants; deleting the split was
+  the largest single win after the tables (-33 % to -41 %) and removed the regression.
+- Lane width beat vector width: 512-bit steps landed inside noise of 256-bit ones twice
+  (Zen 4 double-pumps them), while narrowing the plane lanes from 32 to 16 bits at the
+  same vector width was worth 15-18 %. A column needs h-2 <= 15 bits, so a `ushort`
+  lane doubles the columns per step for free. No AVX-512 tier shipped.
+- An overread beat a tail: rows 1..h-2 always have a row below them, so the transpose
+  can run past the end of a row instead of peeling scalar tail columns. Worth 10-25 %,
+  most on narrow symbols where 3 of 27 columns were the tail.
+- At 40-600 ns per call the prologue is the hot loop: two `stackalloc` zero-inits and a
+  `Span<uint>` argument that rematerialized on the stack were 20 % of the runtime on
+  small symbols. `[SkipLocalsInit]` would still buy 1.5-10 % but needs
+  `AllowUnsafeBlocks`, which the library does not set; left as a one-line opt-in.
+
+**Benchmark delta (net10.0 Release, --launchCount 3 --warmupCount 3 --iterationCount 15, before = HEAD a62812a, after = this change)**
+
+`RmQRDecodeEndToEnd`:
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| RmQR_Numeric_R7x43_Decode (Span) | 892.1 ns | 177.8 ns | **-80 % (5.0x)** |
+| RmQR_Alphanumeric_R11x59_Decode (Span) | 3,024.6 ns | 554.8 ns | **-82 % (5.5x)** |
+| RmQR_Byte_R17x139_Decode (Span) | 17,706.2 ns | 2,223.1 ns | **-87 % (8.0x)** |
+| RmQR_Numeric_R7x43_Decode (string) | 953.4 ns | 203.5 ns | -79 % |
+| RmQR_Byte_R17x139_Decode (string) | 17,540.4 ns | 2,494.7 ns | -86 % |
+| StandardQr_Numeric_V1_Decode (Span) (untouched control) | 915.7 ns | 923.7 ns | +0.9 % (unchanged) |
+
+`RmQRImageEndToEnd`:
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| R7x43_ImageDecode_Span | 19.93 us | 17.20 us | **-14 %** |
+| R17x139_ImageDecode_Span | 114.70 us | 97.59 us | **-15 %** |
+
+Span variants stay at 0 B allocated; the string overloads keep their existing 48 B /
+328 B result allocations. The image path is capped by Amdahl: extraction is only
+10-15 % of it, with the Otsu histogram and the finder scan dominating — those are the
+next targets, along with `LuminanceConverter` (measured at 66 % of a full
+`TryDecode(SKBitmap)` call, and shared by all three symbologies).
+
+---
+
+### Follow-up: luminance conversion fast path (2026-08-17)
+
+With extraction fixed, `LuminanceConverter.ConvertRgba` was the largest single item in
+the whole decode: differencing `TryDecode(SKBitmap)` against `TryDecodeImage(span)`
+(which skips the conversion) put it at **69 %** of the bitmap path on both R7x43 and
+R17x139. It is shared by all three symbologies.
+
+**Done**
+
+- AVX2 kernel (`LuminanceConverter.Simd.cs`), 32 pixels per iteration, bit-identical to
+  the per-pixel loop. Each pixel is shuffled into the byte quad `[R, G, G, B]` and run
+  through `pmaddubsw` against `[77, 51, 99, 29]` then `pmaddwd` with ones. The split of
+  green into 51 + 99 is what makes it exact: `pmaddubsw` sums adjacent byte pairs into
+  signed 16-bit lanes, so each pair weight must stay at or under 128, and the BT.601
+  weights sum to exactly 256.
+- Row remainders take 8-pixel blocks plus one overlapping block (which redoes a few
+  pixels with identical values) instead of dropping to the scalar loop: worth 23-60 %,
+  most on narrow symbols where the tail was 6 % of the pixels running 30x slower.
+- Alpha handled without leaving the vector path in both shapes that occur:
+  straight alpha replaces fully transparent pixels with white (exact, since
+  `(c·0 + 255·255)/255 = 255` and white is exactly luminance 255), and premultiplied
+  adds 255 − a to the luminance, which is exact for *every* alpha because the composite
+  adds 256 · (255 − a) to a sum whose low 8 bits are then shifted away. The
+  premultiplied path never falls back.
+- One loop per alpha mode, dispatched once outside the row loop. Fusing them into a
+  single method measured 2-3x *slower* on code size alone (5.7 KB against 1.4 KB).
+- `LuminanceConverterParityTest`: both tiers against each other over all three pixel
+  layouts, premultiplied and straight, four alpha shapes, widths straddling the 8 and
+  32-pixel steps, padded and tight rows, plus a test pinning that the vector loads stay
+  inside the caller's pixel span. Full suite green on net8.0 and net10.0.
+- `RmQRImageEndToEnd` gained `R7x43_BitmapDecode` / `R17x139_BitmapDecode`: no existing
+  benchmark went through the `SKBitmap` entry point, so the conversion was invisible.
+
+**Lessons learned**
+
+- A noise canary has to be the same *kind* of code as the variants it calibrates. A copy
+  of the scalar baseline reported a 2-14 % noise floor while the vector variants on the
+  same large scenarios were swinging 60 % between process launches - the baseline is
+  compute-bound, the vector kernels are memory-bound. Two rounds of verdicts were
+  artifacts of that, and one sent a whole round chasing a loop-rotation theory that the
+  disassembly appeared to support. Adding a byte-identical copy of a *vector* variant
+  made the real floor visible and retired both false findings.
+- Identical disassembly is evidence that a difference is not in the code. Two loops that
+  matched instruction for instruction were credited with a 34 % gap; that should have
+  been read as "this cannot be a code effect".
+- The textbook first move was the weakest one: specialising the runtime channel offsets
+  bought 2-13 %, mostly inside noise, for +640 B of code, because the JIT was already
+  hoisting the address arithmetic.
+- The correctness gate turned a wrong optimisation into a better one. Whitening
+  transparent pixels is exact for straight alpha but not for premultiplied buffers that
+  violate c ≤ a; the gate rejected it, and asking why produced the identity that makes
+  the premultiplied composite a single add with no fallback at all.
+
+**Benchmark delta (net10.0 Release, --launchCount 3 --warmupCount 3 --iterationCount 15)**
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| R7x43_BitmapDecode | 66.27 µs | 20.38 µs | **-69 % (3.25x)** |
+| R17x139_BitmapDecode | 371.23 µs | 117.72 µs | **-68 % (3.15x)** |
+| R7x43_ImageDecode_Span (control, does not call the converter) | 20.56 µs | 18.86 µs | -8 % (drift) |
+| R17x139_ImageDecode_Span (control) | 115.06 µs | 99.76 µs | -13 % (drift) |
+
+The controls moved, so the raw deltas are not clean: the before run sat on a noisier
+machine (StdDev 8-14 % against 0.9-5 % after) and the untouched render scenarios in the
+same report drifted 12-28 %. The drift-free reading is the within-run difference, since
+bitmap decode is luminance decode plus the conversion: **45.71 → 1.52 µs (30x)** on
+R7x43 and **256.17 → 17.96 µs (14.3x)** on R17x139, matching the kernel measurements
+once `PeekPixels` and the tier dispatch are included. The converter's share of
+`TryDecode(SKBitmap)` falls from 69 % to 7 % / 15 %.
+
+**Open**
+
+Arbitrary partial alpha on the straight-alpha branch still runs the scalar formula
+(a transparent-background PNG with anti-aliased module edges has exactly that shape).
+It is vectorizable exactly - for 0 ≤ x ≤ 65535, `x / 255 == ((x + 1) * 257) >> 16`,
+which is one `pmulhuw` - at roughly 3x the ops of the opaque path, so still around
+5-8x the scalar loop. Left open rather than declared converged.
+
+Next in the image path, now that conversion is 7-15 %: the Otsu histogram and
+`FinderPatternFinder`, whose scalar cross-checks measured 90 % of `FindCandidates`.
+
+---
+
+### Follow-up: finder candidate scan stride (2026-08-17)
+
+With conversion down to 7-15 % of the bitmap path, `FinderPatternFinder.FindCandidates`
+was ~75 % of `TryDecodeImage(span)` and ~64 % of `TryDecode(SKBitmap)`. It is the other
+finder entry point: `TryFind` (Standard QR) already shipped the SIMD row bitmask **and**
+a row stride with a complementary rescan, while `FindCandidates` — used by the Micro QR
+and rMQR image decoders — kept the strideless full sweep. That was sized for Micro QR
+(17 modules square); rMQR at 8 px/module makes it a 1144 × 168 sweep.
+
+**Done**
+
+- Row stride 6 for `FindCandidates`, with the complementary pass over the skipped rows
+  triggered when **no candidate was confirmed on two or more rows**, rather than when
+  none was found at all. That is the whole idea: the stride stops being a correctness
+  parameter. A stride too coarse for the symbol's module size leaves the true finder at
+  Count 1, the fallback runs, and the union is exactly a full sweep — so a bad stride
+  costs time, never a detection. `TryFind` is untouched.
+  > **Superseded by the review round below (2026-08-18).** The claim in this bullet is
+  > false: `Count >= 2` is evaluated over the whole candidate list, so any other
+  > finder-like pattern in the frame satisfies it on the real symbol's behalf and the
+  > fallback never runs. Measured loss and the replacement are in that entry.
+- `FindCandidatesFullSweep` exposed internally for the parity test.
+- `FinderCandidatesStrideTest`: across 3-13 px/module and the narrowest, widest and
+  smallest rMQR shapes, every candidate a full sweep confirms must survive the strided
+  path within 1 px; plus a noise image where nothing is confirmed, so the two paths must
+  agree exactly. Full suite green on net8.0 and net10.0 (5,573 / 5,561 tests), including
+  the per-degree rotation sweep, the 144-symbol PNG corpus, perspective, JPEG q60,
+  ±24 noise and low contrast.
+
+**Lessons learned**
+
+- A per-call cost measured on a synthetic worst case does not tell you what the real
+  case is bound by. A 2 px stripe image put the run walk at ~17 cycles per dark run and
+  ~8.5 per `NextBit`, which predicted a solid win from registerizing the walk; it bought
+  4-10 %, inside the canary spread. The real image's walk is bound by data-dependent
+  branches over unpredictable run lengths, which that rewrite does not change.
+- Two changes that are each inside the noise do not add up to a signal: combining the
+  integer ratio pre-filter with the registerized walk was *worse* than either alone on
+  two scenarios.
+- Row count beat every instruction-level idea by an order of magnitude, and once the
+  stride landed the micro-optimizations contributed nothing measurable at all.
+- Do not re-litigate a prior round's refutation without a new mechanism. The `TryFind`
+  round had already rejected aggressive strides on envelope-safety grounds and this
+  round reproduced that conclusion; what made the wider stride legitimate was not a
+  better argument but a different fallback trigger that changes its failure mode.
+
+**Benchmark delta (net10.0 Release, --launchCount 3 --warmupCount 3 --iterationCount 15)**
+
+> **Superseded by the review round below (2026-08-18).** Every figure in this section,
+> and the kernel gain quoted after it, was measured on stride 6 with the in-scan
+> complementary pass. The shipped design is stride 4 with the widening moved to the
+> image decoders; its numbers, measured against `main` rather than against a branch
+> commit, are in that entry.
+
+`RmQRImageEndToEnd`:
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| R7x43_ImageDecode_Span | 18.86 µs | 7.07 µs | **-63 % (2.7x)** |
+| R17x139_ImageDecode_Span | 99.76 µs | 38.62 µs | **-61 % (2.6x)** |
+| R7x43_BitmapDecode | 20.38 µs | 9.89 µs | **-51 % (2.1x)** |
+| R17x139_BitmapDecode | 117.72 µs | 52.94 µs | **-55 % (2.2x)** |
+| R7x43_512px / R17x139_1024px (renders, untouched) | 1,021 / 2,661 µs | 1,012 / 2,678 µs | -1 % / +1 % |
+
+`MicroQRImageEndToEnd` (the scan is shared):
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| M4_ImageDecode_Span | 13.80 µs | 6.20 µs | **-55 % (2.2x)** |
+| M2_512px / M4_512px (renders, untouched) | 4,486 / 4,480 µs | 4,471 / 4,503 µs | -0.3 % / +0.5 % |
+
+Kernel gain was 5.3-6.7x; the span decode gained 2.6x, the Amdahl gap being the
+remaining Otsu, grid sampling and matrix decode. Across the three decode rounds the
+R17x139 span decode has gone **115 → 99.8 → 38.6 µs**.
+
+**Open**
+
+The inverted-retry path still redoes everything on a second buffer: the reflectance
+retry inverts the luminance (a full pass, measured at 115 µs on 192k px) and rescans.
+The dark bitmask of the inverted image is the exact complement of the first pass's, so
+keeping the per-row masks (width × height bits, 24 KB for 192k px) would let the second
+polarity skip both the inversion and the mask build. That is a change in
+`RmQRImageDecoder`, not in the finder, and it is now the largest remaining item on the
+failure path.
+
+---
+
+### Follow-up: the failed-decode path (2026-08-18)
+
+With the success path down to 36-53 µs, the failure path had never been measured. Adding
+`NoSymbol_*` scenarios to `RmQRImageEndToEnd` showed two regimes on 1144×168:
+
+- an ordinary non-QR image (gradient) fails in **235 µs**, essentially all of it in Otsu
+  and in the reflectance-retry inversion (the two were profiled separately, against
+  different bases, so their individual shares are not quoted here);
+- salt-and-pepper noise fails in **14.2 ms**, because false finder candidates appear.
+
+Profiling localised the second one: `TryLocateSubFinder` costs **375 µs** per wrong frame
+(radius 25 half-modules → 2,601 ring positions × 3 shear leans × a 5×5 template =
+195,000 samples), and `TryFrame` calls it once per frame whose finder-side format copy
+decodes — an 18-bit word matched against 64 valid ones within Hamming distance 3, which
+random data passes roughly a quarter of the time.
+
+**Done**
+
+- `TryLocateSubFinder` bounding-box rejection: every sample sits at
+  `predicted + (offU + i)·u + (offV + j)·sv` with |offU| ≤ radius/2 and |i| ≤ 2, and the
+  12° lean bounds |svX| by |vX| + tan 12°·|vY|; if that box misses the image, every
+  position scores 0 and the baseline scanned all 7,803 of them to return false.
+- `TryLocateSubFinder` row-wise early exit: after each row of five samples, abandon the
+  position when `score + remaining < SubFinderMinScore`. Outcome-safe because a partial
+  score may become best-so-far but acceptance needs the floor, and any position reaching
+  the floor outranks every partial one.
+- `LuminanceInverter`: the reflectance-retry inversion vectorized (`255 - x` on a byte is
+  the ones' complement, so it is one NOT per lane), lifted out of all three image
+  decoders which each had the same scalar loop. 17-20× on the kernel.
+- Otsu was **not** touched: it already had a round whose accepted trade-off was parity on
+  noise, and the measurements here confirm that position rather than contradict it (the
+  gradient case runs at 0.36 ns/px, close to the ~0.28 ns/px a naive per-pixel fill gets
+  on random data, i.e. already at its floor).
+
+**Lessons learned**
+
+- A kernel benchmark scenario is a hypothesis about the input distribution, and it can be
+  wrong in a way statistical rigour cannot catch. The kernel round attributed the win to
+  the bounding box (20,000× on its wrong-frame scenarios) — but both of those scenarios
+  predicted off-image positions, which the real caller's wrong frames mostly do not. End
+  to end the box is worth 15 % and the early exit is worth the rest.
+- Where an early exit is tested decides whether the fast path pays for it. Testing per
+  sample cost **+12 %** on `R17x139_ImageDecode_Span`, reproduced across two runs against
+  two independent baselines; testing once per row of five cost nothing and kept most of
+  the failure win. The per-sample form would have given -77 % on the adversarial path
+  instead of -67 %, which was not worth 12 % on the most common large decode.
+- A ratio of thousands between adjacent benchmark scenarios is a bug report, not a fact:
+  the 2,770× gap between the right and the wrong frame named work that scales with a
+  search space in a case whose answer is known before searching.
+
+**Benchmark delta (net10.0 Release, --launchCount 5 --warmupCount 3 --iterationCount 20; before at fb516f0)**
+
+| Benchmark | Before | After | Delta |
+|---|---|---|---|
+| NoSymbol_Noise_1144x168 (adversarial failure) | 14,208.8 µs | 4,694.7 µs | **-67 % (3.0x)** |
+| NoSymbol_Gradient_1144x168 (ordinary failure) | 234.6 µs | 166.6 µs | **-29 %** |
+| R17x139_ImageDecode_Span | 38.7 µs | 37.5 µs | -3 % |
+| R7x43_ImageDecode_Span | 7.63 µs | 7.59 µs | -1 % |
+| R17x139_BitmapDecode | 52.8 µs | 47.7 µs | -10 % |
+| R7x43_BitmapDecode | 9.90 µs | 9.09 µs | -8 % |
+
+**Open**
+
+The remaining 4.7 ms on the adversarial image is the 18-bit format gate's false-accept
+rate: it lets roughly a quarter of random frames through to a sub-finder search. Two
+levers, both behaviour-affecting and so deliberately not taken here: require Hamming
+distance ≤ 1 for the image path's first format read, or budget sub-finder searches per
+candidate the way full decodes are already budgeted by
+`MaxDecodeAttemptsPerCandidate`. The perspective search has the same shape — its gates
+are not counted against that budget, only its full decodes are.
+
+---
+
+### Follow-up: adversarial review of the decode branch (2026-08-18)
+
+An adversarial review of the four decode optimizations before opening the PR. Three of
+them survived unchanged. The finder-scan stride did not: its safety argument was wrong,
+and a differential sweep against `main` measured the cost.
+
+**The finding.** `FindCandidates` skipped rows and repaired a too-coarse stride with a
+complementary pass over the skipped rows, triggered when no candidate had been confirmed
+on two or more rows. `Count >= 2` is evaluated over the whole candidate list, so it is a
+statement about the *image*, not about the symbol being looked for: a second QR code, a
+printed logo, or salt-and-pepper noise confirms on its own and suppresses exactly the
+pass the real symbol needed. Measured over 15,980 rendered images (rMQR R7x43-R17x139 and
+Micro QR M1-M4, 2-13 px/module, 0-90°, with and without decoy finder patterns, plus
+noise / blur / JPEG q60), against a build of `main`:
+
+| corpus | regressions vs main | improvements |
+|---|---|---|
+| decoy-focused (6,000) | **69** | 26 |
+| mixed sweep (3,980) | **15** | 7 |
+| decoy-free control (6,000) | 3 | 0 |
+
+Zero divergence without a competing pattern in frame, which is why the branch's own
+tests — one symbol per image — never saw it.
+
+**Done**
+
+- The fallback moved out of the scan and into the image decoders. `FindCandidates` is now
+  a plain strided scan with no fallback; `RmQRImageDecoder` and `MicroQRImageDecoder`
+  re-run the whole decode through `FindCandidatesFullSweep` when the strided pass read
+  nothing. That trigger — "did anything decode" — is the only one available that another
+  pattern cannot answer in the symbol's place, and it makes detection a strict superset
+  of a full sweep's. Re-measured: **0 regressions on all three corpora, +95 net gains**,
+  and the retry never fires behind a first pass that already succeeded (0 of 15,980).
+- Stride 6 → 4. Requiring the stride to land in every in-envelope band means measuring
+  the band, and the 3-modules-tall figure holds only for an axis-aligned symbol: under
+  rotation the run ratios drift off-centre and the surviving band's floor is 5 rows at
+  3 px/module. This no longer carries the guarantee (the retry does), it decides how
+  often the retry is paid — it runs on 0.3-1.1 % of the images that do decode, inside
+  the envelope, and on images that fail under `main` too, where a full sweep is what a
+  caller wants anyway.
+- The retry's gate is `IsTerminal`, not `== Success`: `DestinationTooSmall` means the
+  symbol *was* read, and a wider scan cannot change that. Gating on `Success` cost a
+  second full pipeline (measured 2.1x) on a documented probe-for-required-size call.
+- Otsu hoisted so both scans of one polarity share a threshold. Without it the ordinary
+  failure path ran the histogram four times and regressed **+47 % against `main`**.
+- `LuminanceInverter`: an argument check, a `Vector128` tier (ARM64 was silently scalar),
+  and the overlapping final vector replaced by a scalar tail — the overlap re-read bytes
+  the aligned loop had written, so it double-inverted whenever a caller aliased the spans.
+- Bit-plane extraction only dispatches when `stream.Length` equals the version's codeword
+  count (the kernel's output length is fixed by the version, the portable tier truncates
+  to the span); `BuildColumnPlanes`'s unreachable scalar half deleted in favour of an
+  asserted precondition; `PlaneStride` / `ExtractCodewordsScalar` made private.
+- `HardwareCapabilities` moved wholly inside its TFM gate, Hygon added to the AMD-lineage
+  PEXT test, and `MicroQRModulePlacer`'s duplicate alias removed.
+- Tests: both parity tests were order-blind (`IsEquivalentTo` is a multiset compare in
+  TUnit) — a byte-order permutation of the whole codeword stream passed green, and now
+  fails 64/64. Hardware-gated tests `Skip.Test` instead of returning green on ARM CI.
+  New `LuminanceInverterTest` (there was none), `RmQRSubFinderGuardTest`, and a rewritten
+  `FinderCandidatesStrideTest` covering rotation with decoy patterns in frame.
+
+**Lessons learned**
+
+- A fallback is only as sound as the question that triggers it. Both finder entry points
+  stride and both widen on failure, but only `TryFind` was ever safe, because "no
+  consistent triple" is a question about the symbol it is looking for. Anything a flat
+  candidate list can report is a property of the image, and the image contains other
+  things. The fix was not a better predicate — it was moving the decision to the layer
+  that knows what success means.
+- Single-symbol test images cannot test a rule that quantifies over the image. Every test
+  here rendered one symbol per frame, so a predicate that any second pattern could
+  satisfy was invisible to all of them, in both symbologies, for the whole round.
+- Measure the repair, not just the defect. The first fix — tighten the stride, trigger on
+  an empty list — was reasoned carefully and made things **worse** (net −29 / −77 / −25
+  vs −8 / −43 / −3), because an empty candidate list almost never occurs. Isolating the
+  two changes one at a time showed the stride change was an improvement and the trigger
+  change was the whole regression.
+- An assertion helper that reads like equality may not be. `IsEquivalentTo` compares
+  collections as multisets, so both SIMD parity tests were blind to permutation — the
+  single most likely failure mode of a bit-plane transpose or a lane permute.
+- Optimizing a two-pass structure means checking what the second pass repeats. The retry
+  doubled the Otsu histogram, which is the largest single item on an ordinary non-QR
+  image; hoisting it turned a +47 % regression into −16 %.
+
+**Benchmark delta (net10.0 Release, --launchCount 3 --warmupCount 3 --iterationCount 15;
+before = `main` at 7422ac9 with this branch's benchmark file, so the failure scenarios
+are measurable on both sides)**
+
+| Benchmark | main | branch | Delta |
+|---|---|---|---|
+| R7x43_ImageDecode_Span | 20.12 µs | 8.56 µs | **-57 % (2.4x)** |
+| R17x139_ImageDecode_Span | 124.89 µs | 46.83 µs | **-62 % (2.7x)** |
+| R7x43_BitmapDecode | 65.41 µs | 11.55 µs | **-82 % (5.7x)** |
+| R17x139_BitmapDecode | 336.14 µs | 62.93 µs | **-81 % (5.3x)** |
+| NoSymbol_Noise_1144x168 (adversarial failure) | 12,880.19 µs | 9,048.98 µs | **-30 %** |
+| NoSymbol_Gradient_1144x168 (ordinary failure) | 216.08 µs | 186.65 µs | **-14 %** |
+
+The success-path figures are 13-32 % above the pre-review branch (7.59 → 8.56, 37.5 →
+46.83, 9.09 → 11.55, 47.7 → 62.93 µs; stride 4 scans 1.5x the rows of stride 6), and the
+adversarial failure is above its pre-review 4.69 ms figure because a failing image now runs
+two scan passes per polarity. Both were measured against the wrong baseline before: `main`
+is what the PR changes, and against `main` every scenario improves. Absolute figures on
+this machine vary a few percent between runs; the before and after columns above are from
+runs of the same shape, and the deltas are far outside that spread.
+
+**Later rounds of the same review**
+
+The review ran to four rounds; rounds 3 and 4 found defects in round 2's own fixes.
+
+- The retry gate was fixed in one place and not the other: the first pass tested
+  `IsTerminal`, the swept pass still tested `== Success`, so when the *sweep* was the pass
+  that read the symbol its `DestinationTooSmall` was discarded and the caller got the
+  strided pass's `NotDetected`. Both gates now test terminal.
+- `DestinationTooSmall` did not actually mean "the symbol was read", which is the premise
+  the gate rests on. `SegmentDecoders` checked the caller's buffer *before* checking the
+  character count against the remaining bits, so a stream whose count could not possibly
+  fit reported a short buffer instead of a malformed symbol — and because callers treat
+  that as terminal, it stopped the search for the real symbol. Byte mode already had the
+  checks in the right order; numeric and alphanumeric now do too.
+- `MicroQRImageDecoder`'s failure ranking never got the `DestinationTooSmall` promotion
+  rMQR has. Sizes are tried 17 down to 11, so a wrong-size attempt that reached RS first
+  masked it: M3-L reported `DataUncorrectable` for a short buffer while every other
+  version reported `DestinationTooSmall`.
+- Two "stays inside the span" tests could not detect an over-run, because both compared
+  only the region the kernel is supposed to write. The luminance one now hands the
+  converter a destination with a poisoned tail and asserts the tail is untouched; that
+  catches a block-count rounding error in either AVX2 kernel, which nothing did before.
+
+**Lessons learned (rounds 3-4)**
+
+- A fix's premise deserves the same scrutiny as the code. "DestinationTooSmall means the
+  symbol was read" was stated in a comment, used as the justification for a control-flow
+  change, and was false — three call sites checked the buffer before the bitstream. The
+  comment is now the specification of an ordering the segment decoders have to maintain.
+- A test that asserts only the bytes a kernel should write cannot see the bytes it should
+  not. Poison the tail and assert it, or the bounds claim in the summary is decoration.
+- Fix one thing in two places or neither. Both retry gates were the same decision written
+  twice; changing one of them produced a state that was wrong in a way neither the old nor
+  the intended behaviour was.
+- Do not share a working tree with a concurrent measurement. A verification agent's
+  differential run picked up another agent's temporary mutation and reported 293/451/475
+  regressions and the investigation's only two wrong-text results. The numbers were real
+  and the mutation was real; only the attribution was wrong. It did establish something
+  useful: an off-by-one *over*-charge in the numeric bit budget rejects the correct
+  candidate and lets the decoder accept a wrong grid that passes ECC, so that constant now
+  has its own equivalence-class test (payload lengths ending on each remainder branch, and
+  M1 numeric at its exact 5-digit capacity).
+
+**Open**
+
+The strideless retry re-runs the per-candidate pipeline even when the sweep found no
+candidate the strided pass had not — measured 2.0x on failing images whose two candidate
+lists were identical. Comparing the two lists before re-running the pipeline would skip
+it; the scan is far cheaper than the per-candidate work it guards. Not taken here because
+any list-comparison tolerance is a detection heuristic, and this branch's detection
+parity is currently measured at zero regressions.
+
+Ranking `DestinationTooSmall` above the other failures (both symbologies now do) lets a
+wrong-grid attempt that passes format + RS and reads a segment longer than the caller's
+buffer report it on a frame that holds no symbol: 2 of 11,200 fuzzed noise frames, with a
+1-char destination. No wrong text is ever returned, and with a realistically sized buffer
+it cannot arise, so the more useful diagnostic for the common case wins. Revisit if a
+caller reports growing its buffer for an image with nothing in it.

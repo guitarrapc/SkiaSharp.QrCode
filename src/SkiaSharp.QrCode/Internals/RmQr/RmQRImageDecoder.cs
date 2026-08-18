@@ -80,10 +80,7 @@ internal static class RmQRImageDecoder
         try
         {
             var inverted = rented.AsSpan(0, pixelCount);
-            for (var i = 0; i < inverted.Length; i++)
-            {
-                inverted[i] = (byte)(255 - luminance[i]);
-            }
+            LuminanceInverter.Invert(luminance, inverted);
 
             var invertedStatus = DecodeLuminanceCore(inverted, width, height, destination, out charsWritten, out var invertedInfo);
             if (IsTerminal(invertedStatus))
@@ -105,14 +102,57 @@ internal static class RmQRImageDecoder
 
     private static RmQRCodeDecodeInfo NotDetected() => new(QRCodeDecodeStatus.NotDetected, default, default, 0);
 
+    /// <summary>
+    /// Strided finder scan first, then a full sweep when nothing decoded.
+    /// </summary>
+    /// <remarks>
+    /// The widening trigger has to be a question about the symbol, and "did anything
+    /// decode" is the only one available. The scan itself cannot ask it: every signal
+    /// inside a flat candidate list is a statement about the image, so a second QR
+    /// code or a noise artefact would answer it in the real symbol's place and
+    /// suppress the sweep the symbol needed. Paid only on images that fail, and it makes
+    /// the detection envelope a superset of a full sweep's: the symbol is read if
+    /// either pass reads it.
+    /// </remarks>
     private static QRCodeDecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info)
+    {
+        // Hoisted: the two scans binarize the same buffer, and on a non-symbol image the
+        // threshold is the single most expensive step of the whole failure path.
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance);
+
+        var status = DecodeLuminanceScan(luminance, width, height, threshold, destination, out charsWritten, out info, fullSweep: false);
+        // Terminal, not just successful: DestinationTooSmall is only reached after the
+        // symbol has been located, sampled, RS-corrected and its segment found to fit
+        // the bitstream, so the buffer is the only thing missing and a wider finder scan
+        // cannot change it. (That ordering is a precondition, not a given: the segment
+        // decoders check bitstream sufficiency before destination sufficiency precisely
+        // so a malformed count cannot masquerade as a short buffer here.)
+        if (IsTerminal(status))
+            return status;
+
+        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, destination, out var sweptChars, out var sweptInfo, fullSweep: true);
+        // Terminal, not just successful, for the same reason as above: when the sweep
+        // is the pass that reads the symbol, its DestinationTooSmall is the answer.
+        if (IsTerminal(sweptStatus))
+        {
+            charsWritten = sweptChars;
+            info = sweptInfo;
+            return sweptStatus;
+        }
+
+        // Both failed: keep the strided pass's diagnostic, which is the one whose
+        // candidate ranking the caller would have seen before this retry existed.
+        return status;
+    }
+
+    private static QRCodeDecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<char> destination, out int charsWritten, out RmQRCodeDecodeInfo info, bool fullSweep)
     {
         charsWritten = 0;
 
-        var threshold = Binarizer.ComputeOtsuThreshold(luminance);
-
         Span<FinderPattern> candidates = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var candidateCount = FinderPatternFinder.FindCandidates(luminance, width, height, threshold, candidates);
+        var candidateCount = fullSweep
+            ? FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates)
+            : FinderPatternFinder.FindCandidates(luminance, width, height, threshold, candidates);
         if (candidateCount == 0)
         {
             info = NotDetected();
@@ -561,13 +601,34 @@ internal static class RmQRImageDecoder
         var predictedX = candidate.X + dX * uX + dY * vX;
         var predictedY = candidate.Y + dX * uY + dY * vY;
 
+        var radius = SubFinderSearchRadiusHalfModulesBase + symbolWidth / 10 * SubFinderSearchRadiusHalfModulesPerTenModules;
+
+        // Reject before searching when the whole template can only land outside the
+        // image. Every sample sits at predicted + (offU + i)·u + (offV + j)·sv with
+        // |offU| ≤ radius/2 and |i| ≤ 2, and the 12° lean bounds |svX| by
+        // |vX| + tan 12°·|vY|, so |vX| + |vY| over-estimates it. A frame whose prediction
+        // misses the image entirely would otherwise score 0 at all 7,803 ring positions
+        // before returning false. Most wrong frames do NOT predict off-image, so this is
+        // the cheaper and rarer of the two guards here — end to end it is worth about a
+        // sixth of the failure-path win and the row-wise early exit below is worth the
+        // rest; on a frame it does catch it replaces a ~400 µs search with a few ns.
+        var reach = radius * 0.5f + 2f;
+        var extentX = reach * (Math.Abs(uX) + Math.Abs(vX) + Math.Abs(vY)) + 1f;
+        var extentY = reach * (Math.Abs(uY) + Math.Abs(vX) + Math.Abs(vY)) + 1f;
+        if (predictedX + extentX < 0f || predictedX - extentX >= width
+            || predictedY + extentY < 0f || predictedY - extentY >= height)
+        {
+            centerX = 0f;
+            centerY = 0f;
+            return false;
+        }
+
         var bestScore = -1;
         var bestDistance = int.MaxValue;
         var bestX = 0f;
         var bestY = 0f;
         var bestVX = vX;
         var bestVY = vY;
-        var radius = SubFinderSearchRadiusHalfModulesBase + symbolWidth / 10 * SubFinderSearchRadiusHalfModulesPerTenModules;
 
         // A keystone leans the column axis (see TryPerspectiveVariants); the template
         // is matched with a few leans so its corner samples stay on their modules.
@@ -595,6 +656,7 @@ internal static class RmQRImageDecoder
                         var cx = predictedX + offU * uX + offV * svX;
                         var cy = predictedY + offU * uY + offV * svY;
                         var score = 0;
+                        var remaining = 25;
                         for (var j = -2; j <= 2; j++)
                         {
                             for (var i = -2; i <= 2; i++)
@@ -608,6 +670,19 @@ internal static class RmQRImageDecoder
                                 if (dark == expectedDark)
                                     score++;
                             }
+
+                            // Once the rows still to come cannot lift the score to the
+                            // acceptance floor, this position is decided: stop sampling
+                            // it. A partial score may still be recorded as the best so
+                            // far, which cannot change the outcome — acceptance needs
+                            // SubFinderMinScore, and any position that reaches it
+                            // outranks every partial one. Checked per row of five rather
+                            // than per sample: the same early exit on the failing path
+                            // (which bails after one row) without adding a branch to the
+                            // 25-sample inner loop that the matching path runs in full.
+                            remaining -= 5;
+                            if (score + remaining < SubFinderMinScore)
+                                break;
                         }
 
                         var distance = ou * ou + ov * ov;

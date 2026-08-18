@@ -76,7 +76,7 @@ internal static partial class MicroQRModulePlacer
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
 
 #if NET8_0_OR_GREATER
-        if (Avx2.IsSupported && Bmi2.X64.IsSupported && s_hasFastPext)
+        if (Avx2.IsSupported && HardwareCapabilities.HasFastPext)
         {
             return PlaceCoreBmi2(matrix, size, stream, version, eccLevel);
         }
@@ -107,7 +107,7 @@ internal static partial class MicroQRModulePlacer
     /// <summary>
     /// BMI2+AVX2 fast-path variant of <see cref="PlaceSymbol"/>, exposed as a
     /// named entry point for parity tests (the public dispatch additionally
-    /// requires <see cref="s_hasFastPext"/>).
+    /// requires <see cref="HardwareCapabilities.HasFastPext"/>).
     /// </summary>
     internal static int PlaceSymbolBmi2(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel)
     {
@@ -551,31 +551,6 @@ internal static partial class MicroQRModulePlacer
         var m = Avx2.Shuffle(src, sel) & bitm;
         var ones = Vector256.Equals(m, bitm) & Vector256.Create((byte)1);
         ones.StoreUnsafe(ref p);
-    }
-
-    /// <summary>
-    /// PDEP/PEXT are microcoded on AMD before Zen 3 (hundreds of cycles per
-    /// instruction), which would turn the BMI2 kernel into a large regression
-    /// there: allow it only on non-AMD vendors or AMD family 0x19 (Zen 3)+.
-    /// </summary>
-    private static readonly bool s_hasFastPext = DetectFastPext();
-
-    private static bool DetectFastPext()
-    {
-        if (!Bmi2.X64.IsSupported)
-        {
-            return false;
-        }
-        var (_, ebx, ecx, edx) = X86Base.CpuId(0, 0);
-        var isAmd = ebx == 0x68747541 && edx == 0x69746E65 && ecx == 0x444D4163; // "AuthenticAMD"
-        if (!isAmd)
-        {
-            return true;
-        }
-        var (eax, _, _, _) = X86Base.CpuId(1, 0);
-        var baseFamily = (eax >> 8) & 0xF;
-        var family = baseFamily == 0xF ? baseFamily + ((eax >> 20) & 0xFF) : baseFamily;
-        return family >= 0x19;
     }
 
     /// <summary>

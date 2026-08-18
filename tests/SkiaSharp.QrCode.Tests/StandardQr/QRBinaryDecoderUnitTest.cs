@@ -213,6 +213,17 @@ public class QRBinaryDecoderUnitTest
     }
 
     [Test]
+    public async Task Numeric_CountBeyondStream_TakesPrecedenceOverDestinationTooSmall()
+    {
+        // Four digits require 14 payload bits, but only two remain after the header.
+        var data = Build((ModeNumeric, 4), (4, 10), (0, 2));
+
+        var status = QRBinaryDecoder.DecodeBitStream(data, Version, Span<char>.Empty, out _);
+
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+    }
+
+    [Test]
     public async Task EciDesignator_TruncatedMultiByte_ReturnsInvalidBitstream()
     {
         // 2-byte designator prefix (10xxxxxx) with no second byte
