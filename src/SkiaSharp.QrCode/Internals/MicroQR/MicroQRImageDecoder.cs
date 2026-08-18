@@ -56,11 +56,12 @@ internal static class MicroQRImageDecoder
 
         luminance = luminance.Slice(0, pixelCount);
         var status = DecodeLuminanceCore(luminance, width, height, destination, out charsWritten, out info);
-        if (status == QRCodeDecodeStatus.Success)
+        if (IsTerminal(status))
             return status;
 
-        // Reflectance reversal: invert into a rented buffer and retry once.
-        // Taken only on the failure path, so the normal case stays allocation-free.
+        // Reflectance reversal: if no symbol was read, invert into a rented buffer and
+        // retry once. Taken only on that failure path, so success and a genuinely short
+        // destination stay allocation-free.
         var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
         try
         {
@@ -68,7 +69,7 @@ internal static class MicroQRImageDecoder
             LuminanceInverter.Invert(luminance, inverted);
 
             var invertedStatus = DecodeLuminanceCore(inverted, width, height, destination, out charsWritten, out var invertedInfo);
-            if (invertedStatus == QRCodeDecodeStatus.Success)
+            if (IsTerminal(invertedStatus))
             {
                 info = invertedInfo;
                 return invertedStatus;
@@ -104,13 +105,13 @@ internal static class MicroQRImageDecoder
         // cannot change it. (That ordering is a precondition, not a given: the segment
         // decoders check bitstream sufficiency before destination sufficiency precisely
         // so a malformed count cannot masquerade as a short buffer here.)
-        if (status is QRCodeDecodeStatus.Success or QRCodeDecodeStatus.DestinationTooSmall)
+        if (IsTerminal(status))
             return status;
 
         var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, destination, out var sweptChars, out var sweptInfo, fullSweep: true);
         // Terminal, not just successful, for the same reason as above: when the sweep
         // is the pass that reads the symbol, its DestinationTooSmall is the answer.
-        if (sweptStatus is QRCodeDecodeStatus.Success or QRCodeDecodeStatus.DestinationTooSmall)
+        if (IsTerminal(sweptStatus))
         {
             charsWritten = sweptChars;
             info = sweptInfo;
@@ -575,6 +576,9 @@ internal static class MicroQRImageDecoder
         => status is not QRCodeDecodeStatus.NotDetected
             and not QRCodeDecodeStatus.InvalidMatrix
             and not QRCodeDecodeStatus.FormatInformationInvalid;
+
+    private static bool IsTerminal(QRCodeDecodeStatus status)
+        => status is QRCodeDecodeStatus.Success or QRCodeDecodeStatus.DestinationTooSmall;
 
     /// <summary>
     /// All four grid corners must land inside the image (with one module of slack

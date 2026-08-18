@@ -94,6 +94,81 @@ public class SegmentDecoderStatusOrderTest
     }
 
     /// <summary>
+    /// Once a normal-polarity symbol has been read and only the destination is short,
+    /// the reflectance-reversed retry must not replace that terminal result with a
+    /// different symbol from the opposite polarity.
+    /// </summary>
+    [Test]
+    public async Task MicroQR_DestinationTooSmall_DoesNotRetryTheOppositePolarity()
+    {
+        var longData = MicroQRCodeGenerator.CreateMicroQRCode("ABCDEFGHIJ", MicroQREccLevel.L, MicroQRVersion.M3);
+        var shortData = MicroQRCodeGenerator.CreateMicroQRCode("1", MicroQREccLevel.L, MicroQRVersion.M2);
+        using var normal = new MicroQRCodeImageBuilder(longData)
+            .WithModulePixelSize(8)
+            .WithColors(SKColors.Black, SKColors.White, SKColors.White)
+            .ToBitmap();
+        using var reversed = new MicroQRCodeImageBuilder(shortData)
+            .WithModulePixelSize(8)
+            .WithColors(SKColors.White, SKColors.Black, SKColors.Black)
+            .ToBitmap();
+
+        const int gap = 32;
+        var width = normal.Width + gap + reversed.Width;
+        var height = Math.Max(normal.Height, reversed.Height);
+        using var scene = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using (var canvas = new SKCanvas(scene))
+        {
+            canvas.Clear(SKColors.White);
+            canvas.DrawBitmap(normal, 0, 0, SKSamplingOptions.Default);
+            canvas.DrawBitmap(reversed, normal.Width + gap, 0, SKSamplingOptions.Default);
+            canvas.Flush();
+        }
+
+        var luminance = new byte[width * height];
+        Internals.ImageDecoders.LuminanceConverter.Convert(scene, luminance);
+        var decoded = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[1], out _, out var info);
+
+        await Assert.That(decoded).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall);
+        await Assert.That(info.Version).IsEqualTo(MicroQRVersion.M3);
+    }
+
+    [Test]
+    public async Task StandardQR_DestinationTooSmall_DoesNotRetryTheOppositePolarity()
+    {
+        var longData = QRCodeGenerator.CreateQrCode("STANDARD-DESTINATION-TOO-SMALL", ECCLevel.M);
+        var shortData = QRCodeGenerator.CreateQrCode("1", ECCLevel.M);
+        using var normal = new QRCodeImageBuilder(longData)
+            .WithModulePixelSize(6)
+            .WithColors(SKColors.Black, SKColors.White, SKColors.White)
+            .ToBitmap();
+        using var reversed = new QRCodeImageBuilder(shortData)
+            .WithModulePixelSize(6)
+            .WithColors(SKColors.White, SKColors.Black, SKColors.Black)
+            .ToBitmap();
+
+        const int gap = 32;
+        var width = normal.Width + gap + reversed.Width;
+        var height = Math.Max(normal.Height, reversed.Height);
+        using var scene = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using (var canvas = new SKCanvas(scene))
+        {
+            canvas.Clear(SKColors.White);
+            canvas.DrawBitmap(normal, 0, 0, SKSamplingOptions.Default);
+            canvas.DrawBitmap(reversed, normal.Width + gap, 0, SKSamplingOptions.Default);
+            canvas.Flush();
+        }
+
+        var luminance = new byte[width * height];
+        Internals.ImageDecoders.LuminanceConverter.Convert(scene, luminance);
+        var decoded = QRCodeDecoder.TryDecodeImage(luminance, width, height, new char[1], out _, out var info);
+
+        await Assert.That(decoded).IsFalse();
+        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.DestinationTooSmall);
+        await Assert.That(info.Version).IsEqualTo(longData.Version);
+    }
+
+    /// <summary>
     /// The malformed case the check order exists for: a character count read off the wire
     /// naming more characters than the remaining bits could possibly encode. That is a
     /// broken bitstream whatever buffer the caller passed, so it must report

@@ -52,11 +52,12 @@ internal static class QRImageDecoder
 
         luminance = luminance.Slice(0, pixelCount);
         var status = DecodeLuminanceCore(luminance, width, height, destination, out charsWritten, out info);
-        if (status == QRCodeDecodeStatus.Success)
+        if (IsTerminal(status))
             return status;
 
-        // Reflectance reversal: invert into a rented buffer and retry once.
-        // Taken only on the failure path, so the normal case stays allocation-free.
+        // Reflectance reversal: if no symbol was read, invert into a rented buffer and
+        // retry once. Taken only on that failure path, so success and a genuinely short
+        // destination stay allocation-free.
         var rented = ArrayPool<byte>.Shared.Rent(pixelCount);
         try
         {
@@ -64,7 +65,7 @@ internal static class QRImageDecoder
             LuminanceInverter.Invert(luminance, inverted);
 
             var invertedStatus = DecodeLuminanceCore(inverted, width, height, destination, out charsWritten, out var invertedInfo);
-            if (invertedStatus == QRCodeDecodeStatus.Success)
+            if (IsTerminal(invertedStatus))
             {
                 info = invertedInfo;
                 return invertedStatus;
@@ -101,7 +102,7 @@ internal static class QRImageDecoder
         }
 
         var status = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, dimension, moduleSize, destination, out charsWritten, out info);
-        if (status == QRCodeDecodeStatus.Success)
+        if (IsTerminal(status))
             return status;
 
         // The dimension estimate can land between two valid sizes (module-size
@@ -110,7 +111,7 @@ internal static class QRImageDecoder
         if (secondaryDimension != 0)
         {
             var secondaryStatus = SampleAndDecode(luminance, width, height, threshold, topLeft, topRight, bottomLeft, secondaryDimension, moduleSize, destination, out var secondaryCharsWritten, out var secondaryInfo);
-            if (secondaryStatus == QRCodeDecodeStatus.Success)
+            if (IsTerminal(secondaryStatus))
             {
                 charsWritten = secondaryCharsWritten;
                 info = secondaryInfo;
@@ -125,9 +126,11 @@ internal static class QRImageDecoder
     /// <summary>
     /// Samples the module grid at the given dimension and decodes it, retrying once
     /// transposed for mirrored images (e.g. front-camera captures): finder geometry
-    /// is identical but data is transposed. The mirror retry triggers on any decode
-    /// failure, a permuted format pattern may fall within BCH distance of a wrong
-    /// candidate and surface as DataUncorrectable instead of FormatInformationInvalid.
+    /// is identical but data is transposed. The mirror retry triggers on any
+    /// non-terminal decode failure; a permuted format pattern may fall within BCH
+    /// distance of a wrong candidate and surface as DataUncorrectable instead of
+    /// FormatInformationInvalid. DestinationTooSmall is terminal because the
+    /// non-mirrored symbol has already been read successfully through RS correction.
     /// </summary>
     private static QRCodeDecodeStatus SampleAndDecode(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in FinderPattern topLeft, in FinderPattern topRight, in FinderPattern bottomLeft, int dimension, float moduleSize, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
@@ -151,7 +154,7 @@ internal static class QRImageDecoder
             {
                 SampleGridPiecewise(luminance, width, height, threshold, meshGridCoords.Slice(0, meshSize), meshNodeXs, meshNodeYs, meshSize, dimension, modules);
                 var meshStatus = DecodeWithMirrorRetry(modules, dimension, destination, out charsWritten, out info);
-                if (meshStatus == QRCodeDecodeStatus.Success)
+                if (IsTerminal(meshStatus))
                     return meshStatus;
 
                 // Mesh fallback: a partially-detected mesh (unfound nodes keep
@@ -171,17 +174,17 @@ internal static class QRImageDecoder
 
     /// <summary>
     /// Decodes the sampled matrix, retrying once transposed (mirrored capture).
-    /// On failure reports the non-mirrored attempt's diagnostics.
+    /// On non-terminal failure reports the non-mirrored attempt's diagnostics.
     /// </summary>
     private static QRCodeDecodeStatus DecodeWithMirrorRetry(Span<byte> modules, int dimension, Span<char> destination, out int charsWritten, out QRCodeDecodeInfo info)
     {
         var status = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out info);
-        if (status == QRCodeDecodeStatus.Success)
+        if (IsTerminal(status))
             return status;
 
         TransposeInPlace(modules, dimension);
         var mirroredStatus = QRMatrixDecoder.DecodeMatrix(modules, dimension, destination, out charsWritten, out var mirroredInfo);
-        if (mirroredStatus == QRCodeDecodeStatus.Success)
+        if (IsTerminal(mirroredStatus))
         {
             info = mirroredInfo;
             return mirroredStatus;
@@ -189,6 +192,9 @@ internal static class QRImageDecoder
 
         return status;
     }
+
+    private static bool IsTerminal(QRCodeDecodeStatus status)
+        => status is QRCodeDecodeStatus.Success or QRCodeDecodeStatus.DestinationTooSmall;
 
     /// <summary>
     /// Assigns the three finder centers to their corners: the two farthest apart
