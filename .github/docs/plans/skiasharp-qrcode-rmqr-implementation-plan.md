@@ -190,10 +190,128 @@ Exit (Phase 6): **met, see Progress log** (decoder MVT matrix rows: round trips,
 
 Exit (Phase 7): decoder MVT image rows and the representative degradation subset green; rMQR feature-complete; symbology status table says Shipped; progress log entry. Then the parent plan's Phase 8 (interop CI adds rMQR round trips both directions) and Phase 9 (physical device acceptance, rMQR subset per test strategy §11) gate the release.
 
-### Follow-ups (after Phase 7, optional, benchmark-driven)
+### Follow-ups (after Phase 7, benchmark-driven)
 
-- Placer / bit-stream fast paths (kernel benchmark loop, disassembly-read, SIMD rounds in scope), ported back with parity tests exactly as the Micro QR follow-ups.
-- ECI emission in the encoder; Kanji mode across symbologies (single decision, three symbologies).
+The original x64 optimization rounds are complete. ARM64 is not at performance parity yet:
+several shared kernels already dispatch to NEON, but the largest rMQR-specific matrix-decode
+kernel and the bitmap luminance conversion still fall back to portable scalar code. The
+priority below is an **evidence-based starting order**, not an ARM benchmark result: it uses
+the x64 component profiles and current dispatch paths to identify the work most likely to
+move ARM64 end to end. Phase N0 measures the real ARM shares before an intrinsic is accepted
+or a later item is promoted.
+
+#### Completed x64 encode/decode optimization record
+
+These are already implemented and parity-pinned; the detailed benchmark records remain in
+the chronological progress log below.
+
+| Area | Completed work | Measured x64 result |
+|---|---|---|
+| Encode bit stream | Raw-local 64-bit writer; numeric SSSE3/SSE4.1, alphanumeric SSSE3/SSE4.1, and Latin-1 SSE2 segment writers | Kernel 1.3-7.5x; E2E only 1-7 %, confirming that placement was the larger lever |
+| Encode placement | Cached per-version geometry/templates, fused expand + mask, AVX2/SSSE3 expansion, pair stores and irregular scatter | Span E2E 6-13x; R7x43/R11x59/R17x139 improved 83/88/92 % |
+| Result packing / quiet zone | Shared AVX2/Vector128 bit packer and direct strided placement into the caller's quiet-zoned destination | Class encode improved 52-59 %; no intermediate core rental on the span path |
+| Automatic fit | Best-first capacity tables and height bitmasks instead of scanning and comparing all 32 versions | Auto-fit span encode improved about 40 % after accounting for run drift |
+| Matrix extraction | Cached walk/pair descriptors; AVX2 column-plane transpose + fast BMI2 PEXT/PDEP; branchless portable table walk elsewhere | Matrix-decode E2E 5.0-8.0x; image decode 14-15 % |
+| Bitmap luminance | Exact BT.601 AVX2 conversion for opaque, transparent and premultiplied BGRA/RGBA/RGB888x | Conversion 14-30x; bitmap-decode E2E about 3.2x |
+| Finder/image success path | SIMD dark masks, run-based scan, safe row stride with full-sweep retry, and Otsu reuse | Versus `main`: luminance-span decode 2.4-2.7x and bitmap decode 5.3-5.7x |
+| Failure path | Vectorized inversion, sub-finder bounds rejection and row-wise early exit | Gradient failure 14 % faster and adversarial-noise failure 30 % faster versus `main` |
+
+Architecture-neutral parts of those rounds already benefit ARM64: cached layouts, pair
+stores/scatter, table-driven auto-fit, the portable extraction walk, safe finder stride and
+retry, sub-finder guards, and Otsu reuse. The following shared primitives already have a
+NEON/Vector128 tier and must be treated as controls rather than reimplemented:
+`TextAnalyzer`, `EccBinaryEncoder`, `ModuleBitPacker`, `LuminanceInverter`, and finder/alignment
+row-mask construction. In particular, the finder NEON fold was measured separately on Apple
+M2 at 3.3-4.1x over the scalar walk; it is not an open rMQR ARM gap.
+
+#### ARM64 / NEON priority
+
+| Priority | Work | Why it is here | Promotion / stop rule |
+|---|---|---|---|
+| **N0 (first)** | ARM64 baseline and component attribution | There is no current rMQR ARM64 E2E record. Existing x64 numbers identify candidates but cannot rank ARM instruction costs or memory bandwidth. | Record encode, matrix decode, luminance-span image decode, bitmap decode, clean/error-corrected matrices, and both no-symbol cases on one pinned ARM64 machine before changing kernels. Add forced-portable vs automatic-dispatch kernel cases for every item below. |
+| **N1** | NEON `LuminanceConverter` | ARM64 currently takes the per-pixel scalar BGRA/RGBA path. On x64 this conversion was 69 % of bitmap decode before AVX2 and the isolated kernel improved 14-30x, so this is the strongest real-input decode candidate and benefits all symbologies. | Ship only with byte-exact parity for all layouts/alpha modes and a material bitmap E2E win. If conversion is under 10 % of ARM bitmap decode, demote it behind N2. |
+| **N2** | NEON rMQR codeword extraction | ARM64 cannot enter the AVX2+BMI2 bit-plane tier and uses the portable gather. Extraction was 70-91 % of matrix decode before the x64 tier; x64 matrix E2E improved 5-8x. This is the highest-priority rMQR-specific gap. | Compare at least a NEON column-plane builder plus scalar/SWAR bit compression against the current table walk; ARM has no PEXT/PDEP, so do not transliterate the x64 kernel. Keep a new tier only if it wins on small, narrow and largest symbols, not just R17x139. |
+| **N3 (profile-gated)** | NEON RS syndrome computation in `EccBinaryDecoder` | Clean blocks always compute syndromes, and ARM64 currently lacks the x64 GFNI decoder tier. It may become the matrix-decode bottleneck after N2, especially for R17x139 and corrected blocks, but it was under 1 % in the optimized x64 profile. | Start only if N0/N2 show at least 5 % of ARM matrix decode here. Benchmark clean, within-capacity corrected, and uncorrectable blocks; do not optimize Berlekamp-Massey/Chien/Forney unless their damaged-symbol profile independently justifies it. |
+| **N4** | NEON rMQR placement expansion | The cached template and store/scatter design is already portable, but `ExpandBitsMasked` only has AVX2/SSSE3 vector tiers. The 16-module `TBL` + `CMTST` idiom already exists in the Micro QR placer and `ModuleBitPacker`, making this low-risk ARM work. | Port the proven idiom, add a named forced-NEON parity entry, and require an encode E2E win outside the ARM canary band. Do not rewrite the strided scatter unless profiling identifies it separately. |
+| **N5 (profile-gated)** | Vector128/NEON rectangular grid sampling | rMQR `SampleGrid` is scalar while Standard QR already has a bit-identical 128-bit row kernel usable by ARM64. The work is only one sample per module (at most 2,363), so pixel scanning and matrix decode are expected to dominate first. | Share/generalize the Standard QR kernel only if it is at least 5 % of ARM luminance-span decode after N2. Preserve scalar floating-point operation order and exact sampled bytes; otherwise leave it scalar. |
+| **N6 (last)** | NEON rMQR numeric/alphanumeric/Latin-1 writers | ARM64 currently uses the already-fast SWAR/table writers. On x64 the much larger SIMD kernel gains moved encode E2E by only 1-7 % before placement was fixed, and the current pipeline is hundreds of nanoseconds to about one microsecond. | Attempt only if post-N4 profiling shows segment writing at least 5 % E2E. Start with Latin-1 narrowing, then alphanumeric/numeric; stop when gains fall inside the canary band. UTF-8 stays in `Encoding.UTF8`. |
+
+N1 and N2 may exchange order if N0 shows a workload dominated by matrix/luminance-span
+input rather than `SKBitmap`; they are separate deliverables and must be benchmarked
+separately. N3, N5 and N6 are explicitly conditional so that an easy-to-vectorize loop does
+not outrank a measured bottleneck.
+
+#### NEON work packages and acceptance gates
+
+**N0, measurement contract**
+
+- Use `net10.0` Release and the existing `RmQREncodeEndToEnd`,
+  `RmQRDecodeEndToEnd`, and `RmQRImageEndToEnd` scenarios. Pin launch/warmup/iteration
+  counts and record CPU, OS, runtime, power mode and allocation columns. Prefer ABBA ordering
+  for before/after; include an unchanged NEON control such as finder scan or ECC encode.
+- Add kernel cases that can force portable and NEON implementations in the same process.
+  Cover R7x43, a width-27/narrow irregular layout, R11x59, and R17x139; do not infer the
+  small-symbol result from the widest version.
+- Add a matrix-decode case with correctable damage. The current clean E2E set exercises only
+  syndrome generation and cannot rank the rest of the decoder failure/correction path.
+- Capture JIT disassembly for each accepted kernel to prove that the intended AdvSimd
+  instructions were emitted and that a helper call or bounds check did not replace the hot
+  loop. Report kernel and E2E deltas; never promote from a kernel-only result.
+
+**N1, exact luminance conversion**
+
+- Add an AdvSimd-specific file and dispatch after the AVX2 check and before scalar. Process
+  BGRA/RGBA/RGB888x in 128-bit blocks using table lookup/deinterleave plus widening
+  multiply-add for the exact `77R + 150G + 29B` sum.
+- Preserve the current alpha contracts: opaque/fully transparent straight alpha,
+  premultiplied alpha for every value, and a correct partial-straight-alpha path. A scalar
+  tail is acceptable; falling back for an entire common row is not accepted without an E2E
+  comparison.
+- Extend `LuminanceConverterParityTest` with a forced-NEON entry, poisoned destination tail,
+  padded rows, widths around every vector boundary, all channel orders and alpha shapes.
+
+**N2-N3, matrix decode**
+
+- Give the ARM extractor its own named entry and parity test against
+  `RmQRNaiveReference.ExtractInterleavedStream` for all 32 versions, all-light/all-dark
+  non-canonical dark bytes, random grids, exact destination extent and overread bounds.
+- Build 8 `ushort` column planes per NEON vector (forward and row-reversed together), then
+  benchmark ARM-appropriate compression: scalar/SWAR compress of the planes, small
+  mask-specific lookup tables, and a direct table walk. Select by measurement; ARM64 has no
+  general PEXT/PDEP equivalent and the x64 pair descriptor is not automatically the right
+  representation.
+- For syndrome work, vectorize syndromes across lanes rather than codeword bytes, compare a
+  bitsliced/shift-XOR GF multiply and table-lookup designs, and retain the scalar
+  Berlekamp-Massey/Chien/Forney stages unless damaged-input profiling says otherwise.
+  `EccBinaryDecoderKernelParityTest` must cover all ECC counts and codeword-length boundaries.
+
+**N4-N6, encode and sampling**
+
+- Reuse the existing Micro QR `TBL` + `CMTST` expansion shape for placement instead of
+  inventing another bit order. Test every version/ECC, poisoned tails, strided destinations
+  and quiet zones against `PlaceSymbolReference`.
+- If sampling is promoted, extract the Standard QR 128-bit row kernel into a shared
+  rectangular helper rather than copying it. Run both Standard QR and rMQR sampling parity
+  suites and keep Standard/Micro image benchmarks flat.
+- If segment writers are promoted, mirror `RmQRBinaryEncoderKernelParityTest` with a named
+  forced-AdvSimd route across all accumulator phases and lengths. Byte-for-byte parity is
+  insufficient when pending accumulator bits differ; compare the same logical writer state
+  the x64 tests compare.
+
+Every shipped NEON tier must preserve zero allocations, exact output/status parity, scalar
+fallbacks for other targets, and x64 benchmark flatness. The default acceptance threshold is
+an E2E improvement of at least 5 % with confidence intervals outside the unchanged-control
+band; otherwise record the rejected kernel and keep the simpler portable path. Update the
+rMQR spec map and append ARM64 before/after results here after each accepted work package.
+
+Items deliberately below the NEON queue: Otsu histogramming (serial histogram updates and
+already near its measured per-pixel floor), sub-finder/perspective search (branchy,
+data-dependent and failure-path dominated), rendering/PNG (Skia/native-code dominated), and
+the 1.3-8.3 ns version selector. Revisit only with a new ARM profile naming a different
+mechanism.
+
+Feature follow-ups remain separate from performance work: ECI emission in the encoder and
+Kanji mode across symbologies (one decision, three symbologies).
 
 ## Dependency graph
 
