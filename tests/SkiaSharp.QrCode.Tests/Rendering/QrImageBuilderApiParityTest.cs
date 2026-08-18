@@ -17,14 +17,12 @@ public class QrImageBuilderApiParityTest
 {
     /// <summary>
     /// Standard QR-only fluent options: Micro QR and rMQR have a single finder
-    /// pattern, no ECC headroom for overlays, and no ECI mode, these members
-    /// intentionally have no counterpart (decisions recorded in the symbology spec maps).
+    /// pattern and no ECC headroom for overlays.
     /// </summary>
     private static readonly string[] standardOnlyMembers =
     [
         "WithIcon",
         "WithFinderPatternShape",
-        "WithEciMode",
     ];
 
     /// <summary>
@@ -52,7 +50,7 @@ public class QrImageBuilderApiParityTest
             .ToHashSet();
 
         var failures = new List<string>();
-        Compare("MicroQRCodeImageBuilder", micro);
+        Compare("MicroQRCodeImageBuilder", micro, standard.Where(s => !s.Contains(" WithEciMode(")));
         Compare("RmQRCodeImageBuilder", rmqr);
         if (failures.Count > 0)
             Assert.Fail("Image builder surfaces drifted apart.\n" + string.Join("\n", failures));
@@ -60,10 +58,11 @@ public class QrImageBuilderApiParityTest
         // Sanity: the normalization must leave a substantial shared surface
         await Assert.That(standard.Count).IsGreaterThan(20);
 
-        void Compare(string name, HashSet<string> other)
+        void Compare(string name, HashSet<string> other, IEnumerable<string>? expected = null)
         {
-            var missingOnOther = standard.Except(other).OrderBy(s => s).ToArray();
-            var missingOnStandard = other.Except(standard).OrderBy(s => s).ToArray();
+            var expectedSet = (expected ?? standard).ToHashSet();
+            var missingOnOther = expectedSet.Except(other).OrderBy(s => s).ToArray();
+            var missingOnStandard = other.Except(expectedSet).OrderBy(s => s).ToArray();
             if (missingOnOther.Length > 0 || missingOnStandard.Length > 0)
             {
                 failures.Add(
@@ -71,6 +70,14 @@ public class QrImageBuilderApiParityTest
                     $"Missing on QRCodeImageBuilder (present on {name}):\n  {string.Join("\n  ", missingOnStandard)}");
             }
         }
+    }
+
+    [Test]
+    public async Task EciMode_ExistsOnSymbologiesThatDefineEci()
+    {
+        await Assert.That(typeof(QRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithEciMode")).IsTrue();
+        await Assert.That(typeof(RmQRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithEciMode")).IsTrue();
+        await Assert.That(typeof(MicroQRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithEciMode")).IsFalse();
     }
 
     [Test]

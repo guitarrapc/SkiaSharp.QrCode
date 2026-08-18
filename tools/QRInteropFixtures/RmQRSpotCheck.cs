@@ -10,7 +10,7 @@ namespace QRInteropFixtures;
 /// rMQR encoder is rendered to a luminance image in memory and decoded with
 /// zxing-cpp (the only maintained OSS rMQR decode lineage). Payload is compared on
 /// raw bytes (Latin-1 for text within U+00FF, UTF-8 otherwise, exactly what the
-/// encoder writes; UTF-8 without ECI is exposed with a legacy-charset Text guess), and
+/// encoder writes) and decoded text (which verifies the ECI declaration), and
 /// the reader's Version / EcLevel must match what was generated.
 /// </summary>
 public static class RmQRSpotCheck
@@ -23,25 +23,38 @@ public static class RmQRSpotCheck
         var reader = new BarcodeReader { Formats = BarcodeFormat.RMQRCode, TryHarder = true };
         var failures = 0;
         var total = 0;
+        var eci3Total = 0;
+        var eci26Total = 0;
 
         foreach (var version in Enum.GetValues<RmQRVersion>())
         {
             foreach (var ecc in new[] { RmQREccLevel.M, RmQREccLevel.H })
             {
-                foreach (var (mode, text) in Payloads(version, ecc))
+                foreach (var (mode, text, eciMode) in Payloads(version, ecc))
                 {
                     total++;
-                    var calculated = RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, version, quietZoneSize: QuietZoneModules);
+                    if (eciMode == EciMode.Iso8859_1) eci3Total++;
+                    if (eciMode == EciMode.Utf8) eci26Total++;
+                    var calculated = eciMode == EciMode.Default
+                        ? RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, version, quietZoneSize: QuietZoneModules)
+                        : RmQRCodeGenerator.GetRequiredBufferSizeWithEci(text.AsSpan(), ecc, eciMode, version, quietZoneSize: QuietZoneModules);
                     var modules = new byte[calculated.BufferSize];
-                    RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, modules, version, quietZoneSize: QuietZoneModules);
+                    if (eciMode == EciMode.Default)
+                        RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, modules, version, quietZoneSize: QuietZoneModules);
+                    else
+                        RmQRCodeGenerator.CreateRmQRCodeWithEci(text.AsSpan(), ecc, modules, eciMode, version, quietZoneSize: QuietZoneModules);
 
                     var luminance = RenderLuminance(modules, calculated.Width, calculated.Height, PixelsPerModule);
                     var image = new ImageView(luminance, calculated.Width * PixelsPerModule, calculated.Height * PixelsPerModule, ImageFormat.Lum);
                     var results = reader.From(image);
 
                     var expectedVersion = version.ToString();
+                    var expectedBytes = eciMode == EciMode.Utf8 || text.Any(c => c > 0xFF)
+                        ? Encoding.UTF8.GetBytes(text)
+                        : Encoding.Latin1.GetBytes(text);
                     var ok = results.Length == 1
-                        && results[0].Bytes.AsSpan().SequenceEqual(text.All(c => c <= 0xFF) ? Encoding.Latin1.GetBytes(text) : Encoding.UTF8.GetBytes(text))
+                        && results[0].Bytes.AsSpan().SequenceEqual(expectedBytes)
+                        && results[0].Text == text
                         && results[0].Extra("Version") == expectedVersion
                         && results[0].Extra("EcLevel") == ecc.ToString();
                     if (!ok)
@@ -54,24 +67,60 @@ public static class RmQRSpotCheck
             }
         }
 
+        if (total != 318 || eci3Total != 63 || eci26Total != 63)
+        {
+            Console.Error.WriteLine($"FAIL: expected 318 total / 63 ECI 3 / 63 ECI 26 symbols, got {total} / {eci3Total} / {eci26Total}");
+            return 1;
+        }
+
         Console.WriteLine(failures == 0
-            ? $"spot-check-rmqr: all {total} symbols (32 versions x M/H x numeric/alphanumeric/byte/UTF-8) decoded by zxing-cpp with matching bytes, version and ECC"
+            ? $"spot-check-rmqr: all {total} symbols decoded by zxing-cpp with matching text, bytes, version and ECC"
             : $"spot-check-rmqr: {failures}/{total} FAILED");
         return failures == 0 ? 0 : 1;
     }
 
     /// <summary>Capacity-boundary payloads per mode for the version × ECC (UTF-8 uses a Japanese repeat that fits).</summary>
-    private static IEnumerable<(string Mode, string Text)> Payloads(RmQRVersion version, RmQREccLevel ecc)
+    private static IEnumerable<(string Mode, string Text, EciMode EciMode)> Payloads(RmQRVersion version, RmQREccLevel ecc)
     {
         var entry = RmQRVersionTable.Entries.First(e => e.Number == (int)version);
-        yield return ("numeric", Cyclic("0123456789", entry.Capacity(ecc.ToString(), "Numeric")));
-        yield return ("alphanumeric", Cyclic("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 $%*+-./:", entry.Capacity(ecc.ToString(), "Alphanumeric")));
-        yield return ("byte", Cyclic("the quick brown fox jumps over the lazy dog?! ", entry.Capacity(ecc.ToString(), "Byte")));
+        yield return ("numeric", Cyclic("0123456789", entry.Capacity(ecc.ToString(), "Numeric")), EciMode.Default);
+        yield return ("alphanumeric", Cyclic("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 $%*+-./:", entry.Capacity(ecc.ToString(), "Alphanumeric")), EciMode.Default);
+        yield return ("byte", Cyclic("the quick brown fox jumps over the lazy dog?! ", entry.Capacity(ecc.ToString(), "Byte")), EciMode.Default);
 
-        // UTF-8: as many 3-byte characters as fit (at least one fits everywhere except R7x43-H, 2 bytes: use "é" there).
-        var byteCapacity = entry.Capacity(ecc.ToString(), "Byte");
-        var utf8 = byteCapacity >= 3 ? string.Concat(Enumerable.Repeat("あ", byteCapacity / 3)) : "é";
-        yield return ("utf8", utf8);
+        if (FitsWithEci("é", version, ecc, EciMode.Iso8859_1))
+            yield return ("latin1-eci3", "é", EciMode.Iso8859_1);
+
+        // ECI costs 11 bits, so the no-ECI capacity table is only an upper bound.
+        // Ask the public sizing path for the largest Japanese payload that fits;
+        // the smallest symbol at H cannot hold any ECI + Byte payload.
+        var utf8 = LargestUtf8Payload(version, ecc, entry.Capacity(ecc.ToString(), "Byte"));
+        if (utf8 is not null)
+            yield return ("utf8-eci26", utf8, EciMode.Utf8);
+    }
+
+    private static string? LargestUtf8Payload(RmQRVersion version, RmQREccLevel ecc, int byteCapacity)
+    {
+        for (var count = byteCapacity / 3; count > 0; count--)
+        {
+            var text = string.Concat(Enumerable.Repeat("あ", count));
+            if (FitsWithEci(text, version, ecc, EciMode.Utf8))
+                return text;
+        }
+
+        return FitsWithEci("é", version, ecc, EciMode.Utf8) ? "é" : null;
+    }
+
+    private static bool FitsWithEci(string text, RmQRVersion version, RmQREccLevel ecc, EciMode eciMode)
+    {
+        try
+        {
+            RmQRCodeGenerator.GetRequiredBufferSizeWithEci(text.AsSpan(), ecc, eciMode, version);
+            return true;
+        }
+        catch (ArgumentException ex) when (ex.ParamName == "requestedVersion" && ex.Message.StartsWith("Content is too long", StringComparison.Ordinal))
+        {
+            return false;
+        }
     }
 
     private static string Cyclic(string alphabet, int length)

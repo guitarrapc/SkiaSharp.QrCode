@@ -97,15 +97,15 @@ Rectangular geometry rule shared by every rendering entry: the symbol (quiet zon
 | Symbology | rMQR |
 | Versions | All 32 (R7x43 … R17x139) |
 | ECC levels | M, H |
-| Data modes | Numeric, Alphanumeric, Byte (UTF-8 bytes for non-Latin-1 text, same fallback as Micro QR) |
+| Data modes | Numeric, Alphanumeric, Byte (ECI 3 for ISO-8859-1, ECI 26 for UTF-8; ASCII omits ECI) |
 | Version selection | Exact version, or automatic fit by strategy, optionally within a fixed height |
 | Quiet zone | Configurable non-negative size, default 2 (the ISO/IEC 23941 quiet zone) |
 | Output | Bit-packed `RmQRCodeData` or byte-per-module `Span<byte>` |
 
 ### Not implemented
 
-- Kanji mode (tables keep the column; shared scope decision in [QR Symbology Architecture](qrcode-symbologies.md))
-- ECI header emission (the decoder parses ECI segments; encoding always uses Byte mode without an ECI header, matching Micro QR)
+- Kanji mode, intentionally (tables keep the column only for specification completeness;
+  Japanese text uses Byte mode with UTF-8 ECI, matching the Standard QR product policy)
 - FNC1, Structured Append (rMQR does not define Structured Append)
 - Multi-segment optimization within one payload (single-mode segment, as for Standard and Micro QR)
 
@@ -148,7 +148,10 @@ Version index is height-major (all widths of height 7, then 9, …); it is the 5
 | 30 | R17x99 | 17 x 99 | 23, 49, 75 | 160 | 100 / 3 / 20 | 56 / 4 / 26 | 8 / 8 / 7 |
 | 31 | R17x139 | 17 x 139 | 27, 55, 83, 111 | 232 | 152 / 4 / 20 | 76 / 6 / 26 | 9 / 8 / 8 |
 
-Kanji count-indicator widths are not in this table: they cannot be verified with the available oracle command lines and the mode is deferred; `RmQRConstants.GetKanjiCountIndicatorLength` carries them spec-transcribed with an "unverified" comment (values 2-7, monotone below the byte widths).
+Kanji count-indicator widths are not in this table: the mode is intentionally unsupported and
+cannot be verified with the available oracle command lines. `RmQRConstants.GetKanjiCountIndicatorLength`
+carries them spec-transcribed with an "unverified" comment (values 2-7, monotone below the byte
+widths) only to keep the constants table complete.
 
 Data capacity in characters (Numeric / Alphanumeric / Byte), single segment, no ECI header:
 
@@ -199,11 +202,11 @@ Reject an unknown version, an unknown ECC level, a `height` constraint combined 
 
 ### 2. Analyze text
 
-Shared `TextAnalyzer` (Numeric / Alphanumeric / Byte, single segment). Non-Latin-1 text is encoded as UTF-8 bytes in Byte mode with no ECI header (Micro QR precedent; decoders apply the UTF-8 heuristic in shared `SegmentDecoders`).
+Shared `TextAnalyzer` (Numeric / Alphanumeric / Byte, single segment). The default charset policy matches Standard QR: ASCII omits ECI, ISO-8859-1 text emits assignment 3, and other Unicode text is encoded as UTF-8 with assignment 26. An explicit `EciMode` can select ISO-8859-1 or UTF-8; explicit ISO-8859-1 rejects unrepresentable input instead of narrowing it.
 
 ### 3. Fit the version
 
-Required bits = 3 (mode) + count indicator (per version, table above) + payload bits. The terminator may shrink to the remaining capacity, including zero bits. Automatic fit is a table scan (versions pre-ordered best-first per strategy with their capacity per mode × ECC, height as a bitmask); it selects exactly what the definitional "best fitting version" scan selects, and a test pins the two for every input.
+Required bits = optional 11-bit ECI prefix (`111` + 8-bit assignment) + 3 (data mode) + count indicator (per version, table above) + payload bits. The terminator may shrink to the remaining capacity, including zero bits. Automatic fit is a table scan (versions pre-ordered best-first per strategy with their capacity per mode × ECC × ECI-presence, height as a bitmask); it selects exactly what the definitional "best fitting version" scan selects, and a test pins the two for every input.
 
 - `requestedVersion` given: use it or fail with an actionable capacity error (actual length, applicable maximum in mode units, remedy: shorten, lower ECC, choose a larger version, or use Standard QR).
 - Otherwise the candidate set is all 32 versions, or the versions of the constrained `height`; keep those whose data-codeword capacity holds the required bits; choose by `fitStrategy`:
@@ -214,7 +217,7 @@ Required bits = 3 (mode) + count indicator (per version, table above) + payload 
 
 ### 4. Build the data codewords
 
-3-bit mode indicator, count indicator, payload bits, terminator `000` (shortened at capacity), zero bits to a byte boundary, alternating 0xEC / 0x11 pads to the data-codeword count. The stream is written straight into the caller's buffer (no intermediate copy); vectorized value kernels exist per mode on x64 (see Decisions), all producing the identical stream.
+Optional ECI mode `111` plus an 8-bit assignment, 3-bit data-mode indicator, count indicator, payload bits, terminator `000` (shortened at capacity), zero bits to a byte boundary, alternating 0xEC / 0x11 pads to the data-codeword count. The stream is written straight into the caller's buffer (no intermediate copy); vectorized value kernels exist per mode on x64 (see Decisions), all producing the identical stream. UTF-8 stays in a separate cold writer so adding ECI does not address-expose the hot writer locals.
 
 ### 5. Reed-Solomon per block, 6. interleave
 
@@ -232,7 +235,7 @@ The single mask is applied to data modules while placing. Both format copies com
 
 ## Rendering
 
-`RmQRCodeImageBuilder` derives from `QRCodeImageBuilderBase<TSelf>` and adds `WithErrorCorrection(RmQREccLevel)`, `WithVersion(RmQRVersion)`, `WithFitStrategy(RmQRFitStrategy)`, `WithHeight(RmQRHeight)`; quiet zone default 2; no icon overlay or finder styling (one finder, no ECC headroom to spend). Canvas layout is rectangular: with a module pixel size the content is `width × height` modules at that size; with only an explicit canvas size the symbol is fitted with a uniform module scale and centered on whole pixels (letterbox), never stretched non-uniformly. Standard and Micro QR layout is unchanged. Shipped in Phase 5.7 exactly so; additionally, `WithWidth(int)` (public since the 2026-08-16 review; the static helpers use it with their `size`, and 512 is the default when no size option is given) makes the image that wide with the height following the symbol aspect ratio rounded to whole pixels, the background covering the whole image and the symbol drawn at a uniform module scale inside it (no clear-colour pad, so the image is opaque with an opaque background; the review found that letterboxing this aspect-derived canvas again left 1-3 transparent columns on 12 of the 32 versions), and the low-level `QRCodeRenderer.Render(canvas, area, RmQRCodeData, …)` / `SKCanvas.Render` overloads letterbox into the given area with the background covering the whole area.
+`RmQRCodeImageBuilder` derives from `QRCodeImageBuilderBase<TSelf>` and adds `WithErrorCorrection(RmQREccLevel)`, `WithEciMode(EciMode)`, `WithVersion(RmQRVersion)`, `WithFitStrategy(RmQRFitStrategy)`, `WithHeight(RmQRHeight)`; quiet zone default 2; no icon overlay or finder styling (one finder, no ECC headroom to spend). Canvas layout is rectangular: with a module pixel size the content is `width × height` modules at that size; with only an explicit canvas size the symbol is fitted with a uniform module scale and centered on whole pixels (letterbox), never stretched non-uniformly. Standard and Micro QR layout is unchanged. Shipped in Phase 5.7 exactly so; additionally, `WithWidth(int)` (public since the 2026-08-16 review; the static helpers use it with their `size`, and 512 is the default when no size option is given) makes the image that wide with the height following the symbol aspect ratio rounded to whole pixels, the background covering the whole image and the symbol drawn at a uniform module scale inside it (no clear-colour pad, so the image is opaque with an opaque background; the review found that letterboxing this aspect-derived canvas again left 1-3 transparent columns on 12 of the 32 versions), and the low-level `QRCodeRenderer.Render(canvas, area, RmQRCodeData, …)` / `SKCanvas.Render` overloads letterbox into the given area with the background covering the whole area.
 
 ---
 
@@ -242,7 +245,10 @@ The single mask is applied to data modules while placing. Both format copies com
 - Two-dimensional fit exposed as strategy + optional height constraint: rMQR exists to fit narrow print lanes; "fixed height, auto width" is the dominant real-world request (libzint's `R<h>xauto`), and area/width/height minimization covers the rest without a free-form size search that would mostly select non-existent sizes.
 - Letterbox instead of stretch for explicit canvas sizes: a rectangular symbol drawn into an arbitrary rectangle at non-uniform scale is not the same symbol; module aspect ratio must survive.
 - Fixed mask means the placer is a static permutation per version; no mask scoring machinery is designed in.
-- Byte-mode UTF-8 without ECI keeps encoder and decoder symmetric with Micro QR and avoids exposing an option whose interoperability we cannot verify with the available oracles.
+- Superseded 2026-08-18: emitting UTF-8 without ECI made decoding depend on reader heuristics.
+  rMQR supports ECI unlike Micro QR, so the encoder will explicitly emit ISO-8859-1 assignment
+  3 or UTF-8 assignment 26, following Standard QR's policy. Kanji mode remains intentionally
+  unsupported; ECI + Byte mode is the interoperable Unicode path.
 
 ## Decisions
 
@@ -252,8 +258,8 @@ The single mask is applied to data modules while placing. Both format copies com
 | Version fit API | `RmQRFitStrategy` + `RmQRHeight?` | User demand for width constraints (would add `RmQRWidth?` symmetric to height) |
 | Default fit strategy | `MinimizeArea` (fewest modules), **confirmed in Phase 5.6**: both reference encoders choose the same versions automatically (libzint and qrtool with no version option: 12 digits at M → R11x27, 15 → R13x27, 100 → R11x77, measured by `probe-rmqr`), so the default keeps interoperability parity and the printable-area argument; the surprise case (12 digits at M: R11x27 (297) rather than the flatter R7x43 (301)) is documented in the generator XML docs and pinned by `RmQRCodeGeneratorUnitTest`; users wanting the flattest symbol use `MinimizeHeight` or a fixed `RmQRHeight` (README example lands with the rendering surface in 5.7) | User feedback after release |
 | Explicit-canvas layout | Uniform scale, centered (letterbox) | - |
-| ECI on encode | Not emitted | Interop demand; decoder parses ECI regardless |
-| Kanji | Deferred (tables keep the column) | Cross-symbology decision |
+| ECI on encode | Implemented 2026-08-18: none for ASCII; assignment 3 for ISO-8859-1; assignment 26 for UTF-8 | Additional charset demand (cross-symbology decision) |
+| Kanji | Intentionally unsupported; use Byte mode with UTF-8 ECI (tables retain the column only for specification completeness) | Cross-symbology policy change backed by concrete demand |
 | Interleaver | Lifted `BinaryInterleaver` to `Internals.BinaryEncoders` (Phase 5.4): it never used the version, only the `ECCInfo` block structure; the remainder-bit count became a parameter | - |
 | Placer performance | Reference per-module placer first (Phase 5.5), then the benchmark-driven fast path (follow-up, 2026-08-16): per-version tables built once by the reference painters (painted template per version × ECC, zigzag order as core indices, mask per position, column-pair segmentation), vector bit expansion fused with the mask, 16-bit pair stores + index scatter; the reference stays the source of truth (tables, decoder predicate) and the parity test pins both | - |
 | Bit-stream performance | Reference shape first (Phase 5.3), then the benchmark-driven fast path (follow-up, 2026-08-16): raw-local writer, SWAR / SSE numeric and alphanumeric value kernels, SSE2 byte narrowing, capability-gated with scalar fallbacks; kernel-level parity tests pin vector vs scalar, the naive-reference parity pins the stream | - |
@@ -273,7 +279,9 @@ Performed 2026-08-15 with the pinned qrtool 0.13.2 binary (`--variant rmqr`, `--
 | Mask, zigzag start and direction, interleaving | The R7x43-M "1" symbol yields exactly the predicted codewords `22 20 EC 11` and multi-block versions deinterleave to the predicted streams | Confirmed |
 | Alignment column positions, sub-finder and corner patterns | Visual inspection of R7x43 / R9x59 / R11x27 plus the free-module count agreement above | Consistent |
 
-Not verified here: Kanji count widths, and the ISO/IEC 23941 misdecode-protection question (whether ECC counts reserve codewords beyond the correction capacity), both scheduled for the phases that need them.
+Not verified here: Kanji count widths (not needed while Kanji mode is intentionally unsupported),
+and the ISO/IEC 23941 misdecode-protection question (whether ECC counts reserve codewords beyond
+the correction capacity), scheduled for the phase that needs it.
 
 ## Lessons Learned
 
@@ -289,4 +297,4 @@ Implementation lessons: appended per phase (Phase 5 progress log in the [impleme
 
 ## Validation
 
-Per phase (see the implementation plan; every exit met): structural table tests + oracle format/dimension tests (5.1), naive-reference parity for the bit stream (5.3), interleave reference (5.4), extraction test over all 64 combinations (5.5), the `spot-check-rmqr` zxing-cpp gate over every version × ECC × mode (5.6), module-to-pixel rendering parity (5.7); Standard and Micro QR benchmarks flat at every step.
+Per phase (see the implementation plan; every exit met): structural table tests + oracle format/dimension tests (5.1), naive-reference parity for the bit stream (5.3), interleave reference (5.4), extraction test over all 64 combinations (5.5), the `spot-check-rmqr` zxing-cpp gate over every version × ECC × mode (5.6), module-to-pixel rendering parity (5.7); Standard and Micro QR benchmarks flat at every step. The 2026-08-18 ECI follow-up adds exact assignment-3/26 streams, ECI capacity-boundary and exhaustive selector parity tests, public class/span/sizing round trips, unsupported-charset validation, and a 318-symbol zxing-cpp text/bytes/version/ECC gate with 63 ECI-3 and 63 ECI-26 symbols.

@@ -92,15 +92,24 @@ Sibling namespaces bound the blast radius instead: a Micro QR change cannot touc
 
 `QRCodeData` is a shipped public type whose contract is square, 21–177 modules, versions 1–40, with a serialization format that encodes exactly that. Generalizing it would either break the serialization contract or turn every member into a symbology-conditional. Sibling data types keep the shipped contract byte-for-byte stable and let rectangular geometry be designed without compatibility constraints.
 
-### Why Kanji mode is deferred
+### Why Kanji mode is intentionally unsupported
 
-The library does not implement Kanji segments for Standard QR today (detected and reported on decode, never encoded). Extending that line to Micro QR (M3/M4) and rMQR keeps encode/decode capability symmetric across symbologies. Capacity tables and version auto-selection are still written with the Kanji column present, so adding the mode later is a data+segment change, not a table redesign.
+The library intentionally does not implement Kanji segments for Standard QR: UTF-8 Byte mode
+covers Japanese text, while the Shift JIS-based 13-bit Kanji mode has limited demand and adds a
+second charset-specific encode/decode path. The same product policy applies to rMQR. Standard QR
+and rMQR declare UTF-8 with ECI; Micro QR has no ECI mode and keeps its existing raw-UTF-8 plus
+reader-heuristic behavior. All decoders recognize a Kanji mode indicator and return
+`UnsupportedContent` rather than misdecoding it.
+
+Capacity/constants tables retain the Kanji column only for specification completeness. That is
+not a commitment to implement the mode; adding it would require an explicit cross-symbology
+policy change backed by concrete demand.
 
 ## Scope decisions
 
 | Decision | Choice | Revisit when |
 |---|---|---|
-| Kanji mode (all symbologies) | Deferred; tables keep the column | User demand or decoder interop need |
+| Kanji mode (all symbologies) | Intentionally unsupported; use UTF-8 Byte mode (with ECI where the symbology supports it) | Cross-symbology policy change backed by concrete demand |
 | Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR and rMQR scanning are their own explicitly-typed entries (`MicroQRCodeDecoder`, `RmQRCodeDecoder`); the Playground tries the three in that order | - |
 | Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) | - |
 | `QRCodeData` | Frozen for Standard QR | Never (compatibility contract) |

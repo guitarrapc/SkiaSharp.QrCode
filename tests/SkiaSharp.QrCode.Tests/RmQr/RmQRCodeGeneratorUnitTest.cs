@@ -102,17 +102,71 @@ public class RmQRCodeGeneratorUnitTest
     }
 
     [Test]
-    public async Task Create_Utf8_IsByteModeWithoutEci_AndRoundTripsThroughOracleShape()
+    public async Task Create_DefaultEci_AutoDetectsUtf8_AndExplicitUtf8Matches()
     {
-        var fixture = FixtureLoader.Load("RmQr", "qrtool/r13x59-m-utf8-japanese");
-        var (oracle, width, height) = FixtureLoader.ReadRectangularMatrix(fixture.MatrixPath);
-        var data = RmQRCodeGenerator.CreateRmQRCode("こんにちは世界", RmQREccLevel.M, RmQRVersion.R13x59, quietZoneSize: 0);
-        var mismatches = 0;
-        for (var row = 0; row < height; row++)
-            for (var col = 0; col < width; col++)
-                if (data[row, col] != (oracle[row * width + col] != 0) && !(col == 1 && row >= 8 && row <= height - 3))
-                    mismatches++;
-        await Assert.That(mismatches).IsEqualTo(0);
+        const string text = "こんにちは世界";
+        var automatic = RmQRCodeGenerator.CreateRmQRCode(text, RmQREccLevel.M, requestedVersion: RmQRVersion.R13x59, quietZoneSize: 0);
+        var explicitUtf8 = RmQRCodeGenerator.CreateRmQRCodeWithEci(text, RmQREccLevel.M, EciMode.Utf8, requestedVersion: RmQRVersion.R13x59, quietZoneSize: 0);
+
+        await Assert.That(automatic.GetRawData().AsSpan().SequenceEqual(explicitUtf8.GetRawData())).IsTrue();
+        await Assert.That(RmQRCodeDecoder.TryDecode(automatic, out var decoded, out var info)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(text);
+        await Assert.That(info.Status).IsEqualTo(QRCodeDecodeStatus.Success);
+    }
+
+    [Test]
+    public async Task Create_DefaultEci_AutoDetectsLatin1_AndAccountsForItsHeaderAtCapacityBoundary()
+    {
+        const string text = "éé";
+        var automaticSize = RmQRCodeGenerator.GetRequiredBufferSize(text, RmQREccLevel.H, fitStrategy: RmQRFitStrategy.MinimizeHeight);
+        var explicitSize = RmQRCodeGenerator.GetRequiredBufferSizeWithEci(text, RmQREccLevel.H, EciMode.Iso8859_1, fitStrategy: RmQRFitStrategy.MinimizeHeight);
+
+        await Assert.That(automaticSize).IsEqualTo(explicitSize);
+        await Assert.That(automaticSize.Version).IsNotEqualTo(RmQRVersion.R7x43);
+        var automatic = RmQRCodeGenerator.CreateRmQRCode(text, RmQREccLevel.H, fitStrategy: RmQRFitStrategy.MinimizeHeight, quietZoneSize: 0);
+        var explicitLatin1 = RmQRCodeGenerator.CreateRmQRCodeWithEci(text, RmQREccLevel.H, EciMode.Iso8859_1, fitStrategy: RmQRFitStrategy.MinimizeHeight, quietZoneSize: 0);
+        await Assert.That(automatic.GetRawData().AsSpan().SequenceEqual(explicitLatin1.GetRawData())).IsTrue();
+    }
+
+    [Test]
+    public async Task Create_ExplicitEci_ChangesAsciiStream_AndLatin1RoundTrips()
+    {
+        var noEci = RmQRCodeGenerator.CreateRmQRCode("a", RmQREccLevel.M, requestedVersion: RmQRVersion.R7x43, quietZoneSize: 0);
+        var utf8 = RmQRCodeGenerator.CreateRmQRCodeWithEci("a", RmQREccLevel.M, EciMode.Utf8, requestedVersion: RmQRVersion.R7x43, quietZoneSize: 0);
+        await Assert.That(noEci.GetRawData().AsSpan().SequenceEqual(utf8.GetRawData())).IsFalse();
+
+        var latin1 = RmQRCodeGenerator.CreateRmQRCodeWithEci("Café", RmQREccLevel.M, EciMode.Iso8859_1);
+        var automaticLatin1 = RmQRCodeGenerator.CreateRmQRCode("Café", RmQREccLevel.M);
+        await Assert.That(automaticLatin1.GetRawData().AsSpan().SequenceEqual(latin1.GetRawData())).IsTrue();
+        await Assert.That(RmQRCodeDecoder.TryDecode(latin1, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo("Café");
+
+        var size = RmQRCodeGenerator.GetRequiredBufferSizeWithEci("Café".AsSpan(), RmQREccLevel.M, EciMode.Iso8859_1);
+        var destination = new byte[size.BufferSize + 4];
+        destination.AsSpan().Fill(0xA5);
+        var written = RmQRCodeGenerator.CreateRmQRCodeWithEci("Café".AsSpan(), RmQREccLevel.M, destination, EciMode.Iso8859_1);
+        await Assert.That(written).IsEqualTo(size.BufferSize);
+        for (var row = 0; row < size.Height; row++)
+            for (var col = 0; col < size.Width; col++)
+                if ((destination[row * size.Width + col] != 0) != latin1[row, col])
+                    Assert.Fail($"ECI span/class module ({row},{col}) differs");
+        await Assert.That(destination.AsSpan(size.BufferSize).ToArray()).IsEquivalentTo(new byte[] { 0xA5, 0xA5, 0xA5, 0xA5 });
+        await Assert.That(RmQRCodeDecoder.TryDecode(destination.AsSpan(0, size.BufferSize), size.Width, size.Height, out var spanDecoded, out _)).IsTrue();
+        await Assert.That(spanDecoded).IsEqualTo("Café");
+    }
+
+    [Test]
+    public async Task Create_ExplicitIso88591_RejectsUnrepresentableText()
+    {
+        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCodeWithEci("日本語", RmQREccLevel.M, EciMode.Iso8859_1)).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCodeWithEci("a", RmQREccLevel.M, (EciMode)999)).Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
+    public async Task ExistingDefaultLiteralPosition_RemainsSourceCompatible()
+    {
+        var data = RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, default);
+        await Assert.That(data).IsNotNull();
     }
 
     // ---- validation and messages ------------------------------------------------------

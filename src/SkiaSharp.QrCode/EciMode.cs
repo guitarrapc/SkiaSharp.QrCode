@@ -60,7 +60,7 @@ public enum EciMode
     Default = 0,
     /// <summary>
     /// ISO-8859-1 (Latin-1) encoding - Western European characters.
-    /// Adds ECI header: 0111 00000011 (12 bits overhead).
+    /// Adds an ECI header: 12 bits in Standard QR, 11 bits in rMQR.
     /// </summary>
     /// <remarks>
     /// <para>Character Support:</para>
@@ -86,7 +86,7 @@ public enum EciMode
     Iso8859_1 = 3,
     /// <summary>
     /// UTF-8 Unicode encoding - Universal character support.
-    /// Adds ECI header: 0111 00011010 (12 bits overhead).
+    /// Adds an ECI header: 12 bits in Standard QR, 11 bits in rMQR.
     /// </summary>
     /// <remarks>
     /// <para>Character Support:</para>
@@ -98,10 +98,10 @@ public enum EciMode
     /// 
     /// <para>Size Impact:</para>
     /// <list type="bullet">
-    /// <item>ECI header: +12 bits overhead</item>
+    /// <item>ECI header: +12 bits in Standard QR, +11 bits in rMQR</item>
     /// <item>Data encoding: Variable (1-4 bytes per character)</item>
-    /// <item>Example: "🎉" = 12 (header) + 4 + 9 + 32 (4-byte UTF-8) = 57 bits</item>
-    /// <item>Example: "Café" = 12 (header) + 4 + 9 + 40 (5 bytes: C,a,f,é=C3A9) = 65 bits</item>
+    /// <item>Standard QR example: "🎉" = 12 (header) + 4 + 9 + 32 (4-byte UTF-8) = 57 bits</item>
+    /// <item>Standard QR example: "Café" = 12 (header) + 4 + 9 + 40 (5 bytes: C,a,f,é=C3A9) = 65 bits</item>
     /// </list>
     /// 
     /// <para>UTF-8 Byte Examples:</para>
@@ -123,7 +123,7 @@ public enum EciMode
     /// <para>Trade-offs:</para>
     /// <list type="bullet">
     /// <item>Larger data size for non-ASCII characters (multi-byte encoding)</item>
-    /// <item>ECI header adds 12 bits overhead</item>
+    /// <item>ECI header adds 12 bits in Standard QR or 11 bits in rMQR</item>
     /// <item>For Western European text, <see cref="Iso8859_1"/> is more efficient</item>
     /// </list>
     /// </remarks>
@@ -142,7 +142,7 @@ public static class EciModeExtensions
     // └─────────────────┴────────────────────────┘
 
     /// <summary>
-    /// Gets the ECI header size in bits.
+    /// Gets the Standard QR ECI header size in bits.
     /// </summary>
     /// <param name="eciMode">ECI mode.</param>
     /// <returns>
@@ -153,7 +153,7 @@ public static class EciModeExtensions
     /// <remarks>
     /// Current implementation supports 0-127 range (8 bits).
     /// </remarks>
-    internal static int GetHeaderBits(this EciMode eciMode)
+    internal static int GetStandardQrHeaderBits(this EciMode eciMode)
     {
         if (eciMode == EciMode.Default)
         {

@@ -646,7 +646,7 @@ public static class QRCodeGenerator
     private static int GetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM)
     {
         // ECI header overhead if eci specified
-        var eciHeaderBits = eciMode.GetHeaderBits();
+        var eciHeaderBits = eciMode.GetStandardQrHeaderBits();
 
         // Mode indicator (4 bits)
         var modeIndicatorBits = 4;

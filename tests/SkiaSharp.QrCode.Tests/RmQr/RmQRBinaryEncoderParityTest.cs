@@ -49,7 +49,7 @@ public class RmQRBinaryEncoderParityTest
         var encodingMode = mode switch { "Numeric" => EncodingMode.Numeric, "Alphanumeric" => EncodingMode.Alphanumeric, _ => EncodingMode.Byte };
         var dataLength = mode == "Byte" ? (utf8 ? System.Text.Encoding.UTF8.GetByteCount(text) : text.Length) : text.Length;
         var analysis = new TextAnalysisResult(encodingMode, utf8 ? EciMode.Utf8 : EciMode.Default, dataLength);
-        var expected = RmQRNaiveReference.NaiveDataCodewords(text, count, RmQRConstants.GetModeIndicatorValue(encodingMode), RmQRConstants.GetCountIndicatorLength(version, encodingMode), mode, utf8);
+        var expected = RmQRNaiveReference.NaiveDataCodewords(text, count, RmQRConstants.GetModeIndicatorValue(encodingMode), RmQRConstants.GetCountIndicatorLength(version, encodingMode), mode, utf8, analysis.EciMode);
 
         var actual = new byte[count];
         var written = RmQRBinaryEncoder.EncodeDataCodewords(text, version, ecc, in analysis, actual);
@@ -106,7 +106,7 @@ public class RmQRBinaryEncoderParityTest
     [MethodDataSource(nameof(AllVersionEcc))]
     public async Task ByteUtf8_MultiByteAndSurrogates_UpToCapacity(RmQRVersion version, RmQREccLevel ecc)
     {
-        var maxBytes = RmQRVersionSelector.GetMaxDataLength(version, ecc, EncodingMode.Byte);
+        var maxBytes = RmQRVersionSelector.GetMaxDataLength(version, ecc, EncodingMode.Byte, EciMode.Utf8);
         // 2-, 3- and 4-byte sequences (é, こ, 😀) and a lone surrogate (encoded as U+FFFD, 3 bytes, by UTF8Encoding).
         var pieces = new[] { "é", "こ", "😀", "\uD800", "a" };
         var text = "";

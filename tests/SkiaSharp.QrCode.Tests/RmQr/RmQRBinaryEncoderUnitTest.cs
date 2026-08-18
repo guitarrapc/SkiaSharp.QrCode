@@ -78,26 +78,35 @@ public class RmQRBinaryEncoderUnitTest
     }
 
     [Test]
-    public async Task Encode_Utf8Fallback_WritesUtf8Bytes_WithoutEci()
+    public async Task Encode_Utf8_WritesEci26BeforeByteSegment()
     {
-        // "こ" = E3 81 93 in R7x43-M byte mode (count 3, cci 3 bits): 011 011 E3 81 93 000 …
+        // ECI mode 111 + assignment 26 + Byte mode 011 + count 3 + "こ" = E3 81 93
+        // + terminator/alignment: 111 00011010 011 011 E3 81 93 000 0000.
         var actual = Encode("こ", RmQRVersion.R7x43, RmQREccLevel.M, EncodingMode.Byte, EciMode.Utf8, 3);
-        await Assert.That(actual).IsEquivalentTo(RmQRNaiveReference.NaiveDataCodewords("こ", 6, 0b011, 3, "Byte", utf8: true));
+        await Assert.That(actual).IsEquivalentTo(new byte[] { 0xE3, 0x4D, 0xF1, 0xC0, 0xC9, 0x80 });
     }
 
     [Test]
-    public async Task Encode_Latin1_NarrowsWithoutTransliteration()
+    public async Task Encode_Latin1_WritesEci3AndNarrowsWithoutTransliteration()
     {
-        var text = "naïve café";
-        var actual = Encode(text, RmQRVersion.R11x59, RmQREccLevel.M, EncodingMode.Byte, EciMode.Iso8859_1, text.Length);
-        await Assert.That(actual).IsEquivalentTo(RmQRNaiveReference.NaiveDataCodewords(text, RmQRConstants.GetDataCodewordCount(RmQRVersion.R11x59, RmQREccLevel.M), 0b011, 5, "Byte", utf8: false));
+        // ECI mode 111 + assignment 3 + Byte mode 011 + count 1 + E9 + terminator/alignment.
+        var actual = Encode("é", RmQRVersion.R7x43, RmQREccLevel.M, EncodingMode.Byte, EciMode.Iso8859_1, 1);
+        await Assert.That(actual).IsEquivalentTo(new byte[] { 0xE0, 0x6C, 0xF4, 0x80, 0xEC, 0x11 });
     }
 
-    public static IEnumerable<string> FixtureIds() => FixtureLoader.EnumerateFixtureIds("RmQr");
+    public static IEnumerable<string> FixtureIdsWithoutEci()
+    {
+        foreach (var fixtureId in FixtureLoader.EnumerateFixtureIds("RmQr"))
+        {
+            var manifest = FixtureLoader.Load("RmQr", fixtureId).Manifest;
+            if (TextAnalyzer.Analyze(manifest.PayloadText, EciMode.Default).EciMode == EciMode.Default)
+                yield return fixtureId;
+        }
+    }
 
     [Test]
-    [MethodDataSource(nameof(FixtureIds))]
-    public async Task Encode_MatchesDataCodewords_OfEveryExternalOracleSymbol(string fixtureId)
+    [MethodDataSource(nameof(FixtureIdsWithoutEci))]
+    public async Task Encode_MatchesDataCodewords_OfEveryComparableExternalOracleSymbol(string fixtureId)
     {
         var fixture = FixtureLoader.Load("RmQr", fixtureId);
         var manifest = fixture.Manifest;

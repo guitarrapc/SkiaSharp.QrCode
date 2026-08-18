@@ -41,6 +41,7 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
     private readonly string? _content;
     private readonly RmQRCodeData? _data;
     private RmQREccLevel _eccLevel = RmQREccLevel.M;
+    private EciMode _eciMode = EciMode.Default;
     private RmQRVersion? _requestedVersion;
     private RmQRFitStrategy _fitStrategy = RmQRFitStrategy.MinimizeArea;
     private RmQRHeight? _height;
@@ -339,6 +340,18 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
         return this;
     }
 
+    /// <summary>Configure the ECI character encoding declaration.</summary>
+    /// <param name="eciMode">Default auto-detects ASCII, ISO-8859-1 and UTF-8.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    public RmQRCodeImageBuilder WithEciMode(EciMode eciMode)
+    {
+        if (_data is not null)
+            throw new InvalidOperationException("WithEciMode cannot be used when RmQRCodeData is provided directly.");
+
+        _eciMode = eciMode;
+        return this;
+    }
+
     /// <summary>
     /// Configure the exact rMQR version to generate.
     /// </summary>
@@ -422,7 +435,7 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
 
     private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
     {
-        var data = _data ?? RmQRCodeGenerator.CreateRmQRCode(_content.AsSpan(), _eccLevel, _requestedVersion, _fitStrategy, _height, _quietZoneSize);
+        var data = _data ?? RmQRCodeGenerator.CreateRmQRCodeWithEci(_content.AsSpan(), _eccLevel, _eciMode, _requestedVersion, _fitStrategy, _height, _quietZoneSize);
         matrixWidth = data.Width;
         matrixHeight = data.Height;
         return data;
