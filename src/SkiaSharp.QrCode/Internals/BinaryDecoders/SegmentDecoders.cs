@@ -39,7 +39,7 @@ internal static class SegmentDecoders
         // buffer to grow, and — because callers treat that status as "the symbol was
         // read" — would stop the image decoder looking for the real symbol.
         // 3 digits per 10 bits, then 2 per 7 and 1 per 4: 10·(n/3) + the remainder's cost.
-        if (totalBits - reader.BitPosition < 10 * (count / 3) + (count % 3) switch { 2 => 7, 1 => 4, _ => 0 })
+        if (totalBits - reader.BitPosition < 10 * (count / 3) + ((count % 3) switch { 2 => 7, 1 => 4, _ => 0 }))
             return QRCodeDecodeStatus.InvalidBitstream;
 
         if (destination.Length - charsWritten < count)
