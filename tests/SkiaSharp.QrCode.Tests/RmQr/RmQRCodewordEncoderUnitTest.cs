@@ -8,10 +8,11 @@ namespace SkiaSharp.QrCode.Tests;
 /// rMQR final message (ISO/IEC 23941 7.5-7.6): per-block Reed-Solomon ECC over the
 /// data codewords, then block interleaving (data round-robin, ECC round-robin,
 /// zero remainder bits). Verified structurally against naive deinterleaving and the
-/// shared RS kernel, and against EVERY committed external symbol: the full
+/// shared RS kernel, and against every comparable committed external symbol: the full
 /// interleaved stream walked out of a libzint / qrtool symbol must equal our final
 /// message for the same payload, which pins the RS generator polynomials and ECC
-/// counts per block against two independent encoders.
+/// counts per block against two independent encoders. The four legacy qrtool UTF-8
+/// symbols omit ECI and remain decoder fixtures, but are not encoder-bitstream oracles.
 /// </summary>
 public class RmQRCodewordEncoderUnitTest
 {
@@ -94,11 +95,11 @@ public class RmQRCodewordEncoderUnitTest
         await Assert.That(() => RmQRCodewordEncoder.AssembleFinalMessage(data, RmQRVersion.R7x43, RmQREccLevel.M, new byte[12])).Throws<ArgumentException>();
     }
 
-    public static IEnumerable<string> FixtureIds() => FixtureLoader.EnumerateFixtureIds("RmQr");
+    public static IEnumerable<string> FixtureIdsWithoutEci() => RmQRBinaryEncoderUnitTest.FixtureIdsWithoutEci();
 
     [Test]
-    [MethodDataSource(nameof(FixtureIds))]
-    public async Task FinalMessage_MatchesEveryExternalOracleSymbol(string fixtureId)
+    [MethodDataSource(nameof(FixtureIdsWithoutEci))]
+    public async Task FinalMessage_MatchesEveryComparableExternalOracleSymbol(string fixtureId)
     {
         var fixture = FixtureLoader.Load("RmQr", fixtureId);
         var manifest = fixture.Manifest;

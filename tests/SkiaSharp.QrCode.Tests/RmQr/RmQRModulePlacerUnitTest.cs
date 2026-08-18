@@ -7,8 +7,9 @@ namespace SkiaSharp.QrCode.Tests;
 /// <see cref="RmQRModulePlacer"/> reference implementation: function-module
 /// predicate vs the independent naive painter, structural invariants of the placed
 /// function patterns, format-copy read-back, and the module-exact oracle: placing
-/// the same payload as every committed external symbol must reproduce that symbol
-/// module for module (libzint exactly; qrtool except its documented tail defect).
+/// the same payload as every comparable committed external symbol must reproduce
+/// that symbol module for module (libzint exactly; qrtool except its documented tail
+/// defect). Legacy UTF-8 fixtures without ECI remain decoder-only oracles.
 /// </summary>
 public class RmQRModulePlacerUnitTest
 {
@@ -139,11 +140,11 @@ public class RmQRModulePlacerUnitTest
         await Assert.That(() => RmQRModulePlacer.PlaceSymbol(new byte[7 * 43], RmQRVersion.R7x43, RmQREccLevel.M, message.AsSpan(0, message.Length - 1).ToArray())).Throws<ArgumentException>();
     }
 
-    public static IEnumerable<string> FixtureIds() => FixtureLoader.EnumerateFixtureIds("RmQr");
+    public static IEnumerable<string> FixtureIdsWithoutEci() => RmQRBinaryEncoderUnitTest.FixtureIdsWithoutEci();
 
     [Test]
-    [MethodDataSource(nameof(FixtureIds))]
-    public async Task PlaceSymbol_ReproducesEveryExternalOracleSymbol_ModuleForModule(string fixtureId)
+    [MethodDataSource(nameof(FixtureIdsWithoutEci))]
+    public async Task PlaceSymbol_ReproducesEveryComparableExternalOracleSymbol_ModuleForModule(string fixtureId)
     {
         var fixture = FixtureLoader.Load("RmQr", fixtureId);
         var manifest = fixture.Manifest;

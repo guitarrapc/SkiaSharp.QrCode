@@ -9,14 +9,25 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// </summary>
 internal static class RmQRVersionSelector
 {
+    // rMQR ECI prefix for the assignments exposed by EciMode: 3-bit mode 111
+    // followed by the one-byte assignment designator (3 or 26).
+    private const int EciHeaderBits = RmQRConstants.ModeIndicatorLength + 8;
+
     /// <summary>
     /// Total bit count for header (3-bit mode + count indicator) plus data. The
     /// count indicator range never binds below the bit capacity for any
     /// version/mode (verified by RmQRConstantsUnitTest), so no range check is needed.
     /// </summary>
     public static int GetRequiredBits(RmQRVersion version, EncodingMode mode, int dataLength)
+        => GetRequiredBits(version, mode, dataLength, EciMode.Default);
+
+    /// <summary>
+    /// Total bit count including the optional rMQR ECI prefix. The supported
+    /// ISO-8859-1 and UTF-8 assignments both use the one-byte designator form.
+    /// </summary>
+    public static int GetRequiredBits(RmQRVersion version, EncodingMode mode, int dataLength, EciMode eciMode)
     {
-        var headerBits = RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, mode);
+        var headerBits = GetEciHeaderBits(eciMode) + RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, mode);
         var dataBits = mode switch
         {
             EncodingMode.Numeric => dataLength / 3 * 10 + (dataLength % 3) switch { 2 => 7, 1 => 4, _ => 0 },
@@ -29,15 +40,23 @@ internal static class RmQRVersionSelector
 
     /// <summary>Whether <paramref name="dataLength"/> units of <paramref name="mode"/> fit the version at the ECC level.</summary>
     public static bool Fits(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode, int dataLength)
-        => GetRequiredBits(version, mode, dataLength) <= 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
+        => Fits(version, eccLevel, mode, dataLength, EciMode.Default);
+
+    /// <summary>Whether the data and optional ECI prefix fit the version at the ECC level.</summary>
+    public static bool Fits(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode, int dataLength, EciMode eciMode)
+        => GetRequiredBits(version, mode, dataLength, eciMode) <= 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
 
     /// <summary>
     /// Largest data length (digits / characters / bytes) that fits a version × ECC × mode,
     /// the inverse of <see cref="GetRequiredBits"/> against the data bit capacity.
     /// </summary>
     public static int GetMaxDataLength(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode)
+        => GetMaxDataLength(version, eccLevel, mode, EciMode.Default);
+
+    /// <summary>Largest data length after accounting for the optional ECI prefix.</summary>
+    public static int GetMaxDataLength(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode, EciMode eciMode)
     {
-        var headerBits = RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, mode);
+        var headerBits = GetEciHeaderBits(eciMode) + RmQRConstants.ModeIndicatorLength + RmQRConstants.GetCountIndicatorLength(version, mode);
         var dataBits = 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel) - headerBits;
         if (dataBits <= 0)
             return 0;
@@ -99,7 +118,12 @@ internal static class RmQRVersionSelector
     /// length, applicable maximum in mode units, remedy) when the content does not fit.
     /// </summary>
     public static RmQRVersion Select(EncodingMode mode, int dataLength, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height)
+        => Select(mode, dataLength, EciMode.Default, eccLevel, requestedVersion, fitStrategy, height);
+
+    /// <summary>Selects a version while accounting for an optional ECI prefix.</summary>
+    public static RmQRVersion Select(EncodingMode mode, int dataLength, EciMode eciMode, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height)
     {
+        _ = GetEciHeaderBits(eciMode); // validate before either requested/auto path
         if (!RmQRConstants.IsValidEccLevel(eccLevel))
             throw new ArgumentOutOfRangeException(nameof(eccLevel), $"Invalid rMQR ECC level: {eccLevel}");
         if (fitStrategy is < RmQRFitStrategy.MinimizeArea or > RmQRFitStrategy.MinimizeHeight)
@@ -113,11 +137,11 @@ internal static class RmQRVersionSelector
                 throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Invalid rMQR version: {version}");
             if (height is { } requiredHeight && RmQRConstants.GetHeight(version) != (int)requiredHeight)
                 throw new ArgumentException($"Requested rMQR version {version} is {RmQRConstants.GetHeight(version)} modules high, but height {requiredHeight} was requested. Specify one or the other, or make them agree.", nameof(height));
-            if (!Fits(version, eccLevel, mode, dataLength))
+            if (!Fits(version, eccLevel, mode, dataLength, eciMode))
             {
                 throw new ArgumentException(
                     $"Content is too long for rMQR {version} at ECC level {eccLevel}: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
-                    $"but the maximum is {FormatDataLength(GetMaxDataLength(version, eccLevel, mode), mode)}. " +
+                    $"but the maximum is {FormatDataLength(GetMaxDataLength(version, eccLevel, mode, eciMode), mode)}. " +
                     "Shorten the content, lower the ECC level, choose a larger version, or use Standard QR (QRCodeGenerator) for longer content.",
                     nameof(requestedVersion));
             }
@@ -133,7 +157,8 @@ internal static class RmQRVersionSelector
         // allowed — the same result as scanning all 32 versions with Fits + IsBetter
         // (pinned by RmQRVersionSelectorUnitTest), at a fraction of the cost: the
         // scan was about a third of a small auto-fit encode.
-        var capacities = FitCapacities[(RmQRConstants.GetModeIndex(mode) * 2 + (int)eccLevel) * 3 + (int)fitStrategy];
+        var eciIndex = eciMode == EciMode.Default ? 0 : 1;
+        var capacities = FitCapacities[((RmQRConstants.GetModeIndex(mode) * 2 + (int)eccLevel) * 2 + eciIndex) * 3 + (int)fitStrategy];
         var order = FitOrders[(int)fitStrategy];
         var heightMask = height is { } fitHeight ? FitHeightMasks[(int)fitStrategy][((int)fitHeight - 7) / 2] : uint.MaxValue;
         for (var j = 0; j < capacities.Length; j++)
@@ -152,7 +177,7 @@ internal static class RmQRVersionSelector
             if (height is { } wanted && RmQRConstants.GetHeight(candidate) != (int)wanted)
                 continue;
 
-            var candidateMax = GetMaxDataLength(candidate, eccLevel, mode);
+            var candidateMax = GetMaxDataLength(candidate, eccLevel, mode, eciMode);
             if (candidateMax > largestMax)
             {
                 largestMax = candidateMax;
@@ -172,9 +197,9 @@ internal static class RmQRVersionSelector
     // ---------------------------------------------------------------
     // Auto-fit tables (built once at type init from IsBetter / GetMaxDataLength):
     //   FitOrders[strategy][rank]                       = version (1..32), best first
-    //   FitCapacities[(mode*2+ecc)*3+strategy][rank]    = that version's max data length
+    //   FitCapacities[((mode*2+ecc)*2+eci)*3+strategy]  = that version's max data length
     //   FitHeightMasks[strategy][(height-7)/2]          = bit `rank` set when the version has that height
-    // 3 × 32 B + 18 × 64 B + 3 × 24 B ≈ 1.3 KB of table data. Declaration order matters:
+    // 3 × 32 B + 36 × 64 B + 3 × 24 B ≈ 2.5 KB of table data. Declaration order matters:
     // static field initializers run textually, and the two lower tables index FitOrders.
     // ---------------------------------------------------------------
     private static readonly byte[][] FitOrders = BuildFitOrders();
@@ -202,16 +227,18 @@ internal static class RmQRVersionSelector
 
     private static ushort[][] BuildFitCapacities()
     {
-        var tables = new ushort[RmQRConstants.ModeCount * 2 * 3][];
+        var tables = new ushort[RmQRConstants.ModeCount * 2 * 2 * 3][];
         foreach (var mode in new[] { EncodingMode.Numeric, EncodingMode.Alphanumeric, EncodingMode.Byte })
             for (var e = 0; e < 2; e++)
-                for (var s = 0; s < 3; s++)
-                {
-                    var t = new ushort[RmQRConstants.VersionCount];
-                    for (var rank = 0; rank < RmQRConstants.VersionCount; rank++)
-                        t[rank] = (ushort)GetMaxDataLength((RmQRVersion)FitOrders[s][rank], (RmQREccLevel)e, mode);
-                    tables[(RmQRConstants.GetModeIndex(mode) * 2 + e) * 3 + s] = t; // same index function as Select
-                }
+                for (var eci = 0; eci < 2; eci++)
+                    for (var s = 0; s < 3; s++)
+                    {
+                        var t = new ushort[RmQRConstants.VersionCount];
+                        var eciMode = eci == 0 ? EciMode.Default : EciMode.Utf8;
+                        for (var rank = 0; rank < RmQRConstants.VersionCount; rank++)
+                            t[rank] = (ushort)GetMaxDataLength((RmQRVersion)FitOrders[s][rank], (RmQREccLevel)e, mode, eciMode);
+                        tables[((RmQRConstants.GetModeIndex(mode) * 2 + e) * 2 + eci) * 3 + s] = t; // same index function as Select
+                    }
         return tables;
     }
 
@@ -233,5 +260,12 @@ internal static class RmQRVersionSelector
         EncodingMode.Numeric => $"{dataLength} digits",
         EncodingMode.Alphanumeric => $"{dataLength} characters",
         _ => $"{dataLength} bytes",
+    };
+
+    private static int GetEciHeaderBits(EciMode eciMode) => eciMode switch
+    {
+        EciMode.Default => 0,
+        EciMode.Iso8859_1 or EciMode.Utf8 => EciHeaderBits,
+        _ => throw new ArgumentOutOfRangeException(nameof(eciMode), $"Unsupported ECI mode for rMQR: {eciMode}"),
     };
 }

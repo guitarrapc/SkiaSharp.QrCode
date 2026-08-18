@@ -7,6 +7,8 @@
 ///   Numeric_R7x43_M      : smallest symbol, 12 digits (capacity boundary)
 ///   Alphanumeric_R11x59_M: mid symbol, 43 chars (capacity boundary)
 ///   Byte_R17x139_M       : largest symbol, 150 bytes (capacity boundary, 4 RS blocks)
+///   Latin1_Eci_R17x139_M : explicit ECI 3 Byte segment
+///   Utf8_Eci_R17x139_M   : explicit ECI 26 Byte segment
 ///   Numeric_AutoFit_M    : automatic version selection cost on top of the smallest symbol
 /// </summary>
 public class RmQREncodeEndToEnd
@@ -14,6 +16,8 @@ public class RmQREncodeEndToEnd
     private string _numeric = default!;
     private string _alphanumeric = default!;
     private string _byte = default!;
+    private string _latin1 = default!;
+    private string _utf8 = default!;
     private byte[] _spanDestination = default!;
 
     [GlobalSetup]
@@ -22,6 +26,8 @@ public class RmQREncodeEndToEnd
         _numeric = "012345678901";                                     // R7x43-M numeric boundary
         _alphanumeric = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 $%*+-.";   // 43 chars: R11x59-M alphanumeric boundary
         _byte = string.Concat(Enumerable.Repeat("the quick brown fox jumps over the lazy dog?! ", 4)).Substring(0, 150); // R17x139-M byte boundary
+        _latin1 = string.Concat(Enumerable.Repeat("Café déjà vu. ", 8));
+        _utf8 = string.Concat(Enumerable.Repeat("日本語QRコード", 5));
         _spanDestination = new byte[Math.Max(
             RmQRCodeGenerator.GetRequiredBufferSize(_byte.AsSpan(), RmQREccLevel.M, RmQRVersion.R17x139).BufferSize,
             SkiaSharp.QrCode.QRCodeGenerator.GetRequiredBufferSize(_numeric.AsSpan(), ECCLevel.L).BufferSize)];
@@ -65,6 +71,18 @@ public class RmQREncodeEndToEnd
     public int RmQR_Byte_R17x139_EncodeSpan()
     {
         return RmQRCodeGenerator.CreateRmQRCode(_byte.AsSpan(), RmQREccLevel.M, _spanDestination, RmQRVersion.R17x139);
+    }
+
+    [Benchmark(Description = "RmQR_Latin1_ECI_R17x139_Encode (Span)")]
+    public int RmQR_Latin1Eci_R17x139_EncodeSpan()
+    {
+        return RmQRCodeGenerator.CreateRmQRCode(_latin1.AsSpan(), RmQREccLevel.M, _spanDestination, EciMode.Iso8859_1, RmQRVersion.R17x139);
+    }
+
+    [Benchmark(Description = "RmQR_UTF8_ECI_R17x139_Encode (Span)")]
+    public int RmQR_Utf8Eci_R17x139_EncodeSpan()
+    {
+        return RmQRCodeGenerator.CreateRmQRCode(_utf8.AsSpan(), RmQREccLevel.M, _spanDestination, EciMode.Utf8, RmQRVersion.R17x139);
     }
 
     [Benchmark(Description = "RmQR_Numeric_AutoFit_Encode (Span)")]

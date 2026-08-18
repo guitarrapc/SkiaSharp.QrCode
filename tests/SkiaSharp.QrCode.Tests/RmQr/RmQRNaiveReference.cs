@@ -230,7 +230,7 @@ internal static class RmQRNaiveReference
     /// capacity), zero bits to the byte boundary, then alternating 0xEC / 0x11 pad
     /// codewords up to the data codeword count. Built as a bit string on purpose.
     /// </summary>
-    public static byte[] NaiveDataCodewords(string text, int dataCodewordCount, int modeIndicator, int countIndicatorBits, string mode, bool utf8)
+    public static byte[] NaiveDataCodewords(string text, int dataCodewordCount, int modeIndicator, int countIndicatorBits, string mode, bool utf8, EciMode eciMode = EciMode.Default)
     {
         var bits = new System.Text.StringBuilder();
         void Append(int value, int count)
@@ -239,6 +239,11 @@ internal static class RmQRNaiveReference
                 bits.Append(((value >> b) & 1) == 1 ? '1' : '0');
         }
 
+        if (eciMode != EciMode.Default)
+        {
+            Append(0b111, 3);
+            Append((int)eciMode, 8);
+        }
         Append(modeIndicator, 3);
         switch (mode)
         {

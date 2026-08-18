@@ -46,7 +46,12 @@ The symbol parameter tables (32 versions: dimensions, alignment columns, total /
 - Exactly ONE data mask, ((row ⁄ 2) + (col ⁄ 3)) mod 2 == 0. No mask evaluation, no mask scoring: the placer is a fixed permutation per version.
 - Function patterns: 7×7 finder top-left with separators; 5×5 sub-finder bottom-right; timing patterns along all four edges; vertical timing columns at width-dependent positions with 3×3 alignment patterns at their top and bottom ends (none at width 27).
 - Bit stream: 3-bit mode indicators (Numeric 001, Alphanumeric 010, Byte 011, Kanji 100, ECI 111), terminator 000, per-version character-count indicator widths, 0xEC/0x11 padding, standard-QR-style block interleaving, quiet zone 2 modules.
-- Kanji is deferred exactly as for Micro QR (tables keep the column). ECI: the decoder parses ECI segments (as `QRBinaryDecoder` does); the encoder does not emit ECI in this plan (UTF-8 bytes in Byte mode, matching Micro QR), revisit on demand.
+- Kanji is intentionally unsupported, matching Standard QR: callers encode Japanese text as
+  UTF-8 in Byte mode instead. The decoder recognizes Kanji segments and returns
+  `UnsupportedContent`; the tables keep the Kanji column only for specification completeness,
+  not as a promise of later implementation. ECI is independent of Kanji: the decoder already
+  parses it, and encoder emission of ISO-8859-1 / UTF-8 ECI is a required follow-up so Byte-mode
+  text does not depend on a reader's UTF-8 heuristic.
 
 ## Guiding decisions specific to rMQR
 
@@ -310,8 +315,19 @@ data-dependent and failure-path dominated), rendering/PNG (Skia/native-code domi
 the 1.3-8.3 ns version selector. Revisit only with a new ARM profile naming a different
 mechanism.
 
-Feature follow-ups remain separate from performance work: ECI emission in the encoder and
-Kanji mode across symbologies (one decision, three symbologies).
+Feature work remains separate from performance work:
+
+- **Completed 2026-08-18: rMQR ECI emission.** Mirrors Standard QR's charset policy: ASCII needs no ECI;
+  explicit or auto-detected ISO-8859-1 emits assignment 3; explicit or auto-detected UTF-8
+  emits assignment 26. In rMQR this is an 11-bit prefix for the supported assignments
+  (`111` mode + 8-bit designator) before the Byte segment. Add the ECI overhead to required-bit
+  and version-selection calculations, expose `EciMode` without breaking existing positional
+  calls, and keeps class/span/`GetRequiredBufferSize` results identical. Capacity boundaries,
+  explicit/default selection, exact bit streams, external-reader interop and zero allocation are pinned.
+- **Intentionally unsupported: Kanji mode.** It is a separate 13-bit Shift JIS-based data mode,
+  not a prerequisite for ECI. As with Standard QR, encoding Japanese text uses Byte mode with
+  UTF-8 ECI; incoming Kanji segments continue to return `UnsupportedContent`. Reconsider only
+  as a cross-symbology policy change backed by concrete demand, not as part of rMQR completion.
 
 ## Dependency graph
 
@@ -1253,3 +1269,37 @@ buffer report it on a frame that holds no symbol: 2 of 11,200 fuzzed noise frame
 1-char destination. No wrong text is ever returned, and with a realistically sized buffer
 it cannot arise, so the more useful diagnostic for the common case wins. Revisit if a
 caller reports growing its buffer for an image with nothing in it.
+
+### rMQR ECI emission, completed 2026-08-18
+
+**Done**
+
+- Added non-breaking `EciMode` overloads to every `RmQRCodeGenerator` class/span/sizing path.
+  `Default` uses the shared Standard QR policy: ASCII has no ECI, Latin-1 emits assignment 3,
+  and other Unicode emits assignment 26 with UTF-8 bytes. Explicit ISO-8859-1 rejects
+  unrepresentable characters rather than silently narrowing them.
+- `RmQRBinaryEncoder` emits the 11-bit `111` + 8-bit designator prefix. UTF-8 retains its
+  separate non-inlined writer so the x64 hot writer's accumulator remains register-promoted.
+  Kanji mode remains intentionally unsupported and independent of ECI.
+- Version selection charges the 11-bit prefix in exact-fit errors, inverse capacities and
+  automatic selection. The best-first selector remains table-driven: its capacity tables now
+  include ECI absence/presence (about 2.5 KB total table data), rather than reverting to a
+  per-call 32-version definitional scan.
+- Test-first coverage pins exact ECI 3/26 codewords, ECI capacity boundaries, exhaustive
+  table-vs-definitional selection for all versions/ECC/modes/ECI choices, public overload
+  parity and round trips, invalid ECI/charset rejection, and allocation-free span output.
+  Legacy qrtool UTF-8 fixtures without ECI remain decoder oracles but are explicitly excluded
+  from encoder module-exact comparison because the new conforming stream must differ.
+- External gate: zxing-cpp decoded all 254 generated symbols that fit (all versions × ECC ×
+  Numeric/Alphanumeric/Byte plus UTF-8 ECI where capacity permits), matching text, raw bytes,
+  version and ECC. R7x43-H cannot contain ECI + one Byte payload, so the corpus size is below 256.
+
+**Verification**
+
+- Full tests: net10.0 5,616 total / 5,493 passed / 123 capability-skipped / 0 failed;
+  net8.0 5,604 total / 5,491 passed / 113 capability-skipped / 0 failed.
+- BenchmarkDotNet, net10.0 Release, x64 Ryzen 7 5800H, span destination, R17x139-M,
+  one launch / two warmups / five iterations: ASCII 150-byte 1.809 us, Latin-1 ECI 2.349 us,
+  UTF-8 ECI 1.886 us; all report zero managed allocation. Payload work differs, so these are
+  absolute path checks rather than claimed deltas. The ECI cases remain in `RmQREncodeEndToEnd`
+  as permanent allocation/performance guards.

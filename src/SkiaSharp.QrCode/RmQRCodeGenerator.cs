@@ -20,9 +20,10 @@ namespace SkiaSharp.QrCode;
 /// for the flattest symbol), optionally restricted to one height.
 /// </para>
 /// <para>
-/// Modes: Numeric, Alphanumeric and Byte (non-Latin-1 text is carried as UTF-8
-/// bytes without an ECI header, as for Micro QR); Kanji is not implemented. The
-/// quiet zone defaults to the ISO/IEC 23941 value of 2 modules.
+/// Modes: Numeric, Alphanumeric and Byte. Byte mode emits ECI assignment 3 for
+/// ISO-8859-1 and assignment 26 for UTF-8 (automatically selected by default, or
+/// explicitly requested); Kanji is intentionally unsupported, use UTF-8 instead.
+/// The quiet zone defaults to the ISO/IEC 23941 value of 2 modules.
 /// </para>
 /// </remarks>
 public static class RmQRCodeGenerator
@@ -46,12 +47,27 @@ public static class RmQRCodeGenerator
     public static RmQRCodeData CreateRmQRCode(string plainText, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone)
         => CreateRmQRCode(plainText.AsSpan(), eccLevel, requestedVersion, fitStrategy, height, quietZoneSize);
 
+    /// <summary>Creates an rMQR code with an explicit or automatically resolved ECI mode.</summary>
+    /// <param name="plainText">The text to encode.</param>
+    /// <param name="eccLevel">Error correction level (M or H).</param>
+    /// <param name="eciMode">Character encoding declaration. Default auto-detects ASCII / ISO-8859-1 / UTF-8.</param>
+    /// <param name="requestedVersion">Specific version, or null to fit automatically.</param>
+    /// <param name="fitStrategy">How to choose among fitting versions.</param>
+    /// <param name="height">Optional fixed-height constraint.</param>
+    /// <param name="quietZoneSize">Quiet zone width in modules.</param>
+    public static RmQRCodeData CreateRmQRCode(string plainText, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone)
+        => CreateRmQRCode(plainText.AsSpan(), eccLevel, eciMode, requestedVersion, fitStrategy, height, quietZoneSize);
+
     /// <inheritdoc cref="CreateRmQRCode(string, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, int)"/>
     /// <param name="textSpan">The text span to encode.</param>
     public static RmQRCodeData CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone)
+        => CreateRmQRCode(textSpan, eccLevel, EciMode.Default, requestedVersion, fitStrategy, height, quietZoneSize);
+
+    /// <summary>Creates an rMQR code with an explicit or automatically resolved ECI mode.</summary>
+    public static RmQRCodeData CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone)
     {
         ValidateQuietZone(quietZoneSize);
-        var config = PrepareConfiguration(textSpan, eccLevel, requestedVersion, fitStrategy, height);
+        var config = PrepareConfiguration(textSpan, eccLevel, eciMode, requestedVersion, fitStrategy, height);
         var result = new RmQRCodeData(config.Version, quietZoneSize);
         var coreWidth = result.GetCoreWidth();
         var coreHeight = result.GetCoreHeight();
@@ -92,9 +108,13 @@ public static class RmQRCodeGenerator
     /// <returns>The number of bytes written (width × height, quiet zone included).</returns>
     /// <exception cref="ArgumentException">Thrown when the destination is too small, the data does not fit, or the arguments contradict each other.</exception>
     public static int CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone)
+        => CreateRmQRCode(textSpan, eccLevel, destination, EciMode.Default, requestedVersion, fitStrategy, height, quietZoneSize);
+
+    /// <summary>Writes an rMQR matrix with an explicit or automatically resolved ECI mode.</summary>
+    public static int CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, EciMode eciMode, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone)
     {
         ValidateQuietZone(quietZoneSize);
-        var config = PrepareConfiguration(textSpan, eccLevel, requestedVersion, fitStrategy, height);
+        var config = PrepareConfiguration(textSpan, eccLevel, eciMode, requestedVersion, fitStrategy, height);
         var coreWidth = RmQRConstants.GetWidth(config.Version);
         var coreHeight = RmQRConstants.GetHeight(config.Version);
         var totalWidth = coreWidth + quietZoneSize * 2;
@@ -139,9 +159,13 @@ public static class RmQRCodeGenerator
     /// <param name="quietZoneSize">Quiet zone width in modules.</param>
     /// <exception cref="ArgumentException">Thrown when the data does not fit or the arguments contradict each other.</exception>
     public static RmQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone)
+        => GetRequiredBufferSize(text, eccLevel, EciMode.Default, requestedVersion, fitStrategy, height, quietZoneSize);
+
+    /// <summary>Calculates dimensions with an explicit or automatically resolved ECI mode.</summary>
+    public static RmQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone)
     {
         ValidateQuietZone(quietZoneSize);
-        var config = PrepareConfiguration(text, eccLevel, requestedVersion, fitStrategy, height);
+        var config = PrepareConfiguration(text, eccLevel, eciMode, requestedVersion, fitStrategy, height);
         var totalWidth = RmQRConstants.GetWidth(config.Version) + quietZoneSize * 2;
         var totalHeight = RmQRConstants.GetHeight(config.Version) + quietZoneSize * 2;
         return new RmQRCodeCalculatedSize(totalWidth * totalHeight, totalWidth, totalHeight, config.Version);
@@ -156,13 +180,17 @@ public static class RmQRCodeGenerator
     }
 
     /// <summary>Analyzes the text and selects / validates the version.</summary>
-    private static RmQRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height)
+    private static RmQRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height)
     {
-        // No ECI in rMQR encoding: analysis runs with the default charset rules; for
-        // Byte mode the analyzer's DataLength is already the encoded byte count
-        // (ISO-8859-1 char count or UTF-8 byte count).
-        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default);
-        var version = RmQRVersionSelector.Select(analysis.EncodingMode, analysis.DataLength, eccLevel, requestedVersion, fitStrategy, height);
+        if (eciMode is not (EciMode.Default or EciMode.Iso8859_1 or EciMode.Utf8))
+            throw new ArgumentOutOfRangeException(nameof(eciMode), $"Unsupported ECI mode for rMQR: {eciMode}");
+        if (eciMode == EciMode.Iso8859_1 && !CharacterSets.IsValidISO88591(textSpan))
+            throw new ArgumentException("The content contains characters that cannot be represented by ISO-8859-1. Use EciMode.Utf8 or EciMode.Default.", nameof(eciMode));
+
+        // Default resolves to no ECI for ASCII, assignment 3 for Latin-1 beyond
+        // ASCII, and assignment 26 for Unicode. DataLength is the encoded byte count.
+        var analysis = TextAnalyzer.Analyze(textSpan, eciMode);
+        var version = RmQRVersionSelector.Select(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height);
         return new RmQRConfiguration(version, eccLevel, analysis);
     }
 

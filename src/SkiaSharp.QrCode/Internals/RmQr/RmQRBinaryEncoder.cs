@@ -15,9 +15,9 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// rMQR data-codeword stream (ISO/IEC 23941 7.4): 3-bit mode indicator, per-version
 /// character count indicator, segment payload bits, terminator (000, shortened at
 /// capacity), zero bits to the byte boundary, then alternating 0xEC / 0x11 pad
-/// codewords up to the data codeword count. Single segment; ECI headers are not
-/// emitted (non-Latin-1 text is carried as UTF-8 bytes in Byte mode, the Micro QR
-/// precedent). Allocation-free: bits are written straight into the caller's
+/// codewords up to the data codeword count. Single data segment; ISO-8859-1 and
+/// UTF-8 ECI prefixes are emitted before it when selected by the analyzer.
+/// Allocation-free: bits are written straight into the caller's
 /// destination and byte-mode transcoding uses a fixed stack budget with a pool
 /// fallback.
 /// </summary>
@@ -50,6 +50,10 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// </remarks>
 internal static class RmQRBinaryEncoder
 {
+    private const int ModeEci = 0b111;
+    private const int EciDesignatorBits = 8;
+    private const int EciHeaderBits = RmQRConstants.ModeIndicatorLength + EciDesignatorBits;
+
     // rMQR byte-mode capacity tops out at 150 bytes (R17x139-M), so any content
     // that passed version selection transcodes into this budget (the branch is on
     // the analyzer's exact UTF-8 byte count, not a per-char worst case); the pool
@@ -74,7 +78,10 @@ internal static class RmQRBinaryEncoder
         var mode = analysis.EncodingMode;
         if (destination.Length < codewordCount)
             throw new ArgumentException($"Destination too small: {codewordCount} data codewords required, got {destination.Length} bytes.", nameof(destination));
-        Debug.Assert(RmQRVersionSelector.GetRequiredBits(version, mode, analysis.DataLength) <= capacityBits, "content must fit (version selection guarantees this)");
+        Debug.Assert(RmQRVersionSelector.GetRequiredBits(version, mode, analysis.DataLength, analysis.EciMode) <= capacityBits, "content must fit (version selection guarantees this)");
+
+        if (analysis.EciMode is not (EciMode.Default or EciMode.Iso8859_1 or EciMode.Utf8))
+            throw new ArgumentOutOfRangeException(nameof(analysis), $"Unsupported charset {analysis.EciMode} for rMQR.");
 
         // Writer state: 64-bit MSB-first accumulator, pending bit count (0..32
         // between appends), byte position; every store below lands inside
@@ -84,6 +91,11 @@ internal static class RmQRBinaryEncoder
         ulong acc = 0;
         var accBits = 0;
         var bytePos = 0;
+
+        // The UTF-8 branch owns a separate cold writer to keep this hot method's
+        // accumulator promoted by the JIT; that branch writes its ECI prefix there.
+        if (analysis.EciMode != EciMode.Default && !(mode == EncodingMode.Byte && analysis.EciMode == EciMode.Utf8))
+            WriteEciHeader(ref dest, ref acc, ref accBits, ref bytePos, analysis.EciMode);
 
         switch (mode)
         {
@@ -298,7 +310,7 @@ internal static class RmQRBinaryEncoder
     }
 
     /// <summary>
-    /// Byte segment for non-Latin-1 text: UTF-8 transcode (no ECI header) on a
+    /// Byte segment for UTF-8 text: ECI assignment 26 + UTF-8 transcode on a
     /// private writer. <paramref name="byteCount"/> is the analyzer's exact encoded
     /// length, which picks the stack budget for every payload that passed version
     /// selection. Not inlined by design (see the class remarks).
@@ -310,6 +322,7 @@ internal static class RmQRBinaryEncoder
         ulong acc = 0;
         var accBits = 0;
         var bytePos = 0;
+        WriteEciHeader(ref dest, ref acc, ref accBits, ref bytePos, EciMode.Utf8);
         Append(ref dest, ref acc, ref accBits, ref bytePos, headerValue, headerBits);
 
         if (byteCount <= StackByteBudget)
@@ -350,6 +363,10 @@ internal static class RmQRBinaryEncoder
             Append(ref dest, ref acc, ref accBits, ref bytePos, bytes[i], 8);
         }
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void WriteEciHeader(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, EciMode eciMode)
+        => Append(ref dest, ref acc, ref accBits, ref bytePos, (ModeEci << EciDesignatorBits) | (int)eciMode, EciHeaderBits);
 
     private static int GetUtf8Bytes(ReadOnlySpan<char> text, Span<byte> destination)
     {

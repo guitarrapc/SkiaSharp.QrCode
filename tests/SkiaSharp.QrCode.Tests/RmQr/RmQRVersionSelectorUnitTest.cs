@@ -27,13 +27,38 @@ public class RmQRVersionSelectorUnitTest
     {
         var capacityBits = 8 * RmQRConstants.GetDataCodewordCount(version, ecc);
         foreach (var mode in new[] { EncodingMode.Numeric, EncodingMode.Alphanumeric, EncodingMode.Byte })
-        {
-            var max = RmQRVersionSelector.GetMaxDataLength(version, ecc, mode);
-            await Assert.That(RmQRVersionSelector.GetRequiredBits(version, mode, max)).IsLessThanOrEqualTo(capacityBits);
-            await Assert.That(RmQRVersionSelector.GetRequiredBits(version, mode, max + 1)).IsGreaterThan(capacityBits);
-            await Assert.That(RmQRVersionSelector.Fits(version, ecc, mode, max)).IsTrue();
-            await Assert.That(RmQRVersionSelector.Fits(version, ecc, mode, max + 1)).IsFalse();
-        }
+            foreach (var eciMode in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
+            {
+                var max = RmQRVersionSelector.GetMaxDataLength(version, ecc, mode, eciMode);
+                await Assert.That(RmQRVersionSelector.GetRequiredBits(version, mode, max, eciMode)).IsLessThanOrEqualTo(capacityBits);
+                await Assert.That(RmQRVersionSelector.GetRequiredBits(version, mode, max + 1, eciMode)).IsGreaterThan(capacityBits);
+                await Assert.That(RmQRVersionSelector.Fits(version, ecc, mode, max, eciMode)).IsTrue();
+                await Assert.That(RmQRVersionSelector.Fits(version, ecc, mode, max + 1, eciMode)).IsFalse();
+            }
+    }
+
+    [Test]
+    public async Task EciHeader_IsIncludedInRequiredBitsAndCapacity()
+    {
+        // R7x43-H has 24 data bits. Without ECI, Byte header = 3+3 bits and two
+        // bytes fit (22 bits). With ECI, 11+3+3 bits leave only seven: zero bytes.
+        await Assert.That(RmQRVersionSelector.GetRequiredBits(RmQRVersion.R7x43, EncodingMode.Byte, 0, EciMode.Utf8)).IsEqualTo(17);
+        await Assert.That(RmQRVersionSelector.GetRequiredBits(RmQRVersion.R7x43, EncodingMode.Byte, 1, EciMode.Utf8)).IsEqualTo(25);
+        await Assert.That(RmQRVersionSelector.GetMaxDataLength(RmQRVersion.R7x43, RmQREccLevel.H, EncodingMode.Byte, EciMode.Utf8)).IsEqualTo(0);
+        await Assert.That(RmQRVersionSelector.Fits(RmQRVersion.R7x43, RmQREccLevel.H, EncodingMode.Byte, 1, EciMode.Utf8)).IsFalse();
+
+        // Assignment 3 and 26 use the same 8-bit designator form.
+        await Assert.That(RmQRVersionSelector.GetRequiredBits(RmQRVersion.R7x43, EncodingMode.Byte, 1, EciMode.Iso8859_1)).IsEqualTo(25);
+    }
+
+    [Test]
+    public async Task Select_EciBoundary_UsesTheNextFittingVersion()
+    {
+        var withoutEci = RmQRVersionSelector.Select(EncodingMode.Byte, 2, EciMode.Default, RmQREccLevel.H, null, RmQRFitStrategy.MinimizeHeight, null);
+        var withEci = RmQRVersionSelector.Select(EncodingMode.Byte, 2, EciMode.Utf8, RmQREccLevel.H, null, RmQRFitStrategy.MinimizeHeight, null);
+        await Assert.That(withoutEci).IsEqualTo(RmQRVersion.R7x43);
+        await Assert.That(withEci).IsNotEqualTo(RmQRVersion.R7x43);
+        await Assert.That(RmQRVersionSelector.Fits(withEci, RmQREccLevel.H, EncodingMode.Byte, 2, EciMode.Utf8)).IsTrue();
     }
 
     [Test]
@@ -181,34 +206,37 @@ public class RmQRVersionSelectorUnitTest
     public async Task Select_AutoFit_MatchesDefinitionalScan_EveryLengthStrategyHeight(int modeIndex)
     {
         var mode = new[] { EncodingMode.Numeric, EncodingMode.Alphanumeric, EncodingMode.Byte }[modeIndex];
-        var maxAll = Enum.GetValues<RmQRVersion>().Max(v => RmQRVersionSelector.GetMaxDataLength(v, RmQREccLevel.M, mode));
         var heights = new RmQRHeight?[] { null, RmQRHeight.H7, RmQRHeight.H9, RmQRHeight.H11, RmQRHeight.H13, RmQRHeight.H15, RmQRHeight.H17 };
         var checks = 0;
-        foreach (var ecc in new[] { RmQREccLevel.M, RmQREccLevel.H })
-            foreach (var strategy in Enum.GetValues<RmQRFitStrategy>())
-                foreach (var height in heights)
-                    for (var length = 0; length <= maxAll + 3; length++)
-                    {
-                        RmQRVersion expected = 0;
-                        foreach (var candidate in Enum.GetValues<RmQRVersion>())
+        foreach (var eciMode in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
+        {
+            var maxAll = Enum.GetValues<RmQRVersion>().Max(v => RmQRVersionSelector.GetMaxDataLength(v, RmQREccLevel.M, mode, eciMode));
+            foreach (var ecc in new[] { RmQREccLevel.M, RmQREccLevel.H })
+                foreach (var strategy in Enum.GetValues<RmQRFitStrategy>())
+                    foreach (var height in heights)
+                        for (var length = 0; length <= maxAll + 3; length++)
                         {
-                            if (height is { } h && RmQRConstants.GetHeight(candidate) != (int)h) continue;
-                            if (RmQRVersionSelector.Fits(candidate, ecc, mode, length) && (expected == 0 || RmQRVersionSelector.IsBetter(candidate, expected, strategy)))
-                                expected = candidate;
-                        }
+                            RmQRVersion expected = 0;
+                            foreach (var candidate in Enum.GetValues<RmQRVersion>())
+                            {
+                                if (height is { } h && RmQRConstants.GetHeight(candidate) != (int)h) continue;
+                                if (RmQRVersionSelector.Fits(candidate, ecc, mode, length, eciMode) && (expected == 0 || RmQRVersionSelector.IsBetter(candidate, expected, strategy)))
+                                    expected = candidate;
+                            }
 
-                        if (expected == 0)
-                        {
-                            await Assert.That(() => RmQRVersionSelector.Select(mode, length, ecc, null, strategy, height)).Throws<ArgumentException>();
+                            if (expected == 0)
+                            {
+                                await Assert.That(() => RmQRVersionSelector.Select(mode, length, eciMode, ecc, null, strategy, height)).Throws<ArgumentException>();
+                            }
+                            else
+                            {
+                                var actual = RmQRVersionSelector.Select(mode, length, eciMode, ecc, null, strategy, height);
+                                if (actual != expected)
+                                    Assert.Fail($"{mode} len {length} {eciMode} {ecc} {strategy} height {height}: expected {expected}, got {actual}");
+                            }
+                            checks++;
                         }
-                        else
-                        {
-                            var actual = RmQRVersionSelector.Select(mode, length, ecc, null, strategy, height);
-                            if (actual != expected)
-                                Assert.Fail($"{mode} len {length} {ecc} {strategy} height {height}: expected {expected}, got {actual}");
-                        }
-                        checks++;
-                    }
+        }
         await Assert.That(checks).IsGreaterThan(1000);
     }
     /// <summary>
