@@ -7,12 +7,16 @@ using SkiaSharp.QrCode.Image;
 /// render + PNG encode path only (letterboxed into a square canvas, as
 /// RmQRCodeImageBuilder does by default), and the decode scenarios cover the image
 /// detector (finder candidates → format → sub-finder anchored sampling → matrix
-/// decode) on clean 8 px/module renders. Decode variants must stay allocation-free.
+/// decode) on clean 8 px/module renders. The span decode variants must stay
+/// allocation-free; the bitmap ones go through string overloads and carry the result.
 ///
 /// Scenarios:
 ///   R7x43_512px / R17x139_1024px : smallest / largest symbol rendered to PNG
 ///   R7x43_ImageDecode_Span       : smallest symbol, luminance span → text
 ///   R17x139_ImageDecode_Span     : largest symbol (2,363 modules), luminance span → text
+///   R7x43_BitmapDecode / R17x139_BitmapDecode : the SKBitmap entry point, so the
+///                                  grayscale conversion is inside the measurement
+///   NoSymbol_Noise / NoSymbol_Gradient : the failure path (both polarities, NotDetected)
 /// </summary>
 public class RmQRImageEndToEnd
 {
@@ -20,6 +24,8 @@ public class RmQRImageEndToEnd
     private RmQRCodeData _large = default!;
     private SKBitmap _smallBitmap = default!;
     private SKBitmap _largeBitmap = default!;
+    private byte[] _noise = default!;
+    private byte[] _gradient = default!;
     private byte[] _smallLuminance = default!;
     private byte[] _largeLuminance = default!;
     private (int Width, int Height) _smallImage;
@@ -37,6 +43,24 @@ public class RmQRImageEndToEnd
         (_smallLuminance, _smallImage) = Luminance(_small);
         (_largeLuminance, _largeImage) = Luminance(_large);
         _decodeBuffer = new char[RmQRCodeDecoder.GetMaxDecodedLength(RmQRVersion.R17x139)];
+
+        _noise = new byte[1144 * 168];
+        _gradient = new byte[1144 * 168];
+        var state = 12345u;
+        for (var i = 0; i < _noise.Length; i++)
+        {
+            state = state * 1664525u + 1013904223u;
+            _noise[i] = (byte)((state >> 16) % 251 < 60 ? 0 : 255);
+            _gradient[i] = (byte)(i % 1144 * 255 / 1144 ^ (state >> 20 & 7));
+        }
+    }
+
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        // The two bitmaps are the only native Skia handles this class holds in fields.
+        _smallBitmap.Dispose();
+        _largeBitmap.Dispose();
     }
 
     [Benchmark]
@@ -60,6 +84,15 @@ public class RmQRImageEndToEnd
 
     [Benchmark]
     public bool R17x139_BitmapDecode() => RmQRCodeDecoder.TryDecode(_largeBitmap, out _, out _);
+
+    // Failure path: no symbol present, so detection runs the whole pipeline for both
+    // reflectance polarities and reports NotDetected. Salt-and-pepper is the adversarial
+    // shape (false finder candidates); the gradient is the ordinary photo-ish shape.
+    [Benchmark]
+    public bool NoSymbol_Noise_1144x168() => RmQRCodeDecoder.TryDecodeImage(_noise, 1144, 168, _decodeBuffer, out _, out _);
+
+    [Benchmark]
+    public bool NoSymbol_Gradient_1144x168() => RmQRCodeDecoder.TryDecodeImage(_gradient, 1144, 168, _decodeBuffer, out _, out _);
 
     private static (byte[] luminance, (int Width, int Height) size) Luminance(RmQRCodeData data)
     {

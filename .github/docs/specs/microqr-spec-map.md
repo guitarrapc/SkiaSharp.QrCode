@@ -106,7 +106,7 @@ Reference tests: [MicroQRCodeImageBuilderUnitTest](../../../tests/SkiaSharp.QrCo
 ## Image Detection and Sampling
 
 ```
-Luminance ──> Otsu threshold ──> Finder candidates (shared 1:1:3:1:1 scan, ALL candidates)
+Luminance ──> Otsu threshold ──> Finder candidates (shared 1:1:3:1:1 scan, every cross-checked candidate)
           ──> Axis-aligned fast path
           ──> Angular finder-axis recovery ──> Center / scale / bounded projective refinement
           ──> Shared projective grid sampling (sizes M4..M1 × orientations × transpose)
@@ -115,9 +115,9 @@ Luminance ──> Otsu threshold ──> Finder candidates (shared 1:1:3:1:1 sca
 
 | Spec reference | Topic | Implementation |
 |---|---|---|
-| - | Detection pipeline orchestration; inverted (reflectance-reversed) retry | [MicroQRImageDecoder](../../../src/SkiaSharp.QrCode/Internals/MicroQR/MicroQRImageDecoder.cs) |
-| - | Binarization (Otsu), shared with Standard QR (lifted to `Internals.ImageDecoders` when Micro QR became the second consumer; row-strided since the rMQR follow-up, with a complementary pass over the skipped rows unless a candidate was confirmed on two or more rows) | [Binarizer.ComputeOtsuThreshold](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/Binarizer.cs) |
-| Section 6.3.1 | Finder pattern candidates: the shared 1:1:3:1:1 run scan collecting every cross-checked candidate (Standard QR keeps its best-three selection; lifted to `Internals.ImageDecoders` when Micro QR became the second consumer; row-strided since the rMQR follow-up, with a complementary pass over the skipped rows unless a candidate was confirmed on two or more rows) | [FinderPatternFinder.FindCandidates](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/FinderPatternFinder.cs) |
+| - | Detection pipeline orchestration; inverted (reflectance-reversed) retry, whose inversion pass is the shared [LuminanceInverter](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/LuminanceInverter.cs) | [MicroQRImageDecoder](../../../src/SkiaSharp.QrCode/Internals/MicroQR/MicroQRImageDecoder.cs) |
+| - | Binarization (Otsu), shared with Standard QR (lifted to `Internals.ImageDecoders` when Micro QR became the second consumer; whole-buffer histogram, not strided) | [Binarizer.ComputeOtsuThreshold](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/Binarizer.cs) |
+| Section 6.3.1 | Finder pattern candidates: the shared 1:1:3:1:1 run scan collecting every cross-checked candidate (Standard QR keeps its best-three selection; lifted to `Internals.ImageDecoders` when Micro QR became the second consumer; row-strided since the rMQR follow-up, with the strideless sweep re-run by the image decoders when nothing decoded, so the detection envelope is never narrower than a full sweep's) | [FinderPatternFinder.FindCandidates](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/FinderPatternFinder.cs) |
 | - | Independent horizontal/vertical module sizes from dark-light-dark runs through the single finder center (7-module span per axis) | [MicroQRImageDecoder.RefineModuleSize](../../../src/SkiaSharp.QrCode/Internals/MicroQR/MicroQRImageDecoder.cs) |
 | - | Arbitrary-rotation recovery from separated angular finder-axis candidates; local center/scale refinement handles pixel quantization, while a bounded two-parameter projective search supplies the correspondences unavailable from a single finder | [MicroQRImageDecoder.TryDecodeArbitraryOrientation](../../../src/SkiaSharp.QrCode/Internals/MicroQR/MicroQRImageDecoder.cs) |
 | - | Projective transform and module-center sampler shared with Standard QR | [PerspectiveTransform](../../../src/SkiaSharp.QrCode/Internals/ImageDecoders/PerspectiveTransform.cs), [QRImageDecoder.SampleGrid](../../../src/SkiaSharp.QrCode/Internals/StandardQr/QRImageDecoder.cs) |

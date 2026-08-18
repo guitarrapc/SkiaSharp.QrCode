@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using SkiaSharp.QrCode.Internals.ImageDecoders;
 
 namespace SkiaSharp.QrCode.Tests;
@@ -61,7 +62,10 @@ public class LuminanceConverterParityTest
     public async Task Avx2Tier_MatchesScalarTier_EveryLayoutAndAlphaShape(int layout)
     {
         if (!LuminanceConverter.IsAvx2TierSupported)
+        {
+            Skip.Test("AVX2 not supported on this machine");
             return;
+        }
 
         var (ro, go, bo, ao) = Offsets(layout);
         int[] widths = [1, 3, 4, 5, 7, 8, 9, 15, 16, 31, 32, 33, 43, 63, 139, 376];
@@ -89,7 +93,7 @@ public class LuminanceConverterParityTest
                             actual.AsSpan().Fill(0xA5);
                             LuminanceConverter.ConvertRgbaForTest(pixels, actual, width, height, rowBytes, ro, go, bo, ao, premultiplied, forceScalar: false);
 
-                            await Assert.That(actual).IsEquivalentTo(expected)
+                            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching)
                                 .Because($"layout {layout}, {width}x{height}, rowBytes {rowBytes}, alphaShape {alphaShape}, premultiplied {premultiplied}");
                         }
                     }
@@ -99,34 +103,74 @@ public class LuminanceConverterParityTest
     }
 
     /// <summary>
-    /// The vector loops read 128 bytes at a time and the overlapping tail block reads
-    /// the last 8 pixels again, so this pins that neither runs past the row: the pixel
-    /// span ends exactly at the last pixel and is followed by nothing.
+    /// The vector loops write 32 luminance bytes at a time and the tail redoes the last
+    /// 8 pixels, so a block-count that rounds the wrong way writes past the caller's
+    /// destination. The destination is given a poisoned tail beyond the bytes the
+    /// converter owns, and that tail must come back untouched.
     /// </summary>
+    /// <remarks>
+    /// Comparing only the first width × height bytes cannot see this: an over-write
+    /// lands past the compared region and every asserted byte is still correct.
+    /// Verified by mutation — rounding <c>blockEnd</c> up in
+    /// <c>LuminanceConverter.Simd.cs</c> leaves the parity assertions green and is
+    /// caught only by the tail.
+    /// </remarks>
     [Test]
     [MethodDataSource(nameof(Layouts))]
-    public async Task Avx2Tier_StaysInsideThePixelSpan(int layout)
+    public async Task Avx2Tier_WritesNothingPastTheDestination(int layout)
     {
         if (!LuminanceConverter.IsAvx2TierSupported)
+        {
+            Skip.Test("AVX2 not supported on this machine");
             return;
+        }
+
+        const byte Poison = 0x5A;
+        const int TailBytes = 64;
 
         var (ro, go, bo, ao) = Offsets(layout);
-        foreach (var width in new[] { 8, 33, 40, 139, 376 })
+        // Both AVX2 kernels: the straight-alpha one and the premultiplied one are separate
+        // loops with their own block arithmetic, so covering only one leaves the other's
+        // bounds untested (verified by mutation — an over-run in the uncovered kernel
+        // passed the whole class).
+        var alphaModes = ao < 0 ? new[] { false } : [false, true];
+
+        foreach (var premultiplied in alphaModes)
         {
-            const int height = 3;
-            var rowBytes = width * 4;
-            var pixels = MakePixels(width, height, rowBytes, 0, width);
+            foreach (var width in new[] { 1, 7, 8, 9, 31, 32, 33, 40, 139, 376 })
+            {
+                foreach (var height in new[] { 1, 3 })
+                {
+                    var rowBytes = width * 4;
+                    // Alpha shape 1 keeps some pixels non-opaque, so the premultiplied
+                    // kernel's in-vector alpha handling is actually entered.
+                    var pixels = MakePixels(width, height, rowBytes, premultiplied ? 1 : 0, width);
 
-            var expected = new byte[width * height];
-            LuminanceConverter.ConvertRgbaForTest(pixels, expected, width, height, rowBytes, ro, go, bo, ao, premultiplied: false, forceScalar: true);
+                    var expected = new byte[width * height];
+                    LuminanceConverter.ConvertRgbaForTest(pixels, expected, width, height, rowBytes, ro, go, bo, ao, premultiplied, forceScalar: true);
 
-            // Exactly sized span: an overread past rowBytes * height would fault or
-            // read the following heap bytes, and the padded copy below would differ.
-            var exact = pixels.AsSpan(0, rowBytes * height);
-            var actual = new byte[width * height];
-            LuminanceConverter.ConvertRgbaForTest(exact, actual, width, height, rowBytes, ro, go, bo, ao, premultiplied: false, forceScalar: false);
+                    // Destination is longer than the converter's region; only the first
+                    // width × height bytes are handed over as its span.
+                    var backing = new byte[width * height + TailBytes];
+                    backing.AsSpan().Fill(Poison);
+                    var destination = backing.AsSpan(0, width * height);
 
-            await Assert.That(actual).IsEquivalentTo(expected).Because($"layout {layout}, width {width}");
+                    // Exactly sized source too, so an overread past rowBytes × height is
+                    // not silently satisfied by the next object on the heap.
+                    var exact = pixels.AsSpan(0, rowBytes * height);
+                    LuminanceConverter.ConvertRgbaForTest(exact, destination, width, height, rowBytes, ro, go, bo, ao, premultiplied, forceScalar: false);
+
+                    await Assert.That(backing.AsSpan(0, width * height).ToArray())
+                        .IsEquivalentTo(expected, CollectionOrdering.Matching)
+                        .Because($"layout {layout}, {width}x{height}, premultiplied {premultiplied}");
+
+                    for (var i = width * height; i < backing.Length; i++)
+                    {
+                        await Assert.That(backing[i]).IsEqualTo(Poison)
+                            .Because($"layout {layout}, {width}x{height}, premultiplied {premultiplied}: wrote {i - width * height + 1} byte(s) past the destination");
+                    }
+                }
+            }
         }
     }
 }

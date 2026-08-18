@@ -32,6 +32,16 @@ internal static class SegmentDecoders
     /// <summary>Decodes a numeric segment payload of <paramref name="count"/> digits.</summary>
     public static QRCodeDecodeStatus DecodeNumericPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
     {
+        // Bitstream sufficiency before destination sufficiency, as byte mode already
+        // does. A count read off the wire can exceed what the remaining bits could
+        // possibly encode, and such a stream is malformed whatever buffer the caller
+        // passed; reporting DestinationTooSmall for it would tell a caller sizing its
+        // buffer to grow, and — because callers treat that status as "the symbol was
+        // read" — would stop the image decoder looking for the real symbol.
+        // 3 digits per 10 bits, then 2 per 7 and 1 per 4: 10·(n/3) + the remainder's cost.
+        if (totalBits - reader.BitPosition < 10 * (count / 3) + (count % 3) switch { 2 => 7, 1 => 4, _ => 0 })
+            return QRCodeDecodeStatus.InvalidBitstream;
+
         if (destination.Length - charsWritten < count)
             return QRCodeDecodeStatus.DestinationTooSmall;
 
@@ -74,6 +84,11 @@ internal static class SegmentDecoders
     /// <summary>Decodes an alphanumeric segment payload of <paramref name="count"/> characters.</summary>
     public static QRCodeDecodeStatus DecodeAlphanumericPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
     {
+        // Bitstream sufficiency first; see DecodeNumericPayload for why the order matters.
+        // 2 characters per 11 bits, then 6 bits for an odd one.
+        if (totalBits - reader.BitPosition < 11 * (count / 2) + (count % 2) * 6)
+            return QRCodeDecodeStatus.InvalidBitstream;
+
         if (destination.Length - charsWritten < count)
             return QRCodeDecodeStatus.DestinationTooSmall;
 

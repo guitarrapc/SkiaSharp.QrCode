@@ -65,10 +65,7 @@ internal static class MicroQRImageDecoder
         try
         {
             var inverted = rented.AsSpan(0, pixelCount);
-            for (var i = 0; i < inverted.Length; i++)
-            {
-                inverted[i] = (byte)(255 - luminance[i]);
-            }
+            LuminanceInverter.Invert(luminance, inverted);
 
             var invertedStatus = DecodeLuminanceCore(inverted, width, height, destination, out charsWritten, out var invertedInfo);
             if (invertedStatus == QRCodeDecodeStatus.Success)
@@ -86,14 +83,51 @@ internal static class MicroQRImageDecoder
         }
     }
 
+    /// <summary>
+    /// Strided finder scan first, then a full sweep when nothing decoded.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors the rMQR image decoder: the widening trigger has to be a question
+    /// about the symbol, and only the caller can ask it. See
+    /// <see cref="FinderPatternFinder.FindCandidates"/>.
+    /// </remarks>
     private static QRCodeDecodeStatus DecodeLuminanceCore(ReadOnlySpan<byte> luminance, int width, int height, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info)
+    {
+        // Hoisted: the two scans binarize the same buffer, and on a non-symbol image the
+        // threshold is the single most expensive step of the whole failure path.
+        var threshold = Binarizer.ComputeOtsuThreshold(luminance);
+
+        var status = DecodeLuminanceScan(luminance, width, height, threshold, destination, out charsWritten, out info, fullSweep: false);
+        // Terminal, not just successful: DestinationTooSmall is only reached after the
+        // symbol has been located, sampled, RS-corrected and its segment found to fit
+        // the bitstream, so the buffer is the only thing missing and a wider finder scan
+        // cannot change it. (That ordering is a precondition, not a given: the segment
+        // decoders check bitstream sufficiency before destination sufficiency precisely
+        // so a malformed count cannot masquerade as a short buffer here.)
+        if (status is QRCodeDecodeStatus.Success or QRCodeDecodeStatus.DestinationTooSmall)
+            return status;
+
+        var sweptStatus = DecodeLuminanceScan(luminance, width, height, threshold, destination, out var sweptChars, out var sweptInfo, fullSweep: true);
+        // Terminal, not just successful, for the same reason as above: when the sweep
+        // is the pass that reads the symbol, its DestinationTooSmall is the answer.
+        if (sweptStatus is QRCodeDecodeStatus.Success or QRCodeDecodeStatus.DestinationTooSmall)
+        {
+            charsWritten = sweptChars;
+            info = sweptInfo;
+            return sweptStatus;
+        }
+
+        return status;
+    }
+
+    private static QRCodeDecodeStatus DecodeLuminanceScan(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<char> destination, out int charsWritten, out MicroQRCodeDecodeInfo info, bool fullSweep)
     {
         charsWritten = 0;
 
-        var threshold = Binarizer.ComputeOtsuThreshold(luminance);
-
         Span<FinderPattern> candidates = stackalloc FinderPattern[FinderPatternFinder.MaxFinderCandidates];
-        var candidateCount = FinderPatternFinder.FindCandidates(luminance, width, height, threshold, candidates);
+        var candidateCount = fullSweep
+            ? FinderPatternFinder.FindCandidatesFullSweep(luminance, width, height, threshold, candidates)
+            : FinderPatternFinder.FindCandidates(luminance, width, height, threshold, candidates);
         if (candidateCount == 0)
         {
             info = new MicroQRCodeDecodeInfo(QRCodeDecodeStatus.NotDetected, 0, default, -1, 0);
@@ -527,6 +561,12 @@ internal static class MicroQRImageDecoder
             QRCodeDecodeStatus.NotDetected => 0,
             QRCodeDecodeStatus.InvalidMatrix => 1,
             QRCodeDecodeStatus.FormatInformationInvalid => 1,
+            // The symbol was read (format + RS) and only the caller's buffer is short:
+            // this outranks every other failure, so a wrong-size attempt that reaches RS
+            // first — sizes are tried 17 down to 11 — cannot mask it. Matches the rMQR
+            // decoder's ranking; without it M3-L reported DataUncorrectable for a short
+            // buffer while every other version reported DestinationTooSmall.
+            QRCodeDecodeStatus.DestinationTooSmall => 3,
             _ => 2, // got past format decoding
         };
     }

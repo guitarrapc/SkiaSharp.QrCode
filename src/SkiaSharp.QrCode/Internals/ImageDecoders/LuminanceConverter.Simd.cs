@@ -30,7 +30,7 @@ namespace SkiaSharp.QrCode.Internals.ImageDecoders;
 /// Premultiplied: the composite adds 255 − a to every channel, which (because the
 /// weights sum to 256) is exactly 256 · (255 − a) on the sum, so it collapses to
 /// adding 255 − a to the luminance — exact for every alpha, so that path never falls
-/// back. Measured 15-27x over the per-pixel loop; see the decoder kernel parity tests
+/// back. Measured 14-30x over the per-pixel loop; see LuminanceConverterParityTest
 /// for the equivalence proof by test.
 /// </para>
 /// </remarks>

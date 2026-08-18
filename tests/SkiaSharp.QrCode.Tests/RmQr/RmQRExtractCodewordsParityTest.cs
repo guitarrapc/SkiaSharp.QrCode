@@ -1,3 +1,4 @@
+using TUnit.Assertions.Enums;
 using SkiaSharp.QrCode.Internals.RmQr;
 
 namespace SkiaSharp.QrCode.Tests;
@@ -9,7 +10,7 @@ namespace SkiaSharp.QrCode.Tests;
 /// every version over module grids that pin the contract corners: all light, all
 /// dark written as 1 / 0xFF / 2 (the API is "0 = light, non-zero = dark", so a
 /// kernel that bit-tests instead of comparing against zero fails here), several
-/// pseudo-random grids, and grids that are dark only in the function-module regions.
+/// pseudo-random grids.
 /// </summary>
 /// <remarks>
 /// The reference walks the zigzag per module with its own independently written
@@ -68,7 +69,7 @@ public class RmQRExtractCodewordsParityTest
             var scalar = new byte[totalCodewords];
             scalar.AsSpan().Fill(0xA5);
             RmQRMatrixDecoder.ExtractCodewords(modules, width, height, version, scalar, forceScalar: true);
-            await Assert.That(scalar).IsEquivalentTo(expected)
+            await Assert.That(scalar).IsEquivalentTo(expected, CollectionOrdering.Matching)
                 .Because($"scalar tier, version {version} ({width}x{height}), grid shape {shape}");
 
             if (!RmQRMatrixDecoder.IsBitPlaneTierSupported)
@@ -77,7 +78,7 @@ public class RmQRExtractCodewordsParityTest
             var bitPlanes = new byte[totalCodewords];
             bitPlanes.AsSpan().Fill(0xA5);
             RmQRMatrixDecoder.ExtractCodewords(modules, width, height, version, bitPlanes, forceScalar: false);
-            await Assert.That(bitPlanes).IsEquivalentTo(expected)
+            await Assert.That(bitPlanes).IsEquivalentTo(expected, CollectionOrdering.Matching)
                 .Because($"bit-plane tier, version {version} ({width}x{height}), grid shape {shape}");
         }
     }
@@ -93,7 +94,10 @@ public class RmQRExtractCodewordsParityTest
     public async Task BitPlaneTier_StaysInsideTheModuleSpan(RmQRVersion version)
     {
         if (!RmQRMatrixDecoder.IsBitPlaneTierSupported)
+        {
+            Skip.Test("AVX2 + fast BMI2 PEXT/PDEP not supported on this machine");
             return;
+        }
 
         var width = RmQRConstants.GetWidth(version);
         var height = RmQRConstants.GetHeight(version);
@@ -114,7 +118,7 @@ public class RmQRExtractCodewordsParityTest
 
         var actual = new byte[totalCodewords];
         RmQRMatrixDecoder.ExtractCodewords(padded.AsSpan(0, length), width, height, version, actual, forceScalar: false);
-        await Assert.That(actual).IsEquivalentTo(expected)
+        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching)
             .Because($"version {version} ({width}x{height}) must not depend on bytes past width*height");
     }
 }

@@ -146,7 +146,7 @@ internal static partial class RmQRMatrixDecoder
     /// per-version tables, exactly as the placer does for the encode direction. Two
     /// tiers consume those tables: a bit-plane kernel on x64 with AVX2 and fast BMI2
     /// (see RmQRMatrixDecoder.Simd.cs) and a portable table walk everywhere else.
-    /// Measured 15-64x and 8-12x respectively over the per-module reference walk
+    /// Measured 16-64x and 8-12x respectively over the per-module reference walk
     /// across R7x43..R17x139 (see the decoder kernel parity tests for equivalence).
     /// </remarks>
     private static void ExtractCodewords(ReadOnlySpan<byte> modules, int width, int height, RmQRVersion version, Span<byte> stream)
@@ -165,16 +165,17 @@ internal static partial class RmQRMatrixDecoder
     {
         var layout = GetExtractLayout(version);
 #if NET8_0_OR_GREATER
-        if (!forceScalar && IsBitPlaneTierSupported)
+        // The bit-plane kernel emits whole 32-bit words off a per-version pair table, so
+        // its output length is fixed by the version rather than by the span it is handed.
+        // The portable tier reads stream.Length and truncates. Only dispatch to the
+        // kernel when those two agree; every production caller sizes the span exactly.
+        if (!forceScalar && IsBitPlaneTierSupported && stream.Length == RmQRConstants.GetTotalCodewordCount(version))
         {
             ExtractCodewordsBitPlanes(modules, width, height, layout.Pairs, stream);
             return;
         }
 #endif
         // The portable tier reads the geometry out of the walk-order table instead.
-        _ = forceScalar;
-        _ = width;
-        _ = height;
         ExtractCodewordsScalar(modules, layout.Order, stream);
     }
 
@@ -182,7 +183,7 @@ internal static partial class RmQRMatrixDecoder
     /// Portable tier: one gather per stream bit through the walk-order table, the
     /// output byte accumulated in a register so each is stored once.
     /// </summary>
-    internal static void ExtractCodewordsScalar(ReadOnlySpan<byte> modules, ushort[] order, Span<byte> stream)
+    private static void ExtractCodewordsScalar(ReadOnlySpan<byte> modules, ushort[] order, Span<byte> stream)
     {
         ref var o = ref MemoryMarshal.GetReference(order.AsSpan());
         ref var src = ref MemoryMarshal.GetReference(modules);
@@ -214,8 +215,8 @@ internal static partial class RmQRMatrixDecoder
     // Per-version extraction tables (built once from the placer's own predicates, so
     // they are correct by construction; published with a volatile write - a benign
     // race builds identical tables twice). Memory per version: 2 bytes per stream bit
-    // plus 24 bytes per column pair, at most 3.8 KB for R17x139 and ~55 KB if every
-    // version were ever decoded.
+    // plus 24 bytes per column pair: about 5.2 KB for R17x139 (3,712 B of order plus
+    // 69 column pairs), and about 69 KB if every one of the 32 versions were decoded.
     // ---------------------------------------------------------------
 
     /// <summary>Low bits of an <see cref="ExtractLayout.Order"/> entry: the core module index.</summary>
@@ -225,11 +226,12 @@ internal static partial class RmQRMatrixDecoder
     private const int MaskBitShift = 15;
 
     /// <summary>
-    /// Column stride between the two bit planes. 139 (the widest symbol) rounded up to
-    /// a 16-lane vector store, so writing the last column group cannot run past the
-    /// first plane into the second.
+    /// Column stride between the two bit planes. The widest symbol is 139 columns and the
+    /// transpose stores 16 at a time, so the last store ends at 128 + 16 = 144; rounded
+    /// to 160 so writing the last column group cannot run past the first plane into the
+    /// second, with margin.
     /// </summary>
-    internal const int PlaneStride = 160;
+    private const int PlaneStride = 160;
 
     /// <summary>Everything the extraction walk derives from the version alone.</summary>
     private sealed class ExtractLayout

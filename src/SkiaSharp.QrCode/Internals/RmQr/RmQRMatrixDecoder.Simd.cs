@@ -1,4 +1,5 @@
 #if NET8_0_OR_GREATER
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
@@ -22,7 +23,7 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// <para>
 /// Requires fast PDEP/PEXT (see <see cref="HardwareCapabilities.HasFastPext"/>);
 /// pre-Zen 3 AMD parts and every non-x64 target take the portable tier instead.
-/// Measured 15-64x over the per-module reference walk across R7x43..R17x139, versus
+/// Measured 16-64x over the per-module reference walk across R7x43..R17x139, versus
 /// 8-12x for the portable tier; AVX-512 (32 columns per step) measured inside noise
 /// of AVX2 on Zen 4, so there is no 512-bit tier.
 /// </para>
@@ -61,45 +62,35 @@ internal static partial class RmQRMatrixDecoder
     /// </remarks>
     private static void BuildColumnPlanes(ref byte src, int width, int height, ref ushort plane)
     {
+        // Preconditions, both guaranteed by the only caller: AVX2 is supported (the
+        // tier gate in ExtractCodewords requires it) and width >= 16 (the narrowest
+        // rMQR symbol is 27 wide, and the overread argument above needs width >= 15).
+        // They are asserted rather than branched on, so this file has one honest entry
+        // condition instead of a scalar half that can never run and is never tested.
+        Debug.Assert(Avx2.IsSupported, "The bit-plane tier is only dispatched on AVX2.");
+        Debug.Assert(width >= 16, "The 16-byte column step needs at least 16 columns.");
+
         ref var reversed = ref Unsafe.Add(ref plane, PlaneStride);
         var top = (ushort)(height - 3); // highest bit index of a plane word
-        nint c = 0;
 
-        if (Avx2.IsSupported && width >= 16)
+        var one = Vector256.Create((ushort)1);
+        var topShift = Vector128.CreateScalar(top);
+        var oneShift = Vector128.CreateScalar((ushort)1);
+        for (nint c = 0; c < width; c += 16)
         {
-            var one = Vector256.Create((ushort)1);
-            var topShift = Vector128.CreateScalar(top);
-            var oneShift = Vector128.CreateScalar((ushort)1);
-            for (; c < width; c += 16)
-            {
-                var forward = Vector256<ushort>.Zero;
-                var backward = Vector256<ushort>.Zero;
-                ref var q = ref Unsafe.Add(ref src, (nint)(height - 2) * width + c);
-                for (var row = height - 2; row >= 1; row--)
-                {
-                    var value = Avx2.ConvertToVector256Int16(Vector128.LoadUnsafe(ref q)).AsUInt16();
-                    var dark = Vector256.Min(value, one);
-                    forward = Avx2.ShiftLeftLogical(forward, oneShift) | dark;
-                    backward = Avx2.ShiftRightLogical(backward, oneShift) | Avx2.ShiftLeftLogical(dark, topShift);
-                    q = ref Unsafe.Subtract(ref q, (nint)width);
-                }
-                forward.StoreUnsafe(ref plane, (nuint)c);
-                backward.StoreUnsafe(ref reversed, (nuint)c);
-            }
-            return;
-        }
-
-        for (; c < width; c++)
-        {
-            uint forward = 0, backward = 0;
+            var forward = Vector256<ushort>.Zero;
+            var backward = Vector256<ushort>.Zero;
+            ref var q = ref Unsafe.Add(ref src, (nint)(height - 2) * width + c);
             for (var row = height - 2; row >= 1; row--)
             {
-                var dark = Unsafe.Add(ref src, (nint)row * width + c) != 0 ? 1u : 0u;
-                forward = (forward << 1) | dark;
-                backward = (backward >> 1) | (dark << top);
+                var value = Avx2.ConvertToVector256Int16(Vector128.LoadUnsafe(ref q)).AsUInt16();
+                var dark = Vector256.Min(value, one);
+                forward = Avx2.ShiftLeftLogical(forward, oneShift) | dark;
+                backward = Avx2.ShiftRightLogical(backward, oneShift) | Avx2.ShiftLeftLogical(dark, topShift);
+                q = ref Unsafe.Subtract(ref q, (nint)width);
             }
-            Unsafe.Add(ref plane, c) = (ushort)forward;
-            Unsafe.Add(ref reversed, c) = (ushort)backward;
+            forward.StoreUnsafe(ref plane, (nuint)c);
+            backward.StoreUnsafe(ref reversed, (nuint)c);
         }
     }
 

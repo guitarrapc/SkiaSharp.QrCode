@@ -61,10 +61,7 @@ internal static class QRImageDecoder
         try
         {
             var inverted = rented.AsSpan(0, pixelCount);
-            for (var i = 0; i < inverted.Length; i++)
-            {
-                inverted[i] = (byte)(255 - luminance[i]);
-            }
+            LuminanceInverter.Invert(luminance, inverted);
 
             var invertedStatus = DecodeLuminanceCore(inverted, width, height, destination, out charsWritten, out var invertedInfo);
             if (invertedStatus == QRCodeDecodeStatus.Success)

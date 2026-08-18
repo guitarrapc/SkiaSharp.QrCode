@@ -30,18 +30,23 @@ internal struct FinderPattern
 /// rotation, not for low-contrast photos.
 /// <para>
 /// Two entry points: TryFind (three patterns, Standard QR) and FindCandidates
-/// (one pattern, Micro QR and rMQR). Both stride over rows and fall back to a
-/// complementary pass over the skipped rows, differing only in what triggers the
-/// fallback; see each method.
+/// (one pattern, Micro QR and rMQR). Both stride over rows, and both are widened to
+/// a full sweep when the symbol was not read — but only TryFind can decide that for
+/// itself, because "no consistent triple" is a question about the symbol. A single
+/// candidate list cannot answer the same question, so FindCandidates has no fallback
+/// of its own and its callers re-run it strideless instead. See each method.
 /// </para>
 /// <para>
 /// The scan strides over rows: the band of rows showing the 1:1:3:1:1 signature
-/// is 3 modules tall, and although the module size is unknown before detection,
-/// the worst case (a version-40 symbol filling the frame) bounds it from below,
-/// so a stride of 3·height/(4·177) still hits the band of every supported symbol
-/// several times. When the stride pass finds nothing, the rows it skipped are
-/// scanned as a complementary pass, together exactly one full-image sweep, so
-/// striding can never lose a symbol a full scan would find. On net8.0+ each row
+/// is 3 modules tall for an axis-aligned symbol (under rotation the ratios drift
+/// off-centre and it narrows — see CandidateRowStride), and although the module
+/// size is unknown before detection, the worst case (a version-40 symbol filling
+/// the frame) bounds it from below, so a stride of 3·height/(4·177) hits the band of
+/// every supported axis-aligned symbol. When TryFind's stride pass cannot select a
+/// consistent triple, the rows it skipped are scanned as a complementary pass,
+/// together exactly one full-image sweep, so its striding cannot lose a symbol a
+/// full scan would find — that fallback, not the stride arithmetic, is what makes
+/// TryFind safe under rotation too. On net8.0+ each row
 /// is classified into a dark bitmask with SIMD compares (AVX2, NEON, or any
 /// 128-bit acceleration) and walked run-by-run via trailing-zero counts instead
 /// of pixel-by-pixel (measured ~11x combined on the found path on x64 and
@@ -72,13 +77,16 @@ internal static class FinderPatternFinder
         => TryFindCore(luminance, width, height, threshold, forceScalar: true, patterns);
 
     /// <summary>
-    /// Row stride for <see cref="FindCandidates"/>. The band of rows showing the
-    /// 1:1:3:1:1 signature is 3 modules tall, and the decode envelope starts at about
-    /// 3 px/module, so the band is at least 9 px: a stride of 6 lands in any such band
-    /// at least once, and twice from 4 px/module up. Coarser strides measured faster
-    /// still, but they stop being self-correcting (see <see cref="FindCandidates"/>).
+    /// Row stride for <see cref="FindCandidates"/>. The band of rows carrying the
+    /// 1:1:3:1:1 signature is 3 modules tall only while the symbol is axis-aligned:
+    /// under rotation the run ratios drift off-centre and the band that survives the
+    /// cross-checks narrows. Measured over module sizes 3-8 px at every rotation, its
+    /// floor is 5 rows at the 3 px/module bottom of the decode envelope, so a stride
+    /// of 4 lands in every in-envelope band with a row to spare and 6 does not. The
+    /// caller's strideless retry is what makes detection correct either way; this
+    /// value decides how often that retry has to be paid.
     /// </summary>
-    private const int CandidateRowStride = 6;
+    private const int CandidateRowStride = 4;
 
     /// <summary>
     /// Collects every cross-checked finder pattern candidate, without the
@@ -86,22 +94,32 @@ internal static class FinderPatternFinder
     /// symbol carries a single finder pattern.
     /// </summary>
     /// <remarks>
-    /// Strided like <see cref="TryFind"/>, but the fallback is triggered differently.
-    /// There is no three-pattern selection here that can report "not good enough", so
-    /// the signal used instead is confirmation: a candidate seen on two or more rows.
-    /// If the strided pass produced none, the stride was too coarse for this symbol's
-    /// module size (or the image holds no symbol), and the rows it skipped are scanned
-    /// as a complementary pass — together exactly one full sweep, so striding can
-    /// never lose a symbol a full scan would find, and a miss costs one sweep rather
-    /// than two. Measured 5.3-6.7x over the strideless sweep on rMQR shapes at
-    /// 3-8 px/module, with the no-symbol path unchanged.
+    /// Strided like <see cref="TryFind"/>, but with no fallback of its own: this scan
+    /// has only a flat candidate list, and every signal available inside it is a
+    /// statement about the image rather than about the symbol being looked for. A
+    /// confirmation test (any candidate seen on two or more rows) reads like a
+    /// per-symbol signal but is not one — a second QR code, a printed logo, or
+    /// salt-and-pepper noise confirms by itself and would suppress the pass the real
+    /// symbol needed. The only question that distinguishes them is "did anything
+    /// actually decode", which only the caller can answer, so the widening lives
+    /// there: the image decoders run this scan first and re-run
+    /// <see cref="FindCandidatesFullSweep"/> when nothing decoded. Skipping three rows
+    /// in four is most of the rMQR image path: end to end the span decode of the widest
+    /// symbol is 2.7x a strideless build's (see the plan's benchmark tables).
     /// </remarks>
     /// <param name="candidates">Receives merged candidates; <see cref="MaxFinderCandidates"/> entries suffice.</param>
     /// <returns>The number of candidates written.</returns>
     internal static int FindCandidates(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates)
         => FindCandidatesCore(luminance, width, height, threshold, candidates, CandidateRowStride);
 
-    /// <summary>Strideless sweep, kept for the stride parity test.</summary>
+    /// <summary>
+    /// Every row, no stride. The widening step of <see cref="FindCandidates"/>: the
+    /// image decoders re-run the scan through this entry when the strided pass
+    /// produced nothing that decoded, which is what keeps the detection envelope from ever
+    /// being narrower than a full sweep's.
+    /// </summary>
+    /// <param name="candidates">Receives merged candidates; <see cref="MaxFinderCandidates"/> entries suffice.</param>
+    /// <returns>The number of candidates written.</returns>
     internal static int FindCandidatesFullSweep(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates)
         => FindCandidatesCore(luminance, width, height, threshold, candidates, stride: 1);
 
@@ -112,33 +130,7 @@ internal static class FinderPatternFinder
         {
             ScanRow(luminance, width, height, threshold, y, forceScalar: false, candidates, ref candidateCount);
         }
-
-        if (stride > 1 && !HasConfirmedCandidate(candidates, candidateCount))
-        {
-            // Complementary pass: only the rows the stride pass skipped, keeping its
-            // candidates. Covers exactly the rows of a full scan.
-            for (var baseY = 0; baseY < height; baseY += stride)
-            {
-                var limit = Math.Min(baseY + stride, height);
-                for (var y = baseY + 1; y < limit; y++)
-                {
-                    ScanRow(luminance, width, height, threshold, y, forceScalar: false, candidates, ref candidateCount);
-                }
-            }
-        }
-
         return candidateCount;
-    }
-
-    /// <summary>Whether any candidate was seen on two or more rows.</summary>
-    private static bool HasConfirmedCandidate(ReadOnlySpan<FinderPattern> candidates, int candidateCount)
-    {
-        for (var i = 0; i < candidateCount; i++)
-        {
-            if (candidates[i].Count >= 2)
-                return true;
-        }
-        return false;
     }
 
     /// <summary>Capacity to provide for <see cref="FindCandidates"/>'s candidate buffer.</summary>
