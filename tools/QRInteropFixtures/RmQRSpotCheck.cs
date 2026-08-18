@@ -117,7 +117,10 @@ public static class RmQRSpotCheck
             RmQRCodeGenerator.GetRequiredBufferSizeWithEci(text.AsSpan(), ecc, eciMode, version);
             return true;
         }
-        catch (ArgumentException ex) when (ex.ParamName == "requestedVersion" && ex.Message.StartsWith("Content is too long", StringComparison.Ordinal))
+        // Every caller supplies a valid version from the constants table. On this
+        // fixed-version sizing API, requestedVersion is therefore only blamed when
+        // the content does not fit; do not couple the fixture to exception wording.
+        catch (ArgumentException ex) when (ex.ParamName == "requestedVersion")
         {
             return false;
         }

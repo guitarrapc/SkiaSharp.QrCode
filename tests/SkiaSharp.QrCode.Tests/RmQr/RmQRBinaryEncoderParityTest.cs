@@ -43,12 +43,13 @@ public class RmQRBinaryEncoderParityTest
         return new string(chars);
     }
 
-    private static async Task AssertParity(string text, RmQRVersion version, RmQREccLevel ecc, string mode, bool utf8)
+    private static async Task AssertParity(string text, RmQRVersion version, RmQREccLevel ecc, string mode, bool utf8, EciMode eciMode = EciMode.Default)
     {
         var count = RmQRConstants.GetDataCodewordCount(version, ecc);
         var encodingMode = mode switch { "Numeric" => EncodingMode.Numeric, "Alphanumeric" => EncodingMode.Alphanumeric, _ => EncodingMode.Byte };
         var dataLength = mode == "Byte" ? (utf8 ? System.Text.Encoding.UTF8.GetByteCount(text) : text.Length) : text.Length;
-        var analysis = new TextAnalysisResult(encodingMode, utf8 ? EciMode.Utf8 : EciMode.Default, dataLength);
+        var resolvedEciMode = utf8 ? EciMode.Utf8 : eciMode;
+        var analysis = new TextAnalysisResult(encodingMode, resolvedEciMode, dataLength);
         var expected = RmQRNaiveReference.NaiveDataCodewords(text, count, RmQRConstants.GetModeIndicatorValue(encodingMode), RmQRConstants.GetCountIndicatorLength(version, encodingMode), mode, utf8, analysis.EciMode);
 
         var actual = new byte[count];
@@ -100,6 +101,16 @@ public class RmQRBinaryEncoderParityTest
             await AssertParity(new string('ÿ', length), version, ecc, "Byte", false);
             await AssertParity(Cyclic(latin1, length, length * 7), version, ecc, "Byte", false);
         }
+    }
+
+    [Test]
+    [MethodDataSource(nameof(AllVersionEcc))]
+    public async Task ByteLatin1Eci3_EveryLengthUpToEciCapacity_FullRange(RmQRVersion version, RmQREccLevel ecc)
+    {
+        var max = RmQRVersionSelector.GetMaxDataLength(version, ecc, EncodingMode.Byte, EciMode.Iso8859_1);
+        var latin1 = new string(Enumerable.Range(0, 256).Select(c => (char)c).ToArray());
+        for (var length = 0; length <= max; length++)
+            await AssertParity(Cyclic(latin1, length, length * 7), version, ecc, "Byte", false, EciMode.Iso8859_1);
     }
 
     [Test]
