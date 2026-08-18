@@ -1274,7 +1274,9 @@ caller reports growing its buffer for an image with nothing in it.
 
 **Done**
 
-- Added non-breaking `EciMode` overloads to every `RmQRCodeGenerator` class/span/sizing path.
+- Added non-breaking, explicitly named `CreateRmQRCodeWithEci` / `GetRequiredBufferSizeWithEci`
+  APIs to every `RmQRCodeGenerator` class/span/sizing path. Keeping ECI out of the existing
+  method's third argument preserves source compatibility for positional `default` calls.
   `Default` uses the shared Standard QR policy: ASCII has no ECI, Latin-1 emits assignment 3,
   and other Unicode emits assignment 26 with UTF-8 bytes. Explicit ISO-8859-1 rejects
   unrepresentable characters rather than silently narrowing them.
@@ -1290,16 +1292,39 @@ caller reports growing its buffer for an image with nothing in it.
   parity and round trips, invalid ECI/charset rejection, and allocation-free span output.
   Legacy qrtool UTF-8 fixtures without ECI remain decoder oracles but are explicitly excluded
   from encoder module-exact comparison because the new conforming stream must differ.
-- External gate: zxing-cpp decoded all 254 generated symbols that fit (all versions × ECC ×
-  Numeric/Alphanumeric/Byte plus UTF-8 ECI where capacity permits), matching text, raw bytes,
-  version and ECC. R7x43-H cannot contain ECI + one Byte payload, so the corpus size is below 256.
+- `RmQRCodeImageBuilder.WithEciMode` exposes the same explicit control at the high-level image
+  surface; the API parity guard requires ECI on Standard QR and rMQR but not Micro QR.
+- External gate: zxing-cpp decoded all 318 generated symbols (all versions × ECC ×
+  Numeric/Alphanumeric/Byte, plus 63 ISO-8859-1 ECI-3 and 63 UTF-8 ECI-26 symbols), matching
+  text, raw bytes, version and ECC. The expected totals are asserted so an exception cannot
+  silently remove ECI cases; only R7x43-H cannot contain ECI plus a one-byte payload.
 
 **Verification**
 
-- Full tests: net10.0 5,616 total / 5,493 passed / 123 capability-skipped / 0 failed;
-  net8.0 5,604 total / 5,491 passed / 113 capability-skipped / 0 failed.
+- Full tests after the repair rounds: net10.0 5,621 total / 5,498 passed /
+  123 capability-skipped / 0 failed; net8.0 5,609 total / 5,496 passed /
+  113 capability-skipped / 0 failed.
 - BenchmarkDotNet, net10.0 Release, x64 Ryzen 7 5800H, span destination, R17x139-M,
-  one launch / two warmups / five iterations: ASCII 150-byte 1.809 us, Latin-1 ECI 2.349 us,
-  UTF-8 ECI 1.886 us; all report zero managed allocation. Payload work differs, so these are
-  absolute path checks rather than claimed deltas. The ECI cases remain in `RmQREncodeEndToEnd`
-  as permanent allocation/performance guards.
+  all paths report zero managed allocation. A controlled no-ECI comparison used the same
+  2-launch / 3-warmup / 10-iteration job: pre-ECI `5801279` measured 2.428 us and the repaired
+  implementation 2.401 us (overlapping 99.9% confidence intervals; no detected regression).
+  A later final run measured 2.025 us, illustrating the host's run-to-run noise rather than a
+  claimed speedup. One-launch ECI path checks measured Latin-1 2.202 us and UTF-8 2.707 us.
+  Payload work differs, so the ECI figures are absolute guards, not cross-payload deltas.
+
+**Adversarial review and repair rounds**
+
+- Round 1 found that adding `EciMode` as the third argument made existing positional
+  `default` calls ambiguous, omitted builder control, and let the external gate silently
+  skip ECI cases. The API was changed to the explicitly named `CreateRmQRCodeWithEci` /
+  `GetRequiredBufferSizeWithEci` family, `WithEciMode` was added, and the gate now asserts
+  318 total / 63 assignment-3 / 63 assignment-26 cases.
+- Round 2 found a correctness bug introduced by the performance repair itself: the existing
+  `Default` API's isolated fast path treated automatically detected Latin-1/UTF-8 as no ECI
+  and selected versions without charging the 11-bit prefix. Only analysis results whose
+  resolved ECI is actually `Default` now use the no-ECI encoder and selector; automatic
+  ECI uses the ECI-aware paths. A two-byte Latin-1 capacity-boundary test, class/span exact
+  module parity with a poisoned destination tail, and explicit builder/data rejection pin
+  the repair.
+- Round 3 re-ran the 318-symbol external oracle, both full target-framework suites, and the
+  controlled performance comparison. No further actionable defect remained.

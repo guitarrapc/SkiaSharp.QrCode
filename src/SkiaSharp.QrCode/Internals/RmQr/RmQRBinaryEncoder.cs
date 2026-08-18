@@ -136,6 +136,57 @@ internal static class RmQRBinaryEncoder
         return codewordCount;
     }
 
+    /// <summary>
+    /// Original no-ECI hot path, kept separate so the extra ECI validation and
+    /// header branches do not change the JIT layout for ASCII production calls.
+    /// The caller guarantees <see cref="TextAnalysisResult.EciMode"/> is Default.
+    /// </summary>
+    internal static int EncodeDataCodewordsWithoutEci(ReadOnlySpan<char> text, RmQRVersion version, RmQREccLevel eccLevel, in TextAnalysisResult analysis, Span<byte> destination)
+    {
+        Debug.Assert(analysis.EciMode == EciMode.Default);
+        var codewordCount = RmQRConstants.GetDataCodewordCount(version, eccLevel);
+        var capacityBits = codewordCount * 8;
+        var mode = analysis.EncodingMode;
+        if (destination.Length < codewordCount)
+            throw new ArgumentException($"Destination too small: {codewordCount} data codewords required, got {destination.Length} bytes.", nameof(destination));
+        Debug.Assert(RmQRVersionSelector.GetRequiredBits(version, mode, analysis.DataLength) <= capacityBits, "content must fit (version selection guarantees this)");
+
+        ref var dest = ref MemoryMarshal.GetReference(destination);
+        ulong acc = 0;
+        var accBits = 0;
+        var bytePos = 0;
+
+        switch (mode)
+        {
+            case EncodingMode.Numeric:
+                {
+                    var countBits = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric);
+                    Append(ref dest, ref acc, ref accBits, ref bytePos, (0b001 << countBits) | analysis.DataLength, RmQRConstants.ModeIndicatorLength + countBits);
+                    WriteNumeric(ref dest, ref acc, ref accBits, ref bytePos, text, vectorized: true);
+                    break;
+                }
+            case EncodingMode.Alphanumeric:
+                {
+                    var countBits = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric);
+                    Append(ref dest, ref acc, ref accBits, ref bytePos, (0b010 << countBits) | analysis.DataLength, RmQRConstants.ModeIndicatorLength + countBits);
+                    WriteAlphanumeric(ref dest, ref acc, ref accBits, ref bytePos, text, vectorized: true);
+                    break;
+                }
+            case EncodingMode.Byte:
+                {
+                    var countBits = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
+                    Append(ref dest, ref acc, ref accBits, ref bytePos, (0b011 << countBits) | analysis.DataLength, RmQRConstants.ModeIndicatorLength + countBits);
+                    WriteLatin1(ref dest, ref acc, ref accBits, ref bytePos, text, vectorized: true);
+                    break;
+                }
+            default:
+                throw new ArgumentOutOfRangeException(nameof(analysis), $"Encoding mode {mode} is not supported by rMQR.");
+        }
+
+        Finish(ref dest, acc, accBits, bytePos, codewordCount, capacityBits);
+        return codewordCount;
+    }
+
     // ---------------------------------------------------------------
     // Segment writers. Internal + AggressiveInlining: the production call sites
     // above inline them (so the writer locals stay enregistered), while the kernel

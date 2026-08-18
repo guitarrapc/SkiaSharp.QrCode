@@ -938,7 +938,7 @@ var flat = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, fitS
 Console.WriteLine(flat.Version); // R7x43 (the default MinimizeArea picks R11x27: 297 modules vs 301)
 
 // Unicode defaults to UTF-8 Byte mode with ECI 26. It can also be requested explicitly.
-var japanese = RmQRCodeGenerator.CreateRmQRCode("日本語", RmQREccLevel.M, EciMode.Utf8);
+var japanese = RmQRCodeGenerator.CreateRmQRCodeWithEci("日本語", RmQREccLevel.M, EciMode.Utf8);
 // Kanji mode is intentionally unsupported; UTF-8 is the supported Japanese-text path.
 
 // Exact version, zero-allocation span output (byte per module, row-major, quiet zone included)

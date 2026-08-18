@@ -99,7 +99,7 @@ public class RmQRBinaryEncoderUnitTest
         foreach (var fixtureId in FixtureLoader.EnumerateFixtureIds("RmQr"))
         {
             var manifest = FixtureLoader.Load("RmQr", fixtureId).Manifest;
-            if (Analysis(manifest.PayloadText, manifest.Mode).EciMode == EciMode.Default)
+            if (TextAnalyzer.Analyze(manifest.PayloadText, EciMode.Default).EciMode == EciMode.Default)
                 yield return fixtureId;
         }
     }

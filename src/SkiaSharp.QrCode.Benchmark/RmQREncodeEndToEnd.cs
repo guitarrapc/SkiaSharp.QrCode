@@ -76,13 +76,13 @@ public class RmQREncodeEndToEnd
     [Benchmark(Description = "RmQR_Latin1_ECI_R17x139_Encode (Span)")]
     public int RmQR_Latin1Eci_R17x139_EncodeSpan()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_latin1.AsSpan(), RmQREccLevel.M, _spanDestination, EciMode.Iso8859_1, RmQRVersion.R17x139);
+        return RmQRCodeGenerator.CreateRmQRCodeWithEci(_latin1.AsSpan(), RmQREccLevel.M, _spanDestination, EciMode.Iso8859_1, RmQRVersion.R17x139);
     }
 
     [Benchmark(Description = "RmQR_UTF8_ECI_R17x139_Encode (Span)")]
     public int RmQR_Utf8Eci_R17x139_EncodeSpan()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_utf8.AsSpan(), RmQREccLevel.M, _spanDestination, EciMode.Utf8, RmQRVersion.R17x139);
+        return RmQRCodeGenerator.CreateRmQRCodeWithEci(_utf8.AsSpan(), RmQREccLevel.M, _spanDestination, EciMode.Utf8, RmQRVersion.R17x139);
     }
 
     [Benchmark(Description = "RmQR_Numeric_AutoFit_Encode (Span)")]

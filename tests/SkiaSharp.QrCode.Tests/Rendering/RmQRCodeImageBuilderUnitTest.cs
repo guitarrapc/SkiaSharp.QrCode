@@ -41,6 +41,27 @@ public class RmQRCodeImageBuilderUnitTest
         await Assert.That(() => new RmQRCodeImageBuilder((RmQRCodeData)null!)).Throws<ArgumentNullException>();
     }
 
+    [Test]
+    public async Task WithEciMode_ExplicitUtf8_UsesTheEciAwareGeneratorPath()
+    {
+        var expected = RmQRCodeGenerator.CreateRmQRCodeWithEci("a", RmQREccLevel.H, EciMode.Utf8);
+        using var bitmap = new RmQRCodeImageBuilder("a")
+            .WithErrorCorrection(RmQREccLevel.H)
+            .WithEciMode(EciMode.Utf8)
+            .WithModulePixelSize(1)
+            .ToBitmap();
+
+        await Assert.That(bitmap.Width).IsEqualTo(expected.Width);
+        await Assert.That(bitmap.Height).IsEqualTo(expected.Height);
+    }
+
+    [Test]
+    public async Task WithEciMode_WhenDataWasProvided_ThrowsImmediately()
+    {
+        var data = RmQRCodeGenerator.CreateRmQRCode("a", RmQREccLevel.M);
+        await Assert.That(() => new RmQRCodeImageBuilder(data).WithEciMode(EciMode.Utf8)).Throws<InvalidOperationException>();
+    }
+
     // ---- module-to-pixel parity --------------------------------------------------------
 
     [Test]
