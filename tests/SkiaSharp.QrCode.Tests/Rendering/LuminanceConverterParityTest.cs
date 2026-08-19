@@ -63,6 +63,94 @@ public class LuminanceConverterParityTest
         return pixels;
     }
 
+    /// <summary>
+    /// The specification, written the obvious way: one pixel at a time, plain indexing,
+    /// no specialization. Slow and not shipped — it exists so the shipped scalar tier
+    /// has something to be checked against.
+    /// </summary>
+    private static byte[] NaiveReference(byte[] pixels, int width, int height, int rowBytes, int ro, int go, int bo, int ao, bool premultiplied)
+    {
+        var result = new byte[width * height];
+        for (var y = 0; y < height; y++)
+        {
+            for (var x = 0; x < width; x++)
+            {
+                var p = y * rowBytes + x * 4;
+                int r = pixels[p + ro];
+                int g = pixels[p + go];
+                int b = pixels[p + bo];
+
+                if (ao >= 0)
+                {
+                    int a = pixels[p + ao];
+                    if (a != 255)
+                    {
+                        if (premultiplied)
+                        {
+                            r += 255 - a;
+                            g += 255 - a;
+                            b += 255 - a;
+                        }
+                        else
+                        {
+                            r = (r * a + 255 * (255 - a)) / 255;
+                            g = (g * a + 255 * (255 - a)) / 255;
+                            b = (b * a + 255 * (255 - a)) / 255;
+                        }
+                    }
+                }
+
+                result[y * width + x] = (byte)((77 * r + 150 * g + 29 * b) >> 8);
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// The scalar tier against that naive reference. This is not redundant with the
+    /// vector-parity test below: that one uses the scalar tier <em>as</em> its expected
+    /// value, so once the scalar tier stopped being a plain per-pixel loop — it
+    /// specializes per layout, walks by ref and takes four pixels per iteration — an
+    /// error shared by both tiers would pass unnoticed. This test is what pins the
+    /// scalar tier to the specification.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Layouts))]
+    public async Task ScalarTier_MatchesNaiveReference_EveryLayoutAndAlphaShape(int layout)
+    {
+        var (ro, go, bo, ao) = Offsets(layout);
+        // 4, 5, 7, 8 straddle the four-pixel step and its remainder.
+        int[] widths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 17, 43, 139, 376];
+        var alphaShapes = layout == Rgb888x ? new[] { 3 } : [0, 1, 2, 3];
+
+        foreach (var alphaShape in alphaShapes)
+        {
+            foreach (var premultiplied in ao < 0 ? new[] { false } : [false, true])
+            {
+                foreach (var width in widths)
+                {
+                    foreach (var height in new[] { 1, 2, 5 })
+                    {
+                        foreach (var pad in new[] { 0, 12 })
+                        {
+                            var rowBytes = width * 4 + pad;
+                            var pixels = MakePixels(width, height, rowBytes, alphaShape, width * 7 + height + pad + alphaShape);
+
+                            var expected = NaiveReference(pixels, width, height, rowBytes, ro, go, bo, ao, premultiplied);
+
+                            var actual = new byte[width * height];
+                            actual.AsSpan().Fill(0xA5);
+                            LuminanceConverter.ConvertRgbaForTest(pixels, actual, width, height, rowBytes, ro, go, bo, ao, premultiplied, forceScalar: true);
+
+                            await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching)
+                                .Because($"layout {layout}, {width}x{height}, rowBytes {rowBytes}, alphaShape {alphaShape}, premultiplied {premultiplied}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     [Test]
     [MethodDataSource(nameof(Layouts))]
     public async Task VectorTier_MatchesScalarTier_EveryLayoutAndAlphaShape(int layout)
