@@ -233,9 +233,9 @@ M2 at 3.3-4.1x over the scalar walk; it is not an open rMQR ARM gap.
 
 | Priority | Work | Why it is here | Promotion / stop rule |
 |---|---|---|---|
-| **N0 (first)** | ARM64 baseline and component attribution | There is no current rMQR ARM64 E2E record. Existing x64 numbers identify candidates but cannot rank ARM instruction costs or memory bandwidth. | Record encode, matrix decode, luminance-span image decode, bitmap decode, clean/error-corrected matrices, and both no-symbol cases on one pinned ARM64 machine before changing kernels. Add forced-portable vs automatic-dispatch kernel cases for every item below. |
-| **N1** | NEON `LuminanceConverter` | ARM64 currently takes the per-pixel scalar BGRA/RGBA path. On x64 this conversion was 69 % of bitmap decode before AVX2 and the isolated kernel improved 14-30x, so this is the strongest real-input decode candidate and benefits all symbologies. | Ship only with byte-exact parity for all layouts/alpha modes and a material bitmap E2E win. If conversion is under 10 % of ARM bitmap decode, demote it behind N2. |
-| **N2** | NEON rMQR codeword extraction | ARM64 cannot enter the AVX2+BMI2 bit-plane tier and uses the portable gather. Extraction was 70-91 % of matrix decode before the x64 tier; x64 matrix E2E improved 5-8x. This is the highest-priority rMQR-specific gap. | Compare at least a NEON column-plane builder plus scalar/SWAR bit compression against the current table walk; ARM has no PEXT/PDEP, so do not transliterate the x64 kernel. Keep a new tier only if it wins on small, narrow and largest symbols, not just R17x139. |
+| **N0 (done)** | ARM64 baseline and component attribution | There is no current rMQR ARM64 E2E record. Existing x64 numbers identify candidates but cannot rank ARM instruction costs or memory bandwidth. | Record encode, matrix decode, luminance-span image decode, bitmap decode, clean/error-corrected matrices, and both no-symbol cases on one pinned ARM64 machine before changing kernels. Add forced-portable vs automatic-dispatch kernel cases for every item below. |
+| **N1 (shipped)** | NEON `LuminanceConverter` | ARM64 currently takes the per-pixel scalar BGRA/RGBA path. On x64 this conversion was 69 % of bitmap decode before AVX2 and the isolated kernel improved 14-30x, so this is the strongest real-input decode candidate and benefits all symbologies. | Ship only with byte-exact parity for all layouts/alpha modes and a material bitmap E2E win. If conversion is under 10 % of ARM bitmap decode, demote it behind N2. |
+| **N2 (next)** | NEON rMQR codeword extraction | ARM64 cannot enter the AVX2+BMI2 bit-plane tier and uses the portable gather. Extraction was 70-91 % of matrix decode before the x64 tier; x64 matrix E2E improved 5-8x. This is the highest-priority rMQR-specific gap. | Compare at least a NEON column-plane builder plus scalar/SWAR bit compression against the current table walk; ARM has no PEXT/PDEP, so do not transliterate the x64 kernel. Keep a new tier only if it wins on small, narrow and largest symbols, not just R17x139. |
 | **N3 (profile-gated)** | NEON RS syndrome computation in `EccBinaryDecoder` | Clean blocks always compute syndromes, and ARM64 currently lacks the x64 GFNI decoder tier. It may become the matrix-decode bottleneck after N2, especially for R17x139 and corrected blocks, but it was under 1 % in the optimized x64 profile. | Start only if N0/N2 show at least 5 % of ARM matrix decode here. Benchmark clean, within-capacity corrected, and uncorrectable blocks; do not optimize Berlekamp-Massey/Chien/Forney unless their damaged-symbol profile independently justifies it. |
 | **N4** | NEON rMQR placement expansion | The cached template and store/scatter design is already portable, but `ExpandBitsMasked` only has AVX2/SSSE3 vector tiers. The 16-module `TBL` + `CMTST` idiom already exists in the Micro QR placer and `ModuleBitPacker`, making this low-risk ARM work. | Port the proven idiom, add a named forced-NEON parity entry, and require an encode E2E win outside the ARM canary band. Do not rewrite the strided scatter unless profiling identifies it separately. |
 | **N5 (profile-gated)** | Vector128/NEON rectangular grid sampling | rMQR `SampleGrid` is scalar while Standard QR already has a bit-identical 128-bit row kernel usable by ARM64. The work is only one sample per module (at most 2,363), so pixel scanning and matrix decode are expected to dominate first. | Share/generalize the Standard QR kernel only if it is at least 5 % of ARM luminance-span decode after N2. Preserve scalar floating-point operation order and exact sampled bytes; otherwise leave it scalar. |
@@ -308,6 +308,103 @@ fallbacks for other targets, and x64 benchmark flatness. The default acceptance 
 an E2E improvement of at least 5 % with confidence intervals outside the unchanged-control
 band; otherwise record the rejected kernel and keep the simpler portable path. Update the
 rMQR spec map and append ARM64 before/after results here after each accepted work package.
+
+#### ARM64 results: N0 baseline and N1 (completed 2026-08-19)
+
+Machine: Apple M2 (8 cores), macOS 26.5.2, .NET SDK 10.0.301 / runtime 10.0.9, Arm64 RyuJIT,
+`net10.0` Release, AC power. `HardwareIntrinsics=ArmBase+AdvSimd,AES,CRC32,DP,RDM,SHA1,SHA256
+VectorSize=128` — note `DP` (UDOT), which N1 depends on. BenchmarkDotNet's
+`DisassemblyDiagnoser` is Windows/Linux-only, so kernel selection was proved by
+scenario-differencing (below) rather than by emitted assembly.
+
+**N0, baseline.** `--warmupCount 3 --iterationCount 10 --launchCount 3`.
+
+| Path | Scenario | Mean | Allocated |
+|---|---|---:|---:|
+| Encode (span) | R7x43 numeric / R11x59 alnum / R17x139 byte | 166.2 ns / 388.0 ns / 1,673.9 ns | 0 B |
+| Encode (span) | R17x139 Latin-1 ECI / UTF-8 ECI / numeric auto-fit | 1,621.0 ns / 1,560.4 ns / 201.8 ns | 0 B |
+| Matrix decode (span) | R7x43 / R11x59 / R17x139, clean | 279.6 ns / 2,367.6 ns / 14,326.4 ns | 0 B |
+| Matrix decode (span) | R7x43 / R17x139, **correctable damage** | 554.9 ns / 27,158.7 ns | 0 B |
+| Luminance-span image decode | R7x43 / R17x139 | 13.30 us / 87.64 us | 0 B |
+| Bitmap decode | R7x43 / R17x139 | 52.37 us / 309.33 us | 152 B / 440 B |
+| No-symbol failure | noise / gradient 1144x168 | 8,421.7 us / 233.0 us | 0 B |
+
+Scale reference on the same machine: Standard QR v1 numeric is 1,984.5 ns to encode and
+1,228.0 ns to decode, i.e. rMQR R7x43 encodes about 12x faster and decodes about 4x faster
+than the smallest Standard QR.
+
+Measurement note: an earlier pass at this table was taken while another build shared the
+machine and reported R17x139 encode as 2,235 ns +/- 306 (14 % RatioSD). The re-run above is
++/- 17 ns (1 %). Treat any ARM64 row whose Error exceeds ~2 % as contaminated and re-run it;
+do not compare across runs.
+
+Two things the baseline settled:
+
+- **Luminance conversion was 71-74 % of ARM bitmap decode** (bitmap minus luminance-span:
+  39.07 us of 52.37, 221.69 us of 309.33; both ~1.33 ns/px, so it is the pixel loop and not
+  bitmap overhead). N1's demotion rule was "under 10 % → demote behind N2"; it passed by a
+  wide margin and N1 stayed first.
+- **Correctable damage roughly doubles matrix decode** (279.6 → 554.9 ns = 1.98x,
+  14.33 → 27.16 us = 1.90x). The
+  clean-only set could not rank the correction path; `RmQR_*_Corrected_Decode` was added to
+  `RmQRDecodeEndToEnd` to close that gap. This is the input N3 needs, and it says the
+  Berlekamp-Massey/Chien/Forney stages are about half of a damaged decode.
+
+**N1, NEON `LuminanceConverter`: shipped.** Kernel search ran seven rounds in the private
+MicroBenchmarks repo (16 variants, byte-exact gate of 1,836 cases per variant per round);
+the full log with refutations lives there. Shipped as
+`Internals/ImageDecoders/LuminanceConverter.Simd.Arm.cs`, dispatched from `ConvertRgba`
+after the AVX2 check and before scalar.
+
+Design, and why it is not a transliteration of the AVX2 kernel:
+
+- **UDOT, not shuffle + multiply-add.** `Dp.DotProduct` computes `77R + 150G + 29B + 0*A`
+  for four whole pixels in one instruction with no deinterleave, and weighting alpha 0 makes
+  Rgb888x's padding byte free. An `LD4`-based port of the x64 plane approach was measured and
+  lost by 1.2-1.5x.
+- **Alpha tested per row, not per block.** Rgb888x and Bgra-opaque run identical arithmetic
+  and differ only by that test, which measured it at 27 % of the kernel (a cross-lane reduce
+  plus a vector-to-GPR move every 16 px). Rows are converted optimistically while pixels are
+  ANDed into a vector accumulator; one cross-lane test per row decides. The mode is sticky, so
+  an image with alpha wastes one pass, not one per row.
+- **Every alpha shape stays vectorized.** Fully transparent composites to white (luminance
+  255) by replacement; partial straight alpha uses `c' = 255 - ceil((255 - c)*a / 255)`, exact
+  in 16-bit lanes; premultiplied collapses to an add before the shift. Blocks are classified
+  and the classification is sticky per row, which took both the transparent-background win and
+  the partial-alpha win that first looked mutually exclusive.
+- **No `unsafe`.** `LD4` has no ref-taking overload, so the composite builds planes from two
+  UZP rounds instead — measured identical on the only scenario that runs it. The library's
+  no-`AllowUnsafeBlocks` policy is unchanged.
+- **Row modes are separate methods, and the composite is `NoInlining`.** Both are
+  load-bearing, not style: fusing the row modes measured 2.3x slower on inputs where the fused
+  code never ran, and inlining the composite cost 52 % on a path that never calls it. Code
+  sitting in this loop costs as much as code that runs.
+
+E2E (`RmQRImageEndToEnd`, identical benchmark binary, library swapped between runs):
+
+| Scenario | before | after | change |
+|---|---:|---:|---:|
+| R7x43_BitmapDecode | 52.37 us | **16.33 us** | **3.21x** |
+| R17x139_BitmapDecode | 309.33 us | **101.95 us** | **3.03x** |
+| R7x43 / R17x139 ImageDecode_Span (control) | 13.30 / 87.64 us | 13.33 / 87.64 us | flat |
+| R7x43_512px / R17x139_1024px render (control) | 1058.07 / 2748.07 us | 1057.92 / 2749.18 us | flat |
+| NoSymbol noise / gradient (control) | 8421.72 / 232.99 us | 8436.37 / 232.72 us | +0.17 % / flat |
+
+Every unchanged control is flat within 0.2 %. The conversion component alone improved
+**13.0x (R7x43)** and **15.5x (R17x139)**, matching the kernel benchmark's 14-16x, and
+conversion fell from 71-74 % to 14-18 % of bitmap decode. Allocations unchanged (the 152/440 B
+are the decoded strings). Acceptance gate (≥ 5 % E2E, outside the control band): passed.
+
+`LuminanceConverterParityTest` previously skipped entirely on ARM64. It now runs the vector
+tier on whichever ISA the machine has, with widths straddling the NEON block and its
+overlapping tail (16/17/20/24 — width 20 makes the final block redo 12 already-written
+pixels), and the over-write test covers all four alpha shapes because the NEON tier has four
+row modes with separate tail arithmetic. Full suite green: 5,685 tests, 0 failed.
+
+Next per the queue: **N2 (NEON rMQR codeword extraction)**. N0 gives it its baseline — matrix
+decode is 14.33 us clean / 27.16 us corrected at R17x139 — and the correctable-damage figure
+already suggests N3's syndrome work is not the lever there; the correction stages are, since
+they account for the whole 12.8 us difference while syndrome generation runs in both cases.
 
 Items deliberately below the NEON queue: Otsu histogramming (serial histogram updates and
 already near its measured per-pixel floor), sub-finder/perspective search (branchy,

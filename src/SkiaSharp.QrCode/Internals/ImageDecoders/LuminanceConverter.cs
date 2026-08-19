@@ -72,28 +72,62 @@ internal static partial class LuminanceConverter
     }
 
     /// <summary>
-    /// Pixel buffer to BT.601 luminance. Two tiers: an AVX2 kernel at 32 pixels per
-    /// iteration (see LuminanceConverter.Simd.cs) and this per-pixel loop everywhere
-    /// else. Both produce identical bytes; see LuminanceConverterParityTest.
+    /// Pixel buffer to BT.601 luminance. Three tiers: an AVX2 kernel at 32 pixels per
+    /// iteration (LuminanceConverter.Simd.cs), a NEON kernel at 16 pixels per
+    /// iteration (LuminanceConverter.Simd.Arm.cs), and this per-pixel loop everywhere
+    /// else. All three produce identical bytes; see LuminanceConverterParityTest.
     /// </summary>
     private static void ConvertRgba(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied)
     {
 #if NET8_0_OR_GREATER
         // The only layouts reaching here are BGRA (2,1,0) and RGBA / RGB888x (0,1,2),
-        // which is what the vector shuffle masks cover.
-        if (System.Runtime.Intrinsics.X86.Avx2.IsSupported && greenOffset == 1 && (redOffset == 2 ? blueOffset == 0 : redOffset == 0 && blueOffset == 2))
+        // which is what the vector kernels cover.
+        if (IsVectorLayout(redOffset, greenOffset, blueOffset))
         {
-            ConvertRgbaAvx2(pixels, luminance, width, height, rowBytes, bgra: redOffset == 2, hasAlpha: alphaOffset >= 0, premultiplied);
-            return;
+            if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
+            {
+                ConvertRgbaAvx2(pixels, luminance, width, height, rowBytes, bgra: redOffset == 2, hasAlpha: alphaOffset >= 0, premultiplied);
+                return;
+            }
+
+            // The NEON kernel covers a whole row from 16-pixel blocks plus one
+            // overlapping final block, so it has no scalar remainder to fall back on
+            // and narrower rows stay on the per-pixel loop instead.
+            if (IsAdvSimdTierAvailable && width >= AdvSimdBlockPixels)
+            {
+                ConvertRgbaAdvSimd(pixels, luminance, width, height, rowBytes, bgra: redOffset == 2, hasAlpha: alphaOffset >= 0, premultiplied);
+                return;
+            }
         }
 #endif
         ConvertRgbaScalar(pixels, luminance, width, height, rowBytes, redOffset, greenOffset, blueOffset, alphaOffset, premultiplied);
     }
 
+#if NET8_0_OR_GREATER
+    /// <summary>BGRA (2,1,0) or RGBA / RGB888x (0,1,2); nothing else reaches a vector tier.</summary>
+    private static bool IsVectorLayout(int redOffset, int greenOffset, int blueOffset)
+        => greenOffset == 1 && (redOffset == 2 ? blueOffset == 0 : redOffset == 0 && blueOffset == 2);
+
+    /// <summary>
+    /// UDOT carries the whole luminance sum and LD4 the composite path, so both are
+    /// required rather than plain AdvSimd.
+    /// </summary>
+    private static bool IsAdvSimdTierAvailable
+        => System.Runtime.Intrinsics.Arm.Dp.IsSupported && System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported;
+#endif
+
     /// <summary>Whether the AVX2 tier runs on this machine (parity tests skip it otherwise).</summary>
     internal static bool IsAvx2TierSupported =>
 #if NET8_0_OR_GREATER
         System.Runtime.Intrinsics.X86.Avx2.IsSupported;
+#else
+        false;
+#endif
+
+    /// <summary>Whether the NEON tier runs on this machine (parity tests skip it otherwise).</summary>
+    internal static bool IsAdvSimdTierSupported =>
+#if NET8_0_OR_GREATER
+        IsAdvSimdTierAvailable;
 #else
         false;
 #endif

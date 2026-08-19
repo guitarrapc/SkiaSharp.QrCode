@@ -4,17 +4,23 @@ using SkiaSharp.QrCode.Internals.ImageDecoders;
 namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
-/// The two <see cref="LuminanceConverter"/> tiers (the AVX2 kernel and the portable
-/// per-pixel loop) against each other, byte for byte, over every pixel layout the
-/// converter accepts, premultiplied and straight alpha, and alpha shapes that pin the
-/// contract corners: fully opaque, fully transparent, transparent-or-opaque only, and
-/// arbitrary partial alpha (which is what the straight-alpha vector path must hand
-/// back to the scalar formula).
+/// Whichever <see cref="LuminanceConverter"/> vector tier this machine runs (the AVX2
+/// kernel on x86-64, the NEON kernel on ARM64) against the portable per-pixel loop,
+/// byte for byte, over every pixel layout the converter accepts, premultiplied and
+/// straight alpha, and alpha shapes that pin the contract corners: fully opaque, fully
+/// transparent, transparent-or-opaque only, and arbitrary partial alpha.
 /// </summary>
 /// <remarks>
-/// Widths straddle every vector step (8 and 32) and include the degenerate narrow
-/// cases, and rows are tested both tightly packed and padded, because
+/// Widths straddle every vector step of both kernels (8, 16 and 32) and include the
+/// degenerate narrow cases, and rows are tested both tightly packed and padded, because
 /// <c>SKPixmap.RowBytes</c> may exceed width × 4.
+/// <para>
+/// The alpha shapes are not decoration: each kernel routes them to different code. The
+/// NEON tier alone has four row modes — no alpha, premultiplied, an optimistic pass for
+/// fully opaque rows, and a per-block classifier that whitens or composites — and each
+/// carries its own block and tail arithmetic, so a shape that is not exercised is a
+/// kernel that is not tested.
+/// </para>
 /// </remarks>
 public class LuminanceConverterParityTest
 {
@@ -59,16 +65,20 @@ public class LuminanceConverterParityTest
 
     [Test]
     [MethodDataSource(nameof(Layouts))]
-    public async Task Avx2Tier_MatchesScalarTier_EveryLayoutAndAlphaShape(int layout)
+    public async Task VectorTier_MatchesScalarTier_EveryLayoutAndAlphaShape(int layout)
     {
-        if (!LuminanceConverter.IsAvx2TierSupported)
+        if (!LuminanceConverter.IsAvx2TierSupported && !LuminanceConverter.IsAdvSimdTierSupported)
         {
-            Skip.Test("AVX2 not supported on this machine");
+            Skip.Test("No vector tier (AVX2 or NEON) on this machine");
             return;
         }
 
         var (ro, go, bo, ao) = Offsets(layout);
-        int[] widths = [1, 3, 4, 5, 7, 8, 9, 15, 16, 31, 32, 33, 43, 63, 139, 376];
+        // 16, 17, 20 and 24 straddle the NEON block and its overlapping tail (a width of
+        // 20 makes the final block redo 12 pixels the main loop already wrote); 15 and
+        // below fall under the NEON tier's minimum and must still come back correct via
+        // the scalar path.
+        int[] widths = [1, 3, 4, 5, 7, 8, 9, 15, 16, 17, 20, 24, 31, 32, 33, 43, 63, 139, 376];
         int[] heights = [1, 2, 5];
         var alphaShapes = layout == Rgb888x ? new[] { 3 } : [0, 1, 2, 3];
 
@@ -103,10 +113,11 @@ public class LuminanceConverterParityTest
     }
 
     /// <summary>
-    /// The vector loops write 32 luminance bytes at a time and the tail redoes the last
-    /// 8 pixels, so a block-count that rounds the wrong way writes past the caller's
-    /// destination. The destination is given a poisoned tail beyond the bytes the
-    /// converter owns, and that tail must come back untouched.
+    /// The vector loops write a whole block of luminance bytes at a time (32 on AVX2,
+    /// 16 on NEON) and finish the row with an overlapping block, so a block-count that
+    /// rounds the wrong way writes past the caller's destination. The destination is
+    /// given a poisoned tail beyond the bytes the converter owns, and that tail must
+    /// come back untouched.
     /// </summary>
     /// <remarks>
     /// Comparing only the first width × height bytes cannot see this: an over-write
@@ -117,11 +128,11 @@ public class LuminanceConverterParityTest
     /// </remarks>
     [Test]
     [MethodDataSource(nameof(Layouts))]
-    public async Task Avx2Tier_WritesNothingPastTheDestination(int layout)
+    public async Task VectorTier_WritesNothingPastTheDestination(int layout)
     {
-        if (!LuminanceConverter.IsAvx2TierSupported)
+        if (!LuminanceConverter.IsAvx2TierSupported && !LuminanceConverter.IsAdvSimdTierSupported)
         {
-            Skip.Test("AVX2 not supported on this machine");
+            Skip.Test("No vector tier (AVX2 or NEON) on this machine");
             return;
         }
 
@@ -129,22 +140,23 @@ public class LuminanceConverterParityTest
         const int TailBytes = 64;
 
         var (ro, go, bo, ao) = Offsets(layout);
-        // Both AVX2 kernels: the straight-alpha one and the premultiplied one are separate
-        // loops with their own block arithmetic, so covering only one leaves the other's
-        // bounds untested (verified by mutation — an over-run in the uncovered kernel
-        // passed the whole class).
+        // Every alpha shape, not just one per alpha mode: the straight-alpha and
+        // premultiplied kernels are separate loops with their own block arithmetic, and
+        // within straight alpha the opaque, whitening and compositing paths are three
+        // more (verified by mutation — an over-run in an uncovered path passed the whole
+        // class). Shape 0 is opaque, 2 is transparent-or-opaque (whitening), 3 is
+        // arbitrary partial alpha (compositing).
         var alphaModes = ao < 0 ? new[] { false } : [false, true];
 
         foreach (var premultiplied in alphaModes)
+        foreach (var alphaShape in ao < 0 ? new[] { 3 } : [0, 1, 2, 3])
         {
-            foreach (var width in new[] { 1, 7, 8, 9, 31, 32, 33, 40, 139, 376 })
+            foreach (var width in new[] { 1, 7, 8, 9, 16, 17, 20, 24, 31, 32, 33, 40, 139, 376 })
             {
                 foreach (var height in new[] { 1, 3 })
                 {
                     var rowBytes = width * 4;
-                    // Alpha shape 1 keeps some pixels non-opaque, so the premultiplied
-                    // kernel's in-vector alpha handling is actually entered.
-                    var pixels = MakePixels(width, height, rowBytes, premultiplied ? 1 : 0, width);
+                    var pixels = MakePixels(width, height, rowBytes, alphaShape, width + alphaShape);
 
                     var expected = new byte[width * height];
                     LuminanceConverter.ConvertRgbaForTest(pixels, expected, width, height, rowBytes, ro, go, bo, ao, premultiplied, forceScalar: true);
@@ -162,12 +174,12 @@ public class LuminanceConverterParityTest
 
                     await Assert.That(backing.AsSpan(0, width * height).ToArray())
                         .IsEquivalentTo(expected, CollectionOrdering.Matching)
-                        .Because($"layout {layout}, {width}x{height}, premultiplied {premultiplied}");
+                        .Because($"layout {layout}, {width}x{height}, alphaShape {alphaShape}, premultiplied {premultiplied}");
 
                     for (var i = width * height; i < backing.Length; i++)
                     {
                         await Assert.That(backing[i]).IsEqualTo(Poison)
-                            .Because($"layout {layout}, {width}x{height}, premultiplied {premultiplied}: wrote {i - width * height + 1} byte(s) past the destination");
+                            .Because($"layout {layout}, {width}x{height}, alphaShape {alphaShape}, premultiplied {premultiplied}: wrote {i - width * height + 1} byte(s) past the destination");
                     }
                 }
             }
