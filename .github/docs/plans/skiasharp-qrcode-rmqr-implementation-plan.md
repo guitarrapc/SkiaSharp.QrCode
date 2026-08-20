@@ -235,9 +235,9 @@ M2 at 3.3-4.1x over the scalar walk; it is not an open rMQR ARM gap.
 |---|---|---|---|
 | **N0 (done)** | ARM64 baseline and component attribution | There is no current rMQR ARM64 E2E record. Existing x64 numbers identify candidates but cannot rank ARM instruction costs or memory bandwidth. | Record encode, matrix decode, luminance-span image decode, bitmap decode, clean/error-corrected matrices, and both no-symbol cases on one pinned ARM64 machine before changing kernels. Add forced-portable vs automatic-dispatch kernel cases for every item below. |
 | **N1 (shipped)** | NEON `LuminanceConverter` | ARM64 currently takes the per-pixel scalar BGRA/RGBA path. On x64 this conversion was 69 % of bitmap decode before AVX2 and the isolated kernel improved 14-30x, so this is the strongest real-input decode candidate and benefits all symbologies. | Ship only with byte-exact parity for all layouts/alpha modes and a material bitmap E2E win. If conversion is under 10 % of ARM bitmap decode, demote it behind N2. |
-| **N2 (next)** | NEON rMQR codeword extraction | ARM64 cannot enter the AVX2+BMI2 bit-plane tier and uses the portable gather. Extraction was 70-91 % of matrix decode before the x64 tier; x64 matrix E2E improved 5-8x. This is the highest-priority rMQR-specific gap. | Compare at least a NEON column-plane builder plus scalar/SWAR bit compression against the current table walk; ARM has no PEXT/PDEP, so do not transliterate the x64 kernel. Keep a new tier only if it wins on small, narrow and largest symbols, not just R17x139. |
+| **N2 (shipped)** | NEON rMQR codeword extraction | ARM64 cannot enter the AVX2+BMI2 bit-plane tier and uses the portable gather. Extraction was 70-91 % of matrix decode before the x64 tier; x64 matrix E2E improved 5-8x. This is the highest-priority rMQR-specific gap. | Compare at least a NEON column-plane builder plus scalar/SWAR bit compression against the current table walk; ARM has no PEXT/PDEP, so do not transliterate the x64 kernel. Keep a new tier only if it wins on small, narrow and largest symbols, not just R17x139. |
 | **N3 (shipped)** | NEON RS syndrome computation in `EccBinaryDecoder` | Clean blocks always compute syndromes, and ARM64 lacked the x64 GFNI decoder tier. The gate asked for at least 5 % of ARM matrix decode; N0 showed it was essentially **all** of it (matrix decode is linear in syndrome iteration count at 3.07-3.15 ns/iteration across a 50x size range). | Passed by a wide margin. Shipped as `EccBinaryDecoder.Simd.Arm.cs`; results below. Berlekamp-Massey/Chien/Forney remain scalar, as the stop rule required. |
-| **N4** | NEON rMQR placement expansion | The cached template and store/scatter design is already portable, but `ExpandBitsMasked` only has AVX2/SSSE3 vector tiers. The 16-module `TBL` + `CMTST` idiom already exists in the Micro QR placer and `ModuleBitPacker`, making this low-risk ARM work. | Port the proven idiom, add a named forced-NEON parity entry, and require an encode E2E win outside the ARM canary band. Do not rewrite the strided scatter unless profiling identifies it separately. |
+| **N4 (next)** | NEON rMQR placement expansion | The cached template and store/scatter design is already portable, but `ExpandBitsMasked` only has AVX2/SSSE3 vector tiers. The 16-module `TBL` + `CMTST` idiom already exists in the Micro QR placer and `ModuleBitPacker`, making this low-risk ARM work. | Port the proven idiom, add a named forced-NEON parity entry, and require an encode E2E win outside the ARM canary band. Do not rewrite the strided scatter unless profiling identifies it separately. |
 | **N5 (profile-gated)** | Vector128/NEON rectangular grid sampling | rMQR `SampleGrid` is scalar while Standard QR already has a bit-identical 128-bit row kernel usable by ARM64. The work is only one sample per module (at most 2,363), so pixel scanning and matrix decode are expected to dominate first. | Share/generalize the Standard QR kernel only if it is at least 5 % of ARM luminance-span decode after N2. Preserve scalar floating-point operation order and exact sampled bytes; otherwise leave it scalar. |
 | **N6 (last)** | NEON rMQR numeric/alphanumeric/Latin-1 writers | ARM64 currently uses the already-fast SWAR/table writers. On x64 the much larger SIMD kernel gains moved encode E2E by only 1-7 % before placement was fixed, and the current pipeline is hundreds of nanoseconds to about one microsecond. | Attempt only if post-N4 profiling shows segment writing at least 5 % E2E. Start with Latin-1 narrowing, then alphanumeric/numeric; stop when gains fall inside the canary band. UTF-8 stays in `Encoding.UTF8`. |
 
@@ -401,8 +401,10 @@ overlapping tail (16/17/20/24 — width 20 makes the final block redo 12 already
 pixels), and the over-write test covers all four alpha shapes because the NEON tier has four
 row modes with separate tail arithmetic. Full suite green: 5,685 tests, 0 failed.
 
-Next per the queue was **N2 (NEON rMQR codeword extraction)**, which has since been
-withdrawn; **N3** was taken instead and is recorded below.
+Next per the queue was **N2 (NEON rMQR codeword extraction)**. It was withdrawn on an E2E
+reading that later proved to have measured a pre-N3 library; re-measured on top of N3 it
+passes its gate and is shipped (recorded after N3 below), so the queue order N2 then N3 held
+after all — only the evidence arrived out of order.
 
 **Correction to the N0 reading.** The sentence originally here claimed that "the correction
 stages account for the whole 12.8 us difference while syndrome generation runs in both
@@ -501,6 +503,92 @@ variant; the canary puts this harness's true resolution at 13.3 % at 10 ns and 0
 149 codewords — no rMQR block exceeds 68, and it loses badly at rMQR sizes). The latter is a
 Standard-QR-only opportunity; the log carries a stride-16 redesign needing 160 B of baked
 constants instead of the 8 KB table the measured version used.
+
+#### ARM64 results: N2, NEON rMQR codeword extraction (completed 2026-08-20, after N3)
+
+**Shipped; acceptance gate passed.** Seven rounds in the private MicroBenchmarks repo
+(17 variants, byte-exact gate of all 32 versions x 8 grid shapes per variant per round);
+full log with refutations lives there as `MICRO_OPTIMIZATION_RmQrExtractArm.md`.
+
+Design, and why it is not a transliteration of the AVX2+BMI2 kernel:
+
+- **The deposit step is designed away, not emulated.** NEON has neither PEXT nor PDEP, so
+  instead of one bit plane per column plus a deposit, one 32-bit lane holds a whole column
+  PAIR: bit 2j+1 is the right column and bit 2j the left one, j counting data rows in walk
+  order. The walk alternates between a pair's two columns on every row, so that word already
+  *is* the pair's output field with the function modules still in it, and the pair operation
+  collapses to a single PEXT-shaped compress with no deposit at all.
+- **The compress is runs, and the runs are one flat table.** A pair's data mask is a few runs
+  of consecutive bits (function modules come from rectangular blocks, not scattered modules):
+  a pair averages 1.0-2.3 runs but the worst has 5-11, so unrolling every pair to the version's
+  worst case measured **2.4x slower than the portable walk** on small symbols. One flat run
+  stream for the whole symbol removed that entirely.
+- **No plane buffer.** Walk order is descending pair index and a block holds four consecutive
+  pairs, so blocks are transposed backwards and each block's pairs are consumed straight out of
+  the vector that produced them. That deleted a 320-byte stackalloc whose zeroing alone was
+  ~5 ns, i.e. ~10 % of a small symbol.
+- **Step width follows the symbol width.** 32 columns per row-step while four whole blocks
+  remain, 16 afterwards. A fixed 32-column step is 7.5 % faster at R17x139 but **18 % slower at
+  R7x43**, where 43 columns round up to 64 — a granularity cliff, removed rather than accepted.
+- **The row-reversed word is produced once per block** (RBIT + REV32 + one adjacent-bit swap)
+  instead of maintaining a second accumulator through every row.
+- **The drain branch was kept on purpose.** Making it branchless measured 13-22 % slower: run
+  lengths are per-version constants, so the drain pattern is periodic and the predictor learns
+  it. Data-dependent does not mean unpredictable.
+
+Kernel, Apple M2, 3 process launches, versus the portable table walk ARM64 ran before:
+
+| Scenario | bits | portable | pair-plane | ratio |
+|---|---:|---:|---:|---:|
+| R7x43 | 104 | 50.40 ns | 46.28 ns | 0.92 |
+| R11x27 | 120 | 56.98 ns | 53.20 ns | 0.94 |
+| R11x59 | 376 | 194.23 ns | 106.64 ns | 0.55 |
+| R7x139 | 544 | 261.01 ns | 144.56 ns | 0.55 |
+| R13x99 | 904 | 448.58 ns | 162.69 ns | 0.36 |
+| R17x139 | 1856 | 864.38 ns | 258.33 ns | 0.30 |
+
+R7x139 was added specifically to separate "small" from "short": a symbol with only 5 data rows
+still wins 0.55x when it is wide, so the weak cases are about total bits, not height, and no
+height guard is needed. Per-bit cost is a smooth 0.45 -> 0.14 ns curve over a ~35 ns fixed
+floor; the portable walk is ~0.48 ns/bit with no fixed cost, so the two cross at ~100 bits.
+That crossing, not a dispatch boundary, is why the two smallest symbols only win 6-8 %.
+
+E2E (`RmQRDecodeEndToEnd`, identical benchmark binary, dispatch flag toggled between runs,
+`--launchCount 3`, on top of N3):
+
+| Scenario | before | after | change |
+|---|---:|---:|---:|
+| RmQR_Byte_R17x139 (Span) | 3,425.0 ns | **2,793.6 ns** | **-18.4 %** |
+| RmQR_Byte_R17x139 (string) | 3,454.8 ns | 2,828.4 ns | -18.1 % |
+| RmQR_Byte_R17x139_Corrected (Span) | 4,929.5 ns | 4,372.7 ns | -11.3 % |
+| RmQR_Alphanumeric_R11x59 (Span) | 767.9 ns | **682.1 ns** | **-11.2 %** |
+| RmQR_Numeric_R7x43 (Span) | 211.5 ns | 214.5 ns | +1.4 % (inside noise) |
+| StandardQr_Numeric_V1 (control) | 1,106.0 ns | 1,120.0 ns | +1.3 % (flat) |
+
+Acceptance gate (>= 5 % E2E, outside the control band): **passed** at R17x139 and R11x59.
+Span paths stay at 0 B (the 48/328 B are the decoded strings). R7x43 is flat by Amdahl, not by
+failure: the kernel difference there is 4 ns against a 211 ns decode. The E2E deltas match the
+kernel deltas almost exactly (-631 vs -606 ns at R17x139, -86 vs -87 ns at R11x59), which is
+what proves the tier is actually being taken.
+
+**Why this was withdrawn once, and the process fix.** The first E2E pass reported extraction as
+~6 % of matrix decode with a ~4.3 % ceiling and rejected the kernel. Its baseline was 16.5 us at
+R17x139 where the correct figure is 3.4 us: another session was building into the same
+repository, so that run measured a **pre-N3 library**. Two rules follow. First, the Amdahl
+denominator moves as earlier packages land — N3 took the RS side down and lifted extraction
+from ~6 % to ~25 % of matrix decode — so an E2E verdict is only valid against today's
+dependencies, and a rejected kernel must be re-measured after any package that shrinks its
+denominator. Second, a flat control is not sufficient evidence of a clean run: also check that
+the E2E delta matches the kernel delta, because a contaminated run can measure the wrong binary
+rather than merely a noisy one.
+
+`RmQRExtractCodewordsParityTest` now covers three tiers through an `ExtractKernel` selector
+(portable, x64 bit-plane, ARM64 pair-plane) across all 32 versions x 8 grid shapes with a
+poisoned destination, and the overread-bound test runs for both vector transposes. Full suite
+green: 5,691 tests, 0 failed.
+
+Next per the queue: **N4 (NEON rMQR placement expansion)**, porting the Micro QR `TBL` +
+`CMTST` idiom to `ExpandBitsMasked`. N5 and N6 stay profile-gated.
 
 Items deliberately below the NEON queue: Otsu histogramming (serial histogram updates and
 already near its measured per-pixel floor), sub-finder/perspective search (branchy,
