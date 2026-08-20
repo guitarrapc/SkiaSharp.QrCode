@@ -362,9 +362,19 @@ internal static class RmQRBinaryEncoder
             // XTN2 on ARM64); it truncates rather than saturates, which is exactly right
             // because the analyzer has already proved every char <= 0xFF.
             //
-            // Two vectors per iteration rather than one: narrowing a vector against itself
-            // discards half the result, so 16 chars per iteration halves the vector work
-            // per character and issues two independent stores.
+            // Two vectors per iteration rather than one: narrowing a vector against
+            // itself discards half the result, so 16 chars per iteration halves the
+            // vector work per character. The two Append64 calls are NOT independent —
+            // they chain through acc/accBits/bytePos — so the win is the halved narrow
+            // count, not store-level parallelism.
+            //
+            // Note the two vector tiers disagree out of contract: PackUnsignedSaturate
+            // above saturates a char > 0xFF to 0xFF, Vector128.Narrow truncates it, as
+            // the scalar loop below does — so a char this method should never see would
+            // produce a DIFFERENT payload per architecture rather than a uniformly wrong
+            // one. The precondition is enforced where it is decided, not here: explicit
+            // ECI is rejected by CharacterSets.IsValidISO88591, and auto-detection is
+            // pinned by TextAnalyzerAdvSimdParityTest.AutoDetect_NeverDeclaresLatin1_ForCharsAboveFF.
             ref var t = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(text));
             for (; i + 16 <= text.Length; i += 16)
             {

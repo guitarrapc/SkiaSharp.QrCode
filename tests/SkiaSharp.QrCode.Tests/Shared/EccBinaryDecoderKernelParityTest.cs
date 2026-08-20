@@ -184,6 +184,46 @@ public class EccBinaryDecoderKernelParityTest
     }
 
     /// <summary>
+    /// The AdvSimd kernel stores 32 bytes unconditionally, whatever eccCount is, so
+    /// every caller must hand it a SyndromeLanes-wide destination. This pins that the
+    /// store is exactly that wide: a kernel that grew to a third accumulator group
+    /// would smash the caller's stack, and comparing only the first eccCount bytes
+    /// cannot see it.
+    /// </summary>
+    [Test]
+    public async Task AdvSimdKernel_WritesExactlySyndromeLanes()
+    {
+        if (!EccBinaryDecoder.IsAdvSimdTierSupported)
+        {
+            Skip.Test("AdvSimd.Arm64 not supported on this machine");
+            return;
+        }
+
+        const byte Poison = 0x5A;
+        const int TailBytes = 32;
+
+        var random = new Random(20260821);
+        for (var eccCount = 1; eccCount <= 30; eccCount++)
+        {
+            foreach (var length in new[] { eccCount + 1, 13, 58, 255 })
+            {
+                var codeword = new byte[length];
+                random.NextBytes(codeword);
+
+                var backing = new byte[EccBinaryDecoder.SyndromeLanes + TailBytes];
+                backing.AsSpan().Fill(Poison);
+                EccBinaryDecoder.ComputeSyndromesAdvSimd(codeword, eccCount, backing.AsSpan(0, EccBinaryDecoder.SyndromeLanes));
+
+                for (var i = EccBinaryDecoder.SyndromeLanes; i < backing.Length; i++)
+                {
+                    await Assert.That(backing[i]).IsEqualTo(Poison)
+                        .Because($"eccCount {eccCount}, length {length}: wrote {i - EccBinaryDecoder.SyndromeLanes + 1} byte(s) past SyndromeLanes");
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Boundary sweep: every ECC count the symbologies use, block lengths straddling
     /// the x4 unrolled step and its scalar tail, the 16-lane dispatch boundary, and the
     /// degenerate all-light / all-dark codewords. The has-error flag matters as much as

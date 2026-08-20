@@ -30,6 +30,72 @@ public class TextAnalyzerAdvSimdParityTest
         "01234567890123456789é",                                        // non-ASCII only in scalar tail
     ];
 
+    /// <summary>
+    /// The precondition the Latin-1 segment writers rely on: auto-detection must never
+    /// declare Default or ISO-8859-1 for text containing a character above U+00FF.
+    /// </summary>
+    /// <remarks>
+    /// This is the invariant, tested where it is actually decided. `RmQRBinaryEncoder`
+    /// routes Byte-mode text to `WriteLatin1` on `EciMode.Default or Iso8859_1`, and that
+    /// writer truncates chars to a byte — on x64 its SSE2 tier SATURATES instead, so a
+    /// mis-detection would produce a different payload per architecture rather than a
+    /// uniformly wrong one. The explicit-ECI half of the precondition is enforced by
+    /// `CharacterSets.IsValidISO88591` and covered by RmQRCodeGeneratorUnitTest; this is
+    /// the auto-detect half.
+    ///
+    /// Position matters as much as the character: every vector tier tests a whole block
+    /// at a time and finishes with an overlapping or scalar tail, so an offending char is
+    /// placed at the first index, inside the first block, on each block boundary, and in
+    /// the tail.
+    /// </remarks>
+    [Test]
+    public async Task AutoDetect_NeverDeclaresLatin1_ForCharsAboveFF()
+    {
+        char[] offenders = ['\u0100', '\u07FF', 'あ', '\uFFFD'];
+        int[] lengths = [1, 2, 7, 8, 9, 15, 16, 17, 31, 32, 33, 47, 64, 65];
+
+        foreach (var offender in offenders)
+        {
+            foreach (var length in lengths)
+            {
+                for (var position = 0; position < length; position++)
+                {
+                    // A Latin-1 filler, so the ONLY reason to pick UTF-8 is the offender.
+                    var chars = new char[length];
+                    chars.AsSpan().Fill('é');
+                    chars[position] = offender;
+                    var text = new string(chars);
+
+                    var analysis = TextAnalyzer.Analyze(text.AsSpan(), EciMode.Default);
+                    await Assert.That(analysis.EciMode).IsEqualTo(EciMode.Utf8)
+                        .Because($"U+{(int)offender:X4} at {position}/{length} is not representable in ISO-8859-1");
+
+                    var scalar = TextAnalyzer.AnalyzeScalar(text.AsSpan(), EciMode.Default);
+                    await Assert.That(scalar.EciMode).IsEqualTo(EciMode.Utf8)
+                        .Because($"scalar tier: U+{(int)offender:X4} at {position}/{length}");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The complement: text that IS representable must not be pushed to UTF-8, or the
+    /// invariant above would hold trivially by never choosing Latin-1 at all.
+    /// </summary>
+    [Test]
+    public async Task AutoDetect_StillDeclaresLatin1_AtTheBoundaryChar()
+    {
+        foreach (var length in new[] { 1, 8, 16, 17, 33, 64 })
+        {
+            var chars = new char[length];
+            chars.AsSpan().Fill('A');
+            chars[length - 1] = '\u00FF'; // the last char ISO-8859-1 can represent
+            var analysis = TextAnalyzer.Analyze(new string(chars).AsSpan(), EciMode.Default);
+            await Assert.That(analysis.EciMode).IsEqualTo(EciMode.Iso8859_1)
+                .Because($"U+00FF at {length - 1}/{length} is representable in ISO-8859-1");
+        }
+    }
+
     // Boundary chars adjacent to every SIMD range check:
     // '/'(0x2F) and ':'(0x3A) are IN the alphanumeric set, ';' '@' '[' '`' '{' are OUT;
     // 0x7F/0x80 straddle ASCII, 0xFF/0x100 straddle ISO-8859-1.

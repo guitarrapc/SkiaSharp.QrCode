@@ -862,12 +862,22 @@ internal static class RmQRImageDecoder
     /// perspectiveX = perspectiveY = 0, and there the denominator is exactly 1f, so
     /// both divisions can be skipped without changing a sampled byte.
     /// </remarks>
+    /// <summary>
+    /// Narrowest column count the Vector128 samplers accept: one whole lane group. No
+    /// rMQR width comes near it (the narrowest symbol is 27 columns wide), and
+    /// RmQRSampleGridParityTest asserts that, so this is the one place the threshold
+    /// lives — a test that repeated the literal would pin nothing.
+    /// </summary>
+    internal const int Simd128MinColumns = 8;
+
     internal static void SampleGrid(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
     {
 #if NET8_0_OR_GREATER
         // Every rMQR width is >= 27, so the vector path takes every real symbol; the
         // guard only covers direct callers (tests) below one full 8-module block.
-        if (Vector128.IsHardwareAccelerated && columns >= 8)
+        // RmQRSampleGridParityTest pins that against the version table, so a widened
+        // threshold fails there instead of silently retiring the kernel.
+        if (Vector128.IsHardwareAccelerated && columns >= Simd128MinColumns)
         {
             SampleGridSimd128(luminance, width, height, threshold, transform, columns, rows, modules);
             return;
@@ -907,34 +917,29 @@ internal static class RmQRImageDecoder
 
 #if NET8_0_OR_GREATER
     /// <summary>
-    /// Vector128 sampler: eight module centers per iteration, byte-identical to
-    /// <see cref="SampleGridScalar"/> by construction. Affine frames get their own
-    /// kernel; projective frames keep both divisions.
+    /// Vector128 grid sampler: 8 module centres per step, with a projective and an
+    /// affine variant. Byte-identical to <see cref="SampleGridScalar"/>.
     /// </summary>
     /// <remarks>
-    /// What keeps both kernels bit-exact:
-    /// <list type="bullet">
-    /// <item>Only the loop-invariant PRODUCTS a2x*gridY are hoisted per row, never the
-    /// sums. Each lane still evaluates ((a1x*gridX) + a2x*gridY) + a3x, the scalar's
-    /// own association. Folding (a2x*gridY + a3x) into one row constant would
-    /// re-associate, and is deliberately not done.</item>
-    /// <item>No FMA contraction (RyuJIT does not fuse Vector128 multiply/add), and no
-    /// reciprocal multiply: Standard QR's row kernel computes 1/d once and multiplies
-    /// twice, which rounds differently from rMQR's two divisions, and that is why this
-    /// kernel is a separate implementation instead of a shared one.</item>
-    /// <item>The tail block re-samples up to three already-written modules starting
-    /// from columns - 4. It reads the same inputs and writes the same values, so it is
-    /// idempotent, and it keeps every module on the vector path.</item>
-    /// </list>
-    /// Out-of-range lanes saturate differently from the scalar cast, but both are
-    /// clamped into bounds afterwards, so the sampled pixel is the same. The clamp is
-    /// also what makes the unchecked gather safe: px and py are pinned to [0, width-1]
-    /// and [0, height-1], so the index stays inside luminance, which DecodeLuminance
-    /// has already sliced to exactly width * height.
+    /// Exactness is by construction, and each step is chosen to preserve it: lanes keep
+    /// the scalar's own association <c>((a1x*gridX) + a2x*gridY) + a3x</c> (folding the
+    /// last two into a row constant would re-associate), there is no FMA contraction and
+    /// no reciprocal multiply, and the affine variant only skips a division by exactly
+    /// <c>1f</c>. That is also why this is a separate implementation from the Standard QR
+    /// row kernel, which computes <c>1/d</c> once and multiplies twice: it rounds
+    /// differently. The overlapping tail block re-samples up to three already-written
+    /// modules; it reads the same inputs and writes the same values.
+    /// <para>
+    /// The clamp is what makes the unchecked gather safe: px and py are pinned to
+    /// [0, width-1] and [0, height-1]. That relies on the caller having sliced
+    /// <paramref name="luminance"/> to exactly width * height, as DecodeLuminance does —
+    /// this method skips the bounds checks the scalar loop keeps, so a short span reads
+    /// out of bounds here where it would throw there.
+    /// </para>
     /// </remarks>
     internal static void SampleGridSimd128(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
     {
-        if (!Vector128.IsHardwareAccelerated || columns < 8)
+        if (!Vector128.IsHardwareAccelerated || columns < Simd128MinColumns)
         {
             SampleGridScalar(luminance, width, height, threshold, transform, columns, rows, modules);
             return;

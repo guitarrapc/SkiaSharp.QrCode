@@ -28,18 +28,40 @@ public class LuminanceConverterParityTest
     private const int Rgba = 1;
     private const int Rgb888x = 2;
 
-    public static IEnumerable<int> Layouts() => [Bgra, Rgba, Rgb888x];
+    /// <summary>
+    /// ARGB channel order. No vector kernel and none of the scalar tier's three
+    /// constant-offset arms accept it, so it is the only layout that reaches
+    /// <c>RowsGeneral</c> — shipped code that every other layout routes around.
+    /// </summary>
+    private const int Argb = 3;
+
+    /// <summary>
+    /// Widths at or above this reach a vector kernel on every machine that has one:
+    /// AVX2 takes any width, and it is the NEON tier's block size. The coverage floors
+    /// below are counted against it, so widening a tier's width gate fails a test
+    /// instead of turning its cases into green skips.
+    /// </summary>
+    private const int AlwaysVectorWidth = 16;
+
+    public static IEnumerable<int> Layouts() => [Bgra, Rgba, Rgb888x, Argb];
 
     private static (int R, int G, int B, int A) Offsets(int layout) => layout switch
     {
         Bgra => (2, 1, 0, 3),
         Rgba => (0, 1, 2, 3),
-        _ => (0, 1, 2, -1),
+        Rgb888x => (0, 1, 2, -1),
+        _ => (1, 2, 3, 0),
     };
 
     /// <summary>Alpha shapes: 0 opaque, 1 transparent, 2 transparent-or-opaque, 3 arbitrary partial.</summary>
-    private static byte[] MakePixels(int width, int height, int rowBytes, int alphaShape, int seed)
+    /// <summary>
+    /// <paramref name="alphaOffset"/> matters: writing the shaped alpha at a fixed byte 3
+    /// puts it on the BLUE channel for a layout whose alpha is byte 0, so the four alpha
+    /// shapes degenerate into four samples of one shape.
+    /// </summary>
+    private static byte[] MakePixels(int width, int height, int rowBytes, int alphaShape, int seed, int alphaOffset = 3)
     {
+        var colour = alphaOffset == 0 ? 1 : 0;
         var pixels = new byte[rowBytes * height];
         var state = (uint)seed * 2654435761u + 7u;
         for (var i = 0; i + 4 <= pixels.Length; i += 4)
@@ -49,10 +71,10 @@ public class LuminanceConverterParityTest
             // Mostly saturated black or white as a QR render is, plus mid-tones so the
             // channel weights actually matter.
             var mono = (r & 3) == 0 ? (byte)(r >> 16) : (byte)((r & 4) == 0 ? 0 : 255);
-            pixels[i] = mono;
-            pixels[i + 1] = (byte)(mono ^ (byte)((r >> 5) & 3));
-            pixels[i + 2] = (byte)(mono ^ (byte)((r >> 7) & 7));
-            pixels[i + 3] = alphaShape switch
+            pixels[i + colour] = mono;
+            pixels[i + colour + 1] = (byte)(mono ^ (byte)((r >> 5) & 3));
+            pixels[i + colour + 2] = (byte)(mono ^ (byte)((r >> 7) & 7));
+            pixels[i + (alphaOffset < 0 ? 3 : alphaOffset)] = alphaShape switch
             {
                 0 => 255,
                 1 => 0,
@@ -134,13 +156,13 @@ public class LuminanceConverterParityTest
                         foreach (var pad in new[] { 0, 12 })
                         {
                             var rowBytes = width * 4 + pad;
-                            var pixels = MakePixels(width, height, rowBytes, alphaShape, width * 7 + height + pad + alphaShape);
+                            var pixels = MakePixels(width, height, rowBytes, alphaShape, width * 7 + height + pad + alphaShape, ao);
 
                             var expected = NaiveReference(pixels, width, height, rowBytes, ro, go, bo, ao, premultiplied);
 
                             var actual = new byte[width * height];
                             actual.AsSpan().Fill(0xA5);
-                            LuminanceConverter.ConvertRgbaForTest(pixels, actual, width, height, rowBytes, ro, go, bo, ao, premultiplied, forceScalar: true);
+                            LuminanceConverter.ConvertRgbaForTest(pixels, actual, width, height, rowBytes, ro, go, bo, ao, premultiplied, LuminanceConverter.ConvertTier.Scalar);
 
                             await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching)
                                 .Because($"layout {layout}, {width}x{height}, rowBytes {rowBytes}, alphaShape {alphaShape}, premultiplied {premultiplied}");
@@ -162,12 +184,20 @@ public class LuminanceConverterParityTest
         }
 
         var (ro, go, bo, ao) = Offsets(layout);
+        if (!LuminanceConverter.IsVectorTierTakenForLayout(ro, go, bo))
+        {
+            Skip.Test($"No vector kernel converts layout {layout} here");
+            return;
+        }
+
         // 16, 17, 20 and 24 straddle the NEON block and its overlapping tail (a width of
-        // 20 makes the final block redo 12 pixels the main loop already wrote); 15 and
-        // below fall under the NEON tier's minimum and must still come back correct via
-        // the scalar path.
+        // 20 makes the final block redo 12 pixels the main loop already wrote). Widths
+        // below 16 reach a vector kernel only on AVX2 — the NEON tier declines them — so
+        // they are skipped rather than silently compared scalar-against-scalar.
         int[] widths = [1, 3, 4, 5, 7, 8, 9, 15, 16, 17, 20, 24, 31, 32, 33, 43, 63, 139, 376];
         int[] heights = [1, 2, 5];
+        var covered = 0;
+        var floor = 0;
         var alphaShapes = layout == Rgb888x ? new[] { 3 } : [0, 1, 2, 3];
 
         foreach (var alphaShape in alphaShapes)
@@ -176,20 +206,26 @@ public class LuminanceConverterParityTest
             {
                 foreach (var width in widths)
                 {
+                    if (width >= AlwaysVectorWidth)
+                        floor += heights.Length * 2;
+                    if (!LuminanceConverter.IsVectorTierTaken(width, ro, go, bo))
+                        continue;
+
                     foreach (var height in heights)
                     {
                         foreach (var pad in new[] { 0, 12 })
                         {
+                            covered++;
                             var rowBytes = width * 4 + pad;
-                            var pixels = MakePixels(width, height, rowBytes, alphaShape, width * 7 + height + pad + alphaShape);
+                            var pixels = MakePixels(width, height, rowBytes, alphaShape, width * 7 + height + pad + alphaShape, ao);
 
                             var expected = new byte[width * height];
-                            LuminanceConverter.ConvertRgbaForTest(pixels, expected, width, height, rowBytes, ro, go, bo, ao, premultiplied, forceScalar: true);
+                            LuminanceConverter.ConvertRgbaForTest(pixels, expected, width, height, rowBytes, ro, go, bo, ao, premultiplied, LuminanceConverter.ConvertTier.Scalar);
 
                             // Poison the destination so a kernel that skips a pixel is caught.
                             var actual = new byte[width * height];
                             actual.AsSpan().Fill(0xA5);
-                            LuminanceConverter.ConvertRgbaForTest(pixels, actual, width, height, rowBytes, ro, go, bo, ao, premultiplied, forceScalar: false);
+                            LuminanceConverter.ConvertRgbaForTest(pixels, actual, width, height, rowBytes, ro, go, bo, ao, premultiplied, LuminanceConverter.ConvertTier.Vector);
 
                             await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching)
                                 .Because($"layout {layout}, {width}x{height}, rowBytes {rowBytes}, alphaShape {alphaShape}, premultiplied {premultiplied}");
@@ -198,6 +234,63 @@ public class LuminanceConverterParityTest
                 }
             }
         }
+
+        // A floor, not "> 0": every width at or above AlwaysVectorWidth must reach a
+        // vector kernel on any machine that has one, so a widened width gate fails here
+        // instead of quietly skipping its way to green.
+        await Assert.That(covered).IsGreaterThanOrEqualTo(floor)
+            .Because($"layout {layout}: only {covered} of at least {floor} cases reached a vector kernel");
+    }
+
+    /// <summary>
+    /// The pin must refuse, not fall back. Without this the guard itself is untested:
+    /// it can only fire where the tier is absent, which is exactly where every other
+    /// test skips first.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Layouts))]
+    public async Task PinningAnAbsentVectorTier_Throws(int layout)
+    {
+        const int Width = 8;
+        const int Height = 2;
+        var (ro, go, bo, ao) = Offsets(layout);
+        if (LuminanceConverter.IsVectorTierTaken(Width, ro, go, bo))
+        {
+            Skip.Test($"A vector kernel does take width {Width} for layout {layout} here");
+            return;
+        }
+
+        var rowBytes = Width * 4;
+        var pixels = MakePixels(Width, Height, rowBytes, alphaShape: 0, seed: 9, ao);
+        await Assert.That(() => LuminanceConverter.ConvertRgbaForTest(
+            pixels, new byte[Width * Height], Width, Height, rowBytes, ro, go, bo, ao, false, LuminanceConverter.ConvertTier.Vector))
+            .Throws<PlatformNotSupportedException>();
+    }
+
+    /// <summary>
+    /// Every tier walks by ref with no bounds check of its own, so the extents are
+    /// validated once at the entry point. `main` got this for free from per-row
+    /// re-slicing; the ref walk that replaced it does not, and a short destination
+    /// silently corrupted the bytes after it (in practice a pooled rental) instead of
+    /// throwing.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Layouts))]
+    public async Task UndersizedBuffers_Throw(int layout)
+    {
+        const int Width = 8;
+        const int Height = 4;
+        var (ro, go, bo, ao) = Offsets(layout);
+        var rowBytes = Width * 4;
+        var pixels = MakePixels(Width, Height, rowBytes, alphaShape: 0, seed: 5, ao);
+
+        await Assert.That(() => LuminanceConverter.ConvertRgbaForTest(
+            pixels, new byte[Width * Height - 1], Width, Height, rowBytes, ro, go, bo, ao, false, LuminanceConverter.ConvertTier.Scalar))
+            .Throws<ArgumentException>();
+
+        await Assert.That(() => LuminanceConverter.ConvertRgbaForTest(
+            pixels.AsSpan(0, rowBytes * Height - 1).ToArray(), new byte[Width * Height], Width, Height, rowBytes, ro, go, bo, ao, false, LuminanceConverter.ConvertTier.Scalar))
+            .Throws<ArgumentException>();
     }
 
     /// <summary>
@@ -228,6 +321,14 @@ public class LuminanceConverterParityTest
         const int TailBytes = 64;
 
         var (ro, go, bo, ao) = Offsets(layout);
+        if (!LuminanceConverter.IsVectorTierTakenForLayout(ro, go, bo))
+        {
+            Skip.Test($"No vector kernel converts layout {layout} here");
+            return;
+        }
+
+        var covered = 0;
+        var floor = 0;
         // Every alpha shape, not just one per alpha mode: the straight-alpha and
         // premultiplied kernels are separate loops with their own block arithmetic, and
         // within straight alpha the opaque, whitening and compositing paths are three
@@ -241,13 +342,22 @@ public class LuminanceConverterParityTest
         {
             foreach (var width in new[] { 1, 7, 8, 9, 16, 17, 20, 24, 31, 32, 33, 40, 139, 376 })
             {
+                if (width >= AlwaysVectorWidth)
+                    floor += 4;
+                if (!LuminanceConverter.IsVectorTierTaken(width, ro, go, bo))
+                    continue;
+
                 foreach (var height in new[] { 1, 3 })
+                // A padded row as well as a tight one: the exactly-sized source below is
+                // what proves the last block does not read into the next row's padding.
+                foreach (var pad in new[] { 0, 12 })
                 {
-                    var rowBytes = width * 4;
-                    var pixels = MakePixels(width, height, rowBytes, alphaShape, width + alphaShape);
+                    covered++;
+                    var rowBytes = width * 4 + pad;
+                    var pixels = MakePixels(width, height, rowBytes, alphaShape, width + alphaShape, ao);
 
                     var expected = new byte[width * height];
-                    LuminanceConverter.ConvertRgbaForTest(pixels, expected, width, height, rowBytes, ro, go, bo, ao, premultiplied, forceScalar: true);
+                    LuminanceConverter.ConvertRgbaForTest(pixels, expected, width, height, rowBytes, ro, go, bo, ao, premultiplied, LuminanceConverter.ConvertTier.Scalar);
 
                     // Destination is longer than the converter's region; only the first
                     // width × height bytes are handed over as its span.
@@ -258,7 +368,7 @@ public class LuminanceConverterParityTest
                     // Exactly sized source too, so an overread past rowBytes × height is
                     // not silently satisfied by the next object on the heap.
                     var exact = pixels.AsSpan(0, rowBytes * height);
-                    LuminanceConverter.ConvertRgbaForTest(exact, destination, width, height, rowBytes, ro, go, bo, ao, premultiplied, forceScalar: false);
+                    LuminanceConverter.ConvertRgbaForTest(exact, destination, width, height, rowBytes, ro, go, bo, ao, premultiplied, LuminanceConverter.ConvertTier.Vector);
 
                     await Assert.That(backing.AsSpan(0, width * height).ToArray())
                         .IsEquivalentTo(expected, CollectionOrdering.Matching)
@@ -267,10 +377,13 @@ public class LuminanceConverterParityTest
                     for (var i = width * height; i < backing.Length; i++)
                     {
                         await Assert.That(backing[i]).IsEqualTo(Poison)
-                            .Because($"layout {layout}, {width}x{height}, alphaShape {alphaShape}, premultiplied {premultiplied}: wrote {i - width * height + 1} byte(s) past the destination");
+                            .Because($"layout {layout}, {width}x{height}, rowBytes {rowBytes}, alphaShape {alphaShape}, premultiplied {premultiplied}: wrote {i - width * height + 1} byte(s) past the destination");
                     }
                 }
             }
         }
+
+        await Assert.That(covered).IsGreaterThanOrEqualTo(floor)
+            .Because($"layout {layout}: only {covered} of at least {floor} cases reached a vector kernel");
     }
 }

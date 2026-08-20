@@ -100,27 +100,54 @@ public class RmQRSampleGridParityTest
             var rows = RmQRConstants.GetHeight(version);
             var (luminance, width, height, _) = BuildScene(columns, rows, Geometry.Affine, seed: 7);
 
-            // Same frame, shifted so a whole band of module centers lands off the image.
-            var transform = PerspectiveTransform.FromLocalFrame(
-                3.5f, 3.5f, 2 * 8 + 3.5f * 8 + offsetX, 2 * 8 + 3.5f * 8 + offsetY, 8f, 0f, 0f, 8f, 0f, 0f);
+            // Both tiers, not just the affine one: SampleGridSimd128 routes a frame with
+            // zero perspective terms to the affine kernel, whose clamp block is a
+            // separate copy from the projective kernel's. A clamp typo in the copy the
+            // test never reaches reads outside the image and stays green.
+            foreach (var perspective in new[] { 0f, 1f / 400f })
+            {
+                var transform = PerspectiveTransform.FromLocalFrame(
+                    3.5f, 3.5f, 2 * 8 + 3.5f * 8 + offsetX, 2 * 8 + 3.5f * 8 + offsetY, 8f, 0f, 0f, 8f, perspective, -perspective);
 
-            var scalar = new byte[columns * rows];
-            RmQRImageDecoder.SampleGridScalar(luminance, width, height, Threshold, transform, columns, rows, scalar);
+                var scalar = new byte[columns * rows];
+                RmQRImageDecoder.SampleGridScalar(luminance, width, height, Threshold, transform, columns, rows, scalar);
 
-            var simd = new byte[columns * rows];
-            RmQRImageDecoder.SampleGridSimd128(luminance, width, height, Threshold, transform, columns, rows, simd);
+                var simd = new byte[columns * rows];
+                RmQRImageDecoder.SampleGridSimd128(luminance, width, height, Threshold, transform, columns, rows, simd);
 
-            await Assert.That(simd.AsSpan().SequenceEqual(scalar)).IsTrue()
-                .Because($"clamped sampling mismatch ({version}, offset {offsetX}/{offsetY})");
+                await Assert.That(simd.AsSpan().SequenceEqual(scalar)).IsTrue()
+                    .Because($"clamped sampling mismatch ({version}, offset {offsetX}/{offsetY}, perspective {perspective})");
+            }
         }
 #endif
     }
 
     /// <summary>
+    /// The production entry point. Its scalar fallback (`columns &lt; 8`) is unreachable
+    /// for real symbols, and that is the property worth pinning — every rMQR width is at
+    /// least 27, so a change that narrowed the vector path would have to break this
+    /// invariant first.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately NOT a parity comparison of `SampleGrid` against `SampleGridScalar`:
+    /// every tier is byte-identical by contract, so a dispatcher that silently fell back
+    /// to scalar would still match the oracle. Which tier ran is not observable through
+    /// the output, so it is asserted on the input instead.
+    /// </remarks>
+    [Test]
+    [MethodDataSource(nameof(AllVersions))]
+    public async Task SampleGrid_NeverTakesTheNarrowFallback(RmQRVersion version)
+    {
+        await Assert.That(RmQRConstants.GetWidth(version)).IsGreaterThanOrEqualTo(RmQRImageDecoder.Simd128MinColumns)
+            .Because($"{version} would take SampleGrid's scalar fallback, which no rMQR symbol should reach");
+    }
+
+    /// <summary>
     /// Degenerate frames the geometry search can hand the sampler: a collapsed axis
-    /// (zero derivative) and a projective frame whose denominator crosses zero, which
-    /// produces infinities and NaN. The kernel must fall back gracefully to whatever
-    /// the scalar loop does rather than diverge from it.
+    /// (zero derivative) and projective frames whose denominator reaches zero — one
+    /// between module centres (large finite coordinates) and one exactly on a centre,
+    /// which is what actually produces infinities and NaN. The kernel must land wherever
+    /// the scalar loop lands rather than diverge from it.
     /// </summary>
     [Test]
     public async Task Simd128AndScalarSampling_AreByteIdentical_ForDegenerateFrames()
@@ -142,8 +169,17 @@ public class RmQRSampleGridParityTest
             PerspectiveTransform.FromLocalFrame(3.5f, 3.5f, 60f, 40f, 0f, 0f, 0f, 8f, 0f, 0f),
             // Collapsed both axes.
             PerspectiveTransform.FromLocalFrame(3.5f, 3.5f, 60f, 40f, 0f, 0f, 0f, 0f, 0f, 0f),
-            // Denominator crosses zero inside the symbol: infinities and NaN.
+            // Denominator crosses zero between columns. Module centers are half-integers,
+            // so this frame yields only large finite coordinates, not infinities.
             PerspectiveTransform.FromLocalFrame(3.5f, 3.5f, 60f, 40f, 8f, 0f, 0f, 8f, -1f / 20f, 0f),
+            // Denominator exactly zero ON a sampled centre: d = perspectiveX·(col+0.5) + 1
+            // vanishes at col 0 for perspectiveX = -2, and -2 is exact in binary, so this
+            // is the only shape that actually produces infinities (and NaN where the
+            // numerator vanishes too). This is what the float→int conversion argument
+            // rests on, and until now nothing exercised it.
+            PerspectiveTransform.FromLocalFrame(3.5f, 3.5f, 60f, 40f, 8f, 0f, 0f, 8f, -2f, 0f),
+            // Same, on the row axis.
+            PerspectiveTransform.FromLocalFrame(3.5f, 3.5f, 60f, 40f, 8f, 0f, 0f, 8f, 0f, -2f),
             // Negative scale (mirrored frame).
             PerspectiveTransform.FromLocalFrame(3.5f, 3.5f, 60f, 40f, -8f, 0f, 0f, -8f, 0f, 0f),
         };

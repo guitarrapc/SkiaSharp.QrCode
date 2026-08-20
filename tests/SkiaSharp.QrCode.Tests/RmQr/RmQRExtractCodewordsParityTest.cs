@@ -21,6 +21,43 @@ public class RmQRExtractCodewordsParityTest
 {
     public static IEnumerable<RmQRVersion> AllVersions() => Enum.GetValues<RmQRVersion>();
 
+    /// <summary>
+    /// A stream shorter than the version's codeword count is legal and truncates: the
+    /// vector tiers emit whole words off a per-version table and cannot honour it, so
+    /// the dispatcher must fall back to the portable walk. Nothing else pins that
+    /// guard, and deleting it would let a vector kernel run off the end of the span.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(AllVersions))]
+    public async Task ShortStream_FallsBackToTheWalk_AndTruncates(RmQRVersion version)
+    {
+        var width = RmQRConstants.GetWidth(version);
+        var height = RmQRConstants.GetHeight(version);
+        var total = RmQRConstants.GetTotalCodewordCount(version);
+        // Shape 4 (pseudo-random), not a uniform fill: a uniform grid is invariant under
+        // the kernels' transpose, row reversal and run compression, so every tier would
+        // agree with every other no matter how broken it was.
+        var grid = Grid(width * height, 4, (int)version + 41);
+
+        var full = new byte[total];
+        RmQRMatrixDecoder.ExtractCodewords(grid, width, height, version, full, RmQRMatrixDecoder.ExtractKernel.Auto);
+
+        foreach (var length in new[] { 1, total / 2, total - 1 })
+        {
+            var backing = new byte[total];
+            backing.AsSpan().Fill(0xA5);
+            RmQRMatrixDecoder.ExtractCodewords(grid, width, height, version, backing.AsSpan(0, length), RmQRMatrixDecoder.ExtractKernel.Auto);
+
+            await Assert.That(backing.AsSpan(0, length).ToArray()).IsEquivalentTo(full.AsSpan(0, length).ToArray())
+                .Because($"{version}: a {length}-byte stream must be the full stream's prefix");
+            for (var i = length; i < total; i++)
+            {
+                await Assert.That(backing[i]).IsEqualTo((byte)0xA5)
+                    .Because($"{version}: wrote {i - length + 1} byte(s) past a {length}-byte stream");
+            }
+        }
+    }
+
     private static byte[] Grid(int length, int shape, int seed)
     {
         var grid = new byte[length];

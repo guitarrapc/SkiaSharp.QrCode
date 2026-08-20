@@ -80,27 +80,33 @@ internal static partial class LuminanceConverter
     /// iteration (LuminanceConverter.Simd.Arm.cs), and this per-pixel loop everywhere
     /// else. All three produce identical bytes; see LuminanceConverterParityTest.
     /// </summary>
-    private static void ConvertRgba(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied)
+    /// <remarks>
+    /// The extents are checked once here, not per row. Every tier walks by <c>ref</c>
+    /// from a single <c>GetReference</c> and so carries no bounds check of its own —
+    /// including the scalar tier, whose per-row re-slicing was removed for speed. A
+    /// caller that hands over a short destination would otherwise corrupt whatever
+    /// follows it (in practice a pooled rental) instead of throwing.
+    /// </remarks>
+    private static void ConvertRgba(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied, bool forceScalar = false)
     {
+        ValidateExtents(pixels, luminance, width, height, rowBytes);
 #if NET8_0_OR_GREATER
-        // The only layouts reaching here are BGRA (2,1,0) and RGBA / RGB888x (0,1,2),
-        // which is what the vector kernels cover.
-        if (IsVectorLayout(redOffset, greenOffset, blueOffset))
+        // One predicate, shared with the parity tests. Written as a second copy of this
+        // condition it would be free to drift, and a drifted copy makes every pinned
+        // "vector" assertion silently compare the scalar tier against itself.
+        if (!forceScalar && IsVectorTierTaken(width, redOffset, greenOffset, blueOffset))
         {
-            if (System.Runtime.Intrinsics.X86.Avx2.IsSupported)
+            if (IsAvx2TierSupported)
             {
                 ConvertRgbaAvx2(pixels, luminance, width, height, rowBytes, bgra: redOffset == 2, hasAlpha: alphaOffset >= 0, premultiplied);
                 return;
             }
 
             // The NEON kernel covers a whole row from 16-pixel blocks plus one
-            // overlapping final block, so it has no scalar remainder to fall back on
-            // and narrower rows stay on the per-pixel loop instead.
-            if (IsAdvSimdTierAvailable && width >= AdvSimdBlockPixels)
-            {
-                ConvertRgbaAdvSimd(pixels, luminance, width, height, rowBytes, bgra: redOffset == 2, hasAlpha: alphaOffset >= 0, premultiplied);
-                return;
-            }
+            // overlapping final block, so it has no scalar remainder to fall back on;
+            // IsVectorTierTaken is what keeps narrower rows off it.
+            ConvertRgbaAdvSimd(pixels, luminance, width, height, rowBytes, bgra: redOffset == 2, hasAlpha: alphaOffset >= 0, premultiplied);
+            return;
         }
 #endif
         ConvertRgbaScalar(pixels, luminance, width, height, rowBytes, redOffset, greenOffset, blueOffset, alphaOffset, premultiplied);
@@ -112,8 +118,11 @@ internal static partial class LuminanceConverter
         => greenOffset == 1 && (redOffset == 2 ? blueOffset == 0 : redOffset == 0 && blueOffset == 2);
 
     /// <summary>
-    /// UDOT carries the whole luminance sum and LD4 the composite path, so both are
-    /// required rather than plain AdvSimd.
+    /// UDOT carries the whole luminance sum (<see cref="System.Runtime.Intrinsics.Arm.Dp"/>,
+    /// an ARMv8.2 extension that Cortex-A53/A72-class cores lack) and the composite path
+    /// separates planes with UZP1/UZP2, which live under <c>AdvSimd.Arm64</c> — so both
+    /// gates are required rather than plain AdvSimd. LD4 would also serve for the planes
+    /// but has no ref-taking overload, so it was rejected (see LuminanceConverter.Simd.Arm.cs).
     /// </summary>
     private static bool IsAdvSimdTierAvailable
         => System.Runtime.Intrinsics.Arm.Dp.IsSupported && System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported;
@@ -135,14 +144,74 @@ internal static partial class LuminanceConverter
         false;
 #endif
 
-    /// <summary>Tier-selecting entry for parity tests; behavior-identical to <see cref="ConvertRgba"/>.</summary>
-    internal static void ConvertRgbaForTest(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied, bool forceScalar)
+    /// <summary>Extents for a ref-walking tier; see the remarks on <see cref="ConvertRgba"/>.</summary>
+    private static void ValidateExtents(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes)
     {
-        if (forceScalar)
+        if (luminance.Length < width * height)
+            throw new ArgumentException($"Luminance buffer too small: required {width * height} bytes ({width}x{height}), got {luminance.Length}.", nameof(luminance));
+        var requiredPixels = (height - 1) * rowBytes + width * 4;
+        if (height > 0 && pixels.Length < requiredPixels)
+            throw new ArgumentException($"Pixel buffer too small: required {requiredPixels} bytes ({width}x{height}, rowBytes {rowBytes}), got {pixels.Length}.", nameof(pixels));
+    }
+
+    /// <summary>Which tier a parity test wants; <see cref="ConvertTier.Vector"/> refuses to fall back.</summary>
+    internal enum ConvertTier
+    {
+        /// <summary>The portable per-layout loop.</summary>
+        Scalar,
+        /// <summary>The AVX2 or NEON kernel, whichever this machine runs.</summary>
+        Vector,
+    }
+
+    /// <summary>
+    /// Whether a vector kernel actually converts a row of this width and layout here.
+    /// A parity test must consult this before pinning <see cref="ConvertTier.Vector"/>:
+    /// the NEON tier declines rows narrower than one block, so on ARM64 the small widths
+    /// would otherwise compare the scalar tier against itself and pass without running
+    /// the kernel they name.
+    /// </summary>
+    internal static bool IsVectorTierTaken(int width, int redOffset, int greenOffset, int blueOffset)
+    {
+#if NET8_0_OR_GREATER
+        if (!IsVectorTierTakenForLayout(redOffset, greenOffset, blueOffset))
+            return false;
+        return IsAvx2TierSupported || (IsAdvSimdTierAvailable && width >= AdvSimdBlockPixels);
+#else
+        return false;
+#endif
+    }
+
+    /// <summary>
+    /// The layout half of <see cref="IsVectorTierTaken"/> — layout ONLY, deliberately
+    /// carrying no ISA or width term. A parity test skips on this and then asserts a
+    /// coverage floor, so anything that switches a tier off fails the floor instead of
+    /// widening the skip until the test is green and empty.
+    /// </summary>
+    internal static bool IsVectorTierTakenForLayout(int redOffset, int greenOffset, int blueOffset)
+    {
+#if NET8_0_OR_GREATER
+        return IsVectorLayout(redOffset, greenOffset, blueOffset);
+#else
+        return false;
+#endif
+    }
+
+    /// <summary>
+    /// Tier-selecting entry for parity tests. <see cref="ConvertTier.Vector"/> throws
+    /// when no vector kernel would run for these arguments rather than quietly handing
+    /// back the scalar result — see <see cref="IsVectorTierTaken"/>.
+    /// </summary>
+    internal static void ConvertRgbaForTest(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied, ConvertTier tier)
+    {
+        if (tier == ConvertTier.Scalar)
         {
-            ConvertRgbaScalar(pixels, luminance, width, height, rowBytes, redOffset, greenOffset, blueOffset, alphaOffset, premultiplied);
+            // Through ConvertRgba, not straight to ConvertRgbaScalar: a private copy of
+            // the validation here would leave the shipping call with no test.
+            ConvertRgba(pixels, luminance, width, height, rowBytes, redOffset, greenOffset, blueOffset, alphaOffset, premultiplied, forceScalar: true);
             return;
         }
+        if (!IsVectorTierTaken(width, redOffset, greenOffset, blueOffset))
+            throw new PlatformNotSupportedException($"{nameof(ConvertTier)}.{nameof(ConvertTier.Vector)} was pinned, but no vector kernel converts width {width} with offsets ({redOffset},{greenOffset},{blueOffset}) here. Guard the call with {nameof(IsVectorTierTaken)}.");
         ConvertRgba(pixels, luminance, width, height, rowBytes, redOffset, greenOffset, blueOffset, alphaOffset, premultiplied);
     }
 

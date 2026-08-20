@@ -105,6 +105,34 @@ Capacity/constants tables retain the Kanji column only for specification complet
 not a commitment to implement the mode; adding it would require an explicit cross-symbology
 policy change backed by concrete demand.
 
+### Allocation contract
+
+The span-destination overloads are documented as allocating nothing **per call**, not as
+never touching the heap. Every symbology lazily builds immutable lookup tables on first use
+and caches them for the process: per-version placement and extraction layouts, and — on
+ARM64, where the syndrome kernel reads its data terms out of a table rather than computing
+them — a 24 KB alpha-step table shared by all three symbologies. They are built once, keyed
+by version, published with a release store, and bounded (about 100 KB if every rMQR version
+were exercised). A benchmark that measures allocation must warm up first, or it attributes
+that one-time build to the call that happened to trigger it.
+
+### SIMD tier inventory
+
+Shared primitives that already have both an x64 and an ARM64/Vector128 tier, and must be
+treated as controls rather than reimplemented when a new symbology or kernel arrives:
+`TextAnalyzer`, `EccBinaryEncoder`, `EccBinaryDecoder` (syndrome pass), `ModuleBitPacker`,
+`LuminanceConverter`, `LuminanceInverter`, and finder/alignment row-mask construction.
+Architecture-neutral work already benefits every target: cached per-version layouts, pair
+stores and index scatter, table-driven auto-fit, the portable extraction walk, the safe
+finder stride with full-sweep retry, sub-finder guards, and Otsu reuse.
+
+The ARM64 optimization queue is closed. Four components were measured and deliberately left
+below it, with reasons: Otsu histogramming (serial histogram updates, already near its
+measured per-pixel floor), sub-finder and perspective search (branchy, data-dependent and
+failure-path dominated), rendering and PNG encode (Skia/native-code dominated), and the
+1.3-8.3 ns version selector. Reopen ARM work only with a new profile naming a different
+mechanism.
+
 ## Scope decisions
 
 | Decision | Choice | Revisit when |

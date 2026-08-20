@@ -27,20 +27,11 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// (<see cref="IsFunctionModule"/>) and the mask (<see cref="GetMaskBit"/>) are the
 /// single source of truth the matrix decoder reuses, so both sides always agree.</item>
 /// <item><see cref="PlaceSymbol"/> — the fast path (benchmark-driven, 16-27x over the
-/// reference). Everything derived from the version alone is built once per version
-/// by the reference code and cached (<see cref="Layout"/>): a painted template per
-/// (version, ECC) with every function and format module, the zigzag order as core
-/// indices, the mask value per data position, and the column-pair segmentation.
-/// Placement is then a template copy, one vector pass that expands the message bits
-/// to bytes and XORs the masks (AVX2 / SSSE3, scalar otherwise), and a store pass:
-/// "clean" column pairs (both columns pure data on rows 1..h-2) are written as one
-/// byte-swapped 16-bit store per row straight from the masked bit array, the
-/// remaining pairs (finder / format / alignment / sub-finder neighbours) as a table
-/// scatter. Bit array scratch is a fixed 512-byte stack budget with a pool fallback
-/// (versions above 63 codewords). Zero allocations after the one-time tables. The
-/// strided overload writes straight into a wider destination (rows a caller pitch
-/// apart, e.g. inside a quiet zone): row-wise template copies, the same pair stores
-/// with the caller's pitch, and a row/col-coded scatter for the irregular pairs.</item>
+/// reference). Everything derived from the version alone is built once and cached
+/// (<see cref="Layout"/>); placement is then a template copy, one vector pass that
+/// expands the message bits and XORs the masks, and a store pass. The store pass is
+/// documented on <see cref="ScatterPairs"/>, its ARM64 tier in
+/// RmQRModulePlacer.Simd.Arm.cs. Zero allocations after the one-time tables.</item>
 /// </list>
 ///
 /// Geometry (0-based, h = height, w = width):
@@ -141,6 +132,9 @@ internal static partial class RmQRModulePlacer
     /// <param name="eccLevel">ECC level (format information only).</param>
     /// <param name="finalMessage">Interleaved final message (at least total codewords bytes).</param>
     public static void PlaceSymbol(Span<byte> destination, int stride, RmQRVersion version, RmQREccLevel eccLevel, ReadOnlySpan<byte> finalMessage)
+        => PlaceSymbol(destination, stride, version, eccLevel, finalMessage, PlaceKernel.Auto);
+
+    private static void PlaceSymbolCore(Span<byte> destination, int stride, RmQRVersion version, RmQREccLevel eccLevel, ReadOnlySpan<byte> finalMessage, PlaceKernel kernel)
     {
         var height = RmQRConstants.GetHeight(version);
         var width = RmQRConstants.GetWidth(version);
@@ -164,14 +158,14 @@ internal static partial class RmQRModulePlacer
         if (count <= StackBitBudget)
         {
             Span<byte> bits = stackalloc byte[StackBitBudget + VectorSlack];
-            PlaceCore(destination, stride, layout, template, height, width, message, bits);
+            PlaceCore(destination, stride, layout, template, height, width, message, bits, kernel);
         }
         else
         {
             var rented = ArrayPool<byte>.Shared.Rent(count + VectorSlack);
             try
             {
-                PlaceCore(destination, stride, layout, template, height, width, message, rented);
+                PlaceCore(destination, stride, layout, template, height, width, message, rented, kernel);
             }
             finally
             {
@@ -183,8 +177,12 @@ internal static partial class RmQRModulePlacer
     // 512 modules covers every version with <= 63 total codewords; larger symbols rent.
     // Both paths carry VectorSlack bytes past the module count: the AVX2 expand step
     // writes 32 bytes per 4 message bytes, and the ARM64 store tier reads a fixed 32
-    // bytes per column pair (a pair holds at most 2 x 15 modules), so the last pair of
-    // the last transpose block can read past the module count.
+    // bytes per column pair, so the last pair of the last transpose block reads past
+    // the module count. The measured worst case is 20 bytes of over-read (R7x43;
+    // 22 in theory, at rows == 5), so 32 leaves a 10-byte margin, not a large one —
+    // re-measure before shrinking it. Garbage in the slack cannot reach the output:
+    // the UZP/TBL/ZIP chain is a pure permutation and every stored byte comes from a
+    // lane below `rows`.
     private const int StackBitBudget = 512;
     private const int VectorSlack = 32;
 
@@ -225,30 +223,30 @@ internal static partial class RmQRModulePlacer
     {
         /// <summary>The fastest tier this machine supports.</summary>
         Auto,
-        /// <summary>Portable pair stores + index scatter, on every target.</summary>
+        /// <summary>
+        /// The whole portable path — SWAR bit expansion plus pair stores and index
+        /// scatter — on every target, exactly what netstandard2.0/2.1 and non-SIMD
+        /// CPUs run.
+        /// </summary>
         Portable,
         /// <summary>ARM64 register transpose blocks + row runs + single scatter.</summary>
         Neon,
     }
 
-    /// <summary>Kernel-selecting entry; <paramref name="kernel"/> pins one tier for parity tests.</summary>
+    /// <summary>
+    /// Kernel-selecting entry; <paramref name="kernel"/> pins one tier for parity tests.
+    /// Pinning a tier this machine cannot run throws rather than falling back: a parity
+    /// test that silently compares the portable kernel against itself is worse than no
+    /// test at all, because it stays green while the tier it names goes unexercised.
+    /// </summary>
     internal static void PlaceSymbol(Span<byte> destination, int stride, RmQRVersion version, RmQREccLevel eccLevel, ReadOnlySpan<byte> finalMessage, PlaceKernel kernel)
     {
-        _kernel = kernel;
-        try
-        {
-            PlaceSymbol(destination, stride, version, eccLevel, finalMessage);
-        }
-        finally
-        {
-            _kernel = PlaceKernel.Auto;
-        }
+        if (kernel == PlaceKernel.Neon && !IsNeonTierSupported)
+            throw new PlatformNotSupportedException($"{nameof(PlaceKernel)}.{nameof(PlaceKernel.Neon)} was pinned, but the ARM64 store tier does not run on this machine. Guard the call with {nameof(IsNeonTierSupported)}.");
+        PlaceSymbolCore(destination, stride, version, eccLevel, finalMessage, kernel);
     }
 
-    [ThreadStatic]
-    private static PlaceKernel _kernel;
-
-    private static void PlaceCore(Span<byte> destination, int stride, Layout layout, byte[] template, int height, int width, ReadOnlySpan<byte> finalMessage, Span<byte> bits)
+    private static void PlaceCore(Span<byte> destination, int stride, Layout layout, byte[] template, int height, int width, ReadOnlySpan<byte> finalMessage, Span<byte> bits, PlaceKernel kernel)
     {
         if (stride == width)
         {
@@ -259,11 +257,18 @@ internal static partial class RmQRModulePlacer
             for (var row = 0; row < height; row++)
                 template.AsSpan(row * width, width).CopyTo(destination.Slice(row * stride, width));
         }
-        ExpandBitsMasked(finalMessage, layout.Masks, layout.DataModuleCount, bits);
+        ExpandBitsMasked(finalMessage, layout.Masks, layout.DataModuleCount, bits, kernel);
 #if NET8_0_OR_GREATER
-        if (_kernel != PlaceKernel.Portable && IsNeonTierSupported)
+        if (IsNeonTierSupported && kernel != PlaceKernel.Portable)
         {
-            ScatterNeon(destination, bits, layout, height, stride, strided: stride != width);
+            // Literal, not `stride != width`: ScatterNeon is AggressiveInlining and
+            // branches on `strided` per row run, so a constant argument folds those
+            // branches away. ScatterPairs below is called the same way for the same
+            // reason.
+            if (stride == width)
+                ScatterNeon(destination, bits, layout, height, width, strided: false);
+            else
+                ScatterNeon(destination, bits, layout, height, stride, strided: true);
             return;
         }
 #endif
@@ -282,7 +287,7 @@ internal static partial class RmQRModulePlacer
     /// the per-lane bit mask + compare-equal yields 0/1 bytes, XOR with the mask table.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void ExpandBitsMasked(ReadOnlySpan<byte> message, byte[] masks, int count, Span<byte> bits)
+    private static void ExpandBitsMasked(ReadOnlySpan<byte> message, byte[] masks, int count, Span<byte> bits, PlaceKernel kernel)
     {
         var byteCount = message.Length;
         ref var src = ref MemoryMarshal.GetReference(message);
@@ -290,45 +295,53 @@ internal static partial class RmQRModulePlacer
         ref var dst = ref MemoryMarshal.GetReference(bits);
         var k = 0;
 #if NET8_0_OR_GREATER
-        if (Avx2.IsSupported)
+        // One predictable compare per placement, not per iteration. It buys the SWAR
+        // tail below real coverage: on every machine the suite runs on, some vector
+        // tier consumes the whole message, so without this the portable expand — which
+        // is the WHOLE loop on netstandard2.0/2.1 and non-SIMD targets — is unreachable
+        // from any test.
+        if (kernel != PlaceKernel.Portable)
         {
-            // 4 message bytes -> 32 module bytes per step; the uint broadcast puts the
-            // same 4 bytes in both 128-bit lanes, and the in-lane shuffle picks byte 0..3
-            var sel = Vector256.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3);
-            var bitm = Vector256.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
-            var one = Vector256.Create((byte)1);
-            for (; k + 4 <= byteCount; k += 4)
+            if (Avx2.IsSupported)
             {
-                var v = Vector256.Create(Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref src, k))).AsByte();
-                var m = Avx2.Shuffle(v, sel) & bitm;
-                ((Vector256.Equals(m, bitm) & one) ^ Vector256.LoadUnsafe(ref msk, (nuint)(k * 8))).StoreUnsafe(ref dst, (nuint)(k * 8));
+                // 4 message bytes -> 32 module bytes per step; the uint broadcast puts the
+                // same 4 bytes in both 128-bit lanes, and the in-lane shuffle picks byte 0..3
+                var sel = Vector256.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3);
+                var bitm = Vector256.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
+                var one = Vector256.Create((byte)1);
+                for (; k + 4 <= byteCount; k += 4)
+                {
+                    var v = Vector256.Create(Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref src, k))).AsByte();
+                    var m = Avx2.Shuffle(v, sel) & bitm;
+                    ((Vector256.Equals(m, bitm) & one) ^ Vector256.LoadUnsafe(ref msk, (nuint)(k * 8))).StoreUnsafe(ref dst, (nuint)(k * 8));
+                }
             }
-        }
-        if (Ssse3.IsSupported)
-        {
-            var sel = Vector128.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
-            var bitm = Vector128.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
-            var one = Vector128.Create((byte)1);
-            for (; k + 2 <= byteCount; k += 2)
+            if (Ssse3.IsSupported)
             {
-                var v = Vector128.Create(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))).AsByte();
-                var m = Ssse3.Shuffle(v, sel) & bitm;
-                ((Vector128.Equals(m, bitm) & one) ^ Vector128.LoadUnsafe(ref msk, (nuint)(k * 8))).StoreUnsafe(ref dst, (nuint)(k * 8));
+                var sel = Vector128.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
+                var bitm = Vector128.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
+                var one = Vector128.Create((byte)1);
+                for (; k + 2 <= byteCount; k += 2)
+                {
+                    var v = Vector128.Create(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))).AsByte();
+                    var m = Ssse3.Shuffle(v, sel) & bitm;
+                    ((Vector128.Equals(m, bitm) & one) ^ Vector128.LoadUnsafe(ref msk, (nuint)(k * 8))).StoreUnsafe(ref dst, (nuint)(k * 8));
+                }
             }
-        }
-        if (AdvSimd.Arm64.IsSupported)
-        {
-            // Same 16 modules per step as SSSE3, but CMTST (0xFF where (a & b) != 0)
-            // is the per-lane bit test x86 lacks, so the AND + compare-equal pair is
-            // one instruction; the broadcast is a load-replicate straight from memory.
-            var sel = Vector128.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
-            var bitm = Vector128.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
-            var one = Vector128.Create((byte)1);
-            for (; k + 2 <= byteCount; k += 2)
+            if (AdvSimd.Arm64.IsSupported)
             {
-                var v = Vector128.Create(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))).AsByte();
-                var repl = AdvSimd.Arm64.VectorTableLookup(v, sel);
-                ((AdvSimd.CompareTest(repl, bitm) & one) ^ Vector128.LoadUnsafe(ref msk, (nuint)(k * 8))).StoreUnsafe(ref dst, (nuint)(k * 8));
+                // Same 16 modules per step as SSSE3, but CMTST (0xFF where (a & b) != 0)
+                // is the per-lane bit test x86 lacks, so the AND + compare-equal pair is
+                // one instruction; the broadcast is a load-replicate straight from memory.
+                var sel = Vector128.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
+                var bitm = Vector128.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
+                var one = Vector128.Create((byte)1);
+                for (; k + 2 <= byteCount; k += 2)
+                {
+                    var v = Vector128.Create(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))).AsByte();
+                    var repl = AdvSimd.Arm64.VectorTableLookup(v, sel);
+                    ((AdvSimd.CompareTest(repl, bitm) & one) ^ Vector128.LoadUnsafe(ref msk, (nuint)(k * 8))).StoreUnsafe(ref dst, (nuint)(k * 8));
+                }
             }
         }
 #endif
@@ -444,7 +457,9 @@ internal static partial class RmQRModulePlacer
     // correct by construction; published with a volatile write — a benign race
     // builds identical tables twice). Memory per version: w×h bytes per ECC template
     // used + 5 bytes per data module (core index, row/col code, mask) + a few pair
-    // descriptors: <= 12 KB for R17x139, ~150 KB if every version and ECC were ever used.
+    // descriptors, plus the ARM64 block/run/single segmentation where it is built.
+    // Measured for R17x139: about 12 KB, and 784 B more on ARM64; across every version
+    // and ECC about 150 KB, and about 16 KB more on ARM64.
     // ---------------------------------------------------------------
 
     /// <summary>A column pair (col, col-1) of the zigzag walk.</summary>

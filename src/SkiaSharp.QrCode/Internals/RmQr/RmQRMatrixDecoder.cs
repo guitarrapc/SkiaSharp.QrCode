@@ -183,9 +183,24 @@ internal static partial class RmQRMatrixDecoder
         PairPlanes,
     }
 
-    /// <summary>Kernel-selecting entry; <paramref name="kernel"/> pins one tier for parity tests.</summary>
+    /// <summary>
+    /// Kernel-selecting entry; <paramref name="kernel"/> pins one tier for parity tests.
+    /// Pinning a tier that cannot run here throws rather than falling through to the
+    /// portable walk: a parity test that silently compares the portable kernel against
+    /// itself stays green while the tier it names goes unexercised.
+    /// </summary>
     internal static void ExtractCodewords(ReadOnlySpan<byte> modules, int width, int height, RmQRVersion version, Span<byte> stream, ExtractKernel kernel)
     {
+        if (kernel is ExtractKernel.BitPlanes or ExtractKernel.PairPlanes)
+        {
+            var supported = kernel == ExtractKernel.BitPlanes ? IsBitPlaneTierSupported : IsPairPlaneTierSupported;
+            if (!supported)
+                throw new PlatformNotSupportedException($"{nameof(ExtractKernel)}.{kernel} was pinned, but that tier does not run on this machine. Guard the call with {nameof(IsBitPlaneTierSupported)} / {nameof(IsPairPlaneTierSupported)}.");
+            var expected = RmQRConstants.GetTotalCodewordCount(version);
+            if (stream.Length != expected)
+                throw new ArgumentException($"{nameof(ExtractKernel)}.{kernel} emits whole words off a per-version table, so the stream must be exactly {expected} bytes for {version}; got {stream.Length}.", nameof(stream));
+        }
+
         var layout = GetExtractLayout(version);
 #if NET8_0_OR_GREATER
         // Both vector kernels emit whole words off a per-version table, so their output
@@ -247,8 +262,10 @@ internal static partial class RmQRMatrixDecoder
     // Per-version extraction tables (built once from the placer's own predicates, so
     // they are correct by construction; published with a volatile write - a benign
     // race builds identical tables twice). Memory per version: 2 bytes per stream bit
-    // plus 24 bytes per column pair: about 5.2 KB for R17x139 (3,712 B of order plus
-    // 69 column pairs), and about 69 KB if every one of the 32 versions were decoded.
+    // plus 24 bytes per column pair, and on ARM64 the pair-plane run tables on top of
+    // that. Measured: R17x139 is 5,368 B on x64/portable (3,712 B of order plus 69
+    // column pairs) and 7,368 B on ARM64; decoding all 32 versions costs about 68 KB
+    // and about 100 KB respectively.
     // ---------------------------------------------------------------
 
     /// <summary>Low bits of an <see cref="ExtractLayout.Order"/> entry: the core module index.</summary>
@@ -311,9 +328,11 @@ internal static partial class RmQRMatrixDecoder
     /// <summary>
     /// Replays the same walk in the pair-plane shape. Plane word for the pair whose right
     /// column is <c>col</c> holds, for every data row, bit <c>2j+1</c> = module(row, col)
-    /// and <c>2j</c> = module(row, col-1), where j counts rows in WALK order and j = 0 is
-    /// the last row visited. The walk alternates between the two columns of a pair on
-    /// every row, so those bits are already in stream order.
+    /// and <c>2j</c> = module(row, col-1), where j counts rows in WALK order from the
+    /// FIRST row the pair visits (row height-2 walking up, row 1 walking down), so the
+    /// pair's earliest bits sit in the word's high bits and the run extraction reads it
+    /// from bit 31 down. The walk alternates between the two columns of a pair on every
+    /// row, so those bits are already in stream order.
     /// </summary>
     private static PairPlaneLayout BuildPairPlaneLayout(RmQRVersion version, int width, int height, int bitCount)
     {

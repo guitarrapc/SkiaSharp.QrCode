@@ -44,7 +44,11 @@ public class RmQRModulePlacerParityTest
     [MethodDataSource(nameof(AllVersionEcc))]
     public async Task NeonKernel_MatchesReference_EveryMessageShape(RmQRVersion version, RmQREccLevel ecc)
     {
-        if (!RmQRModulePlacer.IsNeonTierSupported) return;
+        if (!RmQRModulePlacer.IsNeonTierSupported)
+        {
+            Skip.Test("No ARM64 store tier on this machine");
+            return;
+        }
 
         var width = RmQRConstants.GetWidth(version);
         var height = RmQRConstants.GetHeight(version);
@@ -97,6 +101,8 @@ public class RmQRModulePlacerParityTest
     [MethodDataSource(nameof(AllVersionEcc))]
     public async Task FastPath_MatchesReference_EveryMessageShape(RmQRVersion version, RmQREccLevel ecc)
     {
+        var coreWidth = RmQRConstants.GetWidth(version);
+        var coreHeight = RmQRConstants.GetHeight(version);
         var total = RmQRConstants.GetTotalCodewordCount(version);
         var size = RmQRConstants.GetWidth(version) * RmQRConstants.GetHeight(version);
         var messages = new[]
@@ -113,6 +119,34 @@ public class RmQRModulePlacerParityTest
             var expected = new byte[size];
             expected.AsSpan().Fill(0xA5);
             RmQRModulePlacer.PlaceSymbolReference(expected, version, ecc, message);
+
+            // Pinned Portable, not the automatic overload: on ARM64 `Auto` is the NEON
+            // tier, so without this the portable pair-store + index scatter would be
+            // exercised on x64 legs only.
+            var portable = new byte[size];
+            portable.AsSpan().Fill(0xA5);
+            RmQRModulePlacer.PlaceSymbol(portable, coreWidth, version, ecc, message, RmQRModulePlacer.PlaceKernel.Portable);
+            await Assert.That(portable).IsEquivalentTo(expected);
+
+            // Strided as well as tight. `ScatterPairs` branches on `strided` and derives
+            // its own row pitch, so the two arms are different code; pinning only the
+            // tight one leaves the strided portable arm unexercised wherever `Auto` picks
+            // a vector tier, which on ARM64 is everywhere.
+            const int PortableQuiet = 3;
+            var portableStride = coreWidth + 2 * PortableQuiet;
+            var portablePadded = new byte[portableStride * (coreHeight + 2 * PortableQuiet)];
+            portablePadded.AsSpan().Fill(0x5A);
+            RmQRModulePlacer.PlaceSymbol(portablePadded.AsSpan(PortableQuiet * portableStride + PortableQuiet), portableStride, version, ecc, message, RmQRModulePlacer.PlaceKernel.Portable);
+            for (var row = 0; row < coreHeight; row++)
+            {
+                await Assert.That(portablePadded.AsSpan((PortableQuiet + row) * portableStride + PortableQuiet, coreWidth).ToArray())
+                    .IsEquivalentTo(expected.AsSpan(row * coreWidth, coreWidth).ToArray());
+                for (var q = 0; q < PortableQuiet; q++)
+                {
+                    await Assert.That(portablePadded[(PortableQuiet + row) * portableStride + q]).IsEqualTo((byte)0x5A);
+                    await Assert.That(portablePadded[(PortableQuiet + row) * portableStride + PortableQuiet + coreWidth + q]).IsEqualTo((byte)0x5A);
+                }
+            }
 
             var actual = new byte[size + 3]; // oversized core: only the first w×h bytes are written
             actual.AsSpan().Fill(0xA5);

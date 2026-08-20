@@ -7,7 +7,8 @@
 ///   Numeric_R7x43_M      : smallest symbol, single RS block
 ///   Alphanumeric_R11x59_M: mid symbol, single block
 ///   Byte_R17x139_M       : largest symbol, 4 RS blocks
-///   *_Corrected          : the same symbols with correctable module damage, so the
+///   *_Corrected          : Numeric_R7x43 and Byte_R17x139 with damage the decoder
+///                          confirms as exactly N corrected errors, so the
 ///                          Berlekamp-Massey/Chien/Forney correction path runs rather
 ///                          than syndrome generation alone (the clean cases exit early)
 /// </summary>
@@ -36,8 +37,8 @@ public class RmQRDecodeEndToEnd
 
         // Correctable damage: flip a few modules and keep only a corruption the decoder
         // still recovers, so the measurement covers correction rather than failure.
-        _numericDamagedModules = Damage(_numericModules, _numericSize, flips: 2, seed: 17);
-        _byteDamagedModules = Damage(_byteModules, _byteSize, flips: 6, seed: 23);
+        _numericDamagedModules = Damage(_numericModules, _numericSize, RmQRVersion.R7x43, flips: 2, seed: 17);
+        _byteDamagedModules = Damage(_byteModules, _byteSize, RmQRVersion.R17x139, flips: 6, seed: 23);
 
         var calculated = SkiaSharp.QrCode.QRCodeGenerator.GetRequiredBufferSize("012345678901", ECCLevel.L, quietZoneSize: 0);
         _standardModules = new byte[calculated.BufferSize];
@@ -111,28 +112,43 @@ public class RmQRDecodeEndToEnd
     }
 
     /// <summary>
-    /// Flips <paramref name="flips"/> modules and verifies the symbol still decodes to
-    /// the same text, so the scenario measures error correction and not the failure path.
+    /// Flips <paramref name="flips"/> distinct modules and keeps the draw only when the
+    /// decoder reports exactly that many corrected errors, so the scenario measures the
+    /// correction path at its stated strength rather than the failure path.
     /// </summary>
-    private static byte[] Damage(byte[] modules, (int Width, int Height) size, int flips, int seed)
+    /// <remarks>
+    /// The ErrorsCorrected check is what makes the count honest. Drawing from the whole
+    /// matrix spends flips on function patterns, which carry no codeword, and two flips
+    /// can land in one codeword byte: either way a nominal 2-flip case injects one actual
+    /// error and measures a shorter correction than its name promises. Rejecting those
+    /// draws is conservative — every excluded sample is easier than the one kept.
+    /// </remarks>
+    private static byte[] Damage(byte[] modules, (int Width, int Height) size, RmQRVersion version, int flips, int seed)
     {
         RmQRCodeDecoder.TryDecode(modules, size.Width, size.Height, out var expected, out _);
 
-        for (var attempt = 0; attempt < 64; attempt++)
+        for (var attempt = 0; attempt < 4096; attempt++)
         {
             var random = new Random(seed + attempt);
             var damaged = (byte[])modules.Clone();
-            for (var i = 0; i < flips; i++)
-            {
-                var index = random.Next(damaged.Length);
+            var picked = new HashSet<int>();
+            while (picked.Count < flips)
+                picked.Add(random.Next(damaged.Length));
+            foreach (var index in picked)
                 damaged[index] ^= 1;
-            }
 
-            if (RmQRCodeDecoder.TryDecode(damaged, size.Width, size.Height, out var text, out _) && text == expected)
+            // ErrorsCorrected, not just "it decoded": a flip that lands on a function
+            // pattern carries no codeword, so the symbol still decodes but the scenario
+            // measures a shorter correction than its name promises.
+            if (RmQRCodeDecoder.TryDecode(damaged, size.Width, size.Height, out var text, out var info)
+                && text == expected
+                && info.ErrorsCorrected == flips)
+            {
                 return damaged;
+            }
         }
 
-        throw new InvalidOperationException($"No correctable {flips}-flip damage found for {size.Width}x{size.Height}.");
+        throw new InvalidOperationException($"No {flips}-error correctable damage found for {version} ({size.Width}x{size.Height}).");
     }
 
     private static (byte[] modules, (int Width, int Height) size) Build(string content, RmQREccLevel eccLevel, RmQRVersion version)

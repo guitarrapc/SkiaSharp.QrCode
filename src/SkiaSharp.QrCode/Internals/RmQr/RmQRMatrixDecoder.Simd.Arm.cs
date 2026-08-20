@@ -15,26 +15,25 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// individually.
 /// </summary>
 /// <remarks>
-/// This is deliberately not a port of the x64 bit-plane kernel. NEON has neither
-/// PEXT nor PDEP, so instead of a plane per column plus a deposit step, one 32-bit
-/// lane holds a whole column pair: bit <c>2j+1</c> is the right column of the pair
-/// and bit <c>2j</c> the left one, where j counts data rows in walk order. The walk
-/// alternates between the two columns of a pair on every row, so that word already
-/// <em>is</em> the pair's output field with the function modules still in it, and
-/// the whole pair operation collapses to a single PEXT-shaped compress with no
-/// deposit at all.
+/// Deliberately not a port of the x64 bit-plane kernel. NEON has neither PEXT nor
+/// PDEP, so instead of a plane per column plus a deposit step, one 32-bit lane holds a
+/// whole column pair: bit <c>2j+1</c> is the pair's right column and <c>2j</c> its
+/// left, where j counts data rows in walk order. The walk alternates between a pair's
+/// two columns on every row, so that word already <em>is</em> the pair's output field
+/// with the function modules still in it, and the pair operation collapses to a single
+/// PEXT-shaped compress with no deposit at all.
 /// <para>
 /// The compress uses what ARM does have. A pair's data mask is a handful of runs of
 /// consecutive bits, because function modules come from rectangular blocks (finder,
-/// sub-finder, format, alignment) rather than scattered modules — a pair averages
-/// 1.0-2.3 runs — and one run is one AND plus one shift. The runs of the whole
-/// symbol are one flat table, so no pair pays for another pair's worst case.
+/// sub-finder, format, alignment) rather than scattered modules, and one run is one AND
+/// plus one shift. The runs of the whole symbol are one flat table, so no pair pays for
+/// another pair's worst case.
 /// </para>
 /// <para>
-/// Measured against the portable table walk on Apple M2: 0.30x at R17x139, 0.36x at
-/// R13x99, 0.55x at R11x59 and R7x139, and 0.92-0.94x at R7x43 and R11x27, where the
-/// symbol is only ~110 bits and the kernel's fixed cost nearly meets the portable
-/// walk's per-bit cost. It wins every size, so there is no size switch.
+/// Measured ratios, the per-bit cost model behind having no size switch, and the
+/// rejected alternatives are recorded in .github/docs/specs/rmqr-decoder.md; the kernel
+/// search log is <c>MICRO_OPTIMIZATION_RmQrExtractArm.md</c> in the private
+/// MicroBenchmarks repository.
 /// </para>
 /// </remarks>
 internal static partial class RmQRMatrixDecoder

@@ -18,7 +18,7 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 /// </summary>
 /// <remarks>
 /// Benchmark-driven (kernel 4.5-9x over the per-call painters + acc64 walk at v40..v1,
-/// see the plan's progress log); the reference implementations
+/// see the Performance section of specs/standardqr-encoder.md); the reference implementations
 /// (<see cref="QRCodeGenerator.PlaceFunctionModulesReference"/>,
 /// <see cref="PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>)
 /// remain the source of truth: they build the tables and the parity tests hold the

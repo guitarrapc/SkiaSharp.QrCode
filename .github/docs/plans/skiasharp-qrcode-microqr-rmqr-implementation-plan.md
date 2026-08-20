@@ -99,7 +99,17 @@ Exit: Micro QR is feature-complete (encode, render, matrix decode, image decode)
 
 ### Phase 5, rMQR encoder
 
-Phases 5-7 are detailed (sub-phases, API decisions, oracle status, exit gates) in [skiasharp-qrcode-rmqr-implementation-plan.md](skiasharp-qrcode-rmqr-implementation-plan.md); their progress log entries live there.
+Phases 5-7 are complete.
+
+One cross-symbology follow-up came out of that work and is deliberately unstarted:
+**axis-aligned grid sampling**. When a sampling transform is affine *and* unrotated
+(`a12 == 0`) the sampled y is constant along a row, so the y vector, its conversion, its
+clamp and the row multiply collapse to one scalar per row. Measured 6-10 % on top of the
+shipped rMQR Vector128 kernel for axis-aligned input and 0 % for rotated input. It is
+neither rMQR-specific nor ARM-specific — Standard QR, Micro QR, x64 and the scalar path
+would all take it — which is why it belongs here rather than in a symbology record.
+Screen renders and square-on scans hit this case; photographs do not.
+ Their detailed plan has been retired now that the work shipped; what it decided lives in [rMQR Encoder](../specs/rmqr-encoder.md), [rMQR Decoder](../specs/rmqr-decoder.md) and the [spec-to-code map](../specs/rmqr-spec-map.md).
 
 - Rectangular tables (32 sizes, ECC M/H), 18-bit format info, finder + sub-finder + edge timing placement, rectangular rendering, version auto-fit strategy (width-first / height-first preference exposed in API).
 - Matrix conformance against fixtures (all 32 sizes at least once; boundary payloads).

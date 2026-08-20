@@ -111,7 +111,7 @@ public static class MicroQRCodeDecoder
 
     /// <summary>
     /// Decodes the text content from a module matrix into a caller-provided buffer
-    /// without heap allocation.
+    /// without per-call heap allocation.
     /// </summary>
     /// <param name="modules">
     /// Module matrix, one byte per module (0 = light, non-zero = dark), flat row-major order.
@@ -232,7 +232,7 @@ public static class MicroQRCodeDecoder
 
     /// <summary>
     /// Detects and decodes a Micro QR code from grayscale image pixels into a
-    /// caller-provided buffer without heap allocation.
+    /// caller-provided buffer without per-call heap allocation.
     /// </summary>
     /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes.</param>
     /// <param name="width">Image width in pixels.</param>

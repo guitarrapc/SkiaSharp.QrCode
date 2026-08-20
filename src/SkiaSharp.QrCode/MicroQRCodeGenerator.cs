@@ -60,7 +60,7 @@ public static class MicroQRCodeGenerator
 
     /// <summary>
     /// Creates a Micro QR code and writes the module matrix into the caller-provided
-    /// buffer without heap allocation.
+    /// buffer without per-call heap allocation.
     /// </summary>
     /// <remarks>
     /// Output format matches <see cref="QRCodeGenerator.CreateQrCode(ReadOnlySpan{char}, ECCLevel, Span{byte}, bool, EciMode, int, int)"/>:

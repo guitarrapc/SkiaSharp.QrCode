@@ -1,5 +1,4 @@
 #if NET8_0_OR_GREATER
-using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -14,36 +13,22 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// </summary>
 /// <remarks>
 /// The zigzag walk fills the bit array column-pair by column-pair while the matrix is
-/// row-major, so the store pass is a transpose. The portable tier does it two modules
-/// at a time (one byte-swapped 16-bit store per row of a "clean" column pair). This
-/// tier takes four consecutive clean pairs — eight consecutive columns — and turns
-/// them inside out in registers: each pair's two column vectors are separated with
-/// UZP1/UZP2, the upward-walked pairs are flipped back into row order with TBL, and a
-/// three-stage ZIP network leaves symbol row <c>i</c> in 64-bit lane <c>i &amp; 1</c> of
-/// vector <c>i / 2</c>. One symbol row is then one 8-byte store: one store per eight
-/// modules instead of one per two.
+/// row-major, so the store pass is a transpose. Four consecutive clean pairs — eight
+/// consecutive columns — are turned inside out in registers (UZP1/UZP2 to separate a
+/// pair's two column vectors, TBL to flip the upward-walked ones back into row order,
+/// a three-stage ZIP network to leave symbol row <c>i</c> in 64-bit lane <c>i &amp; 1</c>
+/// of vector <c>i / 2</c>), so one symbol row is one 8-byte store.
 /// <para>
-/// What the eight columns cannot cover is not thrown back to per-module scatter. The
-/// portable tier's "is this whole column pair clean?" test disqualifies a pair when a
-/// single function module appears anywhere in it, which on R11x27 sends 56 % of the
-/// modules through the byte scatter even though 92 % of them sit in stretches of rows
-/// where both columns are ordinary data. Those stretches are precomputed per version
-/// as row RUNS and keep the 16-bit pair store; only the genuinely isolated modules
-/// (4-12 % of a symbol) are scattered one byte at a time.
+/// What the eight columns cannot cover falls to row RUNS rather than to per-module
+/// scatter: stretches of rows where both columns of a pair are ordinary data keep the
+/// 16-bit pair store, and only the genuinely isolated modules are scattered a byte at
+/// a time. Ref-based loads and stores throughout, because LD2/ST1-lane would need
+/// <c>AllowUnsafeBlocks</c> across the library.
 /// </para>
 /// <para>
-/// Measured against the shipped portable path on Apple M2 (kernel benchmark, six
-/// rounds): 0.29x at R17x139, 0.34x at R13x99, 0.50x at R11x59, 0.56x at R7x43 and
-/// 0.68x at R11x27. It wins every size, so there is no size switch. Two further
-/// designs were measured and rejected: generalizing a block to "four adjacent pairs ×
-/// their common data row range" raised coverage to 89 % but lost, because the ZIP
-/// network costs a fixed ~40 instructions per block whatever its height, so short
-/// blocks pay a tall block's price and take modules away from the cheaper run path.
-/// </para>
-/// <para>
-/// The kernel is written against ref-based loads and stores rather than LD2/ST1-lane,
-/// which would need <c>AllowUnsafeBlocks</c> across the library; UZP1/UZP2 replaces
-/// the LD2 deinterleave and a 64-bit half store replaces the lane store.
+/// Measured ratios and the designs that were rejected are recorded in
+/// .github/docs/specs/rmqr-encoder.md; the kernel search log is
+/// <c>RmQrPlaceArmBenchmark</c> in the private MicroBenchmarks repository.
 /// </para>
 /// </remarks>
 internal static partial class RmQRModulePlacer
