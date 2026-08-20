@@ -238,7 +238,7 @@ M2 at 3.3-4.1x over the scalar walk; it is not an open rMQR ARM gap.
 | **N2 (shipped)** | NEON rMQR codeword extraction | ARM64 cannot enter the AVX2+BMI2 bit-plane tier and uses the portable gather. Extraction was 70-91 % of matrix decode before the x64 tier; x64 matrix E2E improved 5-8x. This is the highest-priority rMQR-specific gap. | Compare at least a NEON column-plane builder plus scalar/SWAR bit compression against the current table walk; ARM has no PEXT/PDEP, so do not transliterate the x64 kernel. Keep a new tier only if it wins on small, narrow and largest symbols, not just R17x139. |
 | **N3 (shipped)** | NEON RS syndrome computation in `EccBinaryDecoder` | Clean blocks always compute syndromes, and ARM64 lacked the x64 GFNI decoder tier. The gate asked for at least 5 % of ARM matrix decode; N0 showed it was essentially **all** of it (matrix decode is linear in syndrome iteration count at 3.07-3.15 ns/iteration across a 50x size range). | Passed by a wide margin. Shipped as `EccBinaryDecoder.Simd.Arm.cs`; results below. Berlekamp-Massey/Chien/Forney remain scalar, as the stop rule required. |
 | **N4 (shipped)** | NEON rMQR placement expansion | The cached template and store/scatter design is already portable, but `ExpandBitsMasked` only has AVX2/SSSE3 vector tiers. The 16-module `TBL` + `CMTST` idiom already exists in the Micro QR placer and `ModuleBitPacker`, making this low-risk ARM work. | Port the proven idiom, add a named forced-NEON parity entry, and require an encode E2E win outside the ARM canary band. Do not rewrite the strided scatter unless profiling identifies it separately. |
-| **N5 (profile-gated)** | Vector128/NEON rectangular grid sampling | rMQR `SampleGrid` is scalar while Standard QR already has a bit-identical 128-bit row kernel usable by ARM64. The work is only one sample per module (at most 2,363), so pixel scanning and matrix decode are expected to dominate first. | Share/generalize the Standard QR kernel only if it is at least 5 % of ARM luminance-span decode after N2. Preserve scalar floating-point operation order and exact sampled bytes; otherwise leave it scalar. |
+| **N5 (shipped)** | Vector128/NEON rectangular grid sampling | rMQR `SampleGrid` was scalar while Standard QR already had a 128-bit row kernel. The gate asked for at least 5 % of ARM luminance-span decode: measured 5.8-7.0 % at R17x139 (5.8-7.0 us of 100 us), so it passed, narrowly. | Passed. Shipped as `SampleGridSimd128` + `SampleGridSimd128Affine`; results below. The premise that the Standard QR kernel could be shared was **wrong** — it multiplies by one reciprocal where rMQR divides twice, which is not bit-equivalent — so the exact-bytes requirement forced a separate implementation rather than a generalization. |
 | **N6 (last)** | NEON rMQR numeric/alphanumeric/Latin-1 writers | ARM64 currently uses the already-fast SWAR/table writers. On x64 the much larger SIMD kernel gains moved encode E2E by only 1-7 % before placement was fixed, and the current pipeline is hundreds of nanoseconds to about one microsecond. | Attempt only if post-N4 profiling shows segment writing at least 5 % E2E. Start with Latin-1 narrowing, then alphanumeric/numeric; stop when gains fall inside the canary band. UTF-8 stays in `Encoding.UTF8`. |
 
 N1 and N2 may exchange order if N0 shows a workload dominated by matrix/luminance-span
@@ -530,7 +530,7 @@ document set for touching the scatter, so the remaining five rounds went there.
 
 - *Expand*: the planned `TBL` + `CMTST` idiom, 2 message bytes → 16 module bytes per step.
   `CMTST` (0xFF where `(a & b) != 0`) is the per-lane bit test x86 lacks, so SSSE3's AND +
-  compare-equal pair is one instruction. Phase measurement: 546 → 106 ns at R17x139.
+  compare-equal pair is one instruction. Phase measurement at R17x139: 451 → 95 ns, 4.7x.
 - *Store*: four consecutive clean column pairs — eight consecutive columns — are transposed in
   registers (`UZP1`/`UZP2` separates each pair's two column vectors, `TBL` flips the
   upward-walked ones into row order, a three-stage `ZIP` network puts symbol row *i* in 64-bit
@@ -547,15 +547,24 @@ document set for touching the scatter, so the remaining five rounds went there.
   stores. This is what netstandard2.0 and non-SIMD targets run for the whole message; on x64 it
   only covers the final odd byte after SSSE3.
 
-Kernel, versus the shipped portable path, same-run ratios (round 6, canary 0.99-1.04):
+Kernel, versus the shipped portable path, from the final confirmation run (all variants in
+one process, 3 warmup / 15 iterations):
 
-| Scenario | ratio |
-|---|---|
-| R7x43_M | 0.56 |
-| R11x27_M | 0.68 |
-| R11x59_M | 0.50 |
-| R13x99_H | 0.34 |
-| R17x139_M | 0.29 |
+| Scenario | before | after | ratio | canary |
+|---|---:|---:|---:|---:|
+| R7x43_M | 104.3 ns | 53.0 ns | 0.51 | 0.96 |
+| R11x27_M | 114.1 ns | 64.4 ns | 0.57 | **1.14** |
+| R11x59_M | 228.4 ns | 100.1 ns | 0.44 | 1.00 |
+| R13x99_H | 515.8 ns | 183.8 ns | 0.36 | 1.03 |
+| R17x139_M | 984.6 ns | 287.4 ns | 0.29 | 1.00 |
+
+R11x27's byte-identical canary drifted 14 % in that run, so read that row with a ±14 % band;
+an independent run (canary 0.99-1.04) put the same five at 0.56 / 0.68 / 0.50 / 0.34 / 0.29.
+The defensible claim across both is 3.4x at the largest symbol, 2.3-2.8x in the middle and
+1.5-2.0x at the smallest. The winner leads every scenario, so no size switch is needed.
+
+Phase split at R17x139 after the change: template copy 33 ns, NEON expand 95 ns, transpose
+block stores 73 ns, row runs + isolated modules 86 ns.
 
 Encode E2E through the public API (`RmQREncodeEndToEnd`, medians of four alternating process
 launches per side, because a single pair moved the untouched Standard QR control by 17 %):
@@ -692,10 +701,9 @@ rather than merely a noisy one.
 poisoned destination, and the overread-bound test runs for both vector transposes. Full suite
 green: 5,691 tests, 0 failed.
 
-**N4 is shipped; results below.** Next per the queue: **N5 (Vector128/NEON rectangular grid
-sampling)** and **N6 (NEON segment writers)**, both still profile-gated — N4 shrank the encode
-denominator by 17-43 %, so N6's "at least 5 % of E2E" gate must be re-measured against the new
-pipeline, not the old one.
+**N4 and N5 are shipped; results below.** The only queue item left is **N6 (NEON segment
+writers)**, still profile-gated — N4 shrank the encode denominator by 17-43 %, so N6's "at
+least 5 % of E2E" gate must be re-measured against the new pipeline, not the old one.
 
 Items deliberately below the NEON queue: Otsu histogramming (serial histogram updates and
 already near its measured per-pixel floor), sub-finder/perspective search (branchy,
@@ -1716,3 +1724,105 @@ caller reports growing its buffer for an image with nothing in it.
   the repair.
 - Round 3 re-ran the 318-symbol external oracle, both full target-framework suites, and the
   controlled performance comparison. No further actionable defect remained.
+
+---
+
+### Follow-up: N5, NEON rectangular grid sampling (2026-08-20)
+
+**Done**
+
+- `RmQRImageDecoder.SampleGrid` is now a dispatcher over three tiers: `SampleGridSimd128`
+  (projective), `SampleGridSimd128Affine`, and `SampleGridScalar` (unchanged, kept as the
+  parity reference and the fallback below Vector128). Every rMQR width is at least 27, so
+  real symbols always take the vector path.
+- Kernel: **2.4-3.8x** over the scalar loop on Apple M2, zero allocations
+  (`MICRO_OPTIMIZATION_RmQrSampleArm.md` in the private benchmark repo). Four steps carried
+  it: vectorizing the convert/clamp/gather (0.42-0.58x), an overlapping vector tail instead
+  of a per-row scalar tail (3-8 %), dropping both divisions on affine frames (10-17 %), and
+  replacing the stack spill of the index vector with constant-lane extraction (20-35 %,
+  the largest single step).
+- The affine tier is not a bet on typical input: `TryDecodeFrame` builds the isotropic and
+  anisotropic frames with `perspectiveX = perspectiveY = 0`, so every attempt before the
+  perspective search has an exactly unit denominator, where `x / 1f == x` drops both
+  divisions without changing a sampled byte.
+- `RmQRSampleGridParityTest`: all 32 versions x 3 seeds x 3 capture geometries (axis-aligned
+  affine, rotated affine, projective), plus off-image sampling (the clamp) and degenerate
+  frames (collapsed axes, a denominator crossing zero into Inf/NaN, a mirrored frame).
+  38 tests; full suite 5,787 tests, 0 failed on net10.0.
+
+**Lessons learned**
+
+- **Measure the phase split before accepting the package's premise about which kernel to
+  write.** This is now three for three across the NEON queue, each wrong in a different way.
+  N4's text called the Micro QR `TBL` + `CMTST` idiom the low-risk port to make: the idiom did
+  port and was worth 4.7x on its own phase, but that phase was only ~40 % of ARM placement and
+  the store pass (48-59 %) produced the actual win. N5's text called the Standard QR sampler
+  shareable: it rounds differently and could not be shared at all. N5 also assumed the shape
+  that won there would transfer: it did not, because rMQR's rows are shorter. The package line
+  is a hypothesis about where the time is and which code to write, and it deserves the same
+  measurement discipline as the variants inside the loop.
+- **A kernel that shares a function name across symbologies does not necessarily share an
+  implementation.** This plan's own N5 line assumed the Standard QR row kernel was
+  "bit-identical ... usable by ARM64". It is not: Standard QR computes `1/d` once and
+  multiplies twice, rMQR divides each numerator, and those round differently. Under N5's
+  exact-bytes rule the correct move was a separate kernel. Generalizing would have silently
+  changed sampled pixels.
+- **Bit-exactness is less restrictive than it sounds** once you separate what re-associates
+  from what does not. Hoisting the loop-invariant *product* `a2x*gridY` is exact (the same
+  float, computed once); folding `a2x*gridY + a3x` into one row constant is not. Skipping a
+  division by exactly 1f is exact; replacing it with a reciprocal multiply is not.
+- **The shape that won for Standard QR ARM lost here.** Two independent 4-lane chains per
+  iteration gained 1.5-4 % on Standard QR and lost on rMQR, whose rows are 27-139 columns
+  rather than 21-177. Going the other way lost too: 4 lanes cost 1-4 %, 16 lanes cost
+  15-20 % (register pressure). Width is not monotonic and must be measured per caller.
+- **After vectorizing, the bottleneck was memory traffic the code did not appear to have**:
+  writing the index vector to a `stackalloc` and reading it straight back put
+  store-to-load forwarding on the critical path of every gather. Constant-lane `GetElement`
+  removed it for 20-35 %.
+- **Byte-identical fallback paths double as free noise canaries.** Each late variant
+  degenerates to an earlier one outside its specialization, so rows that must be identical
+  reveal the run's noise floor. That is how a contaminated round was caught (18 % spread
+  between identical code, against 3 % in a clean round) instead of being read as a result.
+- **Widening a dispatch means widening the gate's input classes.** The first scene builder
+  fixed `uY = 0`, so every affine case was axis-aligned and the `a12 != 0` rotated-affine
+  path went unexercised; a rotated geometry was added before any number was recorded.
+- **One before/after pair is not enough on this machine.** In the first pair
+  `R7x43_BitmapDecode` read +12 % and looked like a regression; alternating a second pair
+  showed it was drift (two runs of the *same* binary differed by 16 %).
+
+**Benchmark delta (net10.0 Release, `--launchCount 4 --warmupCount 3 --iterationCount 15`,
+before/after alternated A/B/A/B, Apple M2)**
+
+| Benchmark | before A1 | after B1 | before A2 | after B2 | Delta |
+|---|---|---|---|---|---|
+| R7x43_ImageDecode_Span | 17.45 us | 15.60 us | 19.29 us | 15.15 us | **-16 %** |
+| R17x139_ImageDecode_Span | 100.27 us | 92.64 us | 99.40 us | 79.88 us | **-14 %** |
+| R17x139_BitmapDecode | 118.77 us | 106.34 us | 100.72 us | 94.97 us | -8 % |
+| R7x43_BitmapDecode | 18.62 us | 20.78 us | 21.62 us | 17.47 us | -5 % |
+| NoSymbol_Gradient_1144x168 (control, no `SampleGrid`) | 291.12 us | 296.60 us | 258.58 us | 261.88 us | flat |
+
+All four span comparisons favour the change and the control is flat, but this machine's
+run-to-run drift is comparable to the effect, so the direction is firm and the point
+estimate is soft. Allocations unchanged (span paths 0 B).
+
+**Open**
+
+- **Absolute E2E numbers are 2x the values recorded earlier in this log** (R17x139 span
+  ~100 us here against 37.5-46.8 us in the 2026-08-17/18 entries). Contamination by a
+  concurrent benchmark was excluded, and the micro harness agrees with the historical
+  per-module cost (rMQR scalar 2.98 ns/module against Standard QR scalar 2.06, the
+  difference being one extra division), which points at machine state or a code difference
+  between those recording points rather than at this change. Unresolved; before/after here
+  was taken under identical conditions, so the comparison stands even though the absolutes
+  do not line up with the older rows.
+- **Proposed follow-up, deliberately not shipped in N5: axis-aligned sampling.** When a
+  transform is affine *and* unrotated (`a12 == 0`) the sampled y is constant along a row, so
+  the y vector, its conversion, its clamp and the row multiply collapse to one scalar per
+  row. Measured 6-10 % on top of the shipped kernel for axis-aligned input and 0 % for
+  rotated input. It is not rMQR-specific or ARM-specific — Standard QR, Micro QR, x64 and
+  the scalar path would all take it — so it belongs in its own cross-symbology package
+  rather than buried in an rMQR NEON item. Screen renders and square-on scans hit it;
+  photographs do not.
+- The gather is now the floor: 0.70 ns/module is about the cost of
+  `umov`/`ldrb`/`cmp`/`cset`/`strb`, and NEON has no gather instruction. Further work on
+  this loop needs a different data layout, not a better kernel.
