@@ -239,7 +239,7 @@ M2 at 3.3-4.1x over the scalar walk; it is not an open rMQR ARM gap.
 | **N3 (shipped)** | NEON RS syndrome computation in `EccBinaryDecoder` | Clean blocks always compute syndromes, and ARM64 lacked the x64 GFNI decoder tier. The gate asked for at least 5 % of ARM matrix decode; N0 showed it was essentially **all** of it (matrix decode is linear in syndrome iteration count at 3.07-3.15 ns/iteration across a 50x size range). | Passed by a wide margin. Shipped as `EccBinaryDecoder.Simd.Arm.cs`; results below. Berlekamp-Massey/Chien/Forney remain scalar, as the stop rule required. |
 | **N4 (shipped)** | NEON rMQR placement expansion | The cached template and store/scatter design is already portable, but `ExpandBitsMasked` only has AVX2/SSSE3 vector tiers. The 16-module `TBL` + `CMTST` idiom already exists in the Micro QR placer and `ModuleBitPacker`, making this low-risk ARM work. | Port the proven idiom, add a named forced-NEON parity entry, and require an encode E2E win outside the ARM canary band. Do not rewrite the strided scatter unless profiling identifies it separately. |
 | **N5 (shipped)** | Vector128/NEON rectangular grid sampling | rMQR `SampleGrid` was scalar while Standard QR already had a 128-bit row kernel. The gate asked for at least 5 % of ARM luminance-span decode: measured 5.8-7.0 % at R17x139 (5.8-7.0 us of 100 us), so it passed, narrowly. | Passed. Shipped as `SampleGridSimd128` + `SampleGridSimd128Affine`; results below. The premise that the Standard QR kernel could be shared was **wrong** — it multiplies by one reciprocal where rMQR divides twice, which is not bit-equivalent — so the exact-bytes requirement forced a separate implementation rather than a generalization. |
-| **N6 (last)** | NEON rMQR numeric/alphanumeric/Latin-1 writers | ARM64 currently uses the already-fast SWAR/table writers. On x64 the much larger SIMD kernel gains moved encode E2E by only 1-7 % before placement was fixed, and the current pipeline is hundreds of nanoseconds to about one microsecond. | Attempt only if post-N4 profiling shows segment writing at least 5 % E2E. Start with Latin-1 narrowing, then alphanumeric/numeric; stop when gains fall inside the canary band. UTF-8 stays in `Encoding.UTF8`. |
+| **N6 (shipped, partial)** | Vector128 rMQR Latin-1 writer; numeric/alphanumeric measured and declined | ARM64 used the SWAR/table writers, but Latin-1's fallback was one accumulator update PER CHARACTER because the narrowing block was gated on `Sse2.IsSupported`. Post-N4 profiling: segment writing is 10.4 % of byte-mode encode E2E, 8.5 % for Latin-1 ECI, 5.4 % for alphanumeric and **0.3 % for numeric**. | Latin-1 passed and shipped (portable `Vector128.Narrow` tier, 9.2x on the writer). Alphanumeric won 19-28 % in the kernel but **did not transfer to E2E** and was reverted; numeric wins only on payloads the E2E set does not contain and loses on the one it does. Neither needed NEON, and neither cleared the acceptance threshold. UTF-8 stays in `Encoding.UTF8`. |
 
 N1 and N2 may exchange order if N0 shows a workload dominated by matrix/luminance-span
 input rather than `SKBitmap`; they are separate deliverables and must be benchmarked
@@ -701,9 +701,11 @@ rather than merely a noisy one.
 poisoned destination, and the overread-bound test runs for both vector transposes. Full suite
 green: 5,691 tests, 0 failed.
 
-**N4 and N5 are shipped; results below.** The only queue item left is **N6 (NEON segment
-writers)**, still profile-gated — N4 shrank the encode denominator by 17-43 %, so N6's "at
-least 5 % of E2E" gate must be re-measured against the new pipeline, not the old one.
+**N4, N5 and N6 are all resolved; results below.** The ARM64 queue is empty: N6 was the
+last item, and it shipped only its Latin-1 half — the alphanumeric and numeric writers were
+measured against the post-N4 pipeline (as that gate required, since N4 had shrunk the encode
+denominator by 17-43 %) and declined on the evidence. Reopen ARM work only with a new
+profile naming a different mechanism.
 
 Items deliberately below the NEON queue: Otsu histogramming (serial histogram updates and
 already near its measured per-pixel floor), sub-finder/perspective search (branchy,
@@ -1826,3 +1828,83 @@ estimate is soft. Allocations unchanged (span paths 0 B).
 - The gather is now the floor: 0.70 ns/module is about the cost of
   `umov`/`ldrb`/`cmp`/`cset`/`strb`, and NEON has no gather instruction. Further work on
   this loop needs a different data layout, not a better kernel.
+
+---
+
+### Follow-up: N6, rMQR segment writers (2026-08-20)
+
+**Done**
+
+- `RmQRBinaryEncoder.WriteLatin1` gains a portable `Vector128` tier: 16 characters
+  narrowed per iteration (`Vector128.Narrow` = XTN + XTN2 on ARM64) plus an 8-character
+  cleanup, feeding the existing 64-bit append. **9.2x on the writer** (109.2 ns → 11.9 ns
+  for a 150-character payload) and **-11 % on byte-mode encode E2E**.
+- The existing `Sse2` block is untouched and the new tier sits behind `else if`, so only
+  targets with 128-bit vectors and no SSE2 (ARM64 NEON, WASM) enter it. x64 flatness is
+  guaranteed by construction rather than by measurement, which matters because x64 cannot
+  be measured on the ARM machine this work was done on.
+- New `RmQRBinaryEncoderWriterReferenceTest`: every writer against an independently
+  written one-group-at-a-time reference, for every length up to the largest rMQR capacity
+  and every header phase (0-12 pending bits), compared on the logical bit stream.
+  Full suite 5,826 tests, 0 failed on net10.0.
+
+**Measured and deliberately not shipped**
+
+- **Alphanumeric, 8 characters per 44-bit append.** Won 19 % in the isolated kernel at
+  both payload sizes with clean canaries, then measured *worse* end to end (331.6 / 304.7
+  ns before against 339.9 / 348.2 after). Reverted. Its Amdahl ceiling was 5.4 % anyway,
+  below the acceptance threshold.
+- **Numeric, 12 digits per 40-bit append.** -9 % at 361 digits, **+6 % at 12 digits** —
+  and 12 digits is the only numeric payload in the E2E set, where the writer is 0.3 % of
+  encode. A size-switched version could recover the large case, but the ceiling does not
+  justify the branch.
+
+**Lessons learned**
+
+- **The package name predicted the wrong solution again** (three for three, now four).
+  N6 was queued as "NEON segment writers"; the shipped win uses no NEON-specific
+  instruction at all — one portable `Vector128.Narrow` plus 8x fewer accumulator updates.
+  The two writers that *would* have needed real NEON kernels are exactly the two that
+  turned out not to be worth optimizing.
+- **What was slow was the writer-state update rate, not the character decoding.** Every
+  measured gain in this round came from making one append cover more characters. That is
+  worth checking before writing any decode-side vector kernel.
+- **An isolated-kernel harness can delete the effect that decides the outcome.** Measuring
+  each mode in its own method was necessary for attribution — a shared-method harness
+  produced +68 % on an untouched path and had to be thrown away — but production keeps all
+  three writers in one `switch` method, so enlarging one arm changes the whole method's
+  codegen. The alphanumeric variant won in the harness that could attribute it and lost in
+  the shape that ships. Both harnesses lie; a kernel win needs re-measuring in production
+  shape before it is believed.
+- **A five-minute attribution probe outranked every kernel in the round.** A variant that
+  writes only the header and padding gives the writer's exact share of encode, and its
+  0.3 % for numeric settled that mode without writing a single kernel.
+- **Canaries have to be structurally identical code, not merely code you did not intend to
+  change.** Round 2's "unchanged" rows moved 68-74 % because they were recompiled inside a
+  different method body.
+
+**Benchmark delta (net10.0 Release, `--launchCount 4 --warmupCount 3 --iterationCount 15`,
+before/after alternated, Apple M2, span = allocation-free path)**
+
+| Benchmark | before A1 | before A2 | after | Delta |
+|---|---:|---:|---:|---|
+| RmQR_Byte_R17x139 (150 chars) | 1,052.2 ns | 1,070.3 ns | **944.0 ns** | **-11 %** |
+| RmQR_Latin1_ECI_R17x139 (112 chars) | 998.3 ns | 1,032.1 ns | **906.3 ns** | **-11 %** |
+| RmQR_UTF8_ECI_R17x139 (control, different writer) | 913.9 ns | 1,064.0 ns | 903.4 ns | flat |
+| RmQR_Numeric_R7x43 (control, unchanged writer) | 165.7 ns | 140.3 ns | 152.8 ns | within noise |
+| StandardQr_Numeric_V1 (control, untouched) | 2,487.3 ns | 2,540.2 ns | 2,326.1 ns | -6 % (drift) |
+
+The kernel delta predicts -9 % and observations ranged -6 % to -11 % across runs. The
+untouched StandardQr control moved -6 % between runs on its own, so read the point
+estimate with that width; the direction and order of magnitude are firm. Allocations
+unchanged (span paths 0 B).
+
+**Open**
+
+- The alphanumeric batching win is real in isolation and unavailable in the current method
+  shape. If encode is ever restructured so each mode compiles independently (separate
+  non-inlined entry points per mode, chosen once by the caller), it becomes available
+  again for free — worth revisiting then, not before.
+- x64 is unmeasured for this change by construction (the new tier cannot execute there).
+  If the SSE2 Latin-1 block is ever revisited, note that the 16-character shape measured
+  better than the 8-character one on ARM and the same may hold with `PackUnsignedSaturate`.

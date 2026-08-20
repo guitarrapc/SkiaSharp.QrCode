@@ -353,6 +353,34 @@ internal static class RmQRBinaryEncoder
                 Append64(ref dest, ref acc, ref accBits, ref bytePos, BinaryPrimitives.ReverseEndianness(packed));
             }
         }
+        else if (vectorized && Vector128.IsHardwareAccelerated)
+        {
+            // Targets with 128-bit vectors but no SSE2 (ARM64 NEON, WASM) previously fell
+            // all the way to the per-character loop below, which is one accumulator update
+            // per byte — measured 9x slower than this on Apple M2 (RmQrSegmentWriteArm
+            // findings log). Vector128.Narrow is the portable form of the same idea (XTN +
+            // XTN2 on ARM64); it truncates rather than saturates, which is exactly right
+            // because the analyzer has already proved every char <= 0xFF.
+            //
+            // Two vectors per iteration rather than one: narrowing a vector against itself
+            // discards half the result, so 16 chars per iteration halves the vector work
+            // per character and issues two independent stores.
+            ref var t = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(text));
+            for (; i + 16 <= text.Length; i += 16)
+            {
+                var packed = Vector128.Narrow(
+                    Vector128.LoadUnsafe(ref t, (nuint)i),
+                    Vector128.LoadUnsafe(ref t, (nuint)(i + 8))).AsUInt64();
+                Append64(ref dest, ref acc, ref accBits, ref bytePos, BinaryPrimitives.ReverseEndianness(packed.GetElement(0)));
+                Append64(ref dest, ref acc, ref accBits, ref bytePos, BinaryPrimitives.ReverseEndianness(packed.GetElement(1)));
+            }
+            if (i + 8 <= text.Length)
+            {
+                var v = Vector128.LoadUnsafe(ref t, (nuint)i);
+                Append64(ref dest, ref acc, ref accBits, ref bytePos, BinaryPrimitives.ReverseEndianness(Vector128.Narrow(v, v).AsUInt64().ToScalar()));
+                i += 8;
+            }
+        }
 #endif
         for (; i < text.Length; i++)
         {
