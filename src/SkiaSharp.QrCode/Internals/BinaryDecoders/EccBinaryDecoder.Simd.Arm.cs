@@ -123,10 +123,18 @@ internal static partial class EccBinaryDecoder
             {
                 var logC = GaloisField.Log[c];
                 var row = baseOffset + c * SyndromeLanes;
+                // exponent = (k·i) mod 255, stepped by k rather than divided per lane.
+                // With k ≤ 3 and 32 lanes it never actually wraps, but the wrap keeps
+                // the loop correct if either bound ever grows. logC + exponent stays
+                // under 512, which is why GaloisField.Exp is double length.
+                var exponent = 0;
                 for (var i = 0; i < SyndromeLanes; i++)
                 {
                     // c · α^(k·i); lane 0 is c itself and α^0 = 1.
-                    tables[row + i] = exp[logC + (k * i) % 255];
+                    tables[row + i] = exp[logC + exponent];
+                    exponent += k;
+                    if (exponent >= 255)
+                        exponent -= 255;
                 }
             }
             // c = 0 stays zero.
