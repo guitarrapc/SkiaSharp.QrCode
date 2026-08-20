@@ -227,11 +227,14 @@ internal static partial class EccBinaryDecoder
     /// </summary>
     /// <remarks>
     /// <paramref name="syndromes"/> must be at least <see cref="SyndromeLanes"/> bytes
-    /// long, not <paramref name="eccCount"/>: both vector tiers store a whole register
-    /// and only the first <paramref name="eccCount"/> lanes are meaningful. A shorter
-    /// span corrupts the caller's stack on ARM64 and nowhere else, so x64 CI cannot see
-    /// it; EccBinaryDecoderKernelParityTest.AdvSimdKernel_WritesExactlySyndromeLanes
-    /// pins the store width from the kernel side.
+    /// long, not <paramref name="eccCount"/>: the AdvSimd kernel stores both accumulator
+    /// registers whole and only the first <paramref name="eccCount"/> lanes are
+    /// meaningful. (The GFNI kernel copies exactly <paramref name="eccCount"/> bytes, so
+    /// it would tolerate a shorter span — the wider contract is what lets the dispatcher
+    /// hand every tier the same buffer.) A shorter span corrupts the caller's stack on
+    /// ARM64 and nowhere else, so x64 CI cannot see it;
+    /// EccBinaryDecoderKernelParityTest.AdvSimdKernel_WritesExactlySyndromeLanes pins
+    /// the store width from the kernel side.
     /// <para>
     /// Dispatches to the GFNI kernel on x64 (all accumulators in one vector register,
     /// one multiply per data byte for every syndrome at once) or the AdvSimd kernel on
@@ -258,7 +261,10 @@ internal static partial class EccBinaryDecoder
         }
 #endif
 #if NET8_0_OR_GREATER
-        if (System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported)
+        // The property, not a second copy of the condition: the parity tests skip on
+        // IsAdvSimdTierSupported, so a gate that drifted from it would let them compare
+        // the scalar tier against itself.
+        if (IsAdvSimdTierSupported)
         {
             return ComputeSyndromesAdvSimd(codeword, eccCount, syndromes);
         }

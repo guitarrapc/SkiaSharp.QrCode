@@ -844,6 +844,14 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
+    /// Narrowest column count the Vector128 samplers accept: one whole lane group. No
+    /// rMQR width comes near it (the narrowest symbol is 27 columns wide), and
+    /// RmQRSampleGridParityTest asserts that, so this is the one place the threshold
+    /// lives — a test that repeated the literal would pin nothing.
+    /// </summary>
+    internal const int Simd128MinColumns = 8;
+
+    /// <summary>
     /// Samples every module center of the rectangular grid through the transform.
     /// Out-of-range positions clamp to the nearest edge pixel.
     /// </summary>
@@ -862,14 +870,6 @@ internal static class RmQRImageDecoder
     /// perspectiveX = perspectiveY = 0, and there the denominator is exactly 1f, so
     /// both divisions can be skipped without changing a sampled byte.
     /// </remarks>
-    /// <summary>
-    /// Narrowest column count the Vector128 samplers accept: one whole lane group. No
-    /// rMQR width comes near it (the narrowest symbol is 27 columns wide), and
-    /// RmQRSampleGridParityTest asserts that, so this is the one place the threshold
-    /// lives — a test that repeated the literal would pin nothing.
-    /// </summary>
-    internal const int Simd128MinColumns = 8;
-
     internal static void SampleGrid(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
     {
 #if NET8_0_OR_GREATER

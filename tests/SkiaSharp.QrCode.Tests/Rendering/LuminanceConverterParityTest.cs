@@ -386,4 +386,110 @@ public class LuminanceConverterParityTest
         await Assert.That(covered).IsGreaterThanOrEqualTo(floor)
             .Because($"layout {layout}: only {covered} of at least {floor} cases reached a vector kernel");
     }
+
+    /// <summary>
+    /// One alpha shape per ROW rather than per image, so the straight-alpha kernel's row
+    /// mode actually changes mid-image.
+    /// </summary>
+    /// <remarks>
+    /// Every other case in this file fills a whole image from ONE alpha shape, so the
+    /// NEON tier's row mode is decided on row 0 and, whichever way it goes, the decision
+    /// is never revisited on a row that would decide differently. Mixing the shapes by
+    /// row is what makes the transitions themselves a designed case: an optimistic row
+    /// that turns out to carry alpha and must be redone by the classifier at y &gt; 0, an
+    /// opaque row reached THROUGH the classifier, and the sticky composite-only mode
+    /// latching on a later row and then having to stay exact over an opaque one.
+    /// <para>
+    /// The row order below walks all of them: opaque (stays optimistic),
+    /// transparent-or-opaque (optimistic falls, classifier whitens, sticky mode stays
+    /// off), opaque again (classified all-255 block), partial (classifier composites and
+    /// latches the sticky mode), opaque again (composite-only over an opaque row), and
+    /// partial once more.
+    /// </para>
+    /// <para>
+    /// Honest about what this adds: the row modes are fail-SAFE by construction — every
+    /// mode but the optimistic one is a specialization of the exact composite, so picking
+    /// the wrong mode costs speed, not bytes. The one mode that can be wrong is the
+    /// optimistic pass, and its accept test is per row. Verified by mutation: hoisting
+    /// the row/dest refs out of the row loop, and deciding the row mode once from row 0
+    /// (<c>y &gt; 0 || opaque</c>), both fail here — but both also happen to fail the
+    /// uniform test above, on the single 16x5 partial-alpha case whose first row the
+    /// generator happens to make opaque. That is luck of the seed, not coverage; this
+    /// test is what makes the transitions deliberate.
+    /// </para>
+    /// </remarks>
+    [Test]
+    [MethodDataSource(nameof(Layouts))]
+    public async Task VectorTier_MatchesScalarTier_WhenTheAlphaShapeChangesPerRow(int layout)
+    {
+        if (!LuminanceConverter.IsAvx2TierSupported && !LuminanceConverter.IsAdvSimdTierSupported)
+        {
+            Skip.Test("No vector tier (AVX2 or NEON) on this machine");
+            return;
+        }
+
+        var (ro, go, bo, ao) = Offsets(layout);
+        if (!LuminanceConverter.IsVectorTierTakenForLayout(ro, go, bo))
+        {
+            Skip.Test($"No vector kernel converts layout {layout} here");
+            return;
+        }
+        if (ao < 0)
+        {
+            Skip.Test("Rgb888x carries no alpha, so it has no row modes to change");
+            return;
+        }
+
+        // The row modes latch, so the sequence is walked in order and also rotated: a
+        // shape that only ever appears after the sticky mode is on would otherwise never
+        // be seen by the classifier at all.
+        int[][] rowShapes =
+        [
+            [0, 2, 0, 3, 0, 3],
+            [0, 0, 3, 2, 0, 1],
+            [3, 0, 0, 2, 1, 0],
+            [1, 0, 2, 0, 3, 0],
+        ];
+
+        var covered = 0;
+        var floor = 0;
+        foreach (var premultiplied in new[] { false, true })
+        {
+            foreach (var shapes in rowShapes)
+            {
+                foreach (var width in new[] { 16, 17, 20, 24, 32, 33, 43, 139 })
+                {
+                    floor += 2; // every width here is at or above AlwaysVectorWidth
+                    if (!LuminanceConverter.IsVectorTierTaken(width, ro, go, bo))
+                        continue;
+
+                    foreach (var pad in new[] { 0, 12 })
+                    {
+                        covered++;
+                        var height = shapes.Length;
+                        var rowBytes = width * 4 + pad;
+                        var pixels = new byte[rowBytes * height];
+                        for (var y = 0; y < height; y++)
+                        {
+                            var row = MakePixels(width, 1, rowBytes, shapes[y], width * 13 + y * 7 + pad, ao);
+                            row.AsSpan(0, rowBytes).CopyTo(pixels.AsSpan(y * rowBytes));
+                        }
+
+                        var expected = new byte[width * height];
+                        LuminanceConverter.ConvertRgbaForTest(pixels, expected, width, height, rowBytes, ro, go, bo, ao, premultiplied, LuminanceConverter.ConvertTier.Scalar);
+
+                        var actual = new byte[width * height];
+                        actual.AsSpan().Fill(0xA5);
+                        LuminanceConverter.ConvertRgbaForTest(pixels, actual, width, height, rowBytes, ro, go, bo, ao, premultiplied, LuminanceConverter.ConvertTier.Vector);
+
+                        await Assert.That(actual).IsEquivalentTo(expected, CollectionOrdering.Matching)
+                            .Because($"layout {layout}, {width}x{height}, rowBytes {rowBytes}, rowShapes [{string.Join(",", shapes)}], premultiplied {premultiplied}");
+                    }
+                }
+            }
+        }
+
+        await Assert.That(covered).IsGreaterThanOrEqualTo(floor)
+            .Because($"layout {layout}: only {covered} of at least {floor} cases reached a vector kernel");
+    }
 }

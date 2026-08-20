@@ -332,7 +332,8 @@ internal static class RmQRBinaryEncoder
 
     /// <summary>
     /// Byte segment for Default / ISO-8859-1 text (every char ≤ 0xFF, validated by
-    /// the analyzer): 8 chars narrow to one 64-bit append on SSE2, scalar otherwise.
+    /// the analyzer): 8 chars narrow to one 64-bit append on SSE2, 16 chars to two on
+    /// any other 128-bit vector target (ARM64, WASM), scalar otherwise.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void WriteLatin1(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, ReadOnlySpan<char> text, bool vectorized)

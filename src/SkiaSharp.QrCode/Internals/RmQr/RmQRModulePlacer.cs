@@ -261,10 +261,11 @@ internal static partial class RmQRModulePlacer
 #if NET8_0_OR_GREATER
         if (IsNeonTierSupported && kernel != PlaceKernel.Portable)
         {
-            // Literal, not `stride != width`: ScatterNeon is AggressiveInlining and
-            // branches on `strided` per row run, so a constant argument folds those
-            // branches away. ScatterPairs below is called the same way for the same
-            // reason.
+            // Literal, not `stride != width`: ScatterPairs below is AggressiveInlining
+            // and branches on `strided` inside its per-pair loop, so a constant argument
+            // folds those branches away, and both call sites are written the same way.
+            // ScatterNeon is deliberately NOT inlined (it is far too large) and tests
+            // `strided` once, outside its loops, so there the literal buys only symmetry.
             if (stride == width)
                 ScatterNeon(destination, bits, layout, height, width, strided: false);
             else
