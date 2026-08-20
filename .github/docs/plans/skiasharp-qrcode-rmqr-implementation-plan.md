@@ -236,7 +236,7 @@ M2 at 3.3-4.1x over the scalar walk; it is not an open rMQR ARM gap.
 | **N0 (done)** | ARM64 baseline and component attribution | There is no current rMQR ARM64 E2E record. Existing x64 numbers identify candidates but cannot rank ARM instruction costs or memory bandwidth. | Record encode, matrix decode, luminance-span image decode, bitmap decode, clean/error-corrected matrices, and both no-symbol cases on one pinned ARM64 machine before changing kernels. Add forced-portable vs automatic-dispatch kernel cases for every item below. |
 | **N1 (shipped)** | NEON `LuminanceConverter` | ARM64 currently takes the per-pixel scalar BGRA/RGBA path. On x64 this conversion was 69 % of bitmap decode before AVX2 and the isolated kernel improved 14-30x, so this is the strongest real-input decode candidate and benefits all symbologies. | Ship only with byte-exact parity for all layouts/alpha modes and a material bitmap E2E win. If conversion is under 10 % of ARM bitmap decode, demote it behind N2. |
 | **N2 (next)** | NEON rMQR codeword extraction | ARM64 cannot enter the AVX2+BMI2 bit-plane tier and uses the portable gather. Extraction was 70-91 % of matrix decode before the x64 tier; x64 matrix E2E improved 5-8x. This is the highest-priority rMQR-specific gap. | Compare at least a NEON column-plane builder plus scalar/SWAR bit compression against the current table walk; ARM has no PEXT/PDEP, so do not transliterate the x64 kernel. Keep a new tier only if it wins on small, narrow and largest symbols, not just R17x139. |
-| **N3 (profile-gated)** | NEON RS syndrome computation in `EccBinaryDecoder` | Clean blocks always compute syndromes, and ARM64 currently lacks the x64 GFNI decoder tier. It may become the matrix-decode bottleneck after N2, especially for R17x139 and corrected blocks, but it was under 1 % in the optimized x64 profile. | Start only if N0/N2 show at least 5 % of ARM matrix decode here. Benchmark clean, within-capacity corrected, and uncorrectable blocks; do not optimize Berlekamp-Massey/Chien/Forney unless their damaged-symbol profile independently justifies it. |
+| **N3 (shipped)** | NEON RS syndrome computation in `EccBinaryDecoder` | Clean blocks always compute syndromes, and ARM64 lacked the x64 GFNI decoder tier. The gate asked for at least 5 % of ARM matrix decode; N0 showed it was essentially **all** of it (matrix decode is linear in syndrome iteration count at 3.07-3.15 ns/iteration across a 50x size range). | Passed by a wide margin. Shipped as `EccBinaryDecoder.Simd.Arm.cs`; results below. Berlekamp-Massey/Chien/Forney remain scalar, as the stop rule required. |
 | **N4** | NEON rMQR placement expansion | The cached template and store/scatter design is already portable, but `ExpandBitsMasked` only has AVX2/SSSE3 vector tiers. The 16-module `TBL` + `CMTST` idiom already exists in the Micro QR placer and `ModuleBitPacker`, making this low-risk ARM work. | Port the proven idiom, add a named forced-NEON parity entry, and require an encode E2E win outside the ARM canary band. Do not rewrite the strided scatter unless profiling identifies it separately. |
 | **N5 (profile-gated)** | Vector128/NEON rectangular grid sampling | rMQR `SampleGrid` is scalar while Standard QR already has a bit-identical 128-bit row kernel usable by ARM64. The work is only one sample per module (at most 2,363), so pixel scanning and matrix decode are expected to dominate first. | Share/generalize the Standard QR kernel only if it is at least 5 % of ARM luminance-span decode after N2. Preserve scalar floating-point operation order and exact sampled bytes; otherwise leave it scalar. |
 | **N6 (last)** | NEON rMQR numeric/alphanumeric/Latin-1 writers | ARM64 currently uses the already-fast SWAR/table writers. On x64 the much larger SIMD kernel gains moved encode E2E by only 1-7 % before placement was fixed, and the current pipeline is hundreds of nanoseconds to about one microsecond. | Attempt only if post-N4 profiling shows segment writing at least 5 % E2E. Start with Latin-1 narrowing, then alphanumeric/numeric; stop when gains fall inside the canary band. UTF-8 stays in `Encoding.UTF8`. |
@@ -401,10 +401,106 @@ overlapping tail (16/17/20/24 — width 20 makes the final block redo 12 already
 pixels), and the over-write test covers all four alpha shapes because the NEON tier has four
 row modes with separate tail arithmetic. Full suite green: 5,685 tests, 0 failed.
 
-Next per the queue: **N2 (NEON rMQR codeword extraction)**. N0 gives it its baseline — matrix
-decode is 14.33 us clean / 27.16 us corrected at R17x139 — and the correctable-damage figure
-already suggests N3's syndrome work is not the lever there; the correction stages are, since
-they account for the whole 12.8 us difference while syndrome generation runs in both cases.
+Next per the queue was **N2 (NEON rMQR codeword extraction)**, which has since been
+withdrawn; **N3** was taken instead and is recorded below.
+
+**Correction to the N0 reading.** The sentence originally here claimed that "the correction
+stages account for the whole 12.8 us difference while syndrome generation runs in both
+cases", and used that to argue N3 was not the lever on damaged symbols. That is wrong:
+`TryCorrect` recomputes the syndromes after applying corrections to guard against silent
+miscorrection, so a corrected block runs the syndrome pass **twice**. Roughly 10 us of the
+12.8 us gap is that second pass. N3 therefore pays on damaged blocks harder than on clean
+ones, which is exactly what the measured result shows (6.47x corrected vs 4.10x clean at
+R17x139).
+
+#### ARM64 results: N3 (completed 2026-08-20)
+
+Same machine and contract as N0/N1. Kernel search ran seven rounds in the private
+MicroBenchmarks repo (24 variants; the final correctness gate is 28,704 comparisons per
+run, covering every ECC count 1-30 x lengths straddling each unroll boundary x
+all-zero/all-dark/random seeds x a poisoned destination). Full log with refutations lives
+there as `MICRO_OPTIMIZATION_EccDecodeArm.md`.
+
+**Why the gate passed on N0 data alone.** Syndrome inner-loop iterations versus the N0
+matrix-decode measurements:
+
+| Symbol | iterations (blocks x cw x ecc) | matrix decode | ns / iteration |
+|---|---:|---:|---:|
+| R7x43 M | 1 x 13 x 7 = 91 | 279.6 ns | 3.07 |
+| R11x59 M | 1 x 47 x 16 = 752 | 2,367.6 ns | 3.15 |
+| R17x139 M | 4 x 58 x 20 = 4,640 | 14,326.4 ns | 3.09 |
+
+A constant of ~3.1 ns/iteration across a 50x size range means ARM matrix decode was
+essentially this one kernel. On x64 the same item was under 1 % *after* its GFNI tier —
+the ARM position was the pre-GFNI one.
+
+**Design, and why it is not a port of the GFNI kernel.** GF2P8MULB multiplies every lane by
+a per-lane constant in one instruction but is hardwired to the AES polynomial, so the x64
+kernel spends its design on a field isomorphism to borrow it. NEON has no such instruction,
+but PMULL/PMUL carry no fixed modulus, so ARM needs **no isomorphism at all** and instead
+pays for the reduction mod 0x11D itself. The shipped step is:
+
+```
+acc' = Reduce(PMULL(acc, alpha^4i)) ^ T3[c0] ^ T2[c1] ^ T1[c2] ^ broadcast(c3)
+```
+
+- **Table reads for the data terms.** `c * alpha^(k*i)` depends only on the byte and the
+  step, so it is read as a ready-made 32-byte vector: three loads + three XORs replace six
+  PMULL + six EOR. The tables cost 24 KB, built lazily and published with a release store.
+  A 3 KB nibble-split alternative was measured and lost by 20-78 %, so the footprint buys
+  real work — but that verdict comes from a 128 KB L1D, which is why the scalar tier was
+  also improved rather than left behind.
+- **Reduction by table lookup.** A product's high half has degree <= 6, so splitting it into
+  nibbles indexes two 16-entry tables of already-reduced contributions:
+  `UZP -> AND -> TBL -> EOR` instead of `UZP -> PMULL -> UZP -> PMUL -> EOR`.
+- **The reduction tables are hoisted into locals.** Load-bearing, not style: the JIT does not
+  CSE `Vector128.Create` over a static array across the loop body, so leaving them inline
+  makes every reduction pay two extra loads — up to 20 % of the kernel.
+- **Blocks needing <= 16 syndromes drive one accumulator group.** Halving the vector work
+  buys only ~20 % of the time, which is the clearest evidence the loop is bound by the
+  `acc -> PMULL -> reduce -> EOR` chain: the second group ran mostly in the first's stall slots.
+- **Scalar tier upgraded too.** `ComputeSyndromesScalar` now runs four syndromes per pass
+  over the codeword (2.2-2.9x on large blocks, no ISA dependency). This is the path
+  netstandard2.0/2.1 and any non-GFNI, non-AdvSimd CPU takes.
+
+Kernel, final round, all variants in one run (`--launchCount 3`), versus the shipped scalar:
+**11.2x (R7x43 M), 15.2x (R7x43 H), 32.5x (R11x59 M), 43.1x (R17x139 H), 35.0x (R17x139 M),
+61.3x (Standard QR v40-L)**, zero allocations.
+
+E2E (`RmQRDecodeEndToEnd`, identical benchmark binary, library stashed between runs,
+`IterationCount=15 LaunchCount=3 WarmupCount=3`):
+
+| Scenario | before | after | change |
+|---|---:|---:|---:|
+| R7x43 clean (span) | 322.4 ns | **202.3 ns** | **1.59x** |
+| R11x59 clean (span) | 2,757.2 ns | **812.5 ns** | **3.39x** |
+| R17x139 clean (span) | 16,759.3 ns | **4,087.1 ns** | **4.10x** |
+| R7x43 corrected (span) | 632.6 ns | **399.8 ns** | **1.58x** |
+| R17x139 corrected (span) | 31,732.1 ns | **4,904.9 ns** | **6.47x** |
+| R17x139 clean (string) | 16,816.9 ns | **3,509.8 ns** | **4.79x** |
+| Standard QR v1 clean (span) | 1,585.8 ns | **1,103.3 ns** | **1.44x** |
+| R7x43 encode (span, control) | 208.4 ns | 194.2 ns | -6.8 % (drift) |
+
+Allocations unchanged (48 B / 328 B are the decoded strings). Acceptance gate (>= 5 % E2E,
+outside the unchanged-control band): passed — the control moved 6.8 %, every decode scenario
+moved 30-85 %. Corrected decode improves more than clean, confirming the correction above:
+the verification pass is a second syndrome computation.
+
+**Measurement note, and a process change.** This machine drifts **+16 % to +50 % between runs
+on byte-identical code** at kernel scale (R11x59 measured 56.70 ns and 84.95 ns for the same
+variant in consecutive rounds). One mid-loop conclusion was drawn from a cross-run comparison
+and had to be withdrawn: a 2-chain split appeared to win 40 % in one round and lose 12 % in
+the next, and the mechanism inferred from that gap did not exist — measured in a single run,
+the two reduction strategies land within a few percent at equal chain counts. Decision rounds
+now require `--launchCount 3`, all candidates in one run, and a byte-identical **noise canary**
+variant; the canary puts this harness's true resolution at 13.3 % at 10 ns and 0.1-4.8 % at
+60-300 ns. Do not compare numbers across runs.
+
+**Deliberately not shipped**, both recorded with numbers in the private log: a 2-chain split
+(did not reproduce; inside the drift band) and a 4-chain split (real, -21.5 %, but only at
+149 codewords — no rMQR block exceeds 68, and it loses badly at rMQR sizes). The latter is a
+Standard-QR-only opportunity; the log carries a stride-16 redesign needing 160 B of baked
+constants instead of the 8 KB table the measured version used.
 
 Items deliberately below the NEON queue: Otsu histogramming (serial histogram updates and
 already near its measured per-pixel floor), sub-finder/perspective search (branchy,
