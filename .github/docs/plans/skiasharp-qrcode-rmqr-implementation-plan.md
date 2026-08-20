@@ -237,7 +237,7 @@ M2 at 3.3-4.1x over the scalar walk; it is not an open rMQR ARM gap.
 | **N1 (shipped)** | NEON `LuminanceConverter` | ARM64 currently takes the per-pixel scalar BGRA/RGBA path. On x64 this conversion was 69 % of bitmap decode before AVX2 and the isolated kernel improved 14-30x, so this is the strongest real-input decode candidate and benefits all symbologies. | Ship only with byte-exact parity for all layouts/alpha modes and a material bitmap E2E win. If conversion is under 10 % of ARM bitmap decode, demote it behind N2. |
 | **N2 (shipped)** | NEON rMQR codeword extraction | ARM64 cannot enter the AVX2+BMI2 bit-plane tier and uses the portable gather. Extraction was 70-91 % of matrix decode before the x64 tier; x64 matrix E2E improved 5-8x. This is the highest-priority rMQR-specific gap. | Compare at least a NEON column-plane builder plus scalar/SWAR bit compression against the current table walk; ARM has no PEXT/PDEP, so do not transliterate the x64 kernel. Keep a new tier only if it wins on small, narrow and largest symbols, not just R17x139. |
 | **N3 (shipped)** | NEON RS syndrome computation in `EccBinaryDecoder` | Clean blocks always compute syndromes, and ARM64 lacked the x64 GFNI decoder tier. The gate asked for at least 5 % of ARM matrix decode; N0 showed it was essentially **all** of it (matrix decode is linear in syndrome iteration count at 3.07-3.15 ns/iteration across a 50x size range). | Passed by a wide margin. Shipped as `EccBinaryDecoder.Simd.Arm.cs`; results below. Berlekamp-Massey/Chien/Forney remain scalar, as the stop rule required. |
-| **N4 (next)** | NEON rMQR placement expansion | The cached template and store/scatter design is already portable, but `ExpandBitsMasked` only has AVX2/SSSE3 vector tiers. The 16-module `TBL` + `CMTST` idiom already exists in the Micro QR placer and `ModuleBitPacker`, making this low-risk ARM work. | Port the proven idiom, add a named forced-NEON parity entry, and require an encode E2E win outside the ARM canary band. Do not rewrite the strided scatter unless profiling identifies it separately. |
+| **N4 (shipped)** | NEON rMQR placement expansion | The cached template and store/scatter design is already portable, but `ExpandBitsMasked` only has AVX2/SSSE3 vector tiers. The 16-module `TBL` + `CMTST` idiom already exists in the Micro QR placer and `ModuleBitPacker`, making this low-risk ARM work. | Port the proven idiom, add a named forced-NEON parity entry, and require an encode E2E win outside the ARM canary band. Do not rewrite the strided scatter unless profiling identifies it separately. |
 | **N5 (profile-gated)** | Vector128/NEON rectangular grid sampling | rMQR `SampleGrid` is scalar while Standard QR already has a bit-identical 128-bit row kernel usable by ARM64. The work is only one sample per module (at most 2,363), so pixel scanning and matrix decode are expected to dominate first. | Share/generalize the Standard QR kernel only if it is at least 5 % of ARM luminance-span decode after N2. Preserve scalar floating-point operation order and exact sampled bytes; otherwise leave it scalar. |
 | **N6 (last)** | NEON rMQR numeric/alphanumeric/Latin-1 writers | ARM64 currently uses the already-fast SWAR/table writers. On x64 the much larger SIMD kernel gains moved encode E2E by only 1-7 % before placement was fixed, and the current pipeline is hundreds of nanoseconds to about one microsecond. | Attempt only if post-N4 profiling shows segment writing at least 5 % E2E. Start with Latin-1 narrowing, then alphanumeric/numeric; stop when gains fall inside the canary band. UTF-8 stays in `Encoding.UTF8`. |
 
@@ -504,6 +504,111 @@ variant; the canary puts this harness's true resolution at 13.3 % at 10 ns and 0
 Standard-QR-only opportunity; the log carries a stride-16 redesign needing 160 B of baked
 constants instead of the 8 KB table the measured version used.
 
+#### ARM64 results: N4, NEON rMQR placement (completed 2026-08-20, after N2)
+
+Kernel search ran six rounds in the private harness (`RmQrPlaceArmBenchmark`, 13 variants and
+2 phase probes, byte-identical gate of 4,480 placements per round against the per-module
+reference — all 32 versions × 2 ECC × all-zero / all-one / two pseudo-random / over-long
+messages on a poisoned core). Apple M2, net10.0 Release.
+
+**The work package named the wrong half.** N4 was written as "port the Micro QR `TBL` + `CMTST`
+idiom to `ExpandBitsMasked`", on the reasoning that ARM64 had no vector tier there at all. Two
+phase probes (template copy only; copy + expand) sized the phases before any kernel was written:
+
+| Scenario | template copy | expand (scalar) | store pass |
+|---|---|---|---|
+| R7x43_M | 9 % | 43 % | 48 % |
+| R11x59_M | 5 % | 46 % | 49 % |
+| R13x99_H | 4 % | 41 % | 55 % |
+| R17x139_M | 3 % | 38 % | 59 % |
+
+The missing expand tier was real and worth 5.2x on its own phase, but the store pass was the
+larger half at every size. That is the "profiling identifies it separately" condition this
+document set for touching the scatter, so the remaining five rounds went there.
+
+**Shipped (`RmQRModulePlacer.Simd.Arm.cs` + an AdvSimd tier in `ExpandBitsMasked`):**
+
+- *Expand*: the planned `TBL` + `CMTST` idiom, 2 message bytes → 16 module bytes per step.
+  `CMTST` (0xFF where `(a & b) != 0`) is the per-lane bit test x86 lacks, so SSSE3's AND +
+  compare-equal pair is one instruction. Phase measurement: 546 → 106 ns at R17x139.
+- *Store*: four consecutive clean column pairs — eight consecutive columns — are transposed in
+  registers (`UZP1`/`UZP2` separates each pair's two column vectors, `TBL` flips the
+  upward-walked ones into row order, a three-stage `ZIP` network puts symbol row *i* in 64-bit
+  lane *i & 1* of vector *i / 2*), so one symbol row is one 8-byte store: **one store per eight
+  modules instead of one per two**.
+- *Segmentation*: the portable tier's per-pair "is this whole column pair clean?" test is
+  replaced by per-row runs. A single function module anywhere in a pair used to send the whole
+  pair to byte scatter; on R11x27 that is 56 % of the symbol, of which **91.8 % actually sits in
+  stretches of rows where both columns are ordinary data**. Only 4-12 % of a symbol is
+  genuinely isolated and still scattered a byte at a time.
+- *Portable side effect*: the scalar expand tail became branch-free SWAR
+  (`b * 0x8040201008040201 >> 7 & 0x0101…`, one source bit per product bit so no carries), one
+  multiply and one 8-byte store per message byte instead of eight loads, shifts and byte
+  stores. This is what netstandard2.0 and non-SIMD targets run for the whole message; on x64 it
+  only covers the final odd byte after SSSE3.
+
+Kernel, versus the shipped portable path, same-run ratios (round 6, canary 0.99-1.04):
+
+| Scenario | ratio |
+|---|---|
+| R7x43_M | 0.56 |
+| R11x27_M | 0.68 |
+| R11x59_M | 0.50 |
+| R13x99_H | 0.34 |
+| R17x139_M | 0.29 |
+
+Encode E2E through the public API (`RmQREncodeEndToEnd`, medians of four alternating process
+launches per side, because a single pair moved the untouched Standard QR control by 17 %):
+
+| Benchmark | before | after | delta |
+|---|---|---|---|
+| RmQR_Numeric_R7x43_Encode | 224.4 ns | 181.7 ns | −19.0 % |
+| RmQR_Alphanumeric_R11x59_Encode | 476.4 ns | 370.4 ns | −22.2 % |
+| RmQR_Byte_R17x139_Encode | 2,079.4 ns | 1,328.4 ns | −36.1 % |
+| RmQR_Numeric_R7x43_Encode (Span) | 207.9 ns | 164.4 ns | −20.9 % |
+| RmQR_Alphanumeric_R11x59_Encode (Span) | 481.3 ns | 333.5 ns | −30.7 % |
+| RmQR_Byte_R17x139_Encode (Span) | 2,050.6 ns | 1,170.1 ns | −42.9 % |
+| RmQR_Latin1_ECI_R17x139_Encode (Span) | 1,966.6 ns | 1,143.3 ns | −41.9 % |
+| RmQR_UTF8_ECI_R17x139_Encode (Span) | 1,976.4 ns | 1,045.4 ns | −47.1 % |
+| RmQR_Numeric_AutoFit_Encode (Span) | 255.3 ns | 211.5 ns | −17.2 % |
+| StandardQr_Numeric_V1_Encode (Span), unchanged control | 2,582.1 ns | 2,466.6 ns | −4.5 % |
+
+The control's −4.5 % is the residual cross-run drift, so the honest rMQR figures are roughly
+15-43 %. The E2E deltas are consistent with the kernel deltas: placement is now about half of
+the encode pipeline rather than nearly all of it, so a 71 % kernel saving at R17x139 shows up
+as 43 % E2E, and the smallest symbol (44 % kernel saving, more fixed pipeline cost around it)
+as 21 %. Allocations unchanged (class results are the returned objects; span paths 0 B). The
+one-time per-version tables gain the block/run/single segmentation, built only where
+`AdvSimd.Arm64.IsSupported` — a JIT constant, so x64 neither builds nor carries them.
+
+**Two designs were measured and rejected, both about coverage:**
+
+- *Generalized blocks* (a block is four adjacent pairs × their common data row range, not four
+  fully clean pairs) raised in-block coverage from 77 % to 89 % at R17x139 and from 0 % to
+  52 % at R11x27, and **lost at every size**. The `ZIP` network costs a fixed ~40 instructions
+  per block whatever its height, so a 4-row block pays a 15-row block's price for a quarter of
+  the modules and takes those modules away from the cheaper run path. Raising the minimum block
+  height to 8 rows recovered a tie at the largest symbol and still lost everywhere else.
+- *Branch-free split lists* (per-version clean-up / clean-down / irregular lists, removing both
+  per-pair branches) lost to the plain kernel at R17x139. Splitting the pairs out of walk order
+  destroys the bit array's read locality, and at 1,858 bytes that costs more than the branches
+  saved. Branch count was not the right objective.
+
+Also rejected: a wider expand step (4 message bytes per iteration) both via `CreateScalarUnsafe`
+(loses — the GPR→SIMD `FMOV` is paid every iteration, where `LD1R` replicates straight from
+memory) and via two independent `LD1R` broadcasts (ties — the expand is not load-bound).
+
+The shipped kernel is deliberately the ref-based form: `UZP1`/`UZP2` instead of `LD2` and 64-bit
+half-stores instead of `ST1 {v.d}[i]`, because the library does not set `AllowUnsafeBlocks` and
+`LuminanceConverter.Simd.Arm.cs` already records that decision. The pointer form measured
+somewhat better in the private harness; revisit only as a deliberate library-wide change.
+
+`RmQRModulePlacerParityTest` gained a forced-ARM64 entry (`PlaceKernel.Neon`, mirroring the
+matrix decoder's `ExtractKernel` selector) covering every version × ECC × message shape through
+both the tight and the quiet-zoned strided destination, with the quiet-zone bytes asserted
+untouched — the strided path derives its own row pitch, so a tier that is byte-exact at
+stride == width can still be wrong at stride > width. Full suite green: 5,619 passed, 0 failed.
+
 #### ARM64 results: N2, NEON rMQR codeword extraction (completed 2026-08-20, after N3)
 
 **Shipped; acceptance gate passed.** Seven rounds in the private MicroBenchmarks repo
@@ -587,8 +692,10 @@ rather than merely a noisy one.
 poisoned destination, and the overread-bound test runs for both vector transposes. Full suite
 green: 5,691 tests, 0 failed.
 
-Next per the queue: **N4 (NEON rMQR placement expansion)**, porting the Micro QR `TBL` +
-`CMTST` idiom to `ExpandBitsMasked`. N5 and N6 stay profile-gated.
+**N4 is shipped; results below.** Next per the queue: **N5 (Vector128/NEON rectangular grid
+sampling)** and **N6 (NEON segment writers)**, both still profile-gated — N4 shrank the encode
+denominator by 17-43 %, so N6's "at least 5 % of E2E" gate must be re-measured against the new
+pipeline, not the old one.
 
 Items deliberately below the NEON queue: Otsu histogramming (serial histogram updates and
 already near its measured per-pixel floor), sub-finder/perspective search (branchy,

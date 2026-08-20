@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
 using System.Runtime.Intrinsics.X86;
 #endif
 
@@ -56,7 +57,7 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// column first, skipping function modules; bits beyond the final message are
 /// remainder bits and are light before masking.
 /// </remarks>
-internal static class RmQRModulePlacer
+internal static partial class RmQRModulePlacer
 {
     /// <summary>The single rMQR data mask (ISO/IEC 23941 7.8): dark when ((row / 2) + (col / 3)) is even.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -162,7 +163,7 @@ internal static class RmQRModulePlacer
         // remainder bits), mask already applied. Fixed stack budget, pool fallback.
         if (count <= StackBitBudget)
         {
-            Span<byte> bits = stackalloc byte[StackBitBudget];
+            Span<byte> bits = stackalloc byte[StackBitBudget + VectorSlack];
             PlaceCore(destination, stride, layout, template, height, width, message, bits);
         }
         else
@@ -179,9 +180,11 @@ internal static class RmQRModulePlacer
         }
     }
 
-    // 512 B covers every version with <= 63 total codewords (504 data modules + slack);
-    // larger symbols rent. The AVX2 expand step writes 32 bytes per 4 message bytes, so
-    // the scratch carries 32 bytes of slack past the module count.
+    // 512 modules covers every version with <= 63 total codewords; larger symbols rent.
+    // Both paths carry VectorSlack bytes past the module count: the AVX2 expand step
+    // writes 32 bytes per 4 message bytes, and the ARM64 store tier reads a fixed 32
+    // bytes per column pair (a pair holds at most 2 x 15 modules), so the last pair of
+    // the last transpose block can read past the module count.
     private const int StackBitBudget = 512;
     private const int VectorSlack = 32;
 
@@ -209,6 +212,42 @@ internal static class RmQRModulePlacer
     // Fast path
     // ---------------------------------------------------------------
 
+    /// <summary>Whether the ARM64 block/run store tier runs on this machine (parity tests skip it otherwise).</summary>
+    internal static bool IsNeonTierSupported =>
+#if NET8_0_OR_GREATER
+        System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported;
+#else
+        false;
+#endif
+
+    /// <summary>Which store kernel to run; anything but <see cref="PlaceKernel.Auto"/> is for parity tests.</summary>
+    internal enum PlaceKernel
+    {
+        /// <summary>The fastest tier this machine supports.</summary>
+        Auto,
+        /// <summary>Portable pair stores + index scatter, on every target.</summary>
+        Portable,
+        /// <summary>ARM64 register transpose blocks + row runs + single scatter.</summary>
+        Neon,
+    }
+
+    /// <summary>Kernel-selecting entry; <paramref name="kernel"/> pins one tier for parity tests.</summary>
+    internal static void PlaceSymbol(Span<byte> destination, int stride, RmQRVersion version, RmQREccLevel eccLevel, ReadOnlySpan<byte> finalMessage, PlaceKernel kernel)
+    {
+        _kernel = kernel;
+        try
+        {
+            PlaceSymbol(destination, stride, version, eccLevel, finalMessage);
+        }
+        finally
+        {
+            _kernel = PlaceKernel.Auto;
+        }
+    }
+
+    [ThreadStatic]
+    private static PlaceKernel _kernel;
+
     private static void PlaceCore(Span<byte> destination, int stride, Layout layout, byte[] template, int height, int width, ReadOnlySpan<byte> finalMessage, Span<byte> bits)
     {
         if (stride == width)
@@ -221,6 +260,13 @@ internal static class RmQRModulePlacer
                 template.AsSpan(row * width, width).CopyTo(destination.Slice(row * stride, width));
         }
         ExpandBitsMasked(finalMessage, layout.Masks, layout.DataModuleCount, bits);
+#if NET8_0_OR_GREATER
+        if (_kernel != PlaceKernel.Portable && IsNeonTierSupported)
+        {
+            ScatterNeon(destination, bits, layout, height, stride, strided: stride != width);
+            return;
+        }
+#endif
         ref var dest = ref MemoryMarshal.GetReference(destination);
         ref var src = ref MemoryMarshal.GetReference(bits);
         if (stride == width)
@@ -270,7 +316,38 @@ internal static class RmQRModulePlacer
                 ((Vector128.Equals(m, bitm) & one) ^ Vector128.LoadUnsafe(ref msk, (nuint)(k * 8))).StoreUnsafe(ref dst, (nuint)(k * 8));
             }
         }
+        if (AdvSimd.Arm64.IsSupported)
+        {
+            // Same 16 modules per step as SSSE3, but CMTST (0xFF where (a & b) != 0)
+            // is the per-lane bit test x86 lacks, so the AND + compare-equal pair is
+            // one instruction; the broadcast is a load-replicate straight from memory.
+            var sel = Vector128.Create((byte)0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1);
+            var bitm = Vector128.Create((byte)128, 64, 32, 16, 8, 4, 2, 1, 128, 64, 32, 16, 8, 4, 2, 1);
+            var one = Vector128.Create((byte)1);
+            for (; k + 2 <= byteCount; k += 2)
+            {
+                var v = Vector128.Create(Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref src, k))).AsByte();
+                var repl = AdvSimd.Arm64.VectorTableLookup(v, sel);
+                ((AdvSimd.CompareTest(repl, bitm) & one) ^ Vector128.LoadUnsafe(ref msk, (nuint)(k * 8))).StoreUnsafe(ref dst, (nuint)(k * 8));
+            }
+        }
 #endif
+        // Portable tail (whole message on netstandard and non-SIMD targets): the
+        // multiply spreads bit 7-j of the byte to bit 8j+7 of the product, one source
+        // bit per product bit so no carries can occur, and the shift + mask leaves the
+        // eight module bytes in one register — one multiply and one 8-byte store
+        // instead of eight loads, shifts and byte stores. Little-endian only: the
+        // product's byte order is the module order.
+        if (BitConverter.IsLittleEndian)
+        {
+            for (; k < byteCount; k++)
+            {
+                ulong b = Unsafe.Add(ref src, k);
+                var expanded = ((b * 0x8040201008040201UL) >> 7) & 0x0101010101010101UL;
+                ref var d = ref Unsafe.Add(ref dst, k * 8);
+                Unsafe.WriteUnaligned(ref d, expanded ^ Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref msk, k * 8)));
+            }
+        }
         for (; k < byteCount; k++)
         {
             int b = Unsafe.Add(ref src, k);
@@ -389,6 +466,49 @@ internal static class RmQRModulePlacer
         }
     }
 
+    /// <summary>
+    /// Four consecutive clean column pairs — eight consecutive columns — that the ARM64
+    /// tier transposes in registers. Consecutive clean pairs occupy consecutive walk
+    /// positions, so the first pair's start locates all four.
+    /// </summary>
+    private readonly struct BlockSegment
+    {
+        public readonly int LeftCol;   // leftmost of the eight columns
+        public readonly int StartBit;  // first walk position of the block's first (rightmost) pair
+        public readonly bool Upward;   // direction of that first pair; they alternate
+
+        public BlockSegment(int leftCol, int startBit, bool upward)
+        {
+            LeftCol = leftCol;
+            StartBit = startBit;
+            Upward = upward;
+        }
+    }
+
+    /// <summary>
+    /// A stretch of consecutive rows of one column pair where BOTH columns are data,
+    /// so the two modules of every row are adjacent walk positions and can be written
+    /// with one byte-swapped 16-bit store. Unlike <see cref="PairSegment.Clean"/> this
+    /// survives function modules elsewhere in the same pair.
+    /// </summary>
+    private readonly struct RunSegment
+    {
+        public readonly int StartBit;  // walk position of the run's first row IN WALK ORDER
+        public readonly int RowCount;
+        public readonly int FirstRow;  // symbol row of that first walk position
+        public readonly int LeftCol;   // the pair's left column (col - 1)
+        public readonly bool Upward;
+
+        public RunSegment(int startBit, int rowCount, int firstRow, int leftCol, bool upward)
+        {
+            StartBit = startBit;
+            RowCount = rowCount;
+            FirstRow = firstRow;
+            LeftCol = leftCol;
+            Upward = upward;
+        }
+    }
+
     private sealed class Layout
     {
         public readonly ushort[] Index;      // core offset (row * width + col) per walk position
@@ -396,11 +516,16 @@ internal static class RmQRModulePlacer
         public readonly byte[] Masks;        // mask bit per walk position
         public readonly int DataModuleCount; // 8 * total codewords + remainder bits
         public readonly PairSegment[] Pairs;
+        // ARM64 store tier (RmQRModulePlacer.Simd.Arm.cs); empty on other targets.
+        public readonly BlockSegment[] Blocks;   // 4 consecutive clean pairs = 8 consecutive columns
+        public readonly RunSegment[] Runs;       // stretches of rows where both columns of a pair are data
+        public readonly int[] Singles;           // walk positions no block or run covers
+        public readonly byte[] ReverseIndex;     // TBL index flipping the first (h-2) lanes into row order
         private readonly byte[] _functionTemplate; // function modules painted, format modules 0
         private byte[]? _templateM;
         private byte[]? _templateH;
 
-        public Layout(byte[] functionTemplate, ushort[] index, ushort[] rowCol, byte[] masks, PairSegment[] pairs)
+        public Layout(byte[] functionTemplate, ushort[] index, ushort[] rowCol, byte[] masks, PairSegment[] pairs, BlockSegment[] blocks, RunSegment[] runs, int[] singles, byte[] reverseIndex)
         {
             _functionTemplate = functionTemplate;
             Index = index;
@@ -408,6 +533,10 @@ internal static class RmQRModulePlacer
             Masks = masks;
             DataModuleCount = index.Length;
             Pairs = pairs;
+            Blocks = blocks;
+            Runs = runs;
+            Singles = singles;
+            ReverseIndex = reverseIndex;
         }
 
         /// <summary>Function template with the ECC level's two format copies painted.</summary>
@@ -475,7 +604,88 @@ internal static class RmQRModulePlacer
             upward = !upward;
         }
 
-        return new Layout(functionTemplate, index.ToArray(), rowCol.ToArray(), masks.ToArray(), pairs.ToArray());
+        var (blocks, runs, singles, reverseIndex) = BuildNeonTables(version, height, width, pairs, index.Count);
+        return new Layout(functionTemplate, index.ToArray(), rowCol.ToArray(), masks.ToArray(), pairs.ToArray(), blocks, runs, singles, reverseIndex);
+    }
+
+    /// <summary>
+    /// Segmentation the ARM64 store tier consumes: transpose blocks, then the row runs
+    /// the blocks did not take, then the isolated modules. Built only where that tier
+    /// can run (<see cref="System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported"/> is
+    /// a JIT constant, so other targets neither build nor carry these tables).
+    /// </summary>
+    private static (BlockSegment[] Blocks, RunSegment[] Runs, int[] Singles, byte[] ReverseIndex) BuildNeonTables(RmQRVersion version, int height, int width, List<PairSegment> pairs, int positionCount)
+    {
+        if (!IsNeonTierSupported)
+            return ([], [], [], []);
+
+        // Blocks: runs of consecutive clean pairs, cut into groups of four.
+        var covered = new bool[positionCount];
+        var blocks = new List<BlockSegment>();
+        var p = 0;
+        while (p < pairs.Count)
+        {
+            var run = 0;
+            while (p + run < pairs.Count && pairs[p + run].Clean) run++;
+            for (var b = 0; b + 4 <= run; b += 4)
+            {
+                var first = pairs[p + b];
+                blocks.Add(new BlockSegment(pairs[p + b + 3].Col - 1, first.Start, first.Upward));
+                for (var j = 0; j < 4; j++)
+                {
+                    var seg = pairs[p + b + j];
+                    for (var k = seg.Start; k < seg.Start + seg.Count; k++) covered[k] = true;
+                }
+            }
+            p += run == 0 ? 1 : run;
+        }
+
+        // The same walk again, now recording which uncovered rows have both columns.
+        var runs = new List<RunSegment>();
+        var singles = new List<int>();
+        var pos = 0;
+        var upward = true;
+        for (var col = width - 2; col >= 1; col -= 2)
+        {
+            var runStart = -1;
+            var runRows = 0;
+            var runFirstRow = 0;
+            for (var step = 0; step < height; step++)
+            {
+                var row = upward ? height - 1 - step : step;
+                var right = IsFunctionModule(version, row, col) ? -1 : pos++;
+                var left = IsFunctionModule(version, row, col - 1) ? -1 : pos++;
+                if (right >= 0 && left >= 0 && !covered[right] && !covered[left])
+                {
+                    if (runStart < 0)
+                    {
+                        runStart = right;
+                        runRows = 0;
+                        runFirstRow = row;
+                    }
+                    runRows++;
+                    continue;
+                }
+                if (runStart >= 0)
+                {
+                    runs.Add(new RunSegment(runStart, runRows, runFirstRow, col - 1, upward));
+                    runStart = -1;
+                }
+                if (right >= 0 && !covered[right]) singles.Add(right);
+                if (left >= 0 && !covered[left]) singles.Add(left);
+            }
+            if (runStart >= 0)
+                runs.Add(new RunSegment(runStart, runRows, runFirstRow, col - 1, upward));
+            upward = !upward;
+        }
+        Debug.Assert(pos == positionCount, "the neon table walk must visit the same positions as the layout walk");
+
+        // Lane i of an upward pair's column vector is row (h - 2) - 1 - i.
+        var reverseIndex = new byte[16];
+        for (var i = 0; i < 16; i++)
+            reverseIndex[i] = (byte)(height - 3 - i); // wraps out of TBL range for i >= h-2, which yields 0
+
+        return (blocks.ToArray(), runs.ToArray(), singles.ToArray(), reverseIndex);
     }
 
     // ---------------------------------------------------------------

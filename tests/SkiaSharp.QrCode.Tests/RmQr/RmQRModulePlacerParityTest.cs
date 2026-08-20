@@ -33,6 +33,66 @@ public class RmQRModulePlacerParityTest
         return bytes;
     }
 
+    /// <summary>
+    /// The ARM64 store tier (transpose blocks + row runs + single scatter) against the
+    /// per-module reference, forced on rather than auto-selected, for every version ×
+    /// ECC × message shape, on a dirty core and through both the tight and the strided
+    /// (quiet-zoned) destination — the strided path derives its own row pitch, so a
+    /// tier that is byte-exact at stride == width can still be wrong at stride > width.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(AllVersionEcc))]
+    public async Task NeonKernel_MatchesReference_EveryMessageShape(RmQRVersion version, RmQREccLevel ecc)
+    {
+        if (!RmQRModulePlacer.IsNeonTierSupported) return;
+
+        var width = RmQRConstants.GetWidth(version);
+        var height = RmQRConstants.GetHeight(version);
+        var total = RmQRConstants.GetTotalCodewordCount(version);
+        var size = width * height;
+        var messages = new[]
+        {
+            new byte[total],
+            Enumerable.Repeat((byte)0xFF, total).ToArray(),
+            PseudoRandom(total, (int)version * 31 + (int)ecc),
+            PseudoRandom(total, (int)version * 17 + (int)ecc + 5),
+            PseudoRandom(total + 3, (int)version + (int)ecc),
+        };
+
+        foreach (var message in messages)
+        {
+            var expected = new byte[size];
+            Array.Fill(expected, (byte)0xA5);
+            RmQRModulePlacer.PlaceSymbolReference(expected, version, ecc, message);
+
+            var tight = new byte[size];
+            Array.Fill(tight, (byte)0xA5);
+            RmQRModulePlacer.PlaceSymbol(tight, width, version, ecc, message, RmQRModulePlacer.PlaceKernel.Neon);
+            await Assert.That(tight).IsEquivalentTo(expected);
+
+            // Strided: 4 modules of quiet zone on every side; the bytes between rows
+            // must survive untouched.
+            const int Quiet = 4;
+            var stride = width + 2 * Quiet;
+            var padded = new byte[stride * (height + 2 * Quiet)];
+            Array.Fill(padded, (byte)0x5A);
+            RmQRModulePlacer.PlaceSymbol(padded.AsSpan(Quiet * stride + Quiet), stride, version, ecc, message, RmQRModulePlacer.PlaceKernel.Neon);
+            for (var row = 0; row < height; row++)
+            {
+                var actualRow = padded.AsSpan((Quiet + row) * stride + Quiet, width).ToArray();
+                await Assert.That(actualRow).IsEquivalentTo(expected.AsSpan(row * width, width).ToArray());
+            }
+            for (var row = 0; row < height; row++)
+            {
+                for (var q = 0; q < Quiet; q++)
+                {
+                    await Assert.That(padded[(Quiet + row) * stride + q]).IsEqualTo((byte)0x5A);
+                    await Assert.That(padded[(Quiet + row) * stride + Quiet + width + q]).IsEqualTo((byte)0x5A);
+                }
+            }
+        }
+    }
+
     [Test]
     [MethodDataSource(nameof(AllVersionEcc))]
     public async Task FastPath_MatchesReference_EveryMessageShape(RmQRVersion version, RmQREccLevel ecc)
