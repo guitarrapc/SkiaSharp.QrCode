@@ -33,10 +33,11 @@ internal static partial class EccBinaryDecoder
     private const int MaxErrors = MaxEccPerBlock / 2;
 
     /// <summary>
-    /// Syndrome buffer length. Two Vector128 accumulator groups cover every QR/rMQR
-    /// ECC count, and the AdvSimd kernel stores both groups whole rather than copying
-    /// eccCount bytes, so the buffer is padded to the vector width. Lanes at or past
-    /// eccCount hold syndromes of roots the code does not use and are never read.
+    /// Syndrome buffer length. One Vector256 group (GFNI) or two Vector128 groups
+    /// (AdvSimd) cover every QR/rMQR ECC count, and both kernels store their
+    /// accumulators whole rather than copying eccCount bytes, so the buffer is padded
+    /// to the vector width. Lanes at or past eccCount hold syndromes of roots the code
+    /// does not use and are never read.
     /// </summary>
     internal const int SyndromeLanes = 32;
 
@@ -227,14 +228,13 @@ internal static partial class EccBinaryDecoder
     /// </summary>
     /// <remarks>
     /// <paramref name="syndromes"/> must be at least <see cref="SyndromeLanes"/> bytes
-    /// long, not <paramref name="eccCount"/>: the AdvSimd kernel stores both accumulator
-    /// registers whole and only the first <paramref name="eccCount"/> lanes are
-    /// meaningful. (The GFNI kernel copies exactly <paramref name="eccCount"/> bytes, so
-    /// it would tolerate a shorter span — the wider contract is what lets the dispatcher
-    /// hand every tier the same buffer.) A shorter span corrupts the caller's stack on
-    /// ARM64 and nowhere else, so x64 CI cannot see it;
-    /// EccBinaryDecoderKernelParityTest.AdvSimdKernel_WritesExactlySyndromeLanes pins
-    /// the store width from the kernel side.
+    /// long, not <paramref name="eccCount"/>: both vector kernels store their
+    /// accumulator registers whole and only the first <paramref name="eccCount"/> lanes
+    /// are meaningful. A shorter span throws on the GFNI tier (Vector256.CopyTo bounds-
+    /// checks the destination) but silently corrupts the caller's stack on ARM64, so x64
+    /// CI cannot see the ARM failure mode;
+    /// EccBinaryDecoderKernelParityTest.GfniKernel_WritesExactlySyndromeLanes and
+    /// .AdvSimdKernel_WritesExactlySyndromeLanes pin the store width from the kernel side.
     /// <para>
     /// Dispatches to the GFNI kernel on x64 (all accumulators in one vector register,
     /// one multiply per data byte for every syndrome at once) or the AdvSimd kernel on

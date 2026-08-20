@@ -71,6 +71,11 @@ internal static partial class EccBinaryDecoder
         0xB5, 0x10, 0x0B, 0xBB, 0xFE, 0x87, 0x2F, 0xE9,
     ];
 
+    /// <summary>
+    /// Computes the syndromes for one block. <paramref name="syndromes"/> must have
+    /// room for <see cref="SyndromeLanes"/> bytes; lanes past <paramref name="eccCount"/>
+    /// receive syndromes of roots the code does not use and must not be read.
+    /// </summary>
     internal static bool ComputeSyndromesGfni(ReadOnlySpan<byte> codeword, int eccCount, Span<byte> syndromes)
     {
         var phi = Vector256.Create(GfniPhiMatrix).AsByte();
@@ -101,12 +106,11 @@ internal static partial class EccBinaryDecoder
             acc = Gfni.V256.GaloisFieldMultiply(acc, alphas) ^ mapped;
         }
 
-        // Map back (φ is its own inverse) and keep the first eccCount lanes; lanes
-        // beyond eccCount hold syndromes of roots the code does not use.
+        // Map back (φ is its own inverse) and store the register whole, the same shape
+        // the AdvSimd tier stores in: the destination is SyndromeLanes wide by contract,
+        // and lanes at or past eccCount hold syndromes of roots the code does not use.
         var result = Gfni.V256.GaloisFieldAffineTransform(acc, phi, 0);
-        Span<byte> buffer = stackalloc byte[32];
-        result.CopyTo(buffer);
-        buffer.Slice(0, eccCount).CopyTo(syndromes);
+        result.CopyTo(syndromes);
 
         byte any = 0;
         for (var i = 0; i < eccCount; i++)

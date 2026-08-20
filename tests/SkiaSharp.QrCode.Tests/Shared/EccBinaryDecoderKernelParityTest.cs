@@ -34,6 +34,11 @@ public class EccBinaryDecoderKernelParityTest
     }
 
 #if NET10_0_OR_GREATER
+    /// <summary>
+    /// The GFNI kernel stores its accumulator register whole, so its destination is
+    /// SyndromeLanes bytes; lanes at or past eccCount hold syndromes of unused roots
+    /// and are not compared.
+    /// </summary>
     [Test]
     public async Task GfniKernel_MatchesScalarKernel()
     {
@@ -55,11 +60,51 @@ public class EccBinaryDecoderKernelParityTest
             var expected = new byte[eccCount];
             var expectedHasError = EccBinaryDecoder.ComputeSyndromesScalar(codeword, eccCount, expected);
 
-            var actual = new byte[eccCount];
+            var actual = new byte[EccBinaryDecoder.SyndromeLanes];
+            Array.Fill(actual, (byte)0xA5); // poison: a kernel that writes nothing must fail
             var actualHasError = EccBinaryDecoder.ComputeSyndromesGfni(codeword, eccCount, actual);
 
             await Assert.That(actualHasError).IsEquivalentTo(expectedHasError);
-            await Assert.That(actual).IsEquivalentTo(expected);
+            await Assert.That(actual.AsSpan(0, eccCount).ToArray()).IsEquivalentTo(expected);
+        }
+    }
+
+    /// <summary>
+    /// The GFNI kernel stores 32 bytes unconditionally, whatever eccCount is, so every
+    /// caller must hand it a SyndromeLanes-wide destination. This pins that the store is
+    /// exactly that wide, the x64 half of the same contract
+    /// AdvSimdKernel_WritesExactlySyndromeLanes pins on ARM64.
+    /// </summary>
+    [Test]
+    public async Task GfniKernel_WritesExactlySyndromeLanes()
+    {
+        if (!System.Runtime.Intrinsics.X86.Gfni.V256.IsSupported)
+        {
+            Skip.Test("GFNI not supported on this machine");
+            return;
+        }
+
+        const byte Poison = 0x5A;
+        const int TailBytes = 32;
+
+        var random = new Random(20260821);
+        for (var eccCount = 1; eccCount <= 30; eccCount++)
+        {
+            foreach (var length in new[] { eccCount + 1, 13, 58, 255 })
+            {
+                var codeword = new byte[length];
+                random.NextBytes(codeword);
+
+                var backing = new byte[EccBinaryDecoder.SyndromeLanes + TailBytes];
+                backing.AsSpan().Fill(Poison);
+                EccBinaryDecoder.ComputeSyndromesGfni(codeword, eccCount, backing.AsSpan(0, EccBinaryDecoder.SyndromeLanes));
+
+                for (var i = EccBinaryDecoder.SyndromeLanes; i < backing.Length; i++)
+                {
+                    await Assert.That(backing[i]).IsEqualTo(Poison)
+                        .Because($"eccCount {eccCount}, length {length}: wrote {i - EccBinaryDecoder.SyndromeLanes + 1} byte(s) past SyndromeLanes");
+                }
+            }
         }
     }
 
