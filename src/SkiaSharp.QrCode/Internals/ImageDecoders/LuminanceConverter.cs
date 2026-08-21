@@ -147,10 +147,17 @@ internal static partial class LuminanceConverter
     /// <summary>Extents for a ref-walking tier; see the remarks on <see cref="ConvertRgba"/>.</summary>
     private static void ValidateExtents(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes)
     {
-        if (luminance.Length < width * height)
-            throw new ArgumentException($"Luminance buffer too small: required {width * height} bytes ({width}x{height}), got {luminance.Length}.", nameof(luminance));
-        var requiredPixels = (height - 1) * rowBytes + width * 4;
-        if (height > 0 && pixels.Length < requiredPixels)
+        // Nothing is walked, and a negative extent would make every comparison below
+        // vacuously true; the loops run zero iterations either way.
+        if (width <= 0 || height <= 0)
+            return;
+        if (rowBytes < 0)
+            throw new ArgumentOutOfRangeException(nameof(rowBytes), rowBytes, "Row stride must not be negative.");
+
+        if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
+            throw new ArgumentException($"Luminance buffer too small: required {(long)width * height} bytes ({width}x{height}), got {luminance.Length}.", nameof(luminance));
+        var requiredPixels = (long)(height - 1) * rowBytes + (long)width * 4;
+        if (pixels.Length < requiredPixels)
             throw new ArgumentException($"Pixel buffer too small: required {requiredPixels} bytes ({width}x{height}, rowBytes {rowBytes}), got {pixels.Length}.", nameof(pixels));
     }
 

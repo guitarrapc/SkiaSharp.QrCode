@@ -294,6 +294,39 @@ public class LuminanceConverterParityTest
     }
 
     /// <summary>
+    /// The extent check itself must not overflow. Both products it forms —
+    /// width × height and (height − 1) × rowBytes + width × 4 — exceed <see cref="int"/>
+    /// for dimensions that are still perfectly representable, and an <c>int</c> multiply
+    /// wraps them to a small (or negative) number that any buffer satisfies. The guard
+    /// then waves the call through to a tier that walks by ref with no bounds check of
+    /// its own, so the wrap does not degrade to a slow path, it reads and writes
+    /// gigabytes past both buffers.
+    /// </summary>
+    /// <remarks>
+    /// The dimensions are chosen so the wrapped product lands near zero rather than
+    /// merely somewhere smaller: 65536 × 65536 is exactly 2^32, and 999999 × 4295 is
+    /// 2^32 + 28409. Neither case allocates the buffers those numbers describe — the
+    /// point is that the call is rejected before anything is touched.
+    /// </remarks>
+    [Test]
+    [MethodDataSource(nameof(Layouts))]
+    public async Task OverflowingExtents_Throw(int layout)
+    {
+        var (ro, go, bo, ao) = Offsets(layout);
+
+        // width × height wraps to 0, so any destination looks large enough
+        await Assert.That(() => LuminanceConverter.ConvertRgbaForTest(
+            new byte[64], new byte[64], 65536, 65536, 65536 * 4, ro, go, bo, ao, false, LuminanceConverter.ConvertTier.Scalar))
+            .Throws<ArgumentException>();
+
+        // width × height fits and the destination is honestly sized; only the pixel
+        // extent wraps, to 28425 bytes against a real requirement of ~4 GB
+        await Assert.That(() => LuminanceConverter.ConvertRgbaForTest(
+            new byte[28425], new byte[4 * 1_000_000], 4, 1_000_000, 4295, ro, go, bo, ao, false, LuminanceConverter.ConvertTier.Scalar))
+            .Throws<ArgumentException>();
+    }
+
+    /// <summary>
     /// The vector loops write a whole block of luminance bytes at a time (32 on AVX2,
     /// 16 on NEON) and finish the row with an overlapping block, so a block-count that
     /// rounds the wrong way writes past the caller's destination. The destination is
