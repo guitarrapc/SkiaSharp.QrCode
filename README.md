@@ -67,9 +67,20 @@ SkiaSharp.QrCode implements the Standard QR Code symbology, Micro QR generation/
 
 See the [FAQ](#does-it-support-micro-qr-or-rmqr) for the Micro QR / rMQR status.
 
-![StandardQR Performance](assets/benchmark_standardqr_encode.png)
+<p float="left">
+  <img src="assets/benchmark_standardqr_encode.png" width="600" alt="Standard QR Encode"/>
+  <img src="assets/benchmark_standardqr_decode.png" width="600" alt="Standard QR Decode"/>
+</p>
 
-![MicroQR Performance](assets/benchmark_microqr_encode.png)
+<p float="left">
+  <img src="assets/benchmark_microqr_encode.png" width="600" alt="Micro QR Encode"/>
+  <img src="assets/benchmark_microqr_decode.png" width="600" alt="Micro QR Decode"/>
+</p>
+
+<p float="left">
+  <img src="assets/benchmark_rmqr_encode.png" width="600" alt="rMQR Encode"/>
+  <img src="assets/benchmark_rmqr_decode.png" width="600" alt="rMQR Decode"/>
+</p>
 
 
 ## Installation
