@@ -58,6 +58,50 @@ public class QRCodeDecodeEndToEnd
         (_byteUrlLuminance, _byteUrlImageSize) = RenderLuminance(_byteUrl, ECCLevel.M, pixelsPerModule: 8);
     }
 
+    // String path (allocates the result string only)
+
+    [Benchmark]
+    public string QR_Numeric_V1_L_Decode()
+    {
+        QRCodeDecoder.TryDecode(_numericModules, _numericSize, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string QR_Alphanumeric_V1_M_Decode()
+    {
+        QRCodeDecoder.TryDecode(_alphanumericModules, _alphanumericSize, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string QR_Byte_Url_V6_M_Decode()
+    {
+        QRCodeDecoder.TryDecode(_byteUrlModules, _byteUrlSize, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string QR_Byte_V40_L_Decode()
+    {
+        QRCodeDecoder.TryDecode(_byteLongLModules, _byteLongLSize, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string QR_Byte_V40_H_Decode()
+    {
+        QRCodeDecoder.TryDecode(_byteLongHModules, _byteLongHSize,out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string Image_Byte_Url_V6_M_Decode()
+    {
+        QRCodeDecoder.TryDecodeImage(_byteUrlLuminance, _byteUrlImageSize, _byteUrlImageSize,out var text, out _);
+        return text;
+    }
+
     // Span destination (zero-allocation) path
 
     [Benchmark(Baseline = true, Description = "QR_Numeric_V1_L_Decode (Span)")]
@@ -100,22 +144,6 @@ public class QRCodeDecodeEndToEnd
     {
         QRCodeDecoder.TryDecodeImage(_byteUrlLuminance, _byteUrlImageSize, _byteUrlImageSize, _chars, out var written, out _);
         return written;
-    }
-
-    // String path (allocates the result string only)
-
-    [Benchmark]
-    public string QR_Numeric_V1_L_Decode()
-    {
-        QRCodeDecoder.TryDecode(_numericModules, _numericSize, out var text, out _);
-        return text;
-    }
-
-    [Benchmark]
-    public string QR_Byte_V40_L_Decode()
-    {
-        QRCodeDecoder.TryDecode(_byteLongLModules, _byteLongLSize, out var text, out _);
-        return text;
     }
 
     // Micro QR M2-L with the same numeric payload, for scale reference.
