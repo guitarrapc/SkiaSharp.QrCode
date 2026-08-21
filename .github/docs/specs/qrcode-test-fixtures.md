@@ -79,6 +79,8 @@ pwsh tools/QRInteropFixtures/get-qrtool.ps1
 dotnet run --project tools/QRInteropFixtures -- regenerate
 ```
 
+The same tool carries the oracle probes, which are run by hand and whose findings are recorded in the matrix below rather than asserted in CI (they need the native oracle on the machine): `spot-check-microqr`, `spot-check-rmqr`, `probe-creator`, `probe-rmqr`, `probe-rmqr-capacity`.
+
 The tool wipes and rewrites each available generator's directory. Fixture updates must be committed as an explicit, reviewed change, a generator-version bump that silently alters fixtures is exactly what the corpus is meant to catch.
 
 ## Oracle capability matrix
@@ -95,6 +97,8 @@ Status meaning, **verified**: exercised in this repository; **documented**: capa
 | BoofCV (Java) | decode | decode | - | claimed | Candidate additional decode oracle; not evaluated |
 
 Independence caveat: ZXing.Net and zxing-cpp descend from the same ZXing lineage, count them as one independent implementation family, not two. Zint and the Rust crates are separate lineages. Note that zxing-cpp's READER and the libzint WRITER ship in one native binary but are algorithmically independent codebases; a created-then-read round-trip within that binary still exercises two lineages.
+
+rMQR correction capacity (`probe-rmqr-capacity`, 2026-08-21): ISO/IEC 23941 Table 8's capacity column is paywalled, so whether rMQR reserves misdecode-protection codewords `p` the way ISO/IEC 18004 Table 9 does for Micro QR was measured against zxing-cpp instead. For each of the 64 version × ECC combinations the probe damages a symbol one module at a time, keeping only flips this library's decoder reports as exactly one more corrected codeword — so the damage saturates at our capacity in every Reed-Solomon block without consulting a block-structure table — and then checks zxing-cpp in both directions: it must still decode at saturation (else it stops below us, i.e. a reserved `p` we ignore) and must not decode one error past it (else it reaches further, i.e. our capacity is too low). All 64 agree, and every saturation count equals `blocks × ⌊ecc per block / 2⌋` exactly, so zxing-cpp corrects rMQR at full Reed-Solomon strength with no reserved `p`. This is evidence from the reference implementation, not a reading of the standard; the Correction cap decision in [rMQR Decoder](rmqr-decoder.md) stays open until someone reads Table 8.
 
 Oracle scarcity, decode direction: zxing-cpp is the only maintained OSS decoder for Micro QR and rMQR (ZXing Java/.NET, rqrr (Rust) and gozxing (Go) do not read them; BoofCV (Java) reads Micro QR only). Encoder verification therefore rests on one external decode lineage plus specification-derived vectors and the in-repo extraction tests, this is a structural limit, not a tooling gap. The decode direction has no such limit: multiple independent encoder lineages (zint, Rust qrcode2) generate the fixture corpus that exercises our decoder.
 

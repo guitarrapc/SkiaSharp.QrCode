@@ -10,17 +10,21 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// copies name the ECC level (only copies naming that version count, the closer
 /// wins), then inverse zigzag + fixed unmask (reusing
 /// the placer's own predicate and mask so both sides always agree), block
-/// deinterleave, per-block Reed-Solomon correction (full RS strength ⌊ecc/2⌋ per
-/// block, as the Standard QR decoder), and the bit-stream decode. Allocation-free:
-/// fixed stack budgets sized by the largest version.
+/// deinterleave, per-block Reed-Solomon correction capped at the block's correction
+/// capacity, and the bit-stream decode. Allocation-free: fixed stack budgets sized by
+/// the largest version.
 /// </summary>
 /// <remarks>
-/// Misdecode-protection codewords: ISO/IEC 18004 reserves p codewords for Micro QR
-/// so decoders must correct fewer than ⌊ecc/2⌋ errors; whether ISO/IEC 23941 does
-/// the same for rMQR could not be confirmed from the specification text (not
-/// available in this repository). This decoder mirrors the Standard QR decoder
-/// (no cap); revisit when the specification text or a reader-conformance oracle
-/// settles the question (recorded in the spec map).
+/// The capacity cap is the same post-correction shape as
+/// <see cref="MicroQR.MicroQRMatrixDecoder"/>, but on rMQR it can never fire: every
+/// <see cref="RmQRConstants.GetErrorCorrectionCapacity"/> entry equals the full
+/// Reed-Solomon strength ⌊ecc/2⌋, and <see cref="EccBinaryDecoder.TryCorrect"/> only
+/// reports a success at or below that. It is applied anyway so both symbologies read
+/// the rule from their constants table at the same point in the pipeline, and so a
+/// future ISO/IEC 23941 Table 8 that reserves misdecode-protection codewords p on some
+/// row (as ISO/IEC 18004 Table 9 does for Micro QR) is a table edit alone. Micro QR
+/// has a false-positive damage class for its cap; rMQR's is empty by construction,
+/// which is why no test exercises this branch.
 /// </remarks>
 internal static partial class RmQRMatrixDecoder
 {
@@ -64,6 +68,7 @@ internal static partial class RmQRMatrixDecoder
         Span<byte> data = stackalloc byte[MaxDataCodewords];
         data = data.Slice(0, eccInfo.TotalDataCodewords);
         var errorsCorrected = 0;
+        var correctionCapacity = RmQRConstants.GetErrorCorrectionCapacity(version, eccLevel);
         var dataOffset = 0;
         for (var b = 0; b < blocks; b++)
         {
@@ -85,7 +90,10 @@ internal static partial class RmQRMatrixDecoder
                 blockSpan[dataLength + e] = stream[eccInfo.TotalDataCodewords + e * blocks + b];
             }
 
-            if (!EccBinaryDecoder.TryCorrect(blockSpan, eccInfo.ECCPerBlock, out var blockErrors))
+            // The capacity cap is unreachable while every table entry equals ⌊ecc/2⌋
+            // (see the remarks on this class); it is the seam a reserved p would use.
+            if (!EccBinaryDecoder.TryCorrect(blockSpan, eccInfo.ECCPerBlock, out var blockErrors)
+                || blockErrors > correctionCapacity)
             {
                 info = new RmQRCodeDecodeInfo(QRCodeDecodeStatus.DataUncorrectable, version, eccLevel, errorsCorrected + blockErrors);
                 return QRCodeDecodeStatus.DataUncorrectable;

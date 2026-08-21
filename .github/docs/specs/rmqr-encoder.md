@@ -281,7 +281,10 @@ Performed 2026-08-15 with the pinned qrtool 0.13.2 binary (`--variant rmqr`, `--
 
 Not verified here: Kanji count widths (not needed while Kanji mode is intentionally unsupported),
 and the ISO/IEC 23941 misdecode-protection question (whether ECC counts reserve codewords beyond
-the correction capacity), scheduled for the phase that needs it.
+the correction capacity). The decoder resolves the latter indirectly — the block structure verified
+above leaves at most one unused ECC codeword per block, and zxing-cpp corrects rMQR at full
+Reed-Solomon strength — but the Table 8 capacity column itself is still unread; see the Correction
+cap decision in [rMQR Decoder](rmqr-decoder.md).
 
 ## Lessons Learned
 

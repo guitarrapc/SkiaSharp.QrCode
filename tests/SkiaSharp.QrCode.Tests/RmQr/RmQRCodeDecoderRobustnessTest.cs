@@ -81,6 +81,12 @@ public class RmQRCodeDecoderRobustnessTest
     {
         var info = RmQRConstants.GetEccInfo(version, ecc);
         var blocks = info.BlocksInGroup1 + info.BlocksInGroup2;
+        // Deliberately the Reed-Solomon strength, NOT GetErrorCorrectionCapacity: this
+        // is the test that pins "rMQR reserves no misdecode-protection codewords p", so
+        // it must fail if the decoder's capacity ever drops below full RS strength.
+        // Deriving t from the API under test makes it self-consistent with any wrong
+        // (lower) capacity — verified by mutation: capacity - 1 leaves this whole class
+        // green. RmQRConstantsUnitTest pins the capacity table against the same value.
         var t = info.ECCPerBlock / 2;
         var (modules, width, height, text) = Symbol(version, ecc);
 
@@ -107,7 +113,7 @@ public class RmQRCodeDecoderRobustnessTest
     public async Task Damage_BeyondCorrectionCapacity_InOneBlock_IsRejected(RmQRVersion version, RmQREccLevel ecc)
     {
         var info = RmQRConstants.GetEccInfo(version, ecc);
-        var t = info.ECCPerBlock / 2;
+        var t = info.ECCPerBlock / 2; // Reed-Solomon strength, see the within-capacity test
         var (modules, width, height, _) = Symbol(version, ecc);
 
         // t + 1 data codewords of block 0 flipped (needs at least t + 1 data codewords in the block; else flip ECC codewords too).

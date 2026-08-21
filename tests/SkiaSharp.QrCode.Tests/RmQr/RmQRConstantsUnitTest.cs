@@ -124,6 +124,45 @@ public class RmQRConstantsUnitTest
     }
 
     [Test]
+    [MethodDataSource(nameof(AllVersionEcc))]
+    public async Task ErrorCorrectionCapacity_IsFullReedSolomonStrength(RmQRVersion version, RmQREccLevel ecc)
+    {
+        // The rMQR correction capacity is held as a hand-written table so a future
+        // reading of ISO/IEC 23941 Table 8 showing a reserved misdecode-protection
+        // count p is a data edit (see RmQRConstants.errorCorrectionCapacities). This
+        // pins every one of the 64 rows against the block structure, which is itself
+        // oracle-verified: as long as no p is reserved, t must be exactly ⌊ecc/2⌋, so
+        // a typo in the table or a divergence from GetEccInfo fails here.
+        var info = RmQRConstants.GetEccInfo(version, ecc);
+        var capacity = RmQRConstants.GetErrorCorrectionCapacity(version, ecc);
+
+        await Assert.That(capacity).IsEqualTo(info.ECCPerBlock / 2);
+        await Assert.That(capacity).IsGreaterThan(0);
+    }
+
+    [Test]
+    public async Task ErrorCorrectionCapacity_HasNoMicroQrStyleProtectionCodewords()
+    {
+        // ISO/IEC 18004 Micro QR reserves p codewords (2t + p = ecc) so the capacity is
+        // below the RS strength; rMQR reserves none. 60 of the 64 rows have an even ECC
+        // count per block, where any p >= 1 would visibly lower t — those are the rows
+        // that make the claim falsifiable. The 4 odd-ECC rows cannot distinguish p = 1
+        // from p = 0, so the 60/4 split is pinned below to keep the limit of this check visible.
+        var falsifiable = 0;
+        foreach (var (version, ecc) in AllVersionEcc())
+        {
+            var info = RmQRConstants.GetEccInfo(version, ecc);
+            var slack = info.ECCPerBlock - 2 * RmQRConstants.GetErrorCorrectionCapacity(version, ecc);
+
+            await Assert.That(slack).IsLessThan(2).Because($"{version}-{ecc}: {slack} ECC codewords per block are unused, which is a reserved p");
+            if (info.ECCPerBlock % 2 == 0)
+                falsifiable++;
+        }
+
+        await Assert.That(falsifiable).IsEqualTo(60);
+    }
+
+    [Test]
     [MethodDataSource(nameof(AllVersions))]
     public async Task TotalCodewords_MatchFreeModuleCount_FromIndependentPainter(RmQRVersion version)
     {
