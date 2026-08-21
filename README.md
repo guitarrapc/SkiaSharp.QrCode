@@ -428,6 +428,9 @@ Bitmap.FromStream(new MemoryStream(QRCodeImageBuilder.GetPngBytes("WIFI:T:WPA;S:
 
 QR codes support four levels of error correction, which allow the code to remain readable even when partially damaged or obscured:
 
+> [!TIP]
+> Use ECC Level H when embedding icons in QR codes to ensure readability even when the center is obscured.
+
 | ECC Level | Error Correction Capability | Use Case |
 |-----------|----------------------------|----------|
 | **L (Low)** | ~7% recovery | Clean environments, maximum data capacity |
@@ -435,20 +438,19 @@ QR codes support four levels of error correction, which allow the code to remain
 | **Q (Quartile)** | ~25% recovery | Outdoor use, moderate damage expected |
 | **H (High)** | ~30% recovery | Required when adding logos/icons, harsh environments |
 
-> **Tip**: Use ECC Level H when embedding icons in QR codes to ensure readability even when the center is obscured.
-
 ### Encoding Modes
 
-QR codes support different encoding modes optimized for specific character types:
+QR codes support different encoding modes optimized for specific character types. SkiaSharp.QrCode automatically selects the most efficient mode for your content.
+
+> [!WARNING]
+> Kanji encoding is not supported. Use Byte mode for Japanese text.
 
 | Mode | Character Set | Bits per Character | Example |
 |------|--------------|-------------------|---------|
 | **Numeric** | 0-9 | ~3.3 bits | Phone numbers, postal codes |
 | **Alphanumeric** | 0-9, A-Z, space, $ % * + - . / : | ~5.5 bits | URLs (uppercase), product codes |
-| **Byte** | ISO-8859-1, UTF-8 | 8 bits | Text, URLs (mixed case), binary data |
-| **Kanji** | Shift JIS characters | 13 bits | Japanese text |
-
-> **Note**: The library automatically selects the most efficient encoding mode for your content.
+| **Byte** | ISO-8859-1, UTF-8 | 8 bits | Text, mixed-case URLs, non-ASCII text |
+| **Kanji** (**Not supported**) | Shift JIS characters | 13 bits | Japanese text |
 
 ### Version and Size
 
