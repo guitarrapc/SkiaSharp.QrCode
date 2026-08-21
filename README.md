@@ -471,30 +471,17 @@ Each symbology has its own API surface, see [Supported Symbologies](#supported-s
 
 ### Standard QR
 
-#### Using Builder Pattern
+#### Image Builder
 
 ```csharp
 using SkiaSharp.QrCode.Image;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
-    .WithErrorCorrection(ECCLevel.H)
-    .WithQuietZone(4);
+    .WithErrorCorrection(ECCLevel.H);
 
 var pngBytes = qrCode.ToByteArray();
 File.WriteAllBytes("qrcode.png", pngBytes);
-```
-
-#### Direct File Output
-
-```csharp
-using SkiaSharp.QrCode.Image;
-using var stream = File.OpenWrite("qrcode.png");
-
-new QRCodeImageBuilder("https://example.com")
-    .WithSize(1024, 1024)
-    .WithErrorCorrection(ECCLevel.H)
-    .SaveTo(stream);
 ```
 
 #### Raster Output (PNG / JPEG / WebP)
@@ -550,12 +537,10 @@ var svgString = new QRCodeImageBuilder("https://example.com")
     .ToSvgString(); // or SaveToSvg(stream) / SaveToSvg(bufferWriter) / GetSvgBytes(...)
 ```
 
-Size options define the SVG viewport (in SVG units instead of pixels); `WithFormat()` does not apply to SVG output.
-
-The root element always carries a `viewBox`, so the QR code scales its content when displayed at any size (`<img>`, CSS, or attribute-based sizing). Plain rectangular modules also get `shape-rendering="crispEdges"` to prevent antialiasing seams between modules; custom shapes (circles, rounded rects) keep antialiasing for smooth curves.
+Size options define the SVG viewport rather than pixels. `WithFormat()` does not apply to SVG output.
 
 > [!TIP]
-> Default rectangle modules produce compact SVG (horizontal module runs merge into single `<rect>` elements). Custom module shapes and gradients render correctly but produce larger documents, since each module becomes an individual vector element. Icon images are embedded as base64 data URIs.
+> SVG output includes a viewBox and scales to any display size. Default rectangular modules produce compact, crisp-edged SVGs. Custom shapes and gradients increase the document size, and icons are embedded directly in the SVG.
 
 #### Choosing Image Size
 
@@ -565,7 +550,7 @@ The root element always carries a `viewBox`, so the QR code scales its content w
 | Also fit a fixed UI frame | `WithModulePixelSize(n)` + `WithSize(w, h)` | Canvas must be `>=` content size. Extra space is centered padding (`clearColor`). Too-small canvas throws. |
 | Only need a fixed pixel box | `WithSize(w, h)` | Simple, but module size may become fractional when QR version changes. |
 
-**Recommended (module-aligned):**
+Use module-based sizing when sharp edges and logo alignment matter:
 
 ```csharp
 using SkiaSharp.QrCode.Image;
@@ -574,33 +559,6 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithModulePixelSize(10) // content = (QR matrix size in modules) * 10
     .WithErrorCorrection(ECCLevel.H)
     .WithQuietZone(4);
-
-var pngBytes = qrCode.ToByteArray();
-```
-
-**Recommended (module-aligned + fixed canvas):**
-
-```csharp
-using SkiaSharp;
-using SkiaSharp.QrCode.Image;
-
-var qrCode = new QRCodeImageBuilder("https://example.com")
-    .WithModulePixelSize(10)
-    .WithSize(512, 512) // must be >= content size
-    .WithColors(clearColor: SKColors.Transparent)
-    .WithErrorCorrection(ECCLevel.H);
-
-var pngBytes = qrCode.ToByteArray();
-```
-
-**Fixed box only (may use fractional module pixels):**
-
-```csharp
-using SkiaSharp.QrCode.Image;
-
-var qrCode = new QRCodeImageBuilder("https://example.com")
-    .WithSize(512, 512)
-    .WithErrorCorrection(ECCLevel.H);
 
 var pngBytes = qrCode.ToByteArray();
 ```
@@ -641,15 +599,22 @@ using SkiaSharp;
 using SkiaSharp.QrCode.Image;
 
 var gradient = new GradientOptions(
-    [SKColors.Blue, SKColors.Purple, SKColors.Pink],
+    [
+        SKColor.Parse("FCAF45"),  // Orange
+        SKColor.Parse("F77737"),  // Orange-Red
+        SKColor.Parse("E1306C"),  // Pink or SKColors.Pink
+        SKColor.Parse("C13584"),  // Purple or SKColors.Purple
+        SKColor.Parse("833AB4")   // Deep Purple
+    ],
     GradientDirection.TopLeftToBottomRight,
-    [0f, 0.5f, 1f]);
+    [0f, 0.25f, 0.5f, 0.75f, 1f]);
 
-var qrCode = new QRCodeImageBuilder("https://example.com")
-    .WithSize(800, 800)
-    .WithErrorCorrection(ECCLevel.H)
-    .WithGradient(gradient)
-    .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f);
+var qrCode = new QRCodeImageBuilder(content)
+    .WithSize(512, 512)
+    .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.White)
+    .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
+    .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
+    .WithGradient(instagramGradient);
 
 var pngBytes = qrCode.ToByteArray();
 ```
@@ -729,56 +694,6 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithColors(codeColor: SKColors.DarkBlue);
 
 var pngBytes = qrCode.ToByteArray();
-```
-
-#### Gradient QR Code
-
-```csharp
-var instagramGradient = new GradientOptions([
-        SKColor.Parse("FCAF45"),  // Orange
-        SKColor.Parse("F77737"),  // Orange-Red
-        SKColor.Parse("E1306C"),  // Pink
-        SKColor.Parse("C13584"),  // Purple
-        SKColor.Parse("833AB4")   // Deep Purple
-    ],
-    GradientDirection.TopLeftToBottomRight,
-    [0f, 0.25f, 0.5f, 0.75f, 1f]);
-
-var qrCode = new QRCodeImageBuilder(content)
-    .WithSize(512, 512)
-    .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.White)
-    .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
-    .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
-    .WithGradient(instagramGradient);
-
-var pngBytes = qrCode.ToByteArray();
-```
-
-
-#### Low-Level Canvas Rendering
-
-For maximum control over rendering:
-
-```csharp
-using SkiaSharp;
-using SkiaSharp.QrCode;
-
-// Generate QR data
-var qrData = QRCodeGenerator.CreateQrCode("https://example.com", ECCLevel.M, quietZoneSize: 4);
-
-// Create canvas
-var info = new SKImageInfo(800, 800);
-using var surface = SKSurface.Create(info);
-var canvas = surface.Canvas;
-
-// Render QR code
-canvas.Render(qrData, info.Width, info.Height);
-
-// Save
-using var image = surface.Snapshot();
-using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-using var stream = File.OpenWrite("qrcode.png");
-data.SaveTo(stream);
 ```
 
 ### Micro QR
