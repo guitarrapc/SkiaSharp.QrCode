@@ -160,6 +160,8 @@ Choose an API based on the output you need. Start with an image builder for most
 | Render a matrix to `SKCanvas` | `QRCodeRenderer` | `QRCodeRenderer` | `QRCodeRenderer` |
 | Decode a matrix or image | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
 
+All generators and decoders also provide [zero-allocation APIs](#zero-allocation-apis) for caller-owned buffers.
+
 ### Image Builders (Recommended)
 
 Image builders provide one-line methods and a fluent API for colors, gradients, module shapes, image formats, and output size. Standard QR also supports icons and custom finder patterns.
@@ -189,9 +191,11 @@ var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, quietZoneSize: 
 var isDark = qrData[row, col];
 ```
 
-#### Span-based Generation
+### Zero-allocation APIs
 
-All three generators can write a module matrix to a caller-provided `Span<byte>`. Use `GetRequiredBufferSize` to size the destination.
+All three generators can write a module matrix to a caller-provided `Span<byte>`. All three decoders can read a module span and write text to a caller-provided `Span<char>`. Use these overloads when you want to pool or reuse buffers.
+
+Use `GetRequiredBufferSize` to size the generation buffer:
 
 ```csharp
 var calculated = QRCodeGenerator.GetRequiredBufferSize("content", ECCLevel.M, quietZoneSize: 4);
@@ -227,7 +231,7 @@ if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info))
 }
 ```
 
-The returned decode information includes a status when decoding fails. Span overloads are available when you want to provide the input and output buffers.
+The returned decode information includes a status when decoding fails.
 
 ## Platform-Specific Considerations
 
