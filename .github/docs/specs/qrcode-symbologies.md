@@ -105,6 +105,34 @@ Capacity/constants tables retain the Kanji column only for specification complet
 not a commitment to implement the mode; adding it would require an explicit cross-symbology
 policy change backed by concrete demand.
 
+### Allocation contract
+
+The span-destination overloads are documented as allocating nothing **per call**, not as
+never touching the heap. Every symbology lazily builds immutable lookup tables on first use
+and caches them for the process: per-version placement and extraction layouts, and — on
+ARM64, where the syndrome kernel reads its data terms out of a table rather than computing
+them — a 24 KB alpha-step table shared by all three symbologies. They are built once, keyed
+by version, published with a release store, and bounded (about 100 KB if every rMQR version
+were exercised). A benchmark that measures allocation must warm up first, or it attributes
+that one-time build to the call that happened to trigger it.
+
+### SIMD tier inventory
+
+Shared primitives that already have both an x64 and an ARM64/Vector128 tier, and must be
+treated as controls rather than reimplemented when a new symbology or kernel arrives:
+`TextAnalyzer`, `EccBinaryEncoder`, `EccBinaryDecoder` (syndrome pass), `ModuleBitPacker`,
+`LuminanceConverter`, `LuminanceInverter`, and finder/alignment row-mask construction.
+Architecture-neutral work already benefits every target: cached per-version layouts, pair
+stores and index scatter, table-driven auto-fit, the portable extraction walk, the safe
+finder stride with full-sweep retry, sub-finder guards, and Otsu reuse.
+
+The ARM64 optimization queue is closed. Four components were measured and deliberately left
+below it, with reasons: Otsu histogramming (serial histogram updates, already near its
+measured per-pixel floor), sub-finder and perspective search (branchy, data-dependent and
+failure-path dominated), rendering and PNG encode (Skia/native-code dominated), and the
+1.3-8.3 ns version selector. Reopen ARM work only with a new profile naming a different
+mechanism.
+
 ## Scope decisions
 
 | Decision | Choice | Revisit when |
@@ -119,3 +147,5 @@ policy change backed by concrete demand.
 - ZXing.Net (the in-CI cross-validation oracle for Standard QR) cannot decode Micro QR or rMQR, so in-CI cross-verification is unavailable for the new symbologies. Committed external fixtures are the primary conformance oracle instead, see the [test strategy](../plans/skiasharp-qrcode-microqr-rmqr-test-strategy.md).
 - `EncodingModeExtensions.GetCountIndicatorLength` looked shared but encodes Standard QR's version thresholds (10/27); Micro QR and rMQR define their own indicator-width tables. The enum is shared; the width logic is per-symbology.
 - The character-class predicates and alphanumeric encoding values (`IsNumeric`, `IsAlphanumeric`, `GetAlphanumericValue`, `IsValidISO88591`) lived inside the Standard QR constants class, so `TextAnalyzer` (shared) silently depended on the Standard QR table class. Applying the namespace dependency rule surfaced this immediately; the predicates now live in shared `CharacterSets`, the alphabets are identical across ISO/IEC 18004 and ISO/IEC 23941.
+- **A UTF-16 code unit compared as `Int16` is negative above U+7FFF.** `TextAnalyzer`'s AVX2 and SSE2 tiers tested the ASCII (> 127) and ISO-8859-1 (> 255) thresholds with signed packed compares, so every char from U+8000 up — surrogate halves, meaning any emoji or other non-BMP char, plus U+FFFD and the CJK compatibility area — read as in range. Auto-detection then declared Latin-1 for text ISO-8859-1 cannot represent, and the Byte-mode Latin-1 writer truncated it (its own SSE2 tier saturates instead, so the corruption differed per architecture). The ARM64 tier was correct by construction: its reduction is `UMAXV`, unsigned. Two lessons. Threshold tests on char data must be unsigned, and at these two thresholds a bit test is both correct and cheaper than any compare (`c > 127` is "any bit from bit 7 up", `c > 255` is "any high-byte bit", one `vptest` on AVX2). And a tier the dispatcher cannot reach on the test machine needs a direct-entry parity test: AVX2 hides SSE2 on every CPU that has it, so the dispatch-level test cannot see an SSE2-only defect — `TextAnalyzerX64ParityTest` calls both entry points itself, the way the ARM64 test always has.
+

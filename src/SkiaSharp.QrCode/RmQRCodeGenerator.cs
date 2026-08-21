@@ -111,7 +111,7 @@ public static class RmQRCodeGenerator
 
     /// <summary>
     /// Creates an rMQR code and writes the module matrix into the caller-provided
-    /// buffer without heap allocation.
+    /// buffer without per-call heap allocation.
     /// </summary>
     /// <remarks>
     /// Output format matches the other generators: one byte per module (0 = light,

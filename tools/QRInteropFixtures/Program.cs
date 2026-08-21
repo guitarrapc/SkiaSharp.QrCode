@@ -25,8 +25,8 @@ if (command == "spot-check-rmqr")
 }
 if (command == "probe-rmqr")
 {
-    // rMQR oracle facts for the implementation plan's Phase 5.0: libzint version mapping,
-    // zxing-cpp Extra() naming, qrtool interop.
+    // rMQR oracle facts, recorded in specs/qrcode-test-fixtures.md: libzint version
+    // mapping, zxing-cpp Extra() naming, qrtool interop.
     return RmQRProbe.Run(FindRepoRoot());
 }
 if (command != "regenerate")

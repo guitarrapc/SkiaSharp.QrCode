@@ -117,7 +117,7 @@ public static class QRCodeGenerator
     }
 
     /// <summary>
-    /// Creates a QR code from the provided plain text and writes the module matrix into the caller-provided buffer without heap allocation.
+    /// Creates a QR code from the provided plain text and writes the module matrix into the caller-provided buffer without per-call heap allocation.
     /// </summary>
     /// <param name="plainText">The text to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
@@ -134,7 +134,7 @@ public static class QRCodeGenerator
     }
 
     /// <summary>
-    /// Creates a QR code from the provided plain text and writes the module matrix into the caller-provided buffer without heap allocation.
+    /// Creates a QR code from the provided plain text and writes the module matrix into the caller-provided buffer without per-call heap allocation.
     /// </summary>
     /// <remarks>
     /// <para>

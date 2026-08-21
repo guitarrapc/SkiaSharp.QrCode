@@ -332,7 +332,8 @@ internal static class RmQRBinaryEncoder
 
     /// <summary>
     /// Byte segment for Default / ISO-8859-1 text (every char ≤ 0xFF, validated by
-    /// the analyzer): 8 chars narrow to one 64-bit append on SSE2, scalar otherwise.
+    /// the analyzer): 8 chars narrow to one 64-bit append on SSE2, 16 chars to two on
+    /// any other 128-bit vector target (ARM64, WASM), scalar otherwise.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void WriteLatin1(ref byte dest, ref ulong acc, ref int accBits, ref int bytePos, ReadOnlySpan<char> text, bool vectorized)
@@ -351,6 +352,44 @@ internal static class RmQRBinaryEncoder
                 var v = Vector128.LoadUnsafe(ref t, (nuint)i);
                 var packed = Sse2.PackUnsignedSaturate(v.AsInt16(), v.AsInt16()).AsUInt64().ToScalar();
                 Append64(ref dest, ref acc, ref accBits, ref bytePos, BinaryPrimitives.ReverseEndianness(packed));
+            }
+        }
+        else if (vectorized && Vector128.IsHardwareAccelerated)
+        {
+            // Targets with 128-bit vectors but no SSE2 (ARM64 NEON, WASM) previously fell
+            // all the way to the per-character loop below, which is one accumulator update
+            // per byte — measured 9x slower than this on Apple M2 (RmQrSegmentWriteArm
+            // findings log). Vector128.Narrow is the portable form of the same idea (XTN +
+            // XTN2 on ARM64); it truncates rather than saturates, which is exactly right
+            // because the analyzer has already proved every char <= 0xFF.
+            //
+            // Two vectors per iteration rather than one: narrowing a vector against
+            // itself discards half the result, so 16 chars per iteration halves the
+            // vector work per character. The two Append64 calls are NOT independent —
+            // they chain through acc/accBits/bytePos — so the win is the halved narrow
+            // count, not store-level parallelism.
+            //
+            // Note the two vector tiers disagree out of contract: PackUnsignedSaturate
+            // above saturates a char > 0xFF to 0xFF, Vector128.Narrow truncates it, as
+            // the scalar loop below does — so a char this method should never see would
+            // produce a DIFFERENT payload per architecture rather than a uniformly wrong
+            // one. The precondition is enforced where it is decided, not here: explicit
+            // ECI is rejected by CharacterSets.IsValidISO88591, and auto-detection is
+            // pinned by TextAnalyzerAdvSimdParityTest.AutoDetect_NeverDeclaresLatin1_ForCharsAboveFF.
+            ref var t = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(text));
+            for (; i + 16 <= text.Length; i += 16)
+            {
+                var packed = Vector128.Narrow(
+                    Vector128.LoadUnsafe(ref t, (nuint)i),
+                    Vector128.LoadUnsafe(ref t, (nuint)(i + 8))).AsUInt64();
+                Append64(ref dest, ref acc, ref accBits, ref bytePos, BinaryPrimitives.ReverseEndianness(packed.GetElement(0)));
+                Append64(ref dest, ref acc, ref accBits, ref bytePos, BinaryPrimitives.ReverseEndianness(packed.GetElement(1)));
+            }
+            if (i + 8 <= text.Length)
+            {
+                var v = Vector128.LoadUnsafe(ref t, (nuint)i);
+                Append64(ref dest, ref acc, ref accBits, ref bytePos, BinaryPrimitives.ReverseEndianness(Vector128.Narrow(v, v).AsUInt64().ToScalar()));
+                i += 8;
             }
         }
 #endif

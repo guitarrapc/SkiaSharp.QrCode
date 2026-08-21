@@ -78,7 +78,7 @@ internal static class TextAnalyzer
     /// <param name="text"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static TextAnalysisResult AnalyzeAvx2(ReadOnlySpan<char> text, EciMode requestedEciMode)
+    internal static TextAnalysisResult AnalyzeAvx2(ReadOnlySpan<char> text, EciMode requestedEciMode)
     {
         var hasNonNumeric = false;
         var hasNonAlphanumeric = false;
@@ -101,23 +101,26 @@ internal static class TextAnalyzer
 
             var charsInt16 = chars.AsInt16();
 
-            // ASCII check (0-127)
+            // ASCII check (0-127). Both thresholds must be tested UNSIGNED: a UTF-16
+            // code unit at or above U+8000 (surrogates, U+FFFD, most of the CJK
+            // compatibility area) is negative as an Int16, so a signed
+            // CompareGreaterThan reports it as in-range and the text would be declared
+            // Latin-1 encodable. c > 127 <=> any bit from bit 7 up is set, and vptest
+            // answers that directly without a compare.
             if (!hasNonAscii)
             {
-                var ascii127 = Vector256.Create((short)127);
-                var asciiMask = Avx2.CompareGreaterThan(charsInt16, ascii127);
-                if (!Avx2.TestZ(asciiMask, asciiMask))
+                var aboveAscii = Vector256.Create(unchecked((short)0xFF80));
+                if (!Avx2.TestZ(charsInt16, aboveAscii))
                 {
                     hasNonAscii = true;
                 }
             }
 
-            // ISO-8859-1 check (0-255)
+            // ISO-8859-1 check (0-255): same reasoning, c > 255 <=> any high-byte bit set.
             if (!hasNonIso88591 && hasNonAscii)
             {
-                var iso255 = Vector256.Create((short)255);
-                var isoMask = Avx2.CompareGreaterThan(charsInt16, iso255);
-                if (!Avx2.TestZ(isoMask, isoMask))
+                var aboveIso = Vector256.Create(unchecked((short)0xFF00));
+                if (!Avx2.TestZ(charsInt16, aboveIso))
                 {
                     hasNonIso88591 = true;
                 }
@@ -238,7 +241,7 @@ internal static class TextAnalyzer
     /// <param name="text"></param>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static TextAnalysisResult AnalyzeSse2(ReadOnlySpan<char> text, EciMode requestedEciMode)
+    internal static TextAnalysisResult AnalyzeSse2(ReadOnlySpan<char> text, EciMode requestedEciMode)
     {
         var hasNonNumeric = false;
         var hasNonAlphanumeric = false;
@@ -259,23 +262,27 @@ internal static class TextAnalyzer
 
             var charsInt16 = chars.AsInt16();
 
-            // ASCII check (0-127)
+            // ASCII check (0-127). Both thresholds must be tested UNSIGNED: a UTF-16
+            // code unit at or above U+8000 (surrogates, U+FFFD, most of the CJK
+            // compatibility area) is negative as an Int16, so a signed
+            // CompareGreaterThan reports it as in-range and the text would be declared
+            // Latin-1 encodable. c > 127 <=> any bit from bit 7 up is set; SSE2 has no
+            // PTEST, so the test is AND against zero (MoveMask cannot see bit 8-15 of a
+            // lane, which is exactly where the ISO-8859-1 answer lives).
             if (!hasNonAscii)
             {
-                var ascii127 = Vector128.Create((short)127);
-                var asciiMask = Sse2.CompareGreaterThan(charsInt16, ascii127);
-                if (Sse2.MoveMask(asciiMask.AsByte()) != 0)
+                var aboveAscii = Sse2.And(charsInt16, Vector128.Create(unchecked((short)0xFF80)));
+                if (Sse2.MoveMask(Sse2.CompareEqual(aboveAscii, Vector128<short>.Zero).AsByte()) != 0xFFFF)
                 {
                     hasNonAscii = true;
                 }
             }
 
-            // ISO-8859-1 check (0-255)
+            // ISO-8859-1 check (0-255): same reasoning, c > 255 <=> any high-byte bit set.
             if (!hasNonIso88591 && hasNonAscii)
             {
-                var iso255 = Vector128.Create((short)255);
-                var isoMask = Sse2.CompareGreaterThan(charsInt16, iso255);
-                if (Sse2.MoveMask(isoMask.AsByte()) != 0)
+                var aboveIso = Sse2.And(charsInt16, Vector128.Create(unchecked((short)0xFF00)));
+                if (Sse2.MoveMask(Sse2.CompareEqual(aboveIso, Vector128<short>.Zero).AsByte()) != 0xFFFF)
                 {
                     hasNonIso88591 = true;
                 }

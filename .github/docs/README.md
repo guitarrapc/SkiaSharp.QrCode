@@ -32,5 +32,4 @@ Forward-looking strategy; durable decisions graduate into `specs/` after impleme
 | Document | Covers |
 |---|---|
 | [skiasharp-qrcode-microqr-rmqr-implementation-plan.md](plans/skiasharp-qrcode-microqr-rmqr-implementation-plan.md) | Micro QR / rMQR implementation order (Phase 0-8) |
-| [skiasharp-qrcode-rmqr-implementation-plan.md](plans/skiasharp-qrcode-rmqr-implementation-plan.md) | rMQR detailed plan (Phases 5-7 sub-phases, API decisions, oracles, exit gates) |
 | [skiasharp-qrcode-microqr-rmqr-test-strategy.md](plans/skiasharp-qrcode-microqr-rmqr-test-strategy.md) | Micro QR / rMQR test strategy (oracles, fixtures, CI design) |

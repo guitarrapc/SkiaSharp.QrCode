@@ -148,11 +148,13 @@ internal static partial class RmQRMatrixDecoder
     /// (see RmQRMatrixDecoder.Simd.cs) and a portable table walk everywhere else.
     /// Measured 16-64x and 8-12x respectively over the per-module reference walk
     /// across R7x43..R17x139 (see the decoder kernel parity tests for equivalence).
+    /// ARM64 has a third tier (RmQRMatrixDecoder.Simd.Arm.cs) built on pair-interleaved
+    /// planes instead, because NEON has no PEXT/PDEP; it is 1.1-3.3x the portable tier.
     /// </remarks>
     private static void ExtractCodewords(ReadOnlySpan<byte> modules, int width, int height, RmQRVersion version, Span<byte> stream)
-        => ExtractCodewords(modules, width, height, version, stream, forceScalar: false);
+        => ExtractCodewords(modules, width, height, version, stream, ExtractKernel.Auto);
 
-    /// <summary>Whether the bit-plane tier runs on this machine (parity tests skip it otherwise).</summary>
+    /// <summary>Whether the x64 bit-plane tier runs on this machine (parity tests skip it otherwise).</summary>
     internal static bool IsBitPlaneTierSupported =>
 #if NET8_0_OR_GREATER
         System.Runtime.Intrinsics.X86.Avx2.IsSupported && HardwareCapabilities.HasFastPext;
@@ -160,19 +162,64 @@ internal static partial class RmQRMatrixDecoder
         false;
 #endif
 
-    /// <summary>Kernel-selecting entry; <paramref name="forceScalar"/> pins the portable tier for parity tests.</summary>
-    internal static void ExtractCodewords(ReadOnlySpan<byte> modules, int width, int height, RmQRVersion version, Span<byte> stream, bool forceScalar)
+    /// <summary>Whether the ARM64 pair-plane tier runs on this machine (parity tests skip it otherwise).</summary>
+    internal static bool IsPairPlaneTierSupported =>
+#if NET8_0_OR_GREATER
+        System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported;
+#else
+        false;
+#endif
+
+    /// <summary>Which extraction kernel to run; anything but <see cref="ExtractKernel.Auto"/> is for parity tests.</summary>
+    internal enum ExtractKernel
     {
+        /// <summary>The fastest tier this machine supports.</summary>
+        Auto,
+        /// <summary>The portable table walk, on every target.</summary>
+        Scalar,
+        /// <summary>x64 column bit planes + PEXT/PDEP.</summary>
+        BitPlanes,
+        /// <summary>ARM64 pair-interleaved planes + run compression.</summary>
+        PairPlanes,
+    }
+
+    /// <summary>
+    /// Kernel-selecting entry; <paramref name="kernel"/> pins one tier for parity tests.
+    /// Pinning a tier that cannot run here throws rather than falling through to the
+    /// portable walk: a parity test that silently compares the portable kernel against
+    /// itself stays green while the tier it names goes unexercised.
+    /// </summary>
+    internal static void ExtractCodewords(ReadOnlySpan<byte> modules, int width, int height, RmQRVersion version, Span<byte> stream, ExtractKernel kernel)
+    {
+        if (kernel is ExtractKernel.BitPlanes or ExtractKernel.PairPlanes)
+        {
+            var supported = kernel == ExtractKernel.BitPlanes ? IsBitPlaneTierSupported : IsPairPlaneTierSupported;
+            if (!supported)
+                throw new PlatformNotSupportedException($"{nameof(ExtractKernel)}.{kernel} was pinned, but that tier does not run on this machine. Guard the call with {nameof(IsBitPlaneTierSupported)} / {nameof(IsPairPlaneTierSupported)}.");
+            var expected = RmQRConstants.GetTotalCodewordCount(version);
+            if (stream.Length != expected)
+                throw new ArgumentException($"{nameof(ExtractKernel)}.{kernel} emits whole words off a per-version table, so the stream must be exactly {expected} bytes for {version}; got {stream.Length}.", nameof(stream));
+        }
+
         var layout = GetExtractLayout(version);
 #if NET8_0_OR_GREATER
-        // The bit-plane kernel emits whole 32-bit words off a per-version pair table, so
-        // its output length is fixed by the version rather than by the span it is handed.
-        // The portable tier reads stream.Length and truncates. Only dispatch to the
-        // kernel when those two agree; every production caller sizes the span exactly.
-        if (!forceScalar && IsBitPlaneTierSupported && stream.Length == RmQRConstants.GetTotalCodewordCount(version))
+        // Both vector kernels emit whole words off a per-version table, so their output
+        // length is fixed by the version rather than by the span they are handed. The
+        // portable tier reads stream.Length and truncates. Only dispatch to a kernel
+        // when those two agree; every production caller sizes the span exactly.
+        var exact = stream.Length == RmQRConstants.GetTotalCodewordCount(version);
+        if (exact && kernel != ExtractKernel.Scalar)
         {
-            ExtractCodewordsBitPlanes(modules, width, height, layout.Pairs, stream);
-            return;
+            if ((kernel == ExtractKernel.Auto || kernel == ExtractKernel.BitPlanes) && IsBitPlaneTierSupported)
+            {
+                ExtractCodewordsBitPlanes(modules, width, height, layout.Pairs, stream);
+                return;
+            }
+            if ((kernel == ExtractKernel.Auto || kernel == ExtractKernel.PairPlanes) && IsPairPlaneTierSupported)
+            {
+                ExtractCodewordsPairPlanes(modules, width, height, layout.PairPlanes!, stream);
+                return;
+            }
         }
 #endif
         // The portable tier reads the geometry out of the walk-order table instead.
@@ -215,8 +262,10 @@ internal static partial class RmQRMatrixDecoder
     // Per-version extraction tables (built once from the placer's own predicates, so
     // they are correct by construction; published with a volatile write - a benign
     // race builds identical tables twice). Memory per version: 2 bytes per stream bit
-    // plus 24 bytes per column pair: about 5.2 KB for R17x139 (3,712 B of order plus
-    // 69 column pairs), and about 69 KB if every one of the 32 versions were decoded.
+    // plus 24 bytes per column pair, and on ARM64 the pair-plane run tables on top of
+    // that. Measured: R17x139 is 5,368 B on x64/portable (3,712 B of order plus 69
+    // column pairs) and 7,368 B on ARM64; decoding all 32 versions costs about 68 KB
+    // and about 100 KB respectively.
     // ---------------------------------------------------------------
 
     /// <summary>Low bits of an <see cref="ExtractLayout.Order"/> entry: the core module index.</summary>
@@ -233,6 +282,140 @@ internal static partial class RmQRMatrixDecoder
     /// </summary>
     private const int PlaneStride = 160;
 
+    /// <summary>
+    /// Everything the ARM64 pair-plane kernel derives from the version alone. Unlike the
+    /// x64 form, a lane here is a whole column PAIR: the transpose interleaves the two
+    /// columns as it goes, so the plane word already is the pair's output field with the
+    /// function modules still in it, and the kernel only has to compress it. The
+    /// compression is described as runs of consecutive data bits, because function
+    /// modules come from rectangular blocks and not from scattered modules (a pair
+    /// averages 1.0-2.3 runs, worst case 5-11).
+    /// </summary>
+    internal sealed class PairPlaneLayout
+    {
+        /// <summary>8-column transpose blocks: ceil(width / 8), each holding 4 pairs.</summary>
+        public readonly int Blocks;
+
+        /// <summary>Bits a full pair contributes before compression: 2 * (height - 2).</summary>
+        public readonly int FieldBits;
+
+        /// <summary>Data mask in plane coordinates, indexed by pair index; XORed into the plane once per block.</summary>
+        public readonly uint[] PlaneXor;
+
+        /// <summary>
+        /// Every run of every pair in walk order, 3 words each: the lane the pair occupies
+        /// in its block, the run's bits in place, and source shift | length &lt;&lt; 16.
+        /// </summary>
+        public readonly uint[] Runs;
+
+        /// <summary>End offset in <see cref="Runs"/> of each block's runs; blocks are walked in descending order.</summary>
+        public readonly uint[] BlockRunEnd;
+
+        /// <summary>All-ones in the lanes whose pair walks downward, so needs the row-reversed word.</summary>
+        public readonly uint[] DownwardLanes;
+
+        public PairPlaneLayout(int blocks, int fieldBits, uint[] planeXor, uint[] runs, uint[] blockRunEnd, uint[] downwardLanes)
+        {
+            Blocks = blocks;
+            FieldBits = fieldBits;
+            PlaneXor = planeXor;
+            Runs = runs;
+            BlockRunEnd = blockRunEnd;
+            DownwardLanes = downwardLanes;
+        }
+    }
+
+    /// <summary>
+    /// Replays the same walk in the pair-plane shape. Plane word for the pair whose right
+    /// column is <c>col</c> holds, for every data row, bit <c>2j+1</c> = module(row, col)
+    /// and <c>2j</c> = module(row, col-1), where j counts rows in WALK order from the
+    /// FIRST row the pair visits (row height-2 walking up, row 1 walking down), so the
+    /// pair's earliest bits sit in the word's high bits and the run extraction reads it
+    /// from bit 31 down. The walk alternates between the two columns of a pair on every
+    /// row, so those bits are already in stream order.
+    /// </summary>
+    private static PairPlaneLayout BuildPairPlaneLayout(RmQRVersion version, int width, int height, int bitCount)
+    {
+        var blocks = (width + 7) / 8;
+        var fieldBits = 2 * (height - 2);
+        var topK = (width - 3) / 2;
+        // Padded to whole 32-column steps (4 blocks): the transpose reads mask vectors
+        // four blocks at a time, and the padding pairs carry no runs.
+        var slots = (blocks + 3) / 4 * 16;
+
+        var selects = new uint[slots];
+        var planeXor = new uint[slots];
+        var downward = new bool[slots];
+
+        var walked = 0;
+        var upward = true;
+        for (var col = width - 2; col >= 1; col -= 2)
+        {
+            var k = col >> 1;
+            downward[k] = !upward;
+
+            uint select = 0, mask = 0;
+            var contributed = 0;
+            for (var step = 0; step < height; step++)
+            {
+                var row = upward ? height - 1 - step : step;
+                if (row < 1 || row > height - 2) continue; // rows 0 and h-1 are timing patterns
+                var j = upward ? height - 2 - row : row - 1;
+                var group = fieldBits - 2 - 2 * j;
+
+                for (var c = col; c >= col - 1; c--)
+                {
+                    if (RmQRModulePlacer.IsFunctionModule(version, row, c)) continue;
+                    if (walked + contributed >= bitCount) continue; // truncated tail of the walk
+                    var bit = group + (c == col ? 1 : 0);
+                    select |= 1u << bit;
+                    if (RmQRModulePlacer.GetMaskBit(row, c)) mask |= 1u << bit;
+                    contributed++;
+                }
+            }
+
+            selects[k] = select;
+            planeXor[k] = mask;
+            walked += contributed;
+            upward = !upward;
+        }
+
+        // A block covers four consecutive pairs and the walk runs down the pair index, so
+        // walking the blocks backwards visits the runs in exactly stream order.
+        var runs = new List<uint>();
+        var blockRunEnd = new uint[slots / 4];
+        var atBlock = slots / 4 - 1;
+        for (var k = slots - 1; k >= 0; k--)
+        {
+            while (atBlock > k >> 2)
+            {
+                blockRunEnd[atBlock] = (uint)runs.Count;
+                atBlock--;
+            }
+            if (k > topK) continue;
+
+            var bit = 31;
+            while (bit >= 0)
+            {
+                if ((selects[k] & (1u << bit)) == 0) { bit--; continue; }
+                var low = bit;
+                while (low > 0 && (selects[k] & (1u << (low - 1))) != 0) low--;
+                var length = bit - low + 1;
+                runs.Add((uint)(k & 3));
+                runs.Add(((1u << length) - 1) << low);
+                runs.Add((uint)low | ((uint)length << 16));
+                bit = low - 1;
+            }
+        }
+        blockRunEnd[0] = (uint)runs.Count;
+
+        var lanes = new uint[4];
+        for (var lane = 0; lane < 4; lane++)
+            lanes[lane] = downward[lane] ? uint.MaxValue : 0u; // a block holds 4 pairs, so the parity pattern repeats
+
+        return new PairPlaneLayout(blocks, fieldBits, planeXor, runs.ToArray(), blockRunEnd, lanes);
+    }
+
     /// <summary>Everything the extraction walk derives from the version alone.</summary>
     private sealed class ExtractLayout
     {
@@ -246,10 +429,14 @@ internal static partial class RmQRMatrixDecoder
         /// </summary>
         public readonly uint[] Pairs;
 
-        public ExtractLayout(ushort[] order, uint[] pairs)
+        /// <summary>Tables for the ARM64 pair-plane kernel; null when that tier cannot run here.</summary>
+        public readonly PairPlaneLayout? PairPlanes;
+
+        public ExtractLayout(ushort[] order, uint[] pairs, PairPlaneLayout? pairPlanes)
         {
             Order = order;
             Pairs = pairs;
+            PairPlanes = pairPlanes;
         }
     }
 
@@ -338,6 +525,6 @@ internal static partial class RmQRMatrixDecoder
             upward = !upward;
         }
 
-        return new ExtractLayout(order, pairs.ToArray());
+        return new ExtractLayout(order, pairs.ToArray(), IsPairPlaneTierSupported ? BuildPairPlaneLayout(version, width, height, bitCount) : null);
     }
 }

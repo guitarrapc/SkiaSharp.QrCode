@@ -1,4 +1,9 @@
 using System.Buffers;
+#if NET8_0_OR_GREATER
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
+#endif
 using SkiaSharp.QrCode.Internals.ImageDecoders;
 
 namespace SkiaSharp.QrCode.Internals.RmQr;
@@ -839,10 +844,54 @@ internal static class RmQRImageDecoder
     }
 
     /// <summary>
+    /// Narrowest column count the Vector128 samplers accept: one whole lane group. No
+    /// rMQR width comes near it (the narrowest symbol is 27 columns wide), and
+    /// RmQRSampleGridParityTest asserts that, so this is the one place the threshold
+    /// lives — a test that repeated the literal would pin nothing.
+    /// </summary>
+    internal const int Simd128MinColumns = 8;
+
+    /// <summary>
     /// Samples every module center of the rectangular grid through the transform.
     /// Out-of-range positions clamp to the nearest edge pixel.
     /// </summary>
+    /// <remarks>
+    /// The Vector128 kernel samples the exact same pixels as the scalar loop, so the
+    /// two tiers are interchangeable (pinned by RmQRSampleGridParityTest). That is
+    /// stricter than it looks: rMQR's scalar form divides each numerator by the
+    /// denominator, and Standard QR's row kernel — which multiplies by one reciprocal
+    /// instead — is NOT bit-equivalent to it, which is why this kernel is its own
+    /// implementation rather than a shared one.
+    ///
+    /// Measured on Apple M2 (RmQrSampleArm findings log), 2.4-3.8x over the scalar
+    /// loop. Two thirds of that comes from vectorizing the convert/clamp/gather; the
+    /// rest from the affine special case, which is not a heuristic — every first
+    /// attempt at a clean capture goes through a frame built with
+    /// perspectiveX = perspectiveY = 0, and there the denominator is exactly 1f, so
+    /// both divisions can be skipped without changing a sampled byte.
+    /// </remarks>
     internal static void SampleGrid(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
+    {
+#if NET8_0_OR_GREATER
+        // Every rMQR width is >= 27, so the vector path takes every real symbol; the
+        // guard only covers direct callers (tests) below one full 8-module block.
+        // RmQRSampleGridParityTest pins that against the version table, so a widened
+        // threshold fails there instead of silently retiring the kernel.
+        if (Vector128.IsHardwareAccelerated && columns >= Simd128MinColumns)
+        {
+            SampleGridSimd128(luminance, width, height, threshold, transform, columns, rows, modules);
+            return;
+        }
+#endif
+        SampleGridScalar(luminance, width, height, threshold, transform, columns, rows, modules);
+    }
+
+    /// <summary>
+    /// Scalar reference sampler: one <see cref="PerspectiveTransform.Transform"/> per
+    /// module. Kept as the parity reference for the vector tier as well as the
+    /// fallback for platforms without Vector128.
+    /// </summary>
+    internal static void SampleGridScalar(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
     {
         for (var row = 0; row < rows; row++)
         {
@@ -865,6 +914,206 @@ internal static class RmQRImageDecoder
             }
         }
     }
+
+#if NET8_0_OR_GREATER
+    /// <summary>
+    /// Vector128 grid sampler: 8 module centres per step, with a projective and an
+    /// affine variant. Byte-identical to <see cref="SampleGridScalar"/>.
+    /// </summary>
+    /// <remarks>
+    /// Exactness is by construction, and each step is chosen to preserve it: lanes keep
+    /// the scalar's own association <c>((a1x*gridX) + a2x*gridY) + a3x</c> (folding the
+    /// last two into a row constant would re-associate), there is no FMA contraction and
+    /// no reciprocal multiply, and the affine variant only skips a division by exactly
+    /// <c>1f</c>. That is also why this is a separate implementation from the Standard QR
+    /// row kernel, which computes <c>1/d</c> once and multiplies twice: it rounds
+    /// differently. The overlapping tail block re-samples up to three already-written
+    /// modules; it reads the same inputs and writes the same values.
+    /// <para>
+    /// The clamp is what makes the unchecked gather safe: px and py are pinned to
+    /// [0, width-1] and [0, height-1]. That relies on the caller having sliced
+    /// <paramref name="luminance"/> to exactly width * height, as DecodeLuminance does —
+    /// this method skips the bounds checks the scalar loop keeps, so a short span reads
+    /// out of bounds here where it would throw there.
+    /// </para>
+    /// </remarks>
+    internal static void SampleGridSimd128(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
+    {
+        if (!Vector128.IsHardwareAccelerated || columns < Simd128MinColumns)
+        {
+            SampleGridScalar(luminance, width, height, threshold, transform, columns, rows, modules);
+            return;
+        }
+
+        // Affine frames have an exactly unit denominator, so both divisions drop out.
+        // This is not a heuristic about typical input: TryDecodeFrame builds the
+        // isotropic and anisotropic frames with perspectiveX = perspectiveY = 0, so
+        // every attempt before the perspective search lands here.
+        if (transform.a13 == 0f && transform.a23 == 0f && transform.a33 == 1f)
+        {
+            SampleGridSimd128Affine(luminance, width, height, threshold, transform, columns, rows, modules);
+            return;
+        }
+
+        var laneOffsetsLo = Vector128.Create(0.5f, 1.5f, 2.5f, 3.5f);
+        var laneOffsetsHi = Vector128.Create(4.5f, 5.5f, 6.5f, 7.5f);
+        var a11 = Vector128.Create(transform.a11);
+        var a12 = Vector128.Create(transform.a12);
+        var a13 = Vector128.Create(transform.a13);
+        var a31 = Vector128.Create(transform.a31);
+        var a32 = Vector128.Create(transform.a32);
+        var a33 = Vector128.Create(transform.a33);
+        var half = Vector128.Create(0.5f);
+        var zero = Vector128<int>.Zero;
+        var maxPx = Vector128.Create(width - 1);
+        var maxPy = Vector128.Create(height - 1);
+        var widthVector = Vector128.Create(width);
+
+        ref var luminanceRef = ref MemoryMarshal.GetReference(luminance);
+        ref var moduleRef = ref MemoryMarshal.GetReference(modules);
+
+        for (var row = 0; row < rows; row++)
+        {
+            var gridY = row + 0.5f;
+            var rowBase = row * columns;
+            var rowX = Vector128.Create(transform.a21 * gridY);
+            var rowY = Vector128.Create(transform.a22 * gridY);
+            var rowDenominator = Vector128.Create(transform.a23 * gridY);
+
+            var column = 0;
+            for (; column + 8 <= columns; column += 8)
+            {
+                var columnVector = Vector128.Create((float)column);
+                var gridXLo = laneOffsetsLo + columnVector;
+                var gridXHi = laneOffsetsHi + columnVector;
+                var denominatorLo = a13 * gridXLo + rowDenominator + a33;
+                var denominatorHi = a13 * gridXHi + rowDenominator + a33;
+                var xLo = (a11 * gridXLo + rowX + a31) / denominatorLo;
+                var yLo = (a12 * gridXLo + rowY + a32) / denominatorLo;
+                var xHi = (a11 * gridXHi + rowX + a31) / denominatorHi;
+                var yHi = (a12 * gridXHi + rowY + a32) / denominatorHi;
+
+                var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo + half), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo + half), maxPx), zero);
+                var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi + half), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi + half), maxPx), zero);
+
+                // Lane extraction beats spilling the index vector to the stack: the
+                // reload was measured on the critical path of every gather.
+                ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + column);
+                Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(0)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 1) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(1)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 2) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(2)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 3) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(3)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 4) = Unsafe.Add(ref luminanceRef, indexHi.GetElement(0)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 5) = Unsafe.Add(ref luminanceRef, indexHi.GetElement(1)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 6) = Unsafe.Add(ref luminanceRef, indexHi.GetElement(2)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 7) = Unsafe.Add(ref luminanceRef, indexHi.GetElement(3)) < threshold ? (byte)1 : (byte)0;
+            }
+
+            while (column < columns)
+            {
+                var start = Math.Min(column, columns - 4);
+                var gridX = laneOffsetsLo + Vector128.Create((float)start);
+                var denominator = a13 * gridX + rowDenominator + a33;
+                var x = (a11 * gridX + rowX + a31) / denominator;
+                var y = (a12 * gridX + rowY + a32) / denominator;
+
+                var index = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y + half), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x + half), maxPx), zero);
+
+                ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + start);
+                Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, index.GetElement(0)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 1) = Unsafe.Add(ref luminanceRef, index.GetElement(1)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 2) = Unsafe.Add(ref luminanceRef, index.GetElement(2)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 3) = Unsafe.Add(ref luminanceRef, index.GetElement(3)) < threshold ? (byte)1 : (byte)0;
+                column = start + 4;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Affine tier of <see cref="SampleGridSimd128"/>: the denominator is exactly 1f,
+    /// so x / 1f == x and both divisions are dropped. Everything else — the hoisted
+    /// products, the clamp, the overlapping tail — matches the projective kernel, and
+    /// the sampled bytes match <see cref="SampleGridScalar"/>.
+    /// </summary>
+    /// <remarks>
+    /// A separate method rather than a branch inside the shared loop: this is the shape
+    /// that was measured, and it keeps the projective kernel's constants out of the
+    /// affine loop's register budget.
+    /// </remarks>
+    private static void SampleGridSimd128Affine(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, in PerspectiveTransform transform, int columns, int rows, Span<byte> modules)
+    {
+        var laneOffsetsLo = Vector128.Create(0.5f, 1.5f, 2.5f, 3.5f);
+        var laneOffsetsHi = Vector128.Create(4.5f, 5.5f, 6.5f, 7.5f);
+        var a11 = Vector128.Create(transform.a11);
+        var a12 = Vector128.Create(transform.a12);
+        var a31 = Vector128.Create(transform.a31);
+        var a32 = Vector128.Create(transform.a32);
+        var half = Vector128.Create(0.5f);
+        var zero = Vector128<int>.Zero;
+        var maxPx = Vector128.Create(width - 1);
+        var maxPy = Vector128.Create(height - 1);
+        var widthVector = Vector128.Create(width);
+
+        ref var luminanceRef = ref MemoryMarshal.GetReference(luminance);
+        ref var moduleRef = ref MemoryMarshal.GetReference(modules);
+
+        for (var row = 0; row < rows; row++)
+        {
+            var gridY = row + 0.5f;
+            var rowBase = row * columns;
+            var rowX = Vector128.Create(transform.a21 * gridY);
+            var rowY = Vector128.Create(transform.a22 * gridY);
+
+            var column = 0;
+            for (; column + 8 <= columns; column += 8)
+            {
+                var columnVector = Vector128.Create((float)column);
+                var gridXLo = laneOffsetsLo + columnVector;
+                var gridXHi = laneOffsetsHi + columnVector;
+                var xLo = a11 * gridXLo + rowX + a31;
+                var yLo = a12 * gridXLo + rowY + a32;
+                var xHi = a11 * gridXHi + rowX + a31;
+                var yHi = a12 * gridXHi + rowY + a32;
+
+                var indexLo = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yLo + half), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xLo + half), maxPx), zero);
+                var indexHi = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(yHi + half), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(xHi + half), maxPx), zero);
+
+                ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + column);
+                Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(0)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 1) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(1)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 2) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(2)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 3) = Unsafe.Add(ref luminanceRef, indexLo.GetElement(3)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 4) = Unsafe.Add(ref luminanceRef, indexHi.GetElement(0)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 5) = Unsafe.Add(ref luminanceRef, indexHi.GetElement(1)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 6) = Unsafe.Add(ref luminanceRef, indexHi.GetElement(2)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 7) = Unsafe.Add(ref luminanceRef, indexHi.GetElement(3)) < threshold ? (byte)1 : (byte)0;
+            }
+
+            while (column < columns)
+            {
+                var start = Math.Min(column, columns - 4);
+                var gridX = laneOffsetsLo + Vector128.Create((float)start);
+                var x = a11 * gridX + rowX + a31;
+                var y = a12 * gridX + rowY + a32;
+
+                var index = Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(y + half), maxPy), zero) * widthVector
+                    + Vector128.Max(Vector128.Min(Vector128.ConvertToInt32(x + half), maxPx), zero);
+
+                ref var destination = ref Unsafe.Add(ref moduleRef, rowBase + start);
+                Unsafe.Add(ref destination, 0) = Unsafe.Add(ref luminanceRef, index.GetElement(0)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 1) = Unsafe.Add(ref luminanceRef, index.GetElement(1)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 2) = Unsafe.Add(ref luminanceRef, index.GetElement(2)) < threshold ? (byte)1 : (byte)0;
+                Unsafe.Add(ref destination, 3) = Unsafe.Add(ref luminanceRef, index.GetElement(3)) < threshold ? (byte)1 : (byte)0;
+                column = start + 4;
+            }
+        }
+    }
+#endif
 
     private static bool SymbolFitsImage(in PerspectiveTransform transform, int symbolWidth, int symbolHeight, int width, int height, float samplingSlack)
     {
