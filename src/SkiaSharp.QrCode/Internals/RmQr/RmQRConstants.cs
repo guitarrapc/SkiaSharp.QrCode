@@ -104,11 +104,38 @@ internal static class RmQRConstants
         1, 2, 2, 2, 2, 3, 3, 4, 4, 6,
     ];
 
+    // Error correction capacity t in codewords per RS block, per version × ECC (M, H):
+    // the maximum a decoder may correct in one block. Every entry is the full
+    // Reed-Solomon strength ⌊ECC codewords per block / 2⌋ — unlike ISO/IEC 18004
+    // Micro QR, no misdecode-protection codewords p are reserved (there 2t + p = ecc,
+    // so a decoder wired to full RS strength over-corrects).
+    //
+    // Provenance: derived from the block-structure tables above ((total − data) /
+    // blocks / 2), which are oracle-verified (specs/rmqr-encoder.md, "Verification
+    // record"), and consistent with zxing-cpp — the only maintained OSS rMQR decode
+    // lineage — which corrects rMQR at full Reed-Solomon strength. The ISO/IEC 23941
+    // Table 8 capacity column itself has NOT been read: the standard is paywalled and
+    // the public preview stops short of Table 8. Held as data rather than as the
+    // ⌊ecc/2⌋ expression so that a future reading of Table 8 showing a reserved p on
+    // some row is a table edit alone; RmQRMatrixDecoder already applies the value per
+    // block. RmQRConstantsUnitTest pins every row against ECCPerBlock / 2.
+    private static ReadOnlySpan<byte> errorCorrectionCapacities =>
+    [
+        3, 5, 4, 7, 6, 11, 8, 15, 12, 11,
+        4, 7, 6, 11, 9, 8, 12, 11, 9, 11,
+        4, 5, 6, 10, 8, 8, 12, 11, 8, 15, 12, 15,
+        4, 7, 7, 14, 11, 10, 8, 14, 10, 13, 10, 14,
+        9, 9, 13, 12, 9, 12, 12, 11, 12, 13,
+        11, 10, 8, 15, 11, 14, 10, 13, 10, 13,
+    ];
+
     // Character count indicator widths per version index (ISO/IEC 23941 Table 3).
-    // Numeric / Alphanumeric / Byte were read back from oracle bit streams (96/96);
-    // Kanji is spec-transcribed only (the mode is not implemented and no oracle
-    // command line emits it), keep it in the table so adding the mode later is a
-    // data + segment change.
+    // Numeric / Alphanumeric / Byte were read back from oracle bit streams (96/96).
+    // No oracle here emits Kanji (the mode is intentionally unimplemented), so that
+    // column is pinned by derivation instead: Table 3 takes the narrowest count field
+    // that still expresses the largest count the version's M-level data capacity
+    // allows, a rule that reproduces all 96 verified widths exactly. The table is kept
+    // so adding the mode later is a data + segment change.
     private static ReadOnlySpan<byte> numericCountBits =>
     [
         4, 5, 6, 7, 7,
@@ -146,7 +173,7 @@ internal static class RmQRConstants
         2, 4, 5, 5, 6, 6,
         3, 5, 5, 6, 6, 7,
         5, 5, 6, 6, 7,
-        5, 6, 6, 7, 7,
+        5, 6, 6, 6, 7,
     ];
 
     // Vertical timing / alignment column positions per width (0-based columns);
@@ -218,6 +245,14 @@ internal static class RmQRConstants
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetBlockCount(RmQRVersion version, RmQREccLevel eccLevel) => blockCounts[Index(version, eccLevel)];
+
+    /// <summary>
+    /// Maximum number of codeword errors a decoder may correct in one Reed-Solomon
+    /// block; see the <c>errorCorrectionCapacities</c> table for its provenance.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetErrorCorrectionCapacity(RmQRVersion version, RmQREccLevel eccLevel)
+        => errorCorrectionCapacities[Index(version, eccLevel)];
 
     /// <summary>
     /// Reed-Solomon block structure as the shared <see cref="ECCInfo"/> (group 1 =

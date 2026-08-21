@@ -29,9 +29,16 @@ if (command == "probe-rmqr")
     // mapping, zxing-cpp Extra() naming, qrtool interop.
     return RmQRProbe.Run(FindRepoRoot());
 }
+if (command == "probe-rmqr-capacity")
+{
+    // Measures whether rMQR reserves misdecode-protection codewords p, by damaging
+    // symbols to our correction capacity and asking zxing-cpp in both directions.
+    // Backs the Correction cap decision in specs/rmqr-decoder.md.
+    return RmQRCapacityProbe.Run();
+}
 if (command != "regenerate")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr]");
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity]");
     return 1;
 }
 
