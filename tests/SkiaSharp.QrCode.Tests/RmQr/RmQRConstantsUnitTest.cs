@@ -225,6 +225,55 @@ public class RmQRConstantsUnitTest
     }
 
     [Test]
+    [MethodDataSource(nameof(AllVersions))]
+    public async Task CountIndicatorWidths_AreTheNarrowestThatHoldTheirMaximumCount(RmQRVersion version)
+    {
+        // ISO/IEC 23941 Table 3 takes, per version and mode, the narrowest count field
+        // that can still express the largest count the version's M-level data capacity
+        // allows. Derived from the data codeword count alone, that rule reproduces all
+        // 96 oracle-verified Numeric / Alphanumeric / Byte widths — which is what makes
+        // it usable on the Kanji column, the one column no oracle in this repo can emit
+        // (Kanji mode is intentionally unimplemented, so a wrong width would sit latent
+        // until someone adds the mode). It caught R17x99 Kanji transcribed as 7 where
+        // the rule gives 6.
+        var dataBits = RmQRConstants.GetDataCodewordCount(version, RmQREccLevel.M) * 8;
+
+        await Assert.That(RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric)).IsEqualTo(NarrowestCountWidth(dataBits, NumericBits));
+        await Assert.That(RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric)).IsEqualTo(NarrowestCountWidth(dataBits, AlphanumericBits));
+        await Assert.That(RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte)).IsEqualTo(NarrowestCountWidth(dataBits, ByteBits));
+        await Assert.That(RmQRConstants.GetKanjiCountIndicatorLength(version)).IsEqualTo(NarrowestCountWidth(dataBits, KanjiBits));
+    }
+
+    /// <summary>
+    /// The narrowest count field that still holds every count the segment can reach:
+    /// a segment costs 3 mode bits + the count field + the mode's payload bits, so the
+    /// largest count is capped by <paramref name="dataBits"/>, and the field must be
+    /// able to express it.
+    /// </summary>
+    private static int NarrowestCountWidth(int dataBits, Func<int, int> payloadBits)
+    {
+        for (var width = 1; width <= 12; width++)
+        {
+            var maxCount = 0;
+            while (3 + width + payloadBits(maxCount + 1) <= dataBits)
+                maxCount++;
+
+            if (maxCount < 1 << width)
+                return width;
+        }
+
+        throw new InvalidOperationException($"no count width up to 12 bits holds the counts {dataBits} data bits allow");
+    }
+
+    // ISO/IEC 23941 Section 7.4: numeric packs 3 digits into 10 bits (a 1- or 2-digit
+    // tail costs 4 or 7), alphanumeric 2 characters into 11 (a 1-character tail 6),
+    // byte 8 bits each, Kanji 13 bits each.
+    private static int NumericBits(int count) => 10 * (count / 3) + (count % 3) switch { 1 => 4, 2 => 7, _ => 0 };
+    private static int AlphanumericBits(int count) => 11 * (count / 2) + (count % 2 == 1 ? 6 : 0);
+    private static int ByteBits(int count) => 8 * count;
+    private static int KanjiBits(int count) => 13 * count;
+
+    [Test]
     public async Task ModeIndicators_AreThreeBits_WithIsoValues()
     {
         int modeIndicatorLength = RmQRConstants.ModeIndicatorLength, terminatorLength = RmQRConstants.TerminatorLength, kanjiIndicator = RmQRConstants.KanjiModeIndicatorValue;

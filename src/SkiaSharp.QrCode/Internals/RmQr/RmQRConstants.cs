@@ -130,10 +130,12 @@ internal static class RmQRConstants
     ];
 
     // Character count indicator widths per version index (ISO/IEC 23941 Table 3).
-    // Numeric / Alphanumeric / Byte were read back from oracle bit streams (96/96);
-    // Kanji is spec-transcribed only (the mode is not implemented and no oracle
-    // command line emits it), keep it in the table so adding the mode later is a
-    // data + segment change.
+    // Numeric / Alphanumeric / Byte were read back from oracle bit streams (96/96).
+    // No oracle here emits Kanji (the mode is intentionally unimplemented), so that
+    // column is pinned by derivation instead: Table 3 takes the narrowest count field
+    // that still expresses the largest count the version's M-level data capacity
+    // allows, a rule that reproduces all 96 verified widths exactly. The table is kept
+    // so adding the mode later is a data + segment change.
     private static ReadOnlySpan<byte> numericCountBits =>
     [
         4, 5, 6, 7, 7,
@@ -171,7 +173,7 @@ internal static class RmQRConstants
         2, 4, 5, 5, 6, 6,
         3, 5, 5, 6, 6, 7,
         5, 5, 6, 6, 7,
-        5, 6, 6, 7, 7,
+        5, 6, 6, 6, 7,
     ];
 
     // Vertical timing / alignment column positions per width (0-based columns);

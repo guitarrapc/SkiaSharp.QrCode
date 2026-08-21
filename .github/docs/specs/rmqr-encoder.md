@@ -275,13 +275,13 @@ Performed 2026-08-15 with the pinned qrtool 0.13.2 binary (`--variant rmqr`, `--
 | Data codewords per version × ECC | Reproduce all 192 capacities from data codewords + count widths | 192/192 |
 | Total codewords | Free-module count from an independent function-pattern painter must equal 8 × total + remainder (0..7) | 32/32 after correcting R17x59 (88, not the initially recalled 90; 90 would also require 31 ECC per block at H, above the 30 maximum) |
 | Count indicator widths (N/A/B) | Read the first data codewords of one-character payloads from oracle matrices (inverse zigzag + unmask + deinterleave), width = position of the count's leading 1 | 96/96 (three numeric widths of the initial recall were off by one and corrected) |
+| Count indicator widths (Kanji) | No oracle here emits Kanji, so the column is pinned by derivation: Table 3 takes the narrowest count field that still expresses the largest count the version's M-level data capacity allows. The rule is validated by reproducing all 96 measured N/A/B widths above, then applied to Kanji | 32/32 after correcting R17x99 (6, not the transcribed 7) |
 | Format information | Both 18-bit copies of all 64 version × ECC symbols equal BCH(18,6) of (ECC bit, version index) XOR the copy's mask | 128/128 |
 | Mask, zigzag start and direction, interleaving | The R7x43-M "1" symbol yields exactly the predicted codewords `22 20 EC 11` and multi-block versions deinterleave to the predicted streams | Confirmed |
 | Alignment column positions, sub-finder and corner patterns | Visual inspection of R7x43 / R9x59 / R11x27 plus the free-module count agreement above | Consistent |
 
-Not verified here: Kanji count widths (not needed while Kanji mode is intentionally unsupported),
-and the ISO/IEC 23941 misdecode-protection question (whether ECC counts reserve codewords beyond
-the correction capacity). The decoder resolves the latter indirectly — the block structure verified
+Not verified here: the ISO/IEC 23941 misdecode-protection question (whether ECC counts reserve codewords beyond
+the correction capacity). The decoder resolves it indirectly — the block structure verified
 above leaves at most one unused ECC codeword per block, and zxing-cpp corrects rMQR at full
 Reed-Solomon strength — but the Table 8 capacity column itself is still unread; see the Correction
 cap decision in [rMQR Decoder](rmqr-decoder.md).
@@ -303,3 +303,4 @@ Implementation lessons, consolidated from the retired phase-by-phase progress lo
 ## Validation
 
 Per phase (every exit met): structural table tests + oracle format/dimension tests (5.1), naive-reference parity for the bit stream (5.3), interleave reference (5.4), extraction test over all 64 combinations (5.5), the `spot-check-rmqr` zxing-cpp gate over every version × ECC × mode (5.6), module-to-pixel rendering parity (5.7); Standard and Micro QR benchmarks flat at every step. The 2026-08-18 ECI follow-up adds exact assignment-3/26 streams, ECI capacity-boundary and exhaustive selector parity tests, public class/span/sizing round trips, unsupported-charset validation, and a 318-symbol zxing-cpp text/bytes/version/ECC gate with 63 ECI-3 and 63 ECI-26 symbols.
+- A table column that no oracle can reach still has a check available: derive it. The Kanji count widths sat in the tables for months marked "spec-transcribed, unverified" because no oracle in this repo emits Kanji — but Table 3's own rule (narrowest count field that still holds the largest count the version's data capacity allows) reproduces all 96 measured Numeric/Alphanumeric/Byte widths exactly, which validates the rule on evidence and then applies it to the column that has none. It found R17x99 transcribed as 7 where the rule gives 6, latent since Phase 5.1b and invisible to every test because the mode is unimplemented. The bound tests that did cover the column (`b >= k >= 2`) passed on the wrong value; a loose invariant on an unverified column is not coverage.
