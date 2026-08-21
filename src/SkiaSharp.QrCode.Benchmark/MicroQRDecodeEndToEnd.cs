@@ -37,6 +37,29 @@ public class MicroQRDecodeEndToEnd
         _standardChars = new char[QRCodeDecoder.GetMaxDecodedLength(1)];
     }
 
+    // String path (allocates the result string only)
+
+    [Benchmark]
+    public string MicroQR_Numeric_M2_Decode()
+    {
+        MicroQRCodeDecoder.TryDecode(_numericModules, _numericSize, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string MicroQR_Alphanumeric_M3_Decode()
+    {
+        MicroQRCodeDecoder.TryDecode(_alphanumericModules, _alphanumericSize, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string MicroQR_Byte_M4_Decode()
+    {
+        MicroQRCodeDecoder.TryDecode(_byteModules, _byteSize, out var text, out _);
+        return text;
+    }
+
     // Span destination (zero-allocation) path
 
     [Benchmark(Baseline = true, Description = "MicroQR_Numeric_M2_Decode (Span)")]
@@ -58,22 +81,6 @@ public class MicroQRDecodeEndToEnd
     {
         MicroQRCodeDecoder.TryDecode(_byteModules, _byteSize, _chars, out var written, out _);
         return written;
-    }
-
-    // String path (allocates the result string only)
-
-    [Benchmark]
-    public string MicroQR_Numeric_M2_Decode()
-    {
-        MicroQRCodeDecoder.TryDecode(_numericModules, _numericSize, out var text, out _);
-        return text;
-    }
-
-    [Benchmark]
-    public string MicroQR_Byte_M4_Decode()
-    {
-        MicroQRCodeDecoder.TryDecode(_byteModules, _byteSize, out var text, out _);
-        return text;
     }
 
     // Standard QR version 1 with the same numeric payload, for scale reference.

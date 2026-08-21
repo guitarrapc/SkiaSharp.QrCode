@@ -47,6 +47,43 @@ public class RmQRDecodeEndToEnd
         _standardChars = new char[QRCodeDecoder.GetMaxDecodedLength(1)];
     }
 
+    // String-returning variants (allocate the result string only)
+
+    [Benchmark]
+    public string RmQR_Numeric_R7x43_Decode()
+    {
+        RmQRCodeDecoder.TryDecode(_numericModules, _numericSize.Width, _numericSize.Height, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string RmQR_Alphanumeric_R11x59_Decode()
+    {
+        RmQRCodeDecoder.TryDecode(_alphanumericModules, _alphanumericSize.Width, _alphanumericSize.Height, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string RmQR_Byte_R17x139_Decode()
+    {
+        RmQRCodeDecoder.TryDecode(_byteModules, _byteSize.Width, _byteSize.Height, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string RmQR_Numeric_R7x43_CorrectedDecode()
+    {
+        RmQRCodeDecoder.TryDecode(_numericDamagedModules, _numericSize.Width, _numericSize.Height, out var text, out _);
+        return text;
+    }
+
+    [Benchmark]
+    public string RmQR_Byte_R17x139_CorrectedDecode()
+    {
+        RmQRCodeDecoder.TryDecode(_byteDamagedModules, _byteSize.Width, _byteSize.Height, out var text, out _);
+        return text;
+    }
+
     // Span destination (zero-allocation) variants
 
     [Benchmark(Baseline = true, Description = "RmQR_Numeric_R7x43_Decode (Span)")]
@@ -68,22 +105,6 @@ public class RmQRDecodeEndToEnd
     {
         RmQRCodeDecoder.TryDecode(_byteModules, _byteSize.Width, _byteSize.Height, _chars, out var written, out _);
         return written;
-    }
-
-    // String-returning variants (allocate the result string only)
-
-    [Benchmark]
-    public string RmQR_Numeric_R7x43_Decode()
-    {
-        RmQRCodeDecoder.TryDecode(_numericModules, _numericSize.Width, _numericSize.Height, out var text, out _);
-        return text;
-    }
-
-    [Benchmark]
-    public string RmQR_Byte_R17x139_Decode()
-    {
-        RmQRCodeDecoder.TryDecode(_byteModules, _byteSize.Width, _byteSize.Height, out var text, out _);
-        return text;
     }
 
     // Correctable damage: same symbols, modules flipped within RS capacity.

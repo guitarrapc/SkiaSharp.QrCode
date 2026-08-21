@@ -53,6 +53,24 @@ public class RmQREncodeEndToEnd
         return RmQRCodeGenerator.CreateRmQRCode(_byte.AsSpan(), RmQREccLevel.M, RmQRVersion.R17x139);
     }
 
+    [Benchmark]
+    public RmQRCodeData RmQR_Latin1Eci_R17x139_Encode()
+    {
+        return RmQRCodeGenerator.CreateRmQRCodeWithEci(_latin1.AsSpan(), RmQREccLevel.M, EciMode.Iso8859_1, RmQRVersion.R17x139);
+    }
+
+    [Benchmark]
+    public RmQRCodeData RmQR_Utf8Eci_R17x139_Encode()
+    {
+        return RmQRCodeGenerator.CreateRmQRCodeWithEci(_utf8.AsSpan(), RmQREccLevel.M, EciMode.Utf8, RmQRVersion.R17x139);
+    }
+
+    [Benchmark]
+    public RmQRCodeData RmQR_Numeric_AutoFit_Encode()
+    {
+        return RmQRCodeGenerator.CreateRmQRCode(_numeric.AsSpan(), RmQREccLevel.M);
+    }
+
     // Span destination (zero-allocation) variants
 
     [Benchmark(Description = "RmQR_Numeric_R7x43_Encode (Span)")]
