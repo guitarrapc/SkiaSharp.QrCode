@@ -77,9 +77,12 @@ jobs:
       - name: Build
         run: dotnet build -c Release
       - name: Test
+        # skip output with multiple modules may stuck test
+        run: dotnet test -c Release --no-build --max-parallel-test-modules 1 --timeout 8m
         env:
+          # Cap TUnit parallelism to match typical GHA runner cores (avoids CPU-heavy QR/Skia tests oversubscribing).
           TUNIT_MAX_PARALLEL_TESTS: 4
-        run: dotnet test -c Release --no-build
+        timeout-minutes: 10
 
   build-dotnet:
     needs: [validate]
