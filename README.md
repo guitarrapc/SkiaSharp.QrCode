@@ -8,7 +8,7 @@
 
 [Migration](docs/migration.md) | [Data Capacity](docs/data-capacity.md) | [Design Docs](.github/docs)
 
-SkiaSharp.QrCode provides high-performance QR code generation/read with [SkiaSharp](https://github.com/mono/SkiaSharp) integration.
+SkiaSharp.QrCode generates, renders, and decodes QR codes with [SkiaSharp](https://github.com/mono/SkiaSharp).
 
 ![Performance Benchmark](assets/benchmark_simpleencode_net10.0.png)
 
@@ -16,7 +16,7 @@ SkiaSharp.QrCode provides high-performance QR code generation/read with [SkiaSha
 
 Many existing QR code libraries rely on System.Drawing, which has well-known GDI+ limitations and cross-platform issues. SkiaSharp.QrCode was created to provide high performance, minimum memory allocation, a simpler and more intuitive API while leveraging SkiaSharp's cross-platform capabilities. Generate a QR code in a single line, or customize every detail - the choice is yours.
 
-You can create professional-looking QR codes like this with just a few lines of code. Here's a small sample of Standard QR, Micro QR and rMQR.
+Create Standard QR, Micro QR, and rMQR images with a few lines of code.
 
 <p float="left">
   <img src="samples/ConsoleApp/samples/pattern15_instagram_frame.png" width="250" alt="Instagram-style"/>
@@ -57,19 +57,28 @@ SkiaSharp.QrCode is a modern, high-performance QR code generation library built 
 
 ## Supported Symbologies
 
-SkiaSharp.QrCode implements the Standard QR Code symbology, Micro QR generation/decoding, and rMQR generation/decoding. Unless a section says otherwise, this README refers to Standard QR; Micro QR is available via `MicroQRCodeGenerator` / `MicroQRCodeDecoder`, rMQR via `RmQRCodeGenerator` / `RmQRCodeImageBuilder` / `RmQRCodeDecoder`.
+SkiaSharp.QrCode supports Standard QR, Micro QR, and rMQR. Examples use Standard QR unless noted otherwise.
 
-| Symbology | Standard | Generate (Encode) | Decode |
+| Symbology | Standard | Generate | Decode |
 |---|---|---|---|
 | Standard QR (versions 1–40) | ISO/IEC 18004 | ✅ | ✅ |
 | Micro QR (M1–M4) | ISO/IEC 18004 | ✅ | ✅ |
 | rMQR (R7x43–R17x139) | ISO/IEC 23941 | ✅ | ✅ |
 
-See the [FAQ](#does-it-support-micro-qr-or-rmqr) for the Micro QR / rMQR status.
+<p float="left">
+  <img src="assets/benchmark_standardqr_encode.png" width="600" alt="Standard QR Encode"/>
+  <img src="assets/benchmark_standardqr_decode.png" width="600" alt="Standard QR Decode"/>
+</p>
 
-![StandardQR Performance](assets/benchmark_standardqr_encode.png)
+<p float="left">
+  <img src="assets/benchmark_microqr_encode.png" width="600" alt="Micro QR Encode"/>
+  <img src="assets/benchmark_microqr_decode.png" width="600" alt="Micro QR Decode"/>
+</p>
 
-![MicroQR Performance](assets/benchmark_microqr_encode.png)
+<p float="left">
+  <img src="assets/benchmark_rmqr_encode.png" width="600" alt="rMQR Encode"/>
+  <img src="assets/benchmark_rmqr_decode.png" width="600" alt="rMQR Decode"/>
+</p>
 
 
 ## Installation
@@ -121,6 +130,9 @@ File.WriteAllText("qrcode.svg", QRCodeImageBuilder.GetSvgString("https://example
 Generate with Custom Settings.
 
 ```csharp
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(512, 512)
     .WithErrorCorrection(ECCLevel.H)
@@ -130,6 +142,7 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 Save Directly to Stream
 
 ```csharp
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 using var stream = File.OpenWrite("qrcode.png");
@@ -142,102 +155,67 @@ See [Migration Guide](docs/migration.md) for details on migrating from older ver
 
 ## API Overview
 
-SkiaSharp.QrCode provides three main APIs for generation, plus `QRCodeDecoder` for decoding.
+Choose an API based on the output you need. Start with an image builder for most applications.
 
-**Recommendation**: Start with `QRCodeImageBuilder` for most scenarios. Use `QRCodeRenderer` when you need canvas control. Use `QRCodeGenerator` only for custom rendering implementations. Use `QRCodeDecoder` to read QR codes back (round-trip validation, decoding rendered images).
-
-| Feature | QRCodeImageBuilder | QRCodeRenderer | QRCodeGenerator |
+| Task | Standard QR | Micro QR | rMQR |
 | --- | --- | --- | --- |
-| Ease of use | High | Medium | Low |
-| Flexibility | Medium | High | Highest |
-| Built-in rendering | Yes | Yes | No |
-| Custom canvas control | No | Yes | N/A |
-| Recommended for beginners | Yes | No | No |
+| Create PNG, JPEG, WebP, or SVG | `QRCodeImageBuilder` | `MicroQRCodeImageBuilder` | `RmQRCodeImageBuilder` |
+| Generate a module matrix | `QRCodeGenerator` | `MicroQRCodeGenerator` | `RmQRCodeGenerator` |
+| Render a matrix to `SKCanvas` | `QRCodeRenderer` | `QRCodeRenderer` | `QRCodeRenderer` |
+| Decode a matrix or image | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
 
-### QRCodeImageBuilder (Recommended)
+All generators and decoders also provide [zero-allocation APIs](#zero-allocation-apis) for caller-owned buffers.
 
-Best for Most use cases - simple to advanced QR code generation. The high-level, fluent API for generating QR codes with minimal code. Provides a builder pattern with sensible defaults and extensive customization options.
+### Image Builders (Recommended)
 
-**Key Features**:
-- One-liner generation with `GetPngBytes()`, `SavePng()`, `SaveSvg()`
-- Fluent API with `WithXxx()` methods
-- Built-in support for colors, gradients, icons, shapes
-- Multiple output formats (PNG, JPEG, WebP, SVG)
-- Stream and byte array output
+Image builders provide one-line methods and a fluent API for colors, gradients, module shapes, image formats, and output size. Standard QR also supports icons and custom finder patterns.
 
-**When to use**:
-- Quick QR code generation
-- Standard customization needs
-- File or stream output
-
-**Example**:
 ```csharp
 var pngBytes = QRCodeImageBuilder.GetPngBytes("content");
 ```
 
+See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) examples for each builder.
+
 ### QRCodeRenderer (Advanced)
 
-Best for Custom rendering with full control over the canvas. The mid-level API that renders QR data onto an existing SkiaSharp canvas. Useful when you need to integrate QR codes into existing graphics or add custom post-processing.
+`QRCodeRenderer` renders `QRCodeData`, `MicroQRCodeData`, or `RmQRCodeData` to an existing `SKCanvas`. Use it to place a symbol inside other SkiaSharp graphics.
 
-**Key Features**:
-- Render to existing `SKCanvas`
-- Full control over rendering area (`SKRect`)
-- Combine with other SkiaSharp drawing operations
-- Custom effects and post-processing
-
-**When to use**:
-- Integrating QR codes into existing graphics
-- Adding custom decorations or effects
-- Multiple elements on the same canvas
-
-**Example**:
 ```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode;
+
 var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
 var canvas = surface.Canvas;
 QRCodeRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
 ```
 
-### QRCodeGenerator (Low-Level)
+### Generators (Low-Level)
 
-Best for QR data generation without rendering. The low-level API that generates raw QR code data (`QRCodeData`). Use this when you need the QR data structure itself, not the image.
+Generators create module matrices without rendering them. Use them for custom output such as ASCII art or LED displays, or as input to `QRCodeRenderer`.
 
-**Key Features**:
-- Generates `QRCodeData` (boolean module matrix stored as 1D byte array)
-- Specify ECC level, ECI mode, quiet zone size
-- No rendering logic included
-- Smallest API surface
-
-**When to use**:
-- Custom rendering implementations
-- Non-image output (e.g., ASCII art, LED displays)
-- Maximum control over the rendering process
-
-**Example**:
 ```csharp
+using SkiaSharp.QrCode;
+
 var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, quietZoneSize: 4);
-// Use qrData for custom rendering
-// Access individual modules: bool isDark = qrData[row, col];
+var isDark = qrData[row, col];
 ```
 
-#### Zero-Allocation Generation (Span destination)
+### Zero-allocation APIs
 
-For high-throughput scenarios (e.g., per-request QR generation on a web server), you can generate the module matrix into a caller-provided buffer with zero heap allocation. Calculate the required size with `GetRequiredBufferSize`, allocate (or rent) the buffer yourself, and pass it as `Span<byte>`:
+All three generators can write a module matrix to a caller-provided `Span<byte>`. All three decoders can read a module span and write text to a caller-provided `Span<char>`. Use these overloads when you want to pool or reuse buffers.
+
+Use `GetRequiredBufferSize` to size the generation buffer:
 
 ```csharp
-// 1. Calculate required buffer size (no allocation)
-var calculated = QRCodeGenerator.GetRequiredBufferSize("content", ECCLevel.M, quietZoneSize: 4);
+using System.Buffers;
+using SkiaSharp.QrCode;
 
-// 2. Allocate the buffer yourself (pool it, reuse it, or stackalloc it)
+var calculated = QRCodeGenerator.GetRequiredBufferSize("content", ECCLevel.M, quietZoneSize: 4);
 var buffer = ArrayPool<byte>.Shared.Rent(calculated.BufferSize);
 try
 {
-    // 3. Generate directly into the buffer; returns bytes written (= QrSize * QrSize)
     var written = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, buffer, quietZoneSize: 4);
-
-    // 4. Slice to the written region and consume
     var matrix = buffer.AsSpan(0, written);
-    // One byte per module (0 = light, 1 = dark), row-major, quiet zone included:
-    var isDark = matrix[row * calculated.QrSize + col] != 0;
 }
 finally
 {
@@ -245,57 +223,30 @@ finally
 }
 ```
 
-Buffer sizes are bounded: version 40 with the standard quiet zone needs 185 × 185 = 34,225 bytes, so a pooled or fixed buffer keeps memory usage constant regardless of request volume. Every byte of the written region is overwritten, so dirty pooled buffers are fine; bytes beyond the written region are left untouched.
+### Decoders
 
-### QRCodeDecoder (Decoding)
+Use the decoder that matches the expected symbol type. Each decoder accepts generated data, a byte-per-module matrix, an `SKBitmap`, or a grayscale luminance span.
 
-Decodes QR codes back into text, the inverse of `QRCodeGenerator`. Works at two levels:
-
-- **Matrix level**: from `QRCodeData` or a byte-per-module span (the same format the zero-allocation generator produces). Full Reed-Solomon error correction included.
-- **Image level**: from `SKBitmap` or a grayscale luminance span. Detects the QR code (arbitrary rotation, mirroring, inverted light-on-dark palettes and mild perspective supported), samples the grid, then decodes.
-
-**Scope**: image decoding targets *clean* inputs, screenshots, rendered QR codes, and scans. Real-world photos with strong perspective, uneven lighting, or blur are out of scope; use a computer-vision grade reader such as ZXing.Net for those. See [Standard QR Decoder](.github/docs/specs/standardqr-decoder.md) for design details.
+Image decoding is intended for screenshots, generated images, and clean scans. For camera images with strong perspective, uneven lighting, or blur, use a dedicated scanner such as ZXing.Net.
 
 ```csharp
-// From QRCodeData (e.g. round-trip validation)
+using SkiaSharp;
+using SkiaSharp.QrCode;
+
 var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
 if (QRCodeDecoder.TryDecode(qrData, out var text))
 {
-    Console.WriteLine(text); // "content"
+    Console.WriteLine(text);
 }
 
-// From an image
 using var bitmap = SKBitmap.Decode("qr.png");
 if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info))
 {
-    Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel}, {info.ErrorsCorrected} errors corrected)");
-}
-
-// Zero-allocation: span in, span out
-Span<char> destination = stackalloc char[QRCodeDecoder.GetMaxDecodedLength(version)];
-if (QRCodeDecoder.TryDecode(moduleSpan, size, destination, out var written, out _))
-{
-    var text = destination.Slice(0, written); // no heap allocation
+    Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel})");
 }
 ```
 
-On failure, `QRCodeDecodeInfo.Status` explains why (`NotDetected`, `FormatInformationInvalid`, `DataUncorrectable`, `UnsupportedContent`, ...). Supported content: Numeric / Alphanumeric / Byte modes, ISO-8859-1 and UTF-8 (with or without ECI), versions 1-40, all ECC levels. Kanji mode, FNC1 and Structured Append are detected and reported as unsupported rather than misdecoded.
-
-Micro QR symbols have their own decoder with the same shape (`MicroQRCodeData` / matrix / `SKBitmap` / zero-allocation span overloads):
-
-```csharp
-var micro = MicroQRCodeGenerator.CreateMicroQRCode("01234567", MicroQREccLevel.L);
-if (MicroQRCodeDecoder.TryDecode(micro, out var text, out var info))
-{
-    Console.WriteLine($"{text} ({info.Version}, ECC {info.EccLevel})"); // 01234567 (M2, ECC L)
-}
-
-// Image scanning is explicitly typed, QRCodeDecoder stays Standard QR-only
-using var bitmap = SKBitmap.Decode("microqr.png");
-var found = MicroQRCodeDecoder.TryDecode(bitmap, out var scanned, out _);
-```
-
-Micro QR image detection targets clean, screen-rendered or scanned images, including arbitrary rotation, mirroring, inverted colors, uniform or non-uniform scaling, translation, and mild perspective distortion. Because Micro QR has only one finder pattern and no alignment patterns, its measured perspective envelope is intentionally more conservative than Standard QR: the test suite covers 2% top-edge inset for M1/M2 and 4% for M3/M4, including rotation and mirror combinations. Strong perspective, uneven lighting, and blur remain out of scope.
+The returned decode information includes a status when decoding fails.
 
 ## Platform-Specific Considerations
 
@@ -312,7 +263,7 @@ sudo apt update && apt install -y libfontconfig1
 ```
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="1.1.0" />
+<PackageReference Include="SkiaSharp.QrCode" Version="1.1.1" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.148.0" />
 ```
 
@@ -321,7 +272,7 @@ sudo apt update && apt install -y libfontconfig1
 If you don't need advanced font operations:
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="1.1.0" />
+<PackageReference Include="SkiaSharp.QrCode" Version="1.1.1" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
@@ -347,21 +298,21 @@ SkiaSharp.QrCode fully supports .NET NativeAOT. You need to include platform-spe
 #### Windows
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="1.1.0" />
+<PackageReference Include="SkiaSharp.QrCode" Version="1.1.1" />
 <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
 ```
 
 #### Linux
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="1.1.0" />
+<PackageReference Include="SkiaSharp.QrCode" Version="1.1.1" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
 #### macOS
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="1.1.0" />
+<PackageReference Include="SkiaSharp.QrCode" Version="1.1.1" />
 <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 
@@ -445,13 +396,7 @@ No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional
 
 ### Any plan to support QR code scanning?
 
-Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#qrcodedecoder-decoding)). Image decoding intentionally targets clean inputs: screenshots, rendered QR codes, and scans, including rotated and mirrored ones. Robust decoding of real-world photos (perspective distortion, uneven lighting, blur) is a computer-vision problem outside this library's scope, use a dedicated reader such as ZXing.Net for camera captures.
-
-### Does it support Micro QR or rMQR?
-
-Micro QR (M1–M4) is fully supported for generation and decoding. See [Micro QR](#supported-symbologies) for details.
-
-rMQR (R7x43–R17x139, ISO/IEC 23941, rectangular symbols for narrow print lanes) is supported for generation and rendering via `RmQRCodeGenerator` and `RmQRCodeImageBuilder` (all 32 versions, ECC M/H, Numeric / Alphanumeric / Byte modes). ASCII omits ECI; ISO-8859-1 and UTF-8 use ECI assignments 3 and 26. Kanji mode is intentionally unsupported—use UTF-8 Byte mode instead. Version selection is two-dimensional: pass an exact `RmQRVersion`, or let `RmQRFitStrategy` choose among the versions that fit (default `MinimizeArea`, the fewest modules, the same choice libzint and qrtool make automatically; note it can pick a taller, narrower symbol, e.g. 12 digits at M give R11x27 rather than the flatter R7x43), optionally within a fixed `RmQRHeight`. Rendering keeps the rectangular symbol's shape: `WithModulePixelSize` gives the exact matrix, `WithSize` letterboxes into the canvas (uniform module scale, never stretched), and `WithWidth` (the static helpers' `size`, default 512) sets the image width with the height following the symbol aspect ratio. `RmQRCodeDecoder` decodes rMQR module matrices (`RmQRCodeData` or byte-per-module spans with width and height, quiet zone stripped automatically) with per-block Reed-Solomon correction, and scans rMQR symbols from images (`SKBitmap` or a grayscale luminance span): clean, screen-rendered or scanned images with arbitrary rotation, mirroring, inverted colors, uniform or non-uniform scaling, translation and mild perspective (the test suite covers 2 % and 4 % keystone along either axis up to R17x139); `QRCodeDecoder` stays Standard QR-only. Capacities per version are listed in [docs/data-capacity.md](docs/data-capacity.md). See [rMQR](#rmqr) for examples.
+Yes. `QRCodeDecoder` decodes QR codes from module matrices and from images (see [API Overview](#decoders)). Image decoding intentionally targets clean inputs: screenshots, rendered QR codes, and scans, including rotated and mirrored ones. Robust decoding of real-world photos (perspective distortion, uneven lighting, blur) is a computer-vision problem outside this library's scope, use a dedicated reader such as ZXing.Net for camera captures.
 
 ### What QR code style provides the best scan reliability?
 
@@ -465,6 +410,10 @@ For optimal scan reliability, we recommend:
 **Example:**
 
 ```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
 // Best reliability - default settings with rectangular modules
 var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
 
@@ -498,6 +447,9 @@ Bitmap.FromStream(new MemoryStream(QRCodeImageBuilder.GetPngBytes("WIFI:T:WPA;S:
 
 QR codes support four levels of error correction, which allow the code to remain readable even when partially damaged or obscured:
 
+> [!TIP]
+> Use ECC Level H when embedding icons in QR codes to ensure readability even when the center is obscured.
+
 | ECC Level | Error Correction Capability | Use Case |
 |-----------|----------------------------|----------|
 | **L (Low)** | ~7% recovery | Clean environments, maximum data capacity |
@@ -505,20 +457,19 @@ QR codes support four levels of error correction, which allow the code to remain
 | **Q (Quartile)** | ~25% recovery | Outdoor use, moderate damage expected |
 | **H (High)** | ~30% recovery | Required when adding logos/icons, harsh environments |
 
-> **Tip**: Use ECC Level H when embedding icons in QR codes to ensure readability even when the center is obscured.
-
 ### Encoding Modes
 
-QR codes support different encoding modes optimized for specific character types:
+QR codes support different encoding modes optimized for specific character types. SkiaSharp.QrCode automatically selects the most efficient mode for your content.
+
+> [!WARNING]
+> Kanji encoding is not supported. Use Byte mode for Japanese text.
 
 | Mode | Character Set | Bits per Character | Example |
 |------|--------------|-------------------|---------|
 | **Numeric** | 0-9 | ~3.3 bits | Phone numbers, postal codes |
 | **Alphanumeric** | 0-9, A-Z, space, $ % * + - . / : | ~5.5 bits | URLs (uppercase), product codes |
-| **Byte** | ISO-8859-1, UTF-8 | 8 bits | Text, URLs (mixed case), binary data |
-| **Kanji** | Shift JIS characters | 13 bits | Japanese text |
-
-> **Note**: The library automatically selects the most efficient encoding mode for your content.
+| **Byte** | ISO-8859-1, UTF-8 | 8 bits | Text, mixed-case URLs, non-ASCII text |
+| **Kanji** (**Not supported**) | Shift JIS characters | 13 bits | Japanese text |
 
 ### Version and Size
 
@@ -539,30 +490,18 @@ Each symbology has its own API surface, see [Supported Symbologies](#supported-s
 
 ### Standard QR
 
-#### Using Builder Pattern
+#### Image Builder
 
 ```csharp
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
-    .WithErrorCorrection(ECCLevel.H)
-    .WithQuietZone(4);
+    .WithErrorCorrection(ECCLevel.H);
 
 var pngBytes = qrCode.ToByteArray();
 File.WriteAllBytes("qrcode.png", pngBytes);
-```
-
-#### Direct File Output
-
-```csharp
-using SkiaSharp.QrCode.Image;
-using var stream = File.OpenWrite("qrcode.png");
-
-new QRCodeImageBuilder("https://example.com")
-    .WithSize(1024, 1024)
-    .WithErrorCorrection(ECCLevel.H)
-    .SaveTo(stream);
 ```
 
 #### Raster Output (PNG / JPEG / WebP)
@@ -571,6 +510,7 @@ Default format is PNG. Switch with `WithFormat()`, quality (0–100) applies to 
 
 ```csharp
 using SkiaSharp;
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 // PNG (default)
@@ -601,6 +541,7 @@ SVG output draws the QR code as vector shapes, so it scales to any size without 
 
 ```csharp
 using SkiaSharp;
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 // One-liner: save to stream
@@ -618,12 +559,10 @@ var svgString = new QRCodeImageBuilder("https://example.com")
     .ToSvgString(); // or SaveToSvg(stream) / SaveToSvg(bufferWriter) / GetSvgBytes(...)
 ```
 
-Size options define the SVG viewport (in SVG units instead of pixels); `WithFormat()` does not apply to SVG output.
-
-The root element always carries a `viewBox`, so the QR code scales its content when displayed at any size (`<img>`, CSS, or attribute-based sizing). Plain rectangular modules also get `shape-rendering="crispEdges"` to prevent antialiasing seams between modules; custom shapes (circles, rounded rects) keep antialiasing for smooth curves.
+Size options define the SVG viewport rather than pixels. `WithFormat()` does not apply to SVG output.
 
 > [!TIP]
-> Default rectangle modules produce compact SVG (horizontal module runs merge into single `<rect>` elements). Custom module shapes and gradients render correctly but produce larger documents, since each module becomes an individual vector element. Icon images are embedded as base64 data URIs.
+> SVG output includes a viewBox and scales to any display size. Default rectangular modules produce compact, crisp-edged SVGs. Custom shapes and gradients increase the document size, and icons are embedded directly in the SVG.
 
 #### Choosing Image Size
 
@@ -633,9 +572,10 @@ The root element always carries a `viewBox`, so the QR code scales its content w
 | Also fit a fixed UI frame | `WithModulePixelSize(n)` + `WithSize(w, h)` | Canvas must be `>=` content size. Extra space is centered padding (`clearColor`). Too-small canvas throws. |
 | Only need a fixed pixel box | `WithSize(w, h)` | Simple, but module size may become fractional when QR version changes. |
 
-**Recommended (module-aligned):**
+Use module-based sizing when sharp edges and logo alignment matter:
 
 ```csharp
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
@@ -646,39 +586,13 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 var pngBytes = qrCode.ToByteArray();
 ```
 
-**Recommended (module-aligned + fixed canvas):**
-
-```csharp
-using SkiaSharp;
-using SkiaSharp.QrCode.Image;
-
-var qrCode = new QRCodeImageBuilder("https://example.com")
-    .WithModulePixelSize(10)
-    .WithSize(512, 512) // must be >= content size
-    .WithColors(clearColor: SKColors.Transparent)
-    .WithErrorCorrection(ECCLevel.H);
-
-var pngBytes = qrCode.ToByteArray();
-```
-
-**Fixed box only (may use fractional module pixels):**
-
-```csharp
-using SkiaSharp.QrCode.Image;
-
-var qrCode = new QRCodeImageBuilder("https://example.com")
-    .WithSize(512, 512)
-    .WithErrorCorrection(ECCLevel.H);
-
-var pngBytes = qrCode.ToByteArray();
-```
-
 #### Request Version
 
 "abc" can fit in Version 1, but we request Version 10 to show more dots. This can be useful for adding logo with short content.
 
 ```csharp
 using SkiaSharp;
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 new QRCodeImageBuilder("abc")
@@ -691,6 +605,7 @@ new QRCodeImageBuilder("abc")
 
 ```csharp
 using SkiaSharp;
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 new QRCodeImageBuilder("https://example.com")
@@ -709,15 +624,22 @@ using SkiaSharp;
 using SkiaSharp.QrCode.Image;
 
 var gradient = new GradientOptions(
-    [SKColors.Blue, SKColors.Purple, SKColors.Pink],
+    [
+        SKColor.Parse("FCAF45"),  // Orange
+        SKColor.Parse("F77737"),  // Orange-Red
+        SKColor.Parse("E1306C"),  // Pink or SKColors.Pink
+        SKColor.Parse("C13584"),  // Purple or SKColors.Purple
+        SKColor.Parse("833AB4")   // Deep Purple
+    ],
     GradientDirection.TopLeftToBottomRight,
-    [0f, 0.5f, 1f]);
+    [0f, 0.25f, 0.5f, 0.75f, 1f]);
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
-    .WithSize(800, 800)
-    .WithErrorCorrection(ECCLevel.H)
-    .WithGradient(gradient)
-    .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f);
+    .WithSize(512, 512)
+    .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.White)
+    .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
+    .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
+    .WithGradient(gradient);
 
 var pngBytes = qrCode.ToByteArray();
 ```
@@ -728,6 +650,7 @@ Prefer module-based sizing so the logo sits on the QR grid. See [Choosing Image 
 
 ```csharp
 using SkiaSharp;
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 using var logo = SKBitmap.Decode(File.ReadAllBytes("logo.png"));
@@ -751,6 +674,7 @@ var pngBytes = qrCode.ToByteArray();
 
 ```csharp
 using SkiaSharp;
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 using var logo = SKBitmap.Decode(File.ReadAllBytes("logo.png"));
@@ -799,59 +723,9 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 var pngBytes = qrCode.ToByteArray();
 ```
 
-#### Gradient QR Code
-
-```csharp
-var instagramGradient = new GradientOptions([
-        SKColor.Parse("FCAF45"),  // Orange
-        SKColor.Parse("F77737"),  // Orange-Red
-        SKColor.Parse("E1306C"),  // Pink
-        SKColor.Parse("C13584"),  // Purple
-        SKColor.Parse("833AB4")   // Deep Purple
-    ],
-    GradientDirection.TopLeftToBottomRight,
-    [0f, 0.25f, 0.5f, 0.75f, 1f]);
-
-var qrCode = new QRCodeImageBuilder(content)
-    .WithSize(512, 512)
-    .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.White)
-    .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
-    .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
-    .WithGradient(instagramGradient);
-
-var pngBytes = qrCode.ToByteArray();
-```
-
-
-#### Low-Level Canvas Rendering
-
-For maximum control over rendering:
-
-```csharp
-using SkiaSharp;
-using SkiaSharp.QrCode;
-
-// Generate QR data
-var qrData = QRCodeGenerator.CreateQrCode("https://example.com", ECCLevel.M, quietZoneSize: 4);
-
-// Create canvas
-var info = new SKImageInfo(800, 800);
-using var surface = SKSurface.Create(info);
-var canvas = surface.Canvas;
-
-// Render QR code
-canvas.Render(qrData, info.Width, info.Height);
-
-// Save
-using var image = surface.Snapshot();
-using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-using var stream = File.OpenWrite("qrcode.png");
-data.SaveTo(stream);
-```
-
 ### Micro QR
 
-`MicroQRCodeGenerator`, `MicroQRCodeImageBuilder`, and `MicroQRCodeDecoder`, version/ECC constraints and capacity in the [FAQ](#does-it-support-micro-qr-or-rmqr). Runnable samples: [ConsoleApp patterns 24–26](samples/ConsoleApp).
+Use Micro QR for short data that needs a smaller square symbol. The generator selects the smallest compatible version from M1–M4. See [Data Capacity](docs/data-capacity.md) for version and error-correction limits.
 
 #### One-liner (PNG)
 
@@ -859,7 +733,6 @@ data.SaveTo(stream);
 using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
-// ISO/IEC 18004 M2-L numeric example, auto-selects the smallest version that fits
 var pngBytes = MicroQRCodeImageBuilder.GetPngBytes("01234567", MicroQREccLevel.L, size: 256);
 File.WriteAllBytes("microqr.png", pngBytes);
 ```
@@ -896,15 +769,16 @@ if (MicroQRCodeDecoder.TryDecode(micro, out var text, out var info))
     Console.WriteLine($"{text} ({info.Version}, ECC {info.EccLevel})"); // 01234567 (M2, ECC L)
 }
 
-// Image scan, use MicroQRCodeDecoder (QRCodeDecoder is Standard QR-only)
+// Decode an image with the Micro QR decoder
 using var bitmap = SKBitmap.Decode("microqr.png");
 var ok = MicroQRCodeDecoder.TryDecode(bitmap, out var scanned, out _);
 ```
 
+Runnable examples: [ConsoleApp patterns 24–26](samples/ConsoleApp).
 
 ### rMQR
 
-`RmQRCodeGenerator`, `RmQRCodeImageBuilder` and `RmQRCodeDecoder`; version/ECC/fit constraints in the [FAQ](#does-it-support-micro-qr-or-rmqr), capacities in [docs/data-capacity.md](docs/data-capacity.md). Runnable samples: [ConsoleApp patterns 27–29](samples/ConsoleApp).
+Use rMQR when a rectangular symbol fits the available space better than a square QR code. The generator selects the version with the smallest area by default. You can instead fix the height or prefer the shortest height. See [Data Capacity](docs/data-capacity.md) for version and error-correction limits.
 
 #### One-liner (PNG)
 
@@ -912,7 +786,7 @@ var ok = MicroQRCodeDecoder.TryDecode(bitmap, out var scanned, out _);
 using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
-// size is the image WIDTH; the height follows the symbol aspect ratio (default fit: fewest modules)
+// size sets the width; the height follows the symbol's aspect ratio
 var pngBytes = RmQRCodeImageBuilder.GetPngBytes("https://example.com/r/12345", RmQREccLevel.M, size: 512);
 File.WriteAllBytes("rmqr.png", pngBytes);
 ```
@@ -924,7 +798,7 @@ using SkiaSharp;
 using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
-// A label lane 9 modules high: the width is chosen automatically
+// Fix the symbol height; the width is selected automatically
 var pngBytes = new RmQRCodeImageBuilder("https://example.com/r/12345")
     .WithHeight(RmQRHeight.H9)
     .WithErrorCorrection(RmQREccLevel.H)
@@ -933,18 +807,9 @@ var pngBytes = new RmQRCodeImageBuilder("https://example.com/r/12345")
     .WithModuleShape(RoundedRectangleModuleShape.Default, sizePercent: 0.9f)
     .ToByteArray();
 
-// The flattest symbol that fits, instead of the fewest modules
+// Prefer the shortest available height
 var flat = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, fitStrategy: RmQRFitStrategy.MinimizeHeight);
-Console.WriteLine(flat.Version); // R7x43 (the default MinimizeArea picks R11x27: 297 modules vs 301)
-
-// Unicode defaults to UTF-8 Byte mode with ECI 26. It can also be requested explicitly.
-var japanese = RmQRCodeGenerator.CreateRmQRCodeWithEci("日本語", RmQREccLevel.M, EciMode.Utf8);
-// Kanji mode is intentionally unsupported; UTF-8 is the supported Japanese-text path.
-
-// Exact version, zero-allocation span output (byte per module, row-major, quiet zone included)
-var size = RmQRCodeGenerator.GetRequiredBufferSize("ABC123".AsSpan(), RmQREccLevel.M, RmQRVersion.R7x59);
-Span<byte> modules = new byte[size.BufferSize];
-RmQRCodeGenerator.CreateRmQRCode("ABC123".AsSpan(), RmQREccLevel.M, modules, RmQRVersion.R7x59); // size.Width × size.Height
+Console.WriteLine(flat.Version); // R7x43
 ```
 
 #### Decode (matrix and image)
@@ -955,22 +820,32 @@ using SkiaSharp.QrCode;
 var rmqr = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M);
 if (RmQRCodeDecoder.TryDecode(rmqr, out var text, out var info))
 {
-    Console.WriteLine($"{text} ({info.Version}, ECC {info.EccLevel}, {info.ErrorsCorrected} corrections)"); // 012345678901 (R11x27, ECC M, 0 corrections)
+    Console.WriteLine($"{text} ({info.Version}, ECC {info.EccLevel})"); // 012345678901 (R11x27, ECC M)
 }
 
-// Byte-per-module matrix with width and height (any light quiet zone is stripped automatically);
-// zero-allocation variant with a caller-provided destination
-var size = RmQRCodeGenerator.GetRequiredBufferSize("012345678901".AsSpan(), RmQREccLevel.M);
-var modules = new byte[size.BufferSize];
-RmQRCodeGenerator.CreateRmQRCode("012345678901".AsSpan(), RmQREccLevel.M, modules);
-Span<char> destination = new char[RmQRCodeDecoder.GetMaxDecodedLength(size.Version)];
-var ok = RmQRCodeDecoder.TryDecode(modules, size.Width, size.Height, destination, out var written, out _);
-
-// Image scan, use RmQRCodeDecoder (QRCodeDecoder is Standard QR-only); rotation, mirroring,
-// inverted colors, scaling and mild perspective are handled
+// Decode an image with the rMQR decoder
 using var bitmap = SKBitmap.Decode("rmqr.png");
 var found = RmQRCodeDecoder.TryDecode(bitmap, out var scanned, out var scanInfo);
 ```
+
+Runnable examples: [ConsoleApp patterns 27–29](samples/ConsoleApp).
+
+## Release flow
+
+When releasing a new version, follow these steps:
+
+1. (manual) From the repository root, bump version strings in `.props`, `.md` files.
+
+```sh
+dotnet ./tools/bump_version.cs patch   # e.g. 0.1.0 → 0.1.1
+dotnet ./tools/bump_version.cs minor   # e.g. 0.1.0 → 0.2.0
+dotnet ./tools/bump_version.cs major   # e.g. 0.1.0 → 1.0.0
+```
+
+2. (manual) Commit the version bump with a message like `chore: Bump version to 0.1.1` and push to the main branch.
+3. (manual) Create new tag with the new version (e.g. `git tag 0.1.1`) and push the tag (`git push origin 0.1.1`).
+4. (auto) GitHub Actions will trigger on the new tag, build the release artifacts, publish new Playground, and create a draft release with the new version. The release notes will be auto-generated based on merged PRs since the last release.
+5. (manual) Check draft release created by GitHub Actions in the [Releases page](https://github.com/guitarrapc/SkiaSharp.QrCode/releases). If the release notes look good, publish the release.
 
 ## License
 
