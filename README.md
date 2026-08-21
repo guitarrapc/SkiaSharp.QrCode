@@ -283,21 +283,21 @@ SkiaSharp.QrCode fully supports .NET NativeAOT. You need to include platform-spe
 #### Windows
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="1.2.0" />
+<PackageReference Include="SkiaSharp.QrCode" Version="1.1.1" />
 <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
 ```
 
 #### Linux
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="1.2.0" />
+<PackageReference Include="SkiaSharp.QrCode" Version="1.1.1" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
 #### macOS
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="1.2.0" />
+<PackageReference Include="SkiaSharp.QrCode" Version="1.1.1" />
 <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 
@@ -609,12 +609,12 @@ var gradient = new GradientOptions(
     GradientDirection.TopLeftToBottomRight,
     [0f, 0.25f, 0.5f, 0.75f, 1f]);
 
-var qrCode = new QRCodeImageBuilder(content)
+var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(512, 512)
     .WithColors(backgroundColor: SKColors.White, clearColor: SKColors.White)
     .WithModuleShape(CircleModuleShape.Default, sizePercent: 0.95f)
     .WithFinderPatternShape(RoundedRectangleCircleFinderPatternShape.Default)
-    .WithGradient(instagramGradient);
+    .WithGradient(gradient);
 
 var pngBytes = qrCode.ToByteArray();
 ```
@@ -818,7 +818,7 @@ dotnet ./tools/bump_version.cs major   # e.g. 0.1.0 → 1.0.0
 2. (manual) Commit the version bump with a message like `chore: Bump version to 0.1.1` and push to the main branch.
 3. (manual) Create new tag with the new version (e.g. `git tag 0.1.1`) and push the tag (`git push origin 0.1.1`).
 4. (auto) GitHub Actions will trigger on the new tag, build the release artifacts, publish new Playground, and create a draft release with the new version. The release notes will be auto-generated based on merged PRs since the last release.
-5. (manual) Check draft release created by GitHub Actions in the [Releases page](https://github.com/guitarrapc/seiton/releases). If the release notes look good, publish the release.
+5. (manual) Check draft release created by GitHub Actions in the [Releases page](https://github.com/guitarrapc/SkiaSharp.QrCode/releases). If the release notes look good, publish the release.
 
 ## License
 
