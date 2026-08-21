@@ -130,6 +130,9 @@ File.WriteAllText("qrcode.svg", QRCodeImageBuilder.GetSvgString("https://example
 Generate with Custom Settings.
 
 ```csharp
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(512, 512)
     .WithErrorCorrection(ECCLevel.H)
@@ -139,6 +142,7 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 Save Directly to Stream
 
 ```csharp
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 using var stream = File.OpenWrite("qrcode.png");
@@ -177,6 +181,9 @@ See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) ex
 `QRCodeRenderer` renders `QRCodeData`, `MicroQRCodeData`, or `RmQRCodeData` to an existing `SKCanvas`. Use it to place a symbol inside other SkiaSharp graphics.
 
 ```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode;
+
 var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
 var canvas = surface.Canvas;
 QRCodeRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
@@ -187,6 +194,8 @@ QRCodeRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
 Generators create module matrices without rendering them. Use them for custom output such as ASCII art or LED displays, or as input to `QRCodeRenderer`.
 
 ```csharp
+using SkiaSharp.QrCode;
+
 var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, quietZoneSize: 4);
 var isDark = qrData[row, col];
 ```
@@ -198,6 +207,9 @@ All three generators can write a module matrix to a caller-provided `Span<byte>`
 Use `GetRequiredBufferSize` to size the generation buffer:
 
 ```csharp
+using System.Buffers;
+using SkiaSharp.QrCode;
+
 var calculated = QRCodeGenerator.GetRequiredBufferSize("content", ECCLevel.M, quietZoneSize: 4);
 var buffer = ArrayPool<byte>.Shared.Rent(calculated.BufferSize);
 try
@@ -218,6 +230,9 @@ Use the decoder that matches the expected symbol type. Each decoder accepts gene
 Image decoding is intended for screenshots, generated images, and clean scans. For camera images with strong perspective, uneven lighting, or blur, use a dedicated scanner such as ZXing.Net.
 
 ```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode;
+
 var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
 if (QRCodeDecoder.TryDecode(qrData, out var text))
 {
@@ -395,6 +410,10 @@ For optimal scan reliability, we recommend:
 **Example:**
 
 ```csharp
+using SkiaSharp;
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
 // Best reliability - default settings with rectangular modules
 var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
 
@@ -474,6 +493,7 @@ Each symbology has its own API surface, see [Supported Symbologies](#supported-s
 #### Image Builder
 
 ```csharp
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
@@ -490,6 +510,7 @@ Default format is PNG. Switch with `WithFormat()`, quality (0–100) applies to 
 
 ```csharp
 using SkiaSharp;
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 // PNG (default)
@@ -520,6 +541,7 @@ SVG output draws the QR code as vector shapes, so it scales to any size without 
 
 ```csharp
 using SkiaSharp;
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 // One-liner: save to stream
@@ -553,6 +575,7 @@ Size options define the SVG viewport rather than pixels. `WithFormat()` does not
 Use module-based sizing when sharp edges and logo alignment matter:
 
 ```csharp
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
@@ -569,6 +592,7 @@ var pngBytes = qrCode.ToByteArray();
 
 ```csharp
 using SkiaSharp;
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 new QRCodeImageBuilder("abc")
@@ -581,6 +605,7 @@ new QRCodeImageBuilder("abc")
 
 ```csharp
 using SkiaSharp;
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 new QRCodeImageBuilder("https://example.com")
@@ -625,6 +650,7 @@ Prefer module-based sizing so the logo sits on the QR grid. See [Choosing Image 
 
 ```csharp
 using SkiaSharp;
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 using var logo = SKBitmap.Decode(File.ReadAllBytes("logo.png"));
@@ -648,6 +674,7 @@ var pngBytes = qrCode.ToByteArray();
 
 ```csharp
 using SkiaSharp;
+using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 
 using var logo = SKBitmap.Decode(File.ReadAllBytes("logo.png"));
