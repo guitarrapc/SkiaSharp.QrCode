@@ -151,102 +151,55 @@ See [Migration Guide](docs/migration.md) for details on migrating from older ver
 
 ## API Overview
 
-SkiaSharp.QrCode provides three main APIs for generation, plus `QRCodeDecoder` for decoding.
+Choose an API based on the output you need. Start with an image builder for most applications.
 
-**Recommendation**: Start with `QRCodeImageBuilder` for most scenarios. Use `QRCodeRenderer` when you need canvas control. Use `QRCodeGenerator` only for custom rendering implementations. Use `QRCodeDecoder` to read QR codes back (round-trip validation, decoding rendered images).
-
-| Feature | QRCodeImageBuilder | QRCodeRenderer | QRCodeGenerator |
+| Task | Standard QR | Micro QR | rMQR |
 | --- | --- | --- | --- |
-| Ease of use | High | Medium | Low |
-| Flexibility | Medium | High | Highest |
-| Built-in rendering | Yes | Yes | No |
-| Custom canvas control | No | Yes | N/A |
-| Recommended for beginners | Yes | No | No |
+| Create PNG, JPEG, WebP, or SVG | `QRCodeImageBuilder` | `MicroQRCodeImageBuilder` | `RmQRCodeImageBuilder` |
+| Generate a module matrix | `QRCodeGenerator` | `MicroQRCodeGenerator` | `RmQRCodeGenerator` |
+| Render a matrix to `SKCanvas` | `QRCodeRenderer` | `QRCodeRenderer` | `QRCodeRenderer` |
+| Decode a matrix or image | `QRCodeDecoder` | `MicroQRCodeDecoder` | `RmQRCodeDecoder` |
 
-### QRCodeImageBuilder (Recommended)
+### Image Builders (Recommended)
 
-Best for Most use cases - simple to advanced QR code generation. The high-level, fluent API for generating QR codes with minimal code. Provides a builder pattern with sensible defaults and extensive customization options.
+Image builders provide one-line methods and a fluent API for colors, gradients, module shapes, image formats, and output size. Standard QR also supports icons and custom finder patterns.
 
-**Key Features**:
-- One-liner generation with `GetPngBytes()`, `SavePng()`, `SaveSvg()`
-- Fluent API with `WithXxx()` methods
-- Built-in support for colors, gradients, icons, shapes
-- Multiple output formats (PNG, JPEG, WebP, SVG)
-- Stream and byte array output
-
-**When to use**:
-- Quick QR code generation
-- Standard customization needs
-- File or stream output
-
-**Example**:
 ```csharp
 var pngBytes = QRCodeImageBuilder.GetPngBytes("content");
 ```
 
+See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) examples for each builder.
+
 ### QRCodeRenderer (Advanced)
 
-Best for Custom rendering with full control over the canvas. The mid-level API that renders QR data onto an existing SkiaSharp canvas. Useful when you need to integrate QR codes into existing graphics or add custom post-processing.
+`QRCodeRenderer` renders `QRCodeData`, `MicroQRCodeData`, or `RmQRCodeData` to an existing `SKCanvas`. Use it to place a symbol inside other SkiaSharp graphics.
 
-**Key Features**:
-- Render to existing `SKCanvas`
-- Full control over rendering area (`SKRect`)
-- Combine with other SkiaSharp drawing operations
-- Custom effects and post-processing
-
-**When to use**:
-- Integrating QR codes into existing graphics
-- Adding custom decorations or effects
-- Multiple elements on the same canvas
-
-**Example**:
 ```csharp
 var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
 var canvas = surface.Canvas;
 QRCodeRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
 ```
 
-### QRCodeGenerator (Low-Level)
+### Generators (Low-Level)
 
-Best for QR data generation without rendering. The low-level API that generates raw QR code data (`QRCodeData`). Use this when you need the QR data structure itself, not the image.
+Generators create module matrices without rendering them. Use them for custom output such as ASCII art or LED displays, or as input to `QRCodeRenderer`.
 
-**Key Features**:
-- Generates `QRCodeData` (boolean module matrix stored as 1D byte array)
-- Specify ECC level, ECI mode, quiet zone size
-- No rendering logic included
-- Smallest API surface
-
-**When to use**:
-- Custom rendering implementations
-- Non-image output (e.g., ASCII art, LED displays)
-- Maximum control over the rendering process
-
-**Example**:
 ```csharp
 var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, quietZoneSize: 4);
-// Use qrData for custom rendering
-// Access individual modules: bool isDark = qrData[row, col];
+var isDark = qrData[row, col];
 ```
 
-#### Zero-Allocation Generation (Span destination)
+#### Span-based Generation
 
-For high-throughput scenarios (e.g., per-request QR generation on a web server), you can generate the module matrix into a caller-provided buffer with zero heap allocation. Calculate the required size with `GetRequiredBufferSize`, allocate (or rent) the buffer yourself, and pass it as `Span<byte>`:
+All three generators can write a module matrix to a caller-provided `Span<byte>`. Use `GetRequiredBufferSize` to size the destination.
 
 ```csharp
-// 1. Calculate required buffer size (no allocation)
 var calculated = QRCodeGenerator.GetRequiredBufferSize("content", ECCLevel.M, quietZoneSize: 4);
-
-// 2. Allocate the buffer yourself (pool it, reuse it, or stackalloc it)
 var buffer = ArrayPool<byte>.Shared.Rent(calculated.BufferSize);
 try
 {
-    // 3. Generate directly into the buffer; returns bytes written (= QrSize * QrSize)
     var written = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, buffer, quietZoneSize: 4);
-
-    // 4. Slice to the written region and consume
     var matrix = buffer.AsSpan(0, written);
-    // One byte per module (0 = light, 1 = dark), row-major, quiet zone included:
-    var isDark = matrix[row * calculated.QrSize + col] != 0;
 }
 finally
 {
@@ -254,43 +207,27 @@ finally
 }
 ```
 
-Buffer sizes are bounded: version 40 with the standard quiet zone needs 185 × 185 = 34,225 bytes, so a pooled or fixed buffer keeps memory usage constant regardless of request volume. Every byte of the written region is overwritten, so dirty pooled buffers are fine; bytes beyond the written region are left untouched.
+### Decoders
 
-### QRCodeDecoder (Decoding)
+Use the decoder that matches the expected symbol type. Each decoder accepts generated data, a byte-per-module matrix, an `SKBitmap`, or a grayscale luminance span.
 
-Decodes QR codes back into text, the inverse of `QRCodeGenerator`. Works at two levels:
-
-- **Matrix level**: from `QRCodeData` or a byte-per-module span (the same format the zero-allocation generator produces). Full Reed-Solomon error correction included.
-- **Image level**: from `SKBitmap` or a grayscale luminance span. Detects the QR code (arbitrary rotation, mirroring, inverted light-on-dark palettes and mild perspective supported), samples the grid, then decodes.
-
-**Scope**: image decoding targets *clean* inputs, screenshots, rendered QR codes, and scans. Real-world photos with strong perspective, uneven lighting, or blur are out of scope; use a computer-vision grade reader such as ZXing.Net for those. See [Standard QR Decoder](.github/docs/specs/standardqr-decoder.md) for design details.
+Image decoding is intended for screenshots, generated images, and clean scans. For camera images with strong perspective, uneven lighting, or blur, use a dedicated scanner such as ZXing.Net.
 
 ```csharp
-// From QRCodeData (e.g. round-trip validation)
 var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
 if (QRCodeDecoder.TryDecode(qrData, out var text))
 {
-    Console.WriteLine(text); // "content"
+    Console.WriteLine(text);
 }
 
-// From an image
 using var bitmap = SKBitmap.Decode("qr.png");
 if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info))
 {
-    Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel}, {info.ErrorsCorrected} errors corrected)");
-}
-
-// Zero-allocation: span in, span out
-Span<char> destination = stackalloc char[QRCodeDecoder.GetMaxDecodedLength(version)];
-if (QRCodeDecoder.TryDecode(moduleSpan, size, destination, out var written, out _))
-{
-    var text = destination.Slice(0, written); // no heap allocation
+    Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel})");
 }
 ```
 
-On failure, `QRCodeDecodeInfo.Status` explains why (`NotDetected`, `FormatInformationInvalid`, `DataUncorrectable`, `UnsupportedContent`, ...). Supported content: Numeric / Alphanumeric / Byte modes, ISO-8859-1 and UTF-8 (with or without ECI), versions 1-40, all ECC levels. Kanji mode, FNC1 and Structured Append are detected and reported as unsupported rather than misdecoded.
-
-Micro QR and rMQR use their own decoders: `MicroQRCodeDecoder` and `RmQRCodeDecoder`. Both accept generated matrix data or clean images. See the [Micro QR](#micro-qr) and [rMQR](#rmqr) examples.
+The returned decode information includes a status when decoding fails. Span overloads are available when you want to provide the input and output buffers.
 
 ## Platform-Specific Considerations
 
