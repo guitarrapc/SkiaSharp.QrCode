@@ -14,7 +14,9 @@
 - **Source compatible**, including positional calls, because the new argument is last.
 - **Binary breaking**, as with any added parameter: assemblies compiled against v1.1.1 or earlier must be recompiled (no code changes needed).
 
-Pass `RmQRSegmentation.Optimal` to let the generator split mixed content into Numeric / Alphanumeric / Byte runs. It never selects a larger symbol than `Single`, it emits the `Single` bit stream verbatim whenever splitting would not shrink the symbol, and it additionally encodes content that overflows every version in a single mode.
+Pass `RmQRSegmentation.Optimal` to let the generator split mixed content into Numeric / Alphanumeric / Byte runs. It never selects a symbol with more core modules than `Single`, it emits the `Single` bit stream verbatim whenever splitting would not shrink it, and it additionally encodes content that overflows every version in a single mode.
+
+Two things to know before opting in: the quiet zone adds a fixed 4 modules to each dimension, so a symbol with fewer core modules can still render onto a *larger* grid with a different aspect ratio; and `GetRequiredBufferSize` must be passed the same `segmentation` as the encode, or the destination buffer can be too small.
 
 ```csharp
 var optimal = RmQRCodeGenerator.CreateRmQRCode(

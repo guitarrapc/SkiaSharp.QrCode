@@ -412,9 +412,10 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
     }
 
     /// <summary>
-    /// Split the content into mixed-mode segments when that yields a smaller symbol
+    /// Split the content into mixed-mode segments when that lowers the module count
     /// (see <see cref="RmQRSegmentation"/>). Defaults to
-    /// <see cref="RmQRSegmentation.Single"/>.
+    /// <see cref="RmQRSegmentation.Single"/>. Fewer modules is not the same as a
+    /// smaller image: a flatter, wider symbol can render onto a larger grid.
     /// </summary>
     /// <param name="segmentation">Segmentation strategy.</param>
     /// <returns>This builder instance for method chaining.</returns>

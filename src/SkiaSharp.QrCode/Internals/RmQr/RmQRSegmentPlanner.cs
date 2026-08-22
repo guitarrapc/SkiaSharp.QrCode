@@ -10,55 +10,31 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// minimal for a given version, and the version fit that follows from it.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The cost of a run is not a per-character constant (Numeric packs 3 digits into
-/// 10 bits, Alphanumeric 2 characters into 11), so the dynamic program carries the
-/// group remainder in its state: 3 Numeric states (0-2 digits into the current
-/// group), 2 Alphanumeric states (0-1 characters), 1 Byte state, plus a virtual
-/// start state. Every transition either continues the current run or opens a new
-/// one paying <c>3 + count indicator</c> bits, which makes the optimum exact rather
-/// than a rounded per-character average.
-/// </para>
-/// <para>
-/// Blast radius is bounded on purpose. When the content fits in a single mode, that
-/// fit is a ceiling: only versions the strategy ranks strictly better than it are
-/// tried, so a plan is produced only when it actually shrinks the symbol and the
-/// single-mode bit stream is emitted byte for byte in every other case. When no
-/// version fits in a single mode the scan runs to the end instead, because a mixed
-/// plan can hold content that no single mode can; only when that also fails does
-/// <see cref="RmQRVersionSelector"/> produce the "content is too long" message.
-/// </para>
-/// <para>
-/// Work is bounded by <see cref="MaxPlannableChars"/> before any table is touched,
-/// all-Numeric content skips planning entirely, and the per-version cost run is
-/// memoised by count indicator triple (the 32 versions share 13 distinct triples).
-/// </para>
+/// A run's cost is not a per-character constant (Numeric packs 3 digits into 10 bits,
+/// Alphanumeric 2 characters into 11), so the dynamic program carries the group
+/// remainder in its state rather than rounding an average. When the content fits in a
+/// single mode that fit caps the search, so a plan is produced only when it lowers the
+/// core module count; otherwise the single-mode stream is emitted unchanged. Design
+/// rationale, bounds and measurements: specs/rmqr-encoder.md, "Mixed-mode segmentation".
 /// </remarks>
 internal static class RmQRSegmentPlanner
 {
     /// <summary>
-    /// Upper bound on the runs a plan can contain. A run costs at least
-    /// <c>3 + count indicator + first character</c> bits, so the largest data
-    /// capacity (152 codewords at R17x139-M) cannot hold more than 76; the margin
-    /// keeps the bound safe without a proof obligation, and
-    /// <c>RmQRSegmentPlannerUnitTest</c> pins the real maximum below it.
+    /// Upper bound on the runs a plan can contain; the largest capacity cannot hold
+    /// more than 76, and <c>RmQRSegmentPlannerUnitTest</c> pins that maximum below this.
     /// </summary>
     public const int MaxSegments = 96;
 
     /// <summary>
-    /// Longest content any rMQR symbol can hold, in characters. Numeric is the densest
-    /// mode at 10 bits per 3 characters and R17x139-M is the largest capacity at 1216
-    /// bits, so 361 digits (1204 payload bits plus a 12-bit header) is the ceiling and
-    /// no mixed plan can beat it: mixing only adds headers to a denser-per-character
-    /// mode that does not exist.
+    /// Longest content any rMQR symbol can hold, in characters (361 digits at
+    /// R17x139-M). No mixed plan can beat it: mixing only adds headers to a
+    /// denser-per-character mode that does not exist.
     /// </summary>
     /// <remarks>
-    /// This is a rejection rule, not only a work cap: since a mixed plan can encode
-    /// content no single mode holds, this constant is what decides that longer content
-    /// is impossible rather than merely expensive to plan. The margin is 2 bits — 362
-    /// characters cost at least 1207 payload bits plus the narrowest R17x139 header of
-    /// 11, i.e. 1218 against the 1216 available — so it must be re-derived, not
-    /// nudged, if the capacity tables ever change.
+    /// A rejection rule, not only a work cap: a mixed plan can encode content no single
+    /// mode holds, so this is what declares longer content impossible. The margin is
+    /// 3 bits (362 digits cost 1219 against 1216), so re-derive it rather than nudge it
+    /// if the capacity tables change. Pinned by <c>RmQRSegmentPlannerUnitTest</c>.
     /// </remarks>
     private const int MaxPlannableChars = 361;
 
@@ -79,8 +55,13 @@ internal static class RmQRSegmentPlanner
     /// <summary>Parent bytes that fit the stack budget (73 characters); longer content rents.</summary>
     private const int MaxStackParents = 512;
 
-    /// <summary>Count indicator triples memoised during a version scan.</summary>
-    private const int MemoCapacity = 32;
+    /// <summary>
+    /// Count indicator triples memoised during a version scan. The 32 versions share 13
+    /// distinct triples, but the bounds narrow the band so far that measured sweeps
+    /// never stored more than 3. Sized for that plus headroom: undersizing is safe, not
+    /// wrong, because the store is guarded and a miss simply recomputes.
+    /// </summary>
+    private const int MemoCapacity = 8;
 
     // Narrowest count indicator any version uses, per mode (ISO/IEC 23941 Table 3;
     // pinned by RmQRSegmentPlannerUnitTest). A cost run at these widths is a lower
@@ -91,7 +72,7 @@ internal static class RmQRSegmentPlanner
     private const int MinCountBitsAlnum = 3;
     private const int MinCountBitsByte = 3;
 
-    /// <summary>Narrowest count indicator of any mode at any version; the same test pins all four.</summary>
+    /// <summary>Narrowest count indicator of any mode at any version; the minimum of the three widths pinned by RmQRSegmentPlannerUnitTest.</summary>
     private const int MinCountBitsAny = 3;
 
     // Cheapest bits a single character can cost in any mode, in sixths so the numeric
@@ -124,14 +105,9 @@ internal static class RmQRSegmentPlanner
         // message and precedence; the selector re-validates on the paths reaching it.
         RmQRVersionSelector.ValidateFitArguments(eccLevel, fitStrategy, height, requestedVersion, charset);
 
-        // All-Numeric content is already at the optimum: digits are the cheapest
-        // characters in the cheapest mode (10 bits per 3, against 11 per 2 in
-        // Alphanumeric and 8 per character in Byte), splitting a Numeric run never
-        // lowers its payload, and every extra run adds a header. Without this the scan
-        // would spend up to 13 dynamic programming passes rediscovering the
-        // single-mode fit — 361 digits measured 11.9x a Single encode for no gain.
-        // The shortcut is Numeric-only: an Alphanumeric or Byte payload can still hide
-        // a digit run worth splitting off.
+        // All-Numeric content is already at the optimum: splitting a Numeric run never
+        // lowers its payload and every extra run adds a header. Numeric-only — an
+        // Alphanumeric or Byte payload can still hide a digit run worth splitting off.
         if (mode == EncodingMode.Numeric)
             return Select(mode, dataLength, charset, eccLevel, requestedVersion, fitStrategy, height);
 
@@ -143,14 +119,12 @@ internal static class RmQRSegmentPlanner
             // stream stays exactly as it is today.
             if (Fits(requested, eccLevel, mode, dataLength, charset))
                 return requested;
-            if (PlanFits(text, charset, requested, eccLevel, eciBits))
-            {
-                useSegments = true;
-                return requested;
-            }
 
-            // Neither fits: the single-mode selector owns the "too long" message.
-            return Select(mode, dataLength, charset, eccLevel, requestedVersion, fitStrategy, height);
+            // One candidate, so pricing it here would decide what building the plan
+            // decides anyway; TryBuildPlan rejects a plan the version cannot hold and
+            // the caller falls back to the single-mode selector, which owns the error.
+            useSegments = true;
+            return requested;
         }
 
         // Ceiling: the version single-mode encoding lands on, when there is one. When
@@ -170,47 +144,10 @@ internal static class RmQRSegmentPlanner
         var heightMask = RmQRVersionSelector.GetFitHeightMask(fitStrategy, height);
 
         // Three filters, cheapest first, so a candidate only reaches an expensive one
-        // when the cheap ones could not answer.
-        //
-        //   Trivial bound. One O(n) pass, no table: each character at the cheapest rate
-        //   any mode gives it, plus one minimal header. When no better-ranked version
-        //   holds even this, the split cannot move the symbol and nothing else runs.
-        //
-        // The remaining two come from a single cost run at the narrowest count
-        // indicators any version uses, which brackets every other version from both
-        // sides:
-        //
-        //   Floor. Widening a count indicator only raises the price of the run carrying
-        //   it, and the minimum over plans of a pointwise larger cost is itself larger,
-        //   so this run's cost is a lower bound everywhere. Below it, a version cannot
-        //   fit. The scan is best-first, i.e. smallest-first, so for mixed content most
-        //   early ranks fail here.
-        //
-        //   Ceiling. The same run also yields a plan, and that plan re-priced at a
-        //   version costs the floor plus one count indicator delta per run it contains
-        //   — arithmetic, no second cost run. Being an actual plan, its price is an
-        //   upper bound on the optimum, so a version holding it is known to fit.
-        //
-        // Only versions between the two bounds are priced for real. Ratios below are
-        // against the Single encode of the same content in the same benchmark run, to
-        // divide out machine drift. The floor alone took the 150-byte worst case from
-        // 13.2x to 3.0x. The ceiling then cut a further 26-42%, and it cuts most where
-        // the scan hurt most, because the more a split helps the more versions clear
-        // the floor: 120 characters of half letters half digits 7.2x to 4.2x,
-        // alternating 10-character groups 9.2x to 6.5x, all lowercase 2.5x to 2.1x,
-        // all digits unchanged at 1.0x (short-circuited before either bound).
-        //
-        // A ceiling taken from a second cost run at the *widest* count indicators was
-        // tried first and reverted: that band widens about 5 bits per run, so for the
-        // many-run content needing the most help it was wide rather than empty, and the
-        // mandatory extra run cost more than it saved (alternating 10-character groups
-        // regressed 9.0 us to 11.2 us). Deriving the ceiling from the floor plan costs
-        // no extra run and is tighter, which is what makes it pay.
-        // Cheapest question first: could a split reach a better version at all? This
-        // bound costs one O(n) pass and no table, and the cost run below is deferred
-        // until some candidate clears it — so content a single mode already encodes
-        // optimally pays nothing for planning, because no better-ranked version can
-        // hold even this.
+        // when the cheap ones could not answer. Soundness in one line each: the trivial
+        // bound and the floor are lower bounds, so they may only reject; the ceiling is
+        // the price of a real plan, so it may only accept. Rationale and measurements:
+        // specs/rmqr-encoder.md, "Bounding the scan".
         var trivialBits = TrivialLowerBoundBits(text, charset) + eciBits;
 
         var floorPayload = -1;
@@ -388,14 +325,6 @@ internal static class RmQRSegmentPlanner
     // Version scan
     // ---------------------------------------------------------------
 
-    private static bool PlanFits(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, int eciBits)
-    {
-        Span<int> keys = stackalloc int[1];
-        Span<int> costs = stackalloc int[1];
-        var count = 0;
-        return PlanFits(text, charset, version, eccLevel, eciBits, keys, costs, ref count);
-    }
-
     private static bool PlanFits(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, int eciBits, Span<int> memoKeys, Span<int> memoCosts, ref int memoCount)
     {
         if (text.Length is 0 or > MaxPlannableChars)
@@ -440,13 +369,9 @@ internal static class RmQRSegmentPlanner
     /// rate any mode could give it, plus the cheapest possible single segment header.
     /// </summary>
     /// <remarks>
-    /// Deliberately cruder than <see cref="ComputeFloor"/> and far cheaper. Its purpose
-    /// is to answer "could a split reach a better version at all" before paying for a
-    /// cost run: when no better-ranked version can hold even this, the split cannot
-    /// move the symbol and planning is skipped outright. It is loose exactly where the
-    /// split is worth searching (mixed content, where the bound sits far below the
-    /// single-mode cost) and tight exactly where it is not (uniform content, where it
-    /// lands within a count indicator of the truth).
+    /// Deliberately cruder than <see cref="ComputeFloor"/> and far cheaper: it answers
+    /// "could a split reach a better version at all" before any cost run. Loose where
+    /// a split is worth searching, tight where it is not.
     /// </remarks>
     public static int TrivialLowerBoundBits(ReadOnlySpan<char> text, EciMode charset)
     {

@@ -12,12 +12,10 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// then the shared terminator / padding tail.
 /// </summary>
 /// <remarks>
-/// This is the cold half of the encoder. It reuses the same segment writers as the
-/// hot path, so the emitted bits are identical run for run, but it does not try to
-/// keep the writer accumulator enregistered across the loop and it re-derives the
-/// planned bit cost up front: the fast writers store without per-flush bounds
-/// checks, so a plan that did not fit must be rejected before the first store
-/// rather than discovered as a buffer overrun.
+/// The cold half of the encoder, reusing the hot path's segment writers so the bits
+/// are identical run for run. It re-derives the planned bit cost up front because
+/// those writers store without per-flush bounds checks: a plan that does not fit must
+/// be rejected before the first store, not discovered as a buffer overrun.
 /// </remarks>
 internal static partial class RmQRBinaryEncoder
 {

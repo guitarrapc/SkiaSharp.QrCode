@@ -4,9 +4,9 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 
 /// <summary>
 /// One encoding-mode run of a planned rMQR bit stream: a contiguous slice of the
-/// source text plus the value its character count indicator carries. Deliberately
-/// small (8 bytes) because plans live in a caller-lent <see cref="Span{T}"/> on the
-/// stack, and deliberately without any reference so it can never own storage.
+/// source text plus the value its character count indicator carries. Packed small and
+/// reference-free on purpose — plans live in a caller-lent <see cref="Span{T}"/> on the
+/// stack, so a run must never own storage.
 /// </summary>
 internal readonly struct RmQRSegment
 {
@@ -18,9 +18,8 @@ internal readonly struct RmQRSegment
 
     /// <summary>
     /// Character count indicator value: digits for Numeric, characters for
-    /// Alphanumeric, and the *encoded byte count* for Byte (Latin-1 = characters,
-    /// UTF-8 = UTF-8 length). Kept alongside <see cref="Length"/> so the planner
-    /// and the encoder agree on the bit budget without recomputing it.
+    /// Alphanumeric, encoded byte count for Byte. Kept alongside <see cref="Length"/>
+    /// so the planner and the encoder agree on the bit budget.
     /// </summary>
     public readonly ushort UnitCount;
 

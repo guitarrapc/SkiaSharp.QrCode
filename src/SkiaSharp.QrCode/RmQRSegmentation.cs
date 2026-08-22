@@ -15,35 +15,18 @@ public enum RmQRSegmentation
     Single = 0,
 
     /// <summary>
-    /// Fewest total bits over all mixed-mode splits, computed by dynamic
-    /// programming.
+    /// The mixed-mode split with the fewest total bits. Never selects a symbol with
+    /// more core modules than <see cref="Single"/>, emits the <see cref="Single"/> bit
+    /// stream verbatim when a split would not shrink it, and additionally encodes
+    /// content that overflows every version in a single mode.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Never selects a larger symbol than <see cref="Single"/>, and falls back to the
-    /// <see cref="Single"/> bit stream verbatim whenever the split would not shrink
-    /// the symbol. It also encodes content that overflows every version in a single
-    /// mode: 100 letters followed by 100 digits is 200 Byte-mode characters, 50 over
-    /// the largest capacity, but fits R17x139 once the digits become their own run.
-    /// </para>
-    /// <para>
-    /// This minimises bits, not symbol dimensions: the version it lands on is still
-    /// whichever one <see cref="RmQRFitStrategy"/> ranks best among those the plan
-    /// fits.
-    /// </para>
-    /// <para>
-    /// Planning is a search over candidate versions, which is why it is opt-in. It
-    /// allocates nothing, and the version a split could reach is bounded before any
-    /// planning runs, so content no split can shrink mostly costs nothing: measured
-    /// against a <see cref="Single"/> encode of the same content, 120 digits and 150
-    /// lowercase both land at 1.0-1.1x. Where planning does run its cost tracks how
-    /// much the split helps — the more it lowers the bit cost, the more candidate
-    /// versions become plausible — so half letters half digits costs 4.8x and
-    /// characters alternating in tens 6.4x. The one shape that pays without winning is
-    /// finely alternating content (2.2x), which the cheap bound cannot rule out.
-    /// Content longer than 361 characters, which no rMQR symbol holds in any mode, is
-    /// rejected without planning.
-    /// </para>
+    /// Opt-in because it searches candidate versions; it allocates nothing, and content
+    /// no split can help is ruled out before the search starts. Fewer core modules is
+    /// not the same as a smaller image: <see cref="RmQRFitStrategy"/> ranks by core
+    /// modules while the quiet zone adds to each dimension, so a flatter symbol can
+    /// render onto a larger grid. Size buffers with the same segmentation you encode
+    /// with.
     /// </remarks>
     Optimal = 1,
 }

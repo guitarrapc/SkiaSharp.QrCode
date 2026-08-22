@@ -136,6 +136,7 @@ public static class RmQRCodeGenerator
     /// <param name="fitStrategy">How to choose among fitting versions when <paramref name="requestedVersion"/> is null.</param>
     /// <param name="height">Restrict automatic fit to this symbol height.</param>
     /// <param name="quietZoneSize">Quiet zone width in modules.</param>
+    /// <param name="segmentation">Whether to split the content into mixed-mode segments (see <see cref="RmQRSegmentation"/>). Size <paramref name="destination"/> with the same value, since the two modes can select different versions.</param>
     /// <returns>The number of bytes written (width × height, quiet zone included).</returns>
     /// <exception cref="ArgumentException">Thrown when the destination is too small, the data does not fit, or the arguments contradict each other.</exception>
     public static int CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
@@ -224,10 +225,9 @@ public static class RmQRCodeGenerator
     /// <param name="quietZoneSize">Quiet zone width in modules.</param>
     /// <param name="segmentation">Whether to split the content into mixed-mode segments (see <see cref="RmQRSegmentation"/>).</param>
     /// <remarks>
-    /// Under <see cref="RmQRSegmentation.Optimal"/> this plans the split in full, the
-    /// same work the encode then repeats, so the size-then-write pattern pays for
-    /// planning twice. Nothing is cached between the calls because a plan is a
-    /// stack-lent span that cannot outlive the call that owns it.
+    /// Pass the same <paramref name="segmentation"/> you will encode with: the two
+    /// modes can select different versions, so a buffer sized for one can be too small
+    /// for the other.
     /// </remarks>
     /// <exception cref="ArgumentException">Thrown when the data does not fit or the arguments contradict each other.</exception>
     public static RmQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
@@ -273,10 +273,7 @@ public static class RmQRCodeGenerator
 
     /// <summary>
     /// Everything the mixed-mode entry points must reject, gathered off the default
-    /// path: only <see cref="RmQRSegmentation.Single"/> and
-    /// <see cref="RmQRSegmentation.Optimal"/> exist, and an explicit ECI mode is
-    /// checked here for the paths whose single-mode twin checks it in
-    /// <see cref="PrepareConfigurationWithEci"/>.
+    /// path so <see cref="RmQRSegmentation.Single"/> pays only one compare.
     /// </summary>
     private static void ValidateOptimalEntry(ReadOnlySpan<char> textSpan, EciMode eciMode, RmQRSegmentation segmentation)
     {
@@ -351,9 +348,8 @@ public static class RmQRCodeGenerator
     // Mixed-mode segmentation (RmQRSegmentation.Optimal).
     //
     // Kept in its own non-inlined methods so the single-mode entry points above keep
-    // their frame and codegen: the plan buffer alone is 768 bytes of stack, and it
-    // must live in the frame that also runs the encoder because a plan is a
-    // caller-lent Span<RmQRSegment> that never escapes (nothing here owns storage).
+    // their frame and codegen. The plan buffer lives here rather than in the planner
+    // because a plan is a caller-lent Span<RmQRSegment> that never escapes.
     // ---------------------------------------------------------------
 
     [MethodImpl(MethodImplOptions.NoInlining)]

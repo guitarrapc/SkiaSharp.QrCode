@@ -7,7 +7,9 @@ namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
 /// <see cref="RmQRSegmentation.Optimal"/> end to end. The three properties every
-/// case is held to are: the symbol is never larger than the single-mode default, it
+/// case is held to are: the symbol never has more core modules than the single-mode
+/// default (which is not the same as never rendering larger — see
+/// <see cref="Optimal_FewerCoreModulesCanStillRenderLarger"/>), it
 /// still decodes to the original content, and when it lands on the same version as
 /// the single-mode default it is byte-for-byte the same matrix (the blast radius
 /// bound the feature is designed around). The rest covers the branches of the
@@ -48,6 +50,46 @@ public class RmQRSegmentationTest
         "こんにちは",
         "😀😁1234567890",
         "é😀A1",
+
+        // Uniform content: the shapes where the trivial bound rejects every candidate
+        // outright, so no cost run happens at all. Without them that filter has no
+        // differential coverage, and it is the dominant path in practice. Sized to fit
+        // ECC H as well, because the property tests below exercise both levels.
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+
+        // Alternating every character: the trivial bound cannot rule this out, so the
+        // floor runs and no candidate is accepted.
+        "a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7",
+
+        // Alternating in tens: a shape where a per-version cost run, not a bound, is
+        // what decides the version.
+        "aaaaaaaaaa7777777777aaaaaaaaaa7777777777aaaaaaaaaa7777777777",
+
+        // Ordinary mixed content in the middle of the length range.
+        "aaaaaaaaaaaaaaaaaaaaaaaaa7777777777777777777777777",
+    ];
+
+    /// <summary>
+    /// Content sized for ECC M only, so the differential scan is exercised at lengths
+    /// the shared corpus cannot reach (ECC H caps at 74 Byte-mode characters). These
+    /// mirror the shapes <c>RmQRSegmentationEncode</c> benchmarks, at its longer lengths.
+    /// </summary>
+    /// <remarks>
+    /// The mixed entries over 73 characters also exercise the planner's ArrayPool
+    /// branch, where its parent table outgrows the stack budget, so do not trim this
+    /// list to short content. (The uniform and all-numeric entries do not: they finish
+    /// at zero cost runs and never allocate a parent table at all.)
+    /// </remarks>
+    public static IEnumerable<string> LongCorpus() =>
+    [
+        new string('A', 120),
+        new string('a', 150),
+        string.Concat(Enumerable.Repeat("a7", 60)),
+        string.Concat(Enumerable.Repeat(new string('a', 10) + new string('7', 10), 6)),
+        new string('a', 60) + new string('7', 60),
+        new string('a', 75) + new string('7', 75),
+        new string('7', 361),
     ];
 
     public static IEnumerable<RmQRFitStrategy> Strategies() => Enum.GetValues<RmQRFitStrategy>();
@@ -121,6 +163,29 @@ public class RmQRSegmentationTest
     }
 
     /// <summary>
+    /// The same differential check at lengths the shared corpus cannot reach, where the
+    /// scan's filters behave differently: uniform content is rejected by the trivial
+    /// bound before any table is allocated, and coarsely alternating content is the one
+    /// shape decided by a per-version cost run.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(LongCorpus))]
+    public async Task Optimal_SelectsWhatAnExhaustiveScanSelects_LongContent(string content)
+    {
+        foreach (var strategy in Strategies())
+        {
+            var actual = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, fitStrategy: strategy, segmentation: RmQRSegmentation.Optimal);
+            await Assert.That(actual.Version).IsEqualTo(ExhaustiveBestVersion(content, RmQREccLevel.M, strategy));
+
+            await Assert.That(RmQRCodeDecoder.TryDecode(actual, out var decoded)).IsTrue();
+            await Assert.That(decoded).IsEqualTo(content);
+
+            var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, fitStrategy: strategy);
+            await Assert.That(Area(actual)).IsLessThanOrEqualTo(Area(single));
+        }
+    }
+
+    /// <summary>
     /// Definitional reference: price every version from scratch, keep those that hold
     /// the content, and take the best by the strategy comparator. Deliberately does no
     /// pruning, no memoisation and no single-mode ceiling.
@@ -157,6 +222,58 @@ public class RmQRSegmentationTest
         }
 
         return best ?? throw new InvalidOperationException("nothing fits");
+    }
+
+    /// <summary>
+    /// The "never larger" guarantee is about core modules, which is what
+    /// <see cref="RmQRFitStrategy"/> ranks by. The quiet zone adds a fixed four modules
+    /// to each dimension, so minimising height × width does not minimise
+    /// (height + 4) × (width + 4): a flatter, wider symbol can have fewer core modules
+    /// and a larger rendered grid. This pins that it really happens, so nobody
+    /// "corrects" the documented invariant back to the stronger, false one.
+    /// </summary>
+    [Test]
+    public async Task Optimal_FewerCoreModulesCanStillRenderLarger()
+    {
+        const string content = "37~yhakdP$%F$SMQINKKTSHJ";
+
+        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.H);
+        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.H, segmentation: RmQRSegmentation.Optimal);
+
+        await Assert.That(single.Version).IsEqualTo(RmQRVersion.R15x59);
+        await Assert.That(optimal.Version).IsEqualTo(RmQRVersion.R11x77);
+
+        // Fewer core modules, as guaranteed...
+        await Assert.That(Area(optimal)).IsLessThan(Area(single));
+        // ...but a larger quiet-zoned grid, which is not guaranteed and must not be.
+        await Assert.That(optimal.Width * optimal.Height).IsGreaterThan(single.Width * single.Height);
+        await Assert.That(optimal.Width).IsGreaterThan(single.Width);
+
+        await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    /// <summary>
+    /// The consequence a caller actually trips over: sizing with one segmentation and
+    /// encoding with another can leave the destination too small.
+    /// </summary>
+    [Test]
+    public async Task Optimal_BufferSizedForSingle_CanBeTooSmall()
+    {
+        const string content = "37~yhakdP$%F$SMQINKKTSHJ";
+
+        var singleSize = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), RmQREccLevel.H);
+        var optimalSize = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), RmQREccLevel.H, segmentation: RmQRSegmentation.Optimal);
+        await Assert.That(optimalSize.BufferSize).IsGreaterThan(singleSize.BufferSize);
+
+        var undersized = new byte[singleSize.BufferSize];
+        var tooSmall = Assert.Throws<ArgumentException>(() => RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.H, undersized, segmentation: RmQRSegmentation.Optimal));
+        // Specifically the destination check, not some other capacity error.
+        await Assert.That(tooSmall!.ParamName).IsEqualTo("destination");
+
+        // Sizing with the same segmentation is what a caller must do, and it works.
+        var sized = new byte[optimalSize.BufferSize];
+        await Assert.That(RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.H, sized, segmentation: RmQRSegmentation.Optimal)).IsEqualTo(optimalSize.BufferSize);
     }
 
     [Test]
@@ -255,6 +372,59 @@ public class RmQRSegmentationTest
         await Assert.That(optimal.Version).IsEqualTo(version);
         await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    /// <summary>
+    /// The requested-version path commits to planning without pricing it first and lets
+    /// the plan build decide, so this pins the whole outcome space of that path over
+    /// every version: either it encodes and round-trips, or it throws exactly what the
+    /// single-mode path throws. It also pins the direction — Optimal must never throw
+    /// where Single succeeds.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Corpus))]
+    public async Task Optimal_RequestedVersion_EitherEncodesOrThrowsLikeSingle(string content)
+    {
+        foreach (var version in Enum.GetValues<RmQRVersion>())
+        {
+            string? singleError = null;
+            Type? singleType = null;
+            try
+            {
+                RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, version);
+            }
+            catch (ArgumentException ex)
+            {
+                singleError = ex.Message;
+                singleType = ex.GetType();
+            }
+
+            RmQRCodeData? optimal = null;
+            string? optimalError = null;
+            Type? optimalType = null;
+            try
+            {
+                optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, version, segmentation: RmQRSegmentation.Optimal);
+            }
+            catch (ArgumentException ex)
+            {
+                optimalError = ex.Message;
+                optimalType = ex.GetType();
+            }
+
+            if (optimal is not null)
+            {
+                await Assert.That(optimal.Version).IsEqualTo(version);
+                await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+                await Assert.That(decoded).IsEqualTo(content);
+                continue;
+            }
+
+            // Optimal failed, so Single must have failed too, with the same message.
+            await Assert.That(singleError).IsNotNull();
+            await Assert.That(optimalError).IsEqualTo(singleError);
+            await Assert.That(optimalType).IsEqualTo(singleType);
+        }
     }
 
     [Test]

@@ -479,11 +479,59 @@ public class RmQRSegmentPlannerUnitTest
         var charset = text.Any(c => c > 255) ? EciMode.Utf8 : EciMode.Default;
         var floor = RmQRSegmentPlanner.MinimumPayloadBits(text.AsSpan(), charset, 4, 3, 3);
 
-        // R11x27 carries the narrowest widths of any version (4 / 4 / 3), so the bound
-        // there differs from the floor by the alphanumeric run count alone.
-        var bound = RmQRSegmentPlanner.FloorPlanUpperBound(text.AsSpan(), charset, RmQRVersion.R11x27);
+        // R7x43 is the only version whose widths are exactly the minima (4 / 3 / 3), so
+        // it is the one version where the bound must equal the floor exactly.
+        var bound = RmQRSegmentPlanner.FloorPlanUpperBound(text.AsSpan(), charset, RmQRVersion.R7x43);
+        await Assert.That(bound).IsEqualTo(floor);
         await Assert.That(bound).IsGreaterThanOrEqualTo(floor);
         await Assert.That(bound - floor).IsLessThanOrEqualTo(RmQRSegmentPlanner.MaxSegments);
+    }
+
+    /// <summary>
+    /// The 361-character planning limit is a rejection rule, not just a work cap:
+    /// content above it is declared impossible rather than merely unplanned. The
+    /// narrowest count indicator widths are pinned above; this pins the other side,
+    /// that 362 characters really do fit nowhere. The margin is three bits, so a capacity
+    /// table change could silently make the constant unsound or over-strict.
+    /// </summary>
+    [Test]
+    public async Task PlanningLimit_IsTheLongestContentAnyVersionCanHold()
+    {
+        // Densest shapes available: all digits, and digits with one non-numeric
+        // character at either end (which forces a second run without adding bulk).
+        string[] shapes =
+        [
+            new string('7', 362),
+            "A" + new string('7', 361),
+            new string('7', 361) + "A",
+            new string('A', 362),
+        ];
+
+        foreach (var text in shapes)
+        {
+            foreach (var version in Enum.GetValues<RmQRVersion>())
+            {
+                var cost = RmQRSegmentPlanner.MinimumPayloadBits(
+                    text.AsSpan(),
+                    EciMode.Default,
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric),
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric),
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte));
+
+                foreach (var ecc in new[] { RmQREccLevel.M, RmQREccLevel.H })
+                    await Assert.That(cost).IsGreaterThan(8 * RmQRConstants.GetDataCodewordCount(version, ecc));
+            }
+        }
+
+        // And 361 digits must still fit, or the limit would be over-strict.
+        var atLimit = new string('7', 361);
+        var atLimitCost = RmQRSegmentPlanner.MinimumPayloadBits(
+            atLimit.AsSpan(),
+            EciMode.Default,
+            RmQRConstants.GetCountIndicatorLength(RmQRVersion.R17x139, EncodingMode.Numeric),
+            RmQRConstants.GetCountIndicatorLength(RmQRVersion.R17x139, EncodingMode.Alphanumeric),
+            RmQRConstants.GetCountIndicatorLength(RmQRVersion.R17x139, EncodingMode.Byte));
+        await Assert.That(atLimitCost).IsLessThanOrEqualTo(8 * RmQRConstants.GetDataCodewordCount(RmQRVersion.R17x139, RmQREccLevel.M));
     }
 
     /// <summary>
