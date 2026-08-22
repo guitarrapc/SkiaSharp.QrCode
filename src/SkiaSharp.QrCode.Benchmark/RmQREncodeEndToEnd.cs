@@ -10,10 +10,10 @@
 ///   Latin1_Eci_R17x139_M : explicit ECI 3 Byte segment
 ///   Utf8_Eci_R17x139_M   : explicit ECI 26 Byte segment
 ///   Numeric_AutoFit_M    : automatic version selection cost on top of the smallest symbol
-///   MixedUrl_*           : what RmQRSegmentation.Optimal costs against Single on the
-///                          same content, where the split does shrink the symbol
-///   MaxNumeric/MaxByte_* : the two shapes Optimal cannot help with — all digits
-///                          (planning short-circuited) and all bytes (planning runs, never wins)
+///
+/// Mixed-mode segmentation has its own class (<see cref="RmQRSegmentationEncode"/>):
+/// it varies content shape rather than version, and every row needs a same-run Single
+/// pair, which does not belong in this table.
 /// </summary>
 public class RmQREncodeEndToEnd
 {
@@ -22,9 +22,6 @@ public class RmQREncodeEndToEnd
     private string _byte = default!;
     private string _latin1 = default!;
     private string _utf8 = default!;
-    private string _mixedUrl = default!;
-    private string _maxNumeric = default!;
-    private string _maxByte = default!;
     private byte[] _spanDestination = default!;
 
     [GlobalSetup]
@@ -35,9 +32,6 @@ public class RmQREncodeEndToEnd
         _byte = string.Concat(Enumerable.Repeat("the quick brown fox jumps over the lazy dog?! ", 4)).Substring(0, 150); // R17x139-M byte boundary
         _latin1 = string.Concat(Enumerable.Repeat("Café déjà vu. ", 8));
         _utf8 = string.Concat(Enumerable.Repeat("日本語QRコード", 5));
-        _mixedUrl = "https://example.com/p/1234567890123456";        // Byte + Numeric: R11x77 as one run, R15x43 split
-        _maxNumeric = new string('7', 361);                           // R17x139-M numeric boundary: planning is short-circuited
-        _maxByte = new string('a', 150);                              // R17x139-M byte boundary: planning runs and never wins
         _spanDestination = new byte[Math.Max(
             RmQRCodeGenerator.GetRequiredBufferSize(_byte.AsSpan(), RmQREccLevel.M, RmQRVersion.R17x139).BufferSize,
             SkiaSharp.QrCode.QRCodeGenerator.GetRequiredBufferSize(_numeric.AsSpan(), ECCLevel.L).BufferSize)];
@@ -119,52 +113,4 @@ public class RmQREncodeEndToEnd
         return RmQRCodeGenerator.CreateRmQRCode(_numeric.AsSpan(), RmQREccLevel.M, _spanDestination);
     }
 
-    // Mixed-mode segmentation: what opting in costs, on the three shapes that answer
-    // it differently — content the split shrinks (the URL, R11x77 → R15x43), content
-    // that provably cannot benefit and is short-circuited (all digits), and content
-    // where the split must be searched but never wins (all lowercase).
-
-    [Benchmark(Description = "RmQR_MixedUrl_AutoFit_Encode (Span, Single)")]
-    public int RmQR_MixedUrl_AutoFit_SingleEncodeSpan()
-    {
-        return RmQRCodeGenerator.CreateRmQRCode(_mixedUrl.AsSpan(), RmQREccLevel.M, _spanDestination);
-    }
-
-    [Benchmark(Description = "RmQR_MixedUrl_AutoFit_Encode (Span, Optimal)")]
-    public int RmQR_MixedUrl_AutoFit_OptimalEncodeSpan()
-    {
-        return RmQRCodeGenerator.CreateRmQRCode(_mixedUrl.AsSpan(), RmQREccLevel.M, _spanDestination, segmentation: RmQRSegmentation.Optimal);
-    }
-
-    [Benchmark(Description = "RmQR_MaxNumeric_AutoFit_Encode (Span, Single)")]
-    public int RmQR_MaxNumeric_AutoFit_SingleEncodeSpan()
-    {
-        return RmQRCodeGenerator.CreateRmQRCode(_maxNumeric.AsSpan(), RmQREccLevel.M, _spanDestination);
-    }
-
-    [Benchmark(Description = "RmQR_MaxNumeric_AutoFit_Encode (Span, Optimal)")]
-    public int RmQR_MaxNumeric_AutoFit_OptimalEncodeSpan()
-    {
-        return RmQRCodeGenerator.CreateRmQRCode(_maxNumeric.AsSpan(), RmQREccLevel.M, _spanDestination, segmentation: RmQRSegmentation.Optimal);
-    }
-
-    [Benchmark(Description = "RmQR_MaxByte_AutoFit_Encode (Span, Single)")]
-    public int RmQR_MaxByte_AutoFit_SingleEncodeSpan()
-    {
-        return RmQRCodeGenerator.CreateRmQRCode(_maxByte.AsSpan(), RmQREccLevel.M, _spanDestination);
-    }
-
-    [Benchmark(Description = "RmQR_MaxByte_AutoFit_Encode (Span, Optimal)")]
-    public int RmQR_MaxByte_AutoFit_OptimalEncodeSpan()
-    {
-        return RmQRCodeGenerator.CreateRmQRCode(_maxByte.AsSpan(), RmQREccLevel.M, _spanDestination, segmentation: RmQRSegmentation.Optimal);
-    }
-
-    // Standard QR version 1 with the same numeric payload, for scale reference.
-
-    [Benchmark(Description = "StandardQr_Numeric_V1_Encode (Span)")]
-    public int StandardQr_Numeric_V1_EncodeSpan()
-    {
-        return SkiaSharp.QrCode.QRCodeGenerator.CreateQrCode(_numeric.AsSpan(), ECCLevel.L, _spanDestination);
-    }
 }
