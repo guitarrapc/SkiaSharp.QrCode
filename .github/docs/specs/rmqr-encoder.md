@@ -98,6 +98,7 @@ Rectangular geometry rule shared by every rendering entry: the symbol (quiet zon
 | Versions | All 32 (R7x43 … R17x139) |
 | ECC levels | M, H |
 | Data modes | Numeric, Alphanumeric, Byte (ECI 3 for ISO-8859-1, ECI 26 for UTF-8; ASCII omits ECI) |
+| Segmentation | One segment in a single mode (default), or the minimal-bit mixed-mode split (opt-in `RmQRSegmentation.Optimal`) |
 | Version selection | Exact version, or automatic fit by strategy, optionally within a fixed height |
 | Quiet zone | Configurable non-negative size, default 2 (the ISO/IEC 23941 quiet zone) |
 | Output | Bit-packed `RmQRCodeData` or byte-per-module `Span<byte>` |
@@ -107,7 +108,6 @@ Rectangular geometry rule shared by every rendering entry: the symbol (quiet zon
 - Kanji mode, intentionally (tables keep the column only for specification completeness;
   Japanese text uses Byte mode with UTF-8 ECI, matching the Standard QR product policy)
 - FNC1, Structured Append (rMQR does not define Structured Append)
-- Multi-segment optimization within one payload (single-mode segment, as for Standard and Micro QR)
 
 ### Symbol parameters (verified)
 
@@ -204,11 +204,41 @@ Reject an unknown version, an unknown ECC level, a `height` constraint combined 
 
 Shared `TextAnalyzer` (Numeric / Alphanumeric / Byte, single segment). The default charset policy matches Standard QR: ASCII omits ECI, ISO-8859-1 text emits assignment 3, and other Unicode text is encoded as UTF-8 with assignment 26. An explicit `EciMode` can select ISO-8859-1 or UTF-8; explicit ISO-8859-1 rejects unrepresentable input instead of narrowing it.
 
+The analyzer decides the charset for every path. It also decides the mode for the default single-segment path; `RmQRSegmentation.Optimal` decides modes per run instead (see [Mixed-mode segmentation](#mixed-mode-segmentation)) but takes the charset from the same analysis, because the charset is a property of the content and not of the split.
+
+### Mixed-mode segmentation
+
+**What.** `RmQRSegmentation.Optimal` splits the content into the Numeric / Alphanumeric / Byte runs whose total bit cost is minimal for a candidate version, and fits the version against that cost instead of the single-mode cost. `RmQRSegmentation.Single` (the default) keeps one run in one mode.
+
+**Why.** rMQR data capacities are small (5 Byte-mode characters at R7x43-M, 150 at R17x139-M), so the modes a payload mixes decide the symbol size far more often than in Standard QR. A URL followed by a numeric identifier is the common case: `https://example.com/p/1234567890123456` needs 313 bits as one Byte run (R11x77, 847 modules) and 249 bits as Byte + Numeric (R15x43, 645 modules).
+
+**Why opt-in, and why the ceiling.** Changing the default would move the emitted bit stream, and therefore the rendered symbol, for existing callers. When the content fits in a single mode, that fit bounds the search from above: only versions the strategy ranks strictly better than it are tried, so the plan is emitted only when it actually shrinks the symbol, and the single-mode stream is emitted byte for byte in every other case. This is the property the end-to-end tests assert for every content, ECC level and strategy.
+
+**When no single mode fits.** The ceiling does not exist, so the scan runs to the end. This is the one place where `Optimal` accepts input `Single` rejects rather than merely shrinking it, and it is the case the option is worth the most in: 100 letters followed by 100 digits is 200 Byte-mode characters, 50 over the 150 R17x139-M holds, but 1157 bits of the 1216 available once the digits split off. Only when a mixed plan fails as well does `RmQRVersionSelector` produce the capacity error, so a genuinely oversized payload reports exactly what it reports today.
+
+**Content that cannot benefit.** All-Numeric content skips planning: digits are the cheapest characters in the cheapest mode, splitting a Numeric run never lowers its payload, and every extra run adds a header, so one run is provably the optimum. Without the shortcut a 361-digit payload paid 11.9x a `Single` encode to rediscover it; with it, 1.05x.
+
+**Pruning the scan.** The scan is best-first, i.e. smallest-version-first, so for mixed content most early ranks are hopeless. One cost run at the narrowest count indicator widths any version uses (4 / 3 / 3) prices a floor for every version — widening a count indicator can only raise the price of the run carrying it, and the minimum over plans of a pointwise larger cost is itself larger — so candidates that cannot hold even that floor are skipped without a run of their own. This replaces up to a dozen cost runs with one: normalised against the Standard QR v1 span encode in the same benchmark run, the 150-byte worst case fell from 13.2x to 3.0x and a mixed URL from 3.9x to 2.1x.
+
+**What it costs, and what drives it.** Planning allocates nothing. Its cost is driven by *how much the split helps*, not by how mixed the content looks: the lower a split drives the bit cost, the more candidate versions clear the floor and get priced. Measured on the span path at 120 characters (same run): all digits 714 ns to 763 ns (short-circuited), all lowercase 989 ns to 2 510 ns (searched, never wins), 60 lowercase + 60 digits 989 ns to 7 161 ns (searched, wins a version). Cost is linear in length at a fixed shape (20 / 60 / 120 / 150 characters of half letters half digits: 1.8 / 4.8 / 8.5 / 12.0 us). The consequence worth stating plainly is that the expensive inputs are the rewarding ones.
+
+The corollary is why this cannot be made free: whether a split helps is only knowable by planning it. All-Numeric is the one shape where "no gain" is provable up front. A payload of a known shape — a URL followed by a numeric identifier — therefore wins predictably, while arbitrary user input trades a few microseconds per symbol against the chance of a smaller one. `RmQREncodeEndToEnd` carries `MixedUrl` / `MaxByte` / `MaxNumeric` Single-vs-Optimal pairs as the regression guard.
+
+**How the optimum is exact.** A run does not cost a constant per character (Numeric packs 3 digits into 10 bits, Alphanumeric 2 characters into 11), so the dynamic program carries the group remainder in its state: 3 Numeric states, 2 Alphanumeric, 1 Byte, plus a virtual start. Each transition either continues the current run or opens a new one paying `3 + count indicator`. Rounding a per-character average instead would misprice the tail of every run.
+
+**Bounds.** Content longer than 361 characters is rejected before any cost run, so pathological input never pays for planning. 361 is the largest character count any rMQR symbol holds in any mode (Numeric at R17x139-M: 1204 payload bits plus a 12-bit header against 1216 available), and no mixed plan can beat it because mixing only adds headers to a mode that is already the densest per character. Since a mixed plan can now encode content no single mode holds, this constant is a rejection rule and not merely a work cap: at 362 characters the cheapest possible cost is 1207 payload bits plus the narrowest R17x139 header of 11, i.e. 1218 against 1216, a margin of 2 bits. A plan is capped at 96 runs, above the 76 the largest capacity could hold. The reconstructed plan is re-costed from the byte counts the encoder will actually emit and rejected on disagreement, because the bit-stream writers store without per-flush bounds checks.
+
+**ECI.** One prefix ahead of the first run: an rMQR decoder carries the declared charset across the runs that follow, so a plan needs no repetition. Its 11 bits are part of the cost the version scan compares.
+
+**Kanji.** Still unsupported, so a Japanese payload mixes Byte (UTF-8) with Numeric runs rather than reaching for 13-bit Kanji.
+
 ### 3. Fit the version
 
 Required bits = optional 11-bit ECI prefix (`111` + 8-bit assignment) + 3 (data mode) + count indicator (per version, table above) + payload bits. The terminator may shrink to the remaining capacity, including zero bits. Automatic fit is a table scan (versions pre-ordered best-first per strategy with their capacity per mode × ECC × ECI-presence, height as a bitmask); it selects exactly what the definitional "best fitting version" scan selects, and a test pins the two for every input.
 
-- `requestedVersion` given: use it or fail with an actionable capacity error (actual length, applicable maximum in mode units, remedy: shorten, lower ECC, choose a larger version, or use Standard QR).
+Under `RmQRSegmentation.Optimal` the required bits are the planned mixed-mode cost for the candidate version rather than the single-mode cost. The candidate set, the strategy ordering, the height constraint and the error text are all unchanged; the one behavioural difference is that input the single mode overflows at every version can now succeed instead of throwing (see [Mixed-mode segmentation](#mixed-mode-segmentation)).
+
+- `requestedVersion` given: use it or fail with an actionable capacity error (actual length, applicable maximum in mode units, remedy: shorten, lower ECC, choose a larger version, or use Standard QR). Under `Optimal` a requested version that the single mode overflows is still accepted when the mixed-mode plan fits it.
 - Otherwise the candidate set is all 32 versions, or the versions of the constrained `height`; keep those whose data-codeword capacity holds the required bits; choose by `fitStrategy`:
   - `MinimizeArea`: fewest modules (height × width); ties toward the smaller height (i.e. the wider symbol).
   - `MinimizeWidth`: smallest width; ties toward the smaller height.
@@ -217,7 +247,7 @@ Required bits = optional 11-bit ECI prefix (`111` + 8-bit assignment) + 3 (data 
 
 ### 4. Build the data codewords
 
-Optional ECI mode `111` plus an 8-bit assignment, 3-bit data-mode indicator, count indicator, payload bits, terminator `000` (shortened at capacity), zero bits to a byte boundary, alternating 0xEC / 0x11 pads to the data-codeword count. The stream is written straight into the caller's buffer (no intermediate copy); vectorized value kernels exist per mode on x64 (see Decisions), all producing the identical stream. UTF-8 stays in a separate cold writer so adding ECI does not address-expose the hot writer locals.
+Optional ECI mode `111` plus an 8-bit assignment, then per run a 3-bit data-mode indicator, count indicator and payload bits (one run by default, the planned runs in order under `Optimal`), terminator `000` (shortened at capacity), zero bits to a byte boundary, alternating 0xEC / 0x11 pads to the data-codeword count. The stream is written straight into the caller's buffer (no intermediate copy); vectorized value kernels exist per mode on x64 (see Decisions), all producing the identical stream. UTF-8 stays in a separate cold writer so adding ECI does not address-expose the hot writer locals.
 
 ### 5. Reed-Solomon per block, 6. interleave
 

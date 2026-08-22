@@ -48,7 +48,7 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// three chained switches). Vector paths are <c>NET8_0_OR_GREATER</c> + capability
 /// gated; netstandard and non-x86 runtimes take the scalar SWAR / table paths.
 /// </remarks>
-internal static class RmQRBinaryEncoder
+internal static partial class RmQRBinaryEncoder
 {
     private const int ModeEci = 0b111;
     private const int EciDesignatorBits = 8;

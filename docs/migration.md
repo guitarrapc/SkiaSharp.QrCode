@@ -1,9 +1,27 @@
 # Migration
 
+- **v1.2.0 adds a `segmentation` argument to the rMQR generator.** Source compatible and behaviour preserving; recompile if you referenced the binary. See [rMQR mixed-mode segmentation](#rmqr-mixed-mode-segmentation) below.
 - **After v1.1.0, the image builders share a common base class.** Source compatible; recompile if you referenced the binary. See [image builder base class](#image-builder-base-class) below.
 - **v1.0.0 removes the obsolete `QrCode` class.** If you still use `QrCode`, see [from before v1.0.0 to v1.0.0](#from-before-v100-to-v100) below.
 - v0.11.0 introduces further improvements to Icon handling. See the IconData section below.
 - v0.9.0 introduces significant performance improvements and API changes. Here's what you need to know to upgrade:
+
+## rMQR mixed-mode segmentation
+
+`RmQRCodeGenerator.CreateRmQRCode`, `CreateRmQRCodeWithEci`, `GetRequiredBufferSize` and `GetRequiredBufferSizeWithEci` gained a trailing optional `RmQRSegmentation segmentation` argument, and `RmQRCodeImageBuilder` gained `WithSegmentation`.
+
+- **Behaviour unchanged by default.** The argument defaults to `RmQRSegmentation.Single`, which is the existing single-mode encoding; every symbol you generate today is byte for byte the same.
+- **Source compatible**, including positional calls, because the new argument is last.
+- **Binary breaking**, as with any added parameter: assemblies compiled against v1.1.1 or earlier must be recompiled (no code changes needed).
+
+Pass `RmQRSegmentation.Optimal` to let the generator split mixed content into Numeric / Alphanumeric / Byte runs. It never selects a larger symbol than `Single`, it emits the `Single` bit stream verbatim whenever splitting would not shrink the symbol, and it additionally encodes content that overflows every version in a single mode.
+
+```csharp
+var optimal = RmQRCodeGenerator.CreateRmQRCode(
+    "https://example.com/p/1234567890123456",
+    RmQREccLevel.M,
+    segmentation: RmQRSegmentation.Optimal);   // R15x43 instead of R11x77
+```
 
 ## image builder base class
 

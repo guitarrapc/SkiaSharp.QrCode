@@ -30,12 +30,15 @@ public class QrImageBuilderApiParityTest
     /// specs/rmqr-encoder.md), so the rMQR builder alone exposes the fit strategy and
     /// the fixed-height constraint; and the symbol is rectangular, so the width-only
     /// sizing rule (height from the aspect ratio) is a builder option of its own.
+    /// Mixed-mode segmentation is rMQR-only for the same reason: rMQR capacities are
+    /// small enough that splitting the content moves the symbol a version or more.
     /// </summary>
     private static readonly string[] rmqrOnlyMembers =
     [
         "WithFitStrategy",
         "WithHeight",
         "WithWidth",
+        "WithSegmentation",
     ];
 
     [Test]
