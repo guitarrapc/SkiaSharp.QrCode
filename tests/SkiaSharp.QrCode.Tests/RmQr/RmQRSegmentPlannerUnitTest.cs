@@ -377,6 +377,62 @@ public class RmQRSegmentPlannerUnitTest
     }
 
     /// <summary>
+    /// Before any dynamic programming table is touched, the scan filters candidates
+    /// with an O(n) bound built from per-character minimum rates. It must never exceed
+    /// the true optimum at any version, or a version the split could actually reach
+    /// would be skipped and the symbol would come out larger than it should.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Corpus))]
+    public async Task TrivialLowerBound_NeverExceedsAnyVersionCost(string text)
+    {
+        if (text.Length == 0)
+            return;
+
+        foreach (var charset in new[] { EciMode.Default, EciMode.Utf8 })
+        {
+            if (charset == EciMode.Default && text.Any(c => c > 255))
+                continue;
+
+            var trivial = RmQRSegmentPlanner.TrivialLowerBoundBits(text.AsSpan(), charset);
+            foreach (var version in Enum.GetValues<RmQRVersion>())
+            {
+                var actual = RmQRSegmentPlanner.MinimumPayloadBits(
+                    text.AsSpan(),
+                    charset,
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric),
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric),
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte));
+
+                await Assert.That(trivial).IsLessThanOrEqualTo(actual);
+            }
+        }
+    }
+
+    /// <summary>
+    /// It also has to be tight enough to be worth having. For content a single mode
+    /// already encodes optimally the bound is within one header of the truth, which is
+    /// what lets the scan skip planning for uniform content entirely.
+    /// </summary>
+    [Test]
+    [Arguments("AAAAAAAAAAAAAAAAAAAA")]
+    [Arguments("aaaaaaaaaaaaaaaaaaaa")]
+    [Arguments("$%*+-./: $%*+-./: ")]
+    public async Task TrivialLowerBound_IsTightForUniformContent(string text)
+    {
+        var trivial = RmQRSegmentPlanner.TrivialLowerBoundBits(text.AsSpan(), EciMode.Default);
+        var actual = RmQRSegmentPlanner.MinimumPayloadBits(
+            text.AsSpan(),
+            EciMode.Default,
+            RmQRConstants.GetCountIndicatorLength(RmQRVersion.R17x139, EncodingMode.Numeric),
+            RmQRConstants.GetCountIndicatorLength(RmQRVersion.R17x139, EncodingMode.Alphanumeric),
+            RmQRConstants.GetCountIndicatorLength(RmQRVersion.R17x139, EncodingMode.Byte));
+
+        // Only the count indicator width and the rounding of a partial group separate them.
+        await Assert.That(actual - trivial).IsLessThanOrEqualTo(12);
+    }
+
+    /// <summary>
     /// The version scan accepts a candidate without pricing it when the candidate
     /// holds an arithmetic upper bound derived from the floor plan. The bound must
     /// never fall below the version's true cost, or a version the plan does not fit

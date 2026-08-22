@@ -33,13 +33,16 @@ public enum RmQRSegmentation
     /// </para>
     /// <para>
     /// Planning is a search over candidate versions, which is why it is opt-in. It
-    /// allocates nothing, but its cost is driven by how much the split helps rather
-    /// than by how mixed the content looks: the more a split lowers the bit cost, the
-    /// more candidate versions become plausible and the more of them get priced. At
-    /// 120 characters, all digits costs 1.0x a <see cref="Single"/> encode (planning
-    /// is short-circuited), characters alternating one by one 2.3x (searched, never
-    /// wins), half letters half digits 4.7x and characters alternating in tens 6.2x
-    /// (searched, wins a version). Cost is linear in length at a fixed shape.
+    /// allocates nothing, and the version a split could reach is bounded before any
+    /// planning runs, so content no split can shrink mostly costs nothing: measured
+    /// against a <see cref="Single"/> encode of the same content, 120 digits and 150
+    /// lowercase both land at 1.0-1.1x. Where planning does run its cost tracks how
+    /// much the split helps — the more it lowers the bit cost, the more candidate
+    /// versions become plausible — so half letters half digits costs 4.8x and
+    /// characters alternating in tens 6.4x. The one shape that pays without winning is
+    /// finely alternating content (2.2x), which the cheap bound cannot rule out.
+    /// Content longer than 361 characters, which no rMQR symbol holds in any mode, is
+    /// rejected without planning.
     /// </para>
     /// </remarks>
     Optimal = 1,

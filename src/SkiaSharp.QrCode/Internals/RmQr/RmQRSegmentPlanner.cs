@@ -91,6 +91,18 @@ internal static class RmQRSegmentPlanner
     private const int MinCountBitsAlnum = 3;
     private const int MinCountBitsByte = 3;
 
+    /// <summary>Narrowest count indicator of any mode at any version; the same test pins all four.</summary>
+    private const int MinCountBitsAny = 3;
+
+    // Cheapest bits a single character can cost in any mode, in sixths so the numeric
+    // and alphanumeric packing rates stay exact: 10 bits per 3 digits, 11 per 2
+    // alphanumerics, 8 per byte. A partial group only ever costs more per character
+    // (one digit is 4 bits against a rate of 3 1/3), so summing these rates can never
+    // exceed what a real plan pays.
+    private const int SixthsPerDigit = 20;
+    private const int SixthsPerAlnum = 33;
+    private const int SixthsPerByte = 48;
+
     /// <summary>rMQR ECI prefix: 3-bit mode indicator 111 plus a one-byte assignment designator.</summary>
     private const int EciHeaderBits = RmQRConstants.ModeIndicatorLength + 8;
 
@@ -157,8 +169,16 @@ internal static class RmQRSegmentPlanner
         var order = RmQRVersionSelector.GetFitOrder(fitStrategy);
         var heightMask = RmQRVersionSelector.GetFitHeightMask(fitStrategy, height);
 
-        // One cost run at the narrowest count indicators any version uses brackets every
-        // other version from both sides, so most candidates need no run of their own.
+        // Three filters, cheapest first, so a candidate only reaches an expensive one
+        // when the cheap ones could not answer.
+        //
+        //   Trivial bound. One O(n) pass, no table: each character at the cheapest rate
+        //   any mode gives it, plus one minimal header. When no better-ranked version
+        //   holds even this, the split cannot move the symbol and nothing else runs.
+        //
+        // The remaining two come from a single cost run at the narrowest count
+        // indicators any version uses, which brackets every other version from both
+        // sides:
         //
         //   Floor. Widening a count indicator only raises the price of the run carrying
         //   it, and the minimum over plans of a pointwise larger cost is itself larger,
@@ -186,8 +206,17 @@ internal static class RmQRSegmentPlanner
         // mandatory extra run cost more than it saved (alternating 10-character groups
         // regressed 9.0 us to 11.2 us). Deriving the ceiling from the floor plan costs
         // no extra run and is tighter, which is what makes it pay.
-        var floorPayload = ComputeFloor(text, charset, out var runsNumeric, out var runsAlnum, out var runsByte);
-        var floorBits = floorPayload + eciBits;
+        // Cheapest question first: could a split reach a better version at all? This
+        // bound costs one O(n) pass and no table, and the cost run below is deferred
+        // until some candidate clears it — so content a single mode already encodes
+        // optimally pays nothing for planning, because no better-ranked version can
+        // hold even this.
+        var trivialBits = TrivialLowerBoundBits(text, charset) + eciBits;
+
+        var floorPayload = -1;
+        var runsNumeric = 0;
+        var runsAlnum = 0;
+        var runsByte = 0;
 
         Span<int> memoKeys = stackalloc int[MemoCapacity];
         Span<int> memoCosts = stackalloc int[MemoCapacity];
@@ -202,7 +231,13 @@ internal static class RmQRSegmentPlanner
                 continue;
 
             var capacityBits = 8 * RmQRConstants.GetDataCodewordCount(candidate, eccLevel);
-            if (capacityBits < floorBits)
+            if (capacityBits < trivialBits)
+                continue; // no split of this content could fit, whatever the plan
+
+            if (floorPayload < 0)
+                floorPayload = ComputeFloor(text, charset, out runsNumeric, out runsAlnum, out runsByte);
+
+            if (capacityBits < floorPayload + eciBits)
                 continue; // cannot hold even the cheapest count indicators
             if (capacityBits >= UpperBound(floorPayload, runsNumeric, runsAlnum, runsByte, candidate) + eciBits)
             {
@@ -398,6 +433,38 @@ internal static class RmQRSegmentPlanner
     // ---------------------------------------------------------------
     // Scan bounds
     // ---------------------------------------------------------------
+
+    /// <summary>
+    /// A lower bound on any plan at any version, in payload bits, computed in one O(n)
+    /// pass with no dynamic programming table: each character priced at the cheapest
+    /// rate any mode could give it, plus the cheapest possible single segment header.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately cruder than <see cref="ComputeFloor"/> and far cheaper. Its purpose
+    /// is to answer "could a split reach a better version at all" before paying for a
+    /// cost run: when no better-ranked version can hold even this, the split cannot
+    /// move the symbol and planning is skipped outright. It is loose exactly where the
+    /// split is worth searching (mixed content, where the bound sits far below the
+    /// single-mode cost) and tight exactly where it is not (uniform content, where it
+    /// lands within a count indicator of the truth).
+    /// </remarks>
+    public static int TrivialLowerBoundBits(ReadOnlySpan<char> text, EciMode charset)
+    {
+        var sixths = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (CharacterSets.IsNumeric(c))
+                sixths += SixthsPerDigit;
+            else if (CharacterSets.IsAlphanumeric(c))
+                sixths += SixthsPerAlnum;
+            else
+                sixths += SixthsPerByte * ByteCost(text, i, charset);
+        }
+
+        // Round up to whole bits, then add the cheapest header a stream can carry.
+        return (sixths + 5) / 6 + RmQRConstants.ModeIndicatorLength + MinCountBitsAny;
+    }
 
     /// <summary>
     /// The floor cost run: minimal payload bits at the narrowest count indicator

@@ -845,13 +845,13 @@ It is opt-in because planning is a search over candidate versions. It allocates 
 
 | Content | Single | Optimal | |
 |---|--:|--:|---|
-| 120 digits | 644 ns | 618 ns | short-circuited: one mode is provably optimal |
-| 120 characters alternating `a7` | 908 ns | 2,069 ns | searched, split never wins |
-| 150 lowercase | 1,086 ns | 2,476 ns | searched, split never wins |
-| 60 lowercase + 60 digits | 904 ns | 4,280 ns | searched, split wins a version |
-| 120 characters alternating in tens | 927 ns | 5,759 ns | searched, split wins big |
+| 120 digits | 512 ns | 496 ns | one mode is provably optimal; planning never starts |
+| 150 lowercase | 1,040 ns | 1,143 ns | no smaller version is reachable; ruled out without planning |
+| 120 characters alternating `a7` | 961 ns | 2,139 ns | planned, and the split loses |
+| 60 lowercase + 60 digits | 930 ns | 4,471 ns | planned, and the split wins a version |
+| 120 characters alternating in tens | 923 ns | 5,917 ns | planned, and the split wins big |
 
-Cost is linear in length at a fixed shape (20 / 60 / 120 / 150 characters of half letters half digits: 1.1 / 2.9 / 4.3 / 5.6 µs). So the expensive cases are the rewarding ones: you pay in proportion to what you gain. All-numeric content skips planning entirely, and content longer than 361 characters — which no rMQR symbol holds in any mode — is rejected without planning.
+The version a split could reach is bounded before any planning runs, so content no split can shrink mostly costs nothing — the exception is finely alternating content like row 3, where that cheap bound cannot see that switching modes every character never pays. Where planning does run, cost is linear in length at a fixed shape (20 / 60 / 120 / 150 characters of half letters half digits: 0.9 / 2.4 / 4.5 / 5.7 µs). So the expensive cases are the rewarding ones: you pay in proportion to what you gain. Content longer than 361 characters — which no rMQR symbol holds in any mode — is rejected without planning.
 
 Reproduce with `dotnet run -c Release -- --filter "*RmQRSegmentationEncode*"` in `src/SkiaSharp.QrCode.Benchmark`.
 
