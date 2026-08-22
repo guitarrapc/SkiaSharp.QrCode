@@ -234,6 +234,33 @@ public class RmQRBinaryEncoderSegmentedTest
         await Assert.That(() => EncodeRaw("12abcd", RmQRVersion.R17x139, RmQREccLevel.M, EciMode.Default, plan)).Throws<ArgumentException>();
     }
 
+    /// <summary>
+    /// The bit budget is computed from <c>UnitCount</c> while the payload is written
+    /// from the run's characters, so a plan whose two disagree would pass the budget
+    /// check and then write past the data codewords. The writers store without
+    /// per-flush bounds checks, so this has to be rejected, not merely asserted in
+    /// Debug: R7x43-M is 48 bits, and this plan budgets 11 while writing 74.
+    /// </summary>
+    [Test]
+    [Arguments(0)]
+    [Arguments(1)]
+    [Arguments(2)]
+    public async Task EncodeSegmented_UnitCountBelowRunLength_Throws(int modeIndex)
+    {
+        var content = modeIndex switch { 0 => new string('7', 20), 1 => new string('A', 20), _ => new string('a', 20) };
+        RmQRSegment[] plan = [new RmQRSegment(modeIndex, 0, content.Length, 1)];
+
+        await Assert.That(() => EncodeRaw(content, RmQRVersion.R7x43, RmQREccLevel.M, EciMode.Default, plan)).Throws<ArgumentException>();
+    }
+
+    /// <summary>A unit count above the run length is equally inconsistent and equally rejected.</summary>
+    [Test]
+    public async Task EncodeSegmented_UnitCountAboveRunLength_Throws()
+    {
+        RmQRSegment[] plan = [new RmQRSegment(0, 0, 3, 9)];
+        await Assert.That(() => EncodeRaw("123", RmQRVersion.R17x139, RmQREccLevel.M, EciMode.Default, plan)).Throws<ArgumentException>();
+    }
+
     [Test]
     public async Task EncodeSegmented_Utf8RunWithAWrongByteBudget_Throws()
     {

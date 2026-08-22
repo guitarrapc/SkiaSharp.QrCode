@@ -74,15 +74,21 @@ internal static partial class RmQRBinaryEncoder
             // it anyway because overflowing it would corrupt the mode indicator above.
             Debug.Assert(segment.UnitCount < (1 << countBits), "run length must fit the character count indicator");
 
+            // The budget checked above comes from UnitCount, but the payload below is
+            // written from the run's characters. A plan whose two disagree would clear
+            // the budget and then overrun, so this is a runtime check, not an assert.
+            // Byte mode under UTF-8 is the exception: its unit count is only knowable
+            // after transcoding, so WriteUtf8Segment verifies it there instead.
+            if ((mode != EncodingMode.Byte || charset != EciMode.Utf8) && segment.UnitCount != segment.Length)
+                throw new ArgumentException($"Segment plan gives a {segment.Length}-character run a unit count of {segment.UnitCount}; they must agree outside UTF-8 Byte mode.", nameof(segments));
+
             switch (mode)
             {
                 case EncodingMode.Numeric:
-                    Debug.Assert(segment.UnitCount == segment.Length);
                     Append(ref dest, ref acc, ref accBits, ref bytePos, (0b001 << countBits) | segment.UnitCount, RmQRConstants.ModeIndicatorLength + countBits);
                     WriteNumeric(ref dest, ref acc, ref accBits, ref bytePos, chars, vectorized: true);
                     break;
                 case EncodingMode.Alphanumeric:
-                    Debug.Assert(segment.UnitCount == segment.Length);
                     Append(ref dest, ref acc, ref accBits, ref bytePos, (0b010 << countBits) | segment.UnitCount, RmQRConstants.ModeIndicatorLength + countBits);
                     WriteAlphanumeric(ref dest, ref acc, ref accBits, ref bytePos, chars, vectorized: true);
                     break;
