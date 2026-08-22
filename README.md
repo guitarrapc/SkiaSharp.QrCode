@@ -812,6 +812,53 @@ var flat = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, fitS
 Console.WriteLine(flat.Version); // R7x43
 ```
 
+#### Mixed-mode segmentation (smaller symbols for mixed content)
+
+By default the whole content is encoded in one mode, so a single lowercase letter pushes an otherwise numeric payload into Byte mode. `RmQRSegmentation.Optimal` instead splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits. That does two things: it often drops the symbol by a version or more, and it encodes content that no single mode fits at any version. It never selects a symbol with more core modules than the default, and it emits the default bit stream unchanged whenever splitting would not shrink it.
+
+> **Core modules, not the rendered grid.** `RmQRFitStrategy` ranks by core modules while the quiet zone adds a fixed 4 modules to each dimension, so minimizing `height × width` does not minimize `(height + 4) × (width + 4)`. A flatter, wider symbol can therefore have fewer core modules but a *larger* rendered grid — 24 characters at ECC H go from R15x59 (885 core, 63×19 rendered) to R11x77 (847 core, 81×15 rendered). So a rendered image can get wider, and `GetRequiredBufferSize` must be passed the same `segmentation` as the encode or the destination buffer can be too small.
+
+```csharp
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
+const string content = "https://example.com/p/1234567890123456";
+
+var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M);
+Console.WriteLine(single.Version);  // R11x77 - one Byte segment, 313 bits
+
+var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, segmentation: RmQRSegmentation.Optimal);
+Console.WriteLine(optimal.Version); // R15x43 - Byte + Numeric, 249 bits
+
+// 200 characters is 50 over the largest Byte-mode capacity, but fits once split
+var mixed = new string('a', 100) + new string('7', 100);
+RmQRCodeGenerator.CreateRmQRCode(mixed, RmQREccLevel.M);                                  // throws: too long
+RmQRCodeGenerator.CreateRmQRCode(mixed, RmQREccLevel.M, segmentation: RmQRSegmentation.Optimal); // R17x139
+
+// Also available on the image builder
+var pngBytes = new RmQRCodeImageBuilder(content)
+    .WithSegmentation(RmQRSegmentation.Optimal)
+    .ToByteArray();
+```
+
+`Optimal` minimizes bits, not symbol dimensions: the version it lands on is still whichever one `RmQRFitStrategy` ranks best among those the plan fits.
+
+It is opt-in because planning is a search over candidate versions. Planning allocates nothing, but it is not free, and the cost is driven by **how much the split helps**, not by how "mixed" the input looks. The more a split lowers the bit cost, the more candidate versions become plausible and the more of them the search has to price:
+
+| Content | Single | Optimal | |
+|---|--:|--:|---|
+| 120 digits | 512 ns | 496 ns | one mode is provably optimal; planning never starts |
+| 150 lowercase | 1,040 ns | 1,143 ns | no smaller version is reachable; ruled out without planning |
+| 120 characters alternating `a7` | 961 ns | 2,139 ns | planned, and the split loses |
+| 60 lowercase + 60 digits | 930 ns | 4,471 ns | planned, and the split wins a version |
+| 120 characters alternating in tens | 923 ns | 5,917 ns | planned, and the split wins big |
+
+The version a split could reach is bounded before any planning runs, so content no split can shrink mostly costs nothing — the exception is finely alternating content like row 3, where that cheap bound cannot see that switching modes every character never pays. Where planning does run, cost is linear in length at a fixed shape (20 / 60 / 120 / 150 characters of half letters half digits: 0.9 / 2.4 / 4.5 / 5.7 µs). So the expensive cases are the rewarding ones: you pay in proportion to what you gain. Content longer than 361 characters — which no rMQR symbol holds in any mode — is rejected without planning.
+
+Reproduce with `dotnet run -c Release -- --filter "*RmQRSegmentationEncode*"` in `src/SkiaSharp.QrCode.Benchmark`.
+
+Two practical rules: if your payload has a **known shape** (a URL followed by a numeric ID, say), `Optimal` wins every time and the cost is predictable. If it is **arbitrary user input**, decide whether a few microseconds per symbol is worth the chance of a smaller one. Note also that the zero-allocation two-call pattern (`GetRequiredBufferSize` then `CreateRmQRCode(span, destination)`) plans once per call, so it pays twice.
+
 #### Decode (matrix and image)
 
 ```csharp

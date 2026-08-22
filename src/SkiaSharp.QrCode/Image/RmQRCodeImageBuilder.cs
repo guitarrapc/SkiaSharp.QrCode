@@ -45,6 +45,7 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
     private RmQRVersion? _requestedVersion;
     private RmQRFitStrategy _fitStrategy = RmQRFitStrategy.MinimizeArea;
     private RmQRHeight? _height;
+    private RmQRSegmentation _segmentation = RmQRSegmentation.Single;
     private int? _widthOnly;
 
     public RmQRCodeImageBuilder(string content) : base(defaultQuietZoneSize: RmQRConstants.QuietZoneModules)
@@ -411,6 +412,27 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
     }
 
     /// <summary>
+    /// Split the content into mixed-mode segments when that lowers the module count
+    /// (see <see cref="RmQRSegmentation"/>). Defaults to
+    /// <see cref="RmQRSegmentation.Single"/>. Fewer modules is not the same as a
+    /// smaller image: a flatter, wider symbol can render onto a larger grid.
+    /// </summary>
+    /// <param name="segmentation">Segmentation strategy.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="ArgumentOutOfRangeException"></exception>
+    /// <exception cref="InvalidOperationException"></exception>
+    public RmQRCodeImageBuilder WithSegmentation(RmQRSegmentation segmentation)
+    {
+        if (_data is not null)
+            throw new InvalidOperationException("WithSegmentation cannot be used when RmQRCodeData is provided directly.");
+        if (segmentation is not (RmQRSegmentation.Single or RmQRSegmentation.Optimal))
+            throw new ArgumentOutOfRangeException(nameof(segmentation), $"Invalid rMQR segmentation: {segmentation}");
+
+        _segmentation = segmentation;
+        return this;
+    }
+
+    /// <summary>
     /// Configure the image width in pixels; the height follows the symbol aspect
     /// ratio (rounded to whole pixels), the background covers the whole image and
     /// the symbol is drawn at a uniform module scale inside it. This is the static
@@ -435,7 +457,7 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
 
     private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
     {
-        var data = _data ?? RmQRCodeGenerator.CreateRmQRCodeWithEci(_content.AsSpan(), _eccLevel, _eciMode, _requestedVersion, _fitStrategy, _height, _quietZoneSize);
+        var data = _data ?? RmQRCodeGenerator.CreateRmQRCodeWithEci(_content.AsSpan(), _eccLevel, _eciMode, _requestedVersion, _fitStrategy, _height, _quietZoneSize, _segmentation);
         matrixWidth = data.Width;
         matrixHeight = data.Height;
         return data;

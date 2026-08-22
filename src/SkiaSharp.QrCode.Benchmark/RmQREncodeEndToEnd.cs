@@ -10,6 +10,10 @@
 ///   Latin1_Eci_R17x139_M : explicit ECI 3 Byte segment
 ///   Utf8_Eci_R17x139_M   : explicit ECI 26 Byte segment
 ///   Numeric_AutoFit_M    : automatic version selection cost on top of the smallest symbol
+///
+/// Mixed-mode segmentation has its own class (<see cref="RmQRSegmentationEncode"/>):
+/// it varies content shape rather than version, and every row needs a same-run Single
+/// pair, which does not belong in this table.
 /// </summary>
 public class RmQREncodeEndToEnd
 {
@@ -109,7 +113,9 @@ public class RmQREncodeEndToEnd
         return RmQRCodeGenerator.CreateRmQRCode(_numeric.AsSpan(), RmQREccLevel.M, _spanDestination);
     }
 
-    // Standard QR version 1 with the same numeric payload, for scale reference.
+    // Standard QR version 1 with the same numeric payload, for scale reference. Also
+    // the control row when comparing two runs: it is untouched by any rMQR change, so
+    // how far it moves between runs is the machine drift to divide out.
 
     [Benchmark(Description = "StandardQr_Numeric_V1_Encode (Span)")]
     public int StandardQr_Numeric_V1_EncodeSpan()

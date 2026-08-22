@@ -347,6 +347,70 @@ internal static class RmQRVersionSelector
         return masks;
     }
 
+    /// <summary>
+    /// Non-throwing automatic fit: the same table scan the <c>Select</c> overloads run,
+    /// reporting "nothing fits" instead of throwing. <see cref="RmQRSegmentPlanner"/>
+    /// needs the answer without the exception, because content that overflows every
+    /// version in one mode can still fit once the modes are mixed. Arguments must
+    /// already be validated (see <see cref="ValidateFitArguments"/>).
+    /// </summary>
+    public static bool TrySelectAutoFit(EncodingMode mode, int dataLength, EciMode eciMode, RmQREccLevel eccLevel, RmQRFitStrategy fitStrategy, RmQRHeight? height, out RmQRVersion version)
+    {
+        var eciIndex = eciMode == EciMode.Default ? 0 : 1;
+        var capacities = FitCapacities[((RmQRConstants.GetModeIndex(mode) * 2 + (int)eccLevel) * 2 + eciIndex) * 3 + (int)fitStrategy];
+        var order = FitOrders[(int)fitStrategy];
+        var heightMask = GetFitHeightMask(fitStrategy, height);
+        for (var j = 0; j < capacities.Length; j++)
+        {
+            if (capacities[j] >= dataLength && (heightMask & (1u << j)) != 0)
+            {
+                version = (RmQRVersion)order[j];
+                return true;
+            }
+        }
+
+        version = default;
+        return false;
+    }
+
+    /// <summary>
+    /// The auto-fit scan order for a strategy: version numbers (1-32), best first.
+    /// Exposed for <see cref="RmQRSegmentPlanner"/>, which walks the same ranking but
+    /// with a per-version bit cost that no table can precompute.
+    /// </summary>
+    public static ReadOnlySpan<byte> GetFitOrder(RmQRFitStrategy fitStrategy) => FitOrders[(int)fitStrategy];
+
+    /// <summary>
+    /// Rank mask for a height constraint over <see cref="GetFitOrder"/>: bit
+    /// <c>rank</c> is set when the version at that rank has the requested height.
+    /// All bits are set when the height is unconstrained.
+    /// </summary>
+    public static uint GetFitHeightMask(RmQRFitStrategy fitStrategy, RmQRHeight? height)
+        => height is { } h ? FitHeightMasks[(int)fitStrategy][((int)h - 7) / 2] : uint.MaxValue;
+
+    /// <summary>
+    /// The argument validation both <c>Select</c> overloads perform before they look
+    /// at capacity, in the same order, so a caller that needs to try something else
+    /// before letting <c>Select</c> throw still reports argument errors identically.
+    /// </summary>
+    public static void ValidateFitArguments(RmQREccLevel eccLevel, RmQRFitStrategy fitStrategy, RmQRHeight? height, RmQRVersion? requestedVersion, EciMode eciMode)
+    {
+        _ = GetEciHeaderBits(eciMode);
+        if (!RmQRConstants.IsValidEccLevel(eccLevel))
+            throw new ArgumentOutOfRangeException(nameof(eccLevel), $"Invalid rMQR ECC level: {eccLevel}");
+        if (fitStrategy is < RmQRFitStrategy.MinimizeArea or > RmQRFitStrategy.MinimizeHeight)
+            throw new ArgumentOutOfRangeException(nameof(fitStrategy), $"Invalid rMQR fit strategy: {fitStrategy}");
+        if (height is { } h && h is not (RmQRHeight.H7 or RmQRHeight.H9 or RmQRHeight.H11 or RmQRHeight.H13 or RmQRHeight.H15 or RmQRHeight.H17))
+            throw new ArgumentOutOfRangeException(nameof(height), $"Invalid rMQR height: {height}");
+        if (requestedVersion is { } version)
+        {
+            if (!RmQRConstants.IsValidVersion(version))
+                throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Invalid rMQR version: {version}");
+            if (height is { } requiredHeight && RmQRConstants.GetHeight(version) != (int)requiredHeight)
+                throw new ArgumentException($"Requested rMQR version {version} is {RmQRConstants.GetHeight(version)} modules high, but height {requiredHeight} was requested. Specify one or the other, or make them agree.", nameof(height));
+        }
+    }
+
     /// <summary>Human unit per mode: Numeric counts digits, Alphanumeric characters, Byte encoded bytes.</summary>
     private static string FormatDataLength(int dataLength, EncodingMode mode) => mode switch
     {

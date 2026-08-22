@@ -225,6 +225,78 @@ internal static class RmQRNaiveReference
     }
 
     /// <summary>
+    /// Independent naive rMQR data-codeword reference for a multi-segment stream:
+    /// one optional ECI prefix, then per run a mode indicator, its count indicator
+    /// and the payload, then the shared terminator / padding tail. Built as a bit
+    /// string on purpose, exactly like the single-segment reference.
+    /// </summary>
+    public static byte[] NaiveSegmentedDataCodewords(int dataCodewordCount, (string Mode, string Data, int CountIndicatorBits)[] segments, bool utf8, EciMode eciMode = EciMode.Default)
+    {
+        var bits = new System.Text.StringBuilder();
+        void Append(int value, int count)
+        {
+            for (var b = count - 1; b >= 0; b--)
+                bits.Append(((value >> b) & 1) == 1 ? '1' : '0');
+        }
+
+        if (eciMode != EciMode.Default)
+        {
+            Append(0b111, 3);
+            Append((int)eciMode, 8);
+        }
+
+        foreach (var (mode, text, countIndicatorBits) in segments)
+        {
+            switch (mode)
+            {
+                case "Numeric":
+                    Append(0b001, 3);
+                    Append(text.Length, countIndicatorBits);
+                    for (var i = 0; i < text.Length; i += 3)
+                    {
+                        var take = Math.Min(3, text.Length - i);
+                        Append(int.Parse(text.Substring(i, take)), take == 3 ? 10 : take == 2 ? 7 : 4);
+                    }
+                    break;
+                case "Alphanumeric":
+                    Append(0b010, 3);
+                    Append(text.Length, countIndicatorBits);
+                    const string alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+                    for (var i = 0; i < text.Length; i += 2)
+                    {
+                        if (i + 1 < text.Length)
+                            Append(alphabet.IndexOf(text[i]) * 45 + alphabet.IndexOf(text[i + 1]), 11);
+                        else
+                            Append(alphabet.IndexOf(text[i]), 6);
+                    }
+                    break;
+                default:
+                    Append(0b011, 3);
+                    var bytes = utf8 ? System.Text.Encoding.UTF8.GetBytes(text) : System.Text.Encoding.Latin1.GetBytes(text);
+                    Append(bytes.Length, countIndicatorBits);
+                    foreach (var b in bytes)
+                        Append(b, 8);
+                    break;
+            }
+        }
+
+        var capacity = dataCodewordCount * 8;
+        if (bits.Length > capacity)
+            throw new InvalidOperationException($"payload does not fit: {bits.Length} > {capacity} bits");
+        for (var t = 0; t < 3 && bits.Length < capacity; t++)
+            bits.Append('0');
+        while (bits.Length % 8 != 0)
+            bits.Append('0');
+
+        var result = new byte[dataCodewordCount];
+        for (var i = 0; i < bits.Length / 8; i++)
+            result[i] = Convert.ToByte(bits.ToString(i * 8, 8), 2);
+        for (var i = bits.Length / 8; i < dataCodewordCount; i++)
+            result[i] = (i - bits.Length / 8) % 2 == 0 ? (byte)0xEC : (byte)0x11;
+        return result;
+    }
+
+    /// <summary>
     /// Independent naive rMQR data-codeword reference: mode indicator (3 bits),
     /// count indicator, payload bits, terminator (up to 3 zero bits, shortened at
     /// capacity), zero bits to the byte boundary, then alternating 0xEC / 0x11 pad
