@@ -157,22 +157,37 @@ internal static class RmQRSegmentPlanner
         var order = RmQRVersionSelector.GetFitOrder(fitStrategy);
         var heightMask = RmQRVersionSelector.GetFitHeightMask(fitStrategy, height);
 
-        // One run at the narrowest count indicators any version uses prices a floor for
-        // every version (widening a count indicator only raises the price of the run
-        // carrying it, and the minimum over plans of a pointwise larger cost is itself
-        // larger), so the ranks that cannot hold even that are skipped without a run of
-        // their own. The scan is best-first, i.e. smallest-first, so for mixed content
-        // most early ranks are hopeless. Measured against the Standard QR v1 span
-        // encode in the same run to divide out machine drift: the 150-byte worst case
-        // went from 13.2x to 3.0x and a mixed URL from 3.9x to 2.1x.
+        // One cost run at the narrowest count indicators any version uses brackets every
+        // other version from both sides, so most candidates need no run of their own.
         //
-        // The symmetric idea — a ceiling at the widest count indicators, letting a
-        // candidate that holds it be accepted without a run — was tried and reverted:
-        // the band between floor and ceiling widens by about 5 bits per run, so for the
-        // many-run content that needs the help most it is wide rather than empty, and
-        // the mandatory extra run cost more than it saved (alternating 10-character
-        // groups regressed 9.0 us to 11.2 us).
-        var floorBits = ComputeCosts(text, charset, MinCountBitsNumeric, MinCountBitsAlnum, MinCountBitsByte, default, out _) + eciBits;
+        //   Floor. Widening a count indicator only raises the price of the run carrying
+        //   it, and the minimum over plans of a pointwise larger cost is itself larger,
+        //   so this run's cost is a lower bound everywhere. Below it, a version cannot
+        //   fit. The scan is best-first, i.e. smallest-first, so for mixed content most
+        //   early ranks fail here.
+        //
+        //   Ceiling. The same run also yields a plan, and that plan re-priced at a
+        //   version costs the floor plus one count indicator delta per run it contains
+        //   — arithmetic, no second cost run. Being an actual plan, its price is an
+        //   upper bound on the optimum, so a version holding it is known to fit.
+        //
+        // Only versions between the two bounds are priced for real. Ratios below are
+        // against the Single encode of the same content in the same benchmark run, to
+        // divide out machine drift. The floor alone took the 150-byte worst case from
+        // 13.2x to 3.0x. The ceiling then cut a further 26-42%, and it cuts most where
+        // the scan hurt most, because the more a split helps the more versions clear
+        // the floor: 120 characters of half letters half digits 7.2x to 4.2x,
+        // alternating 10-character groups 9.2x to 6.5x, all lowercase 2.5x to 2.1x,
+        // all digits unchanged at 1.0x (short-circuited before either bound).
+        //
+        // A ceiling taken from a second cost run at the *widest* count indicators was
+        // tried first and reverted: that band widens about 5 bits per run, so for the
+        // many-run content needing the most help it was wide rather than empty, and the
+        // mandatory extra run cost more than it saved (alternating 10-character groups
+        // regressed 9.0 us to 11.2 us). Deriving the ceiling from the floor plan costs
+        // no extra run and is tighter, which is what makes it pay.
+        var floorPayload = ComputeFloor(text, charset, out var runsNumeric, out var runsAlnum, out var runsByte);
+        var floorBits = floorPayload + eciBits;
 
         Span<int> memoKeys = stackalloc int[MemoCapacity];
         Span<int> memoCosts = stackalloc int[MemoCapacity];
@@ -185,8 +200,17 @@ internal static class RmQRSegmentPlanner
                 break; // every later rank is no better than the single-mode fit
             if ((heightMask & (1u << rank)) == 0)
                 continue;
-            if (8 * RmQRConstants.GetDataCodewordCount(candidate, eccLevel) < floorBits)
+
+            var capacityBits = 8 * RmQRConstants.GetDataCodewordCount(candidate, eccLevel);
+            if (capacityBits < floorBits)
                 continue; // cannot hold even the cheapest count indicators
+            if (capacityBits >= UpperBound(floorPayload, runsNumeric, runsAlnum, runsByte, candidate) + eciBits)
+            {
+                // Holds the floor plan re-priced at this version, so it holds the
+                // optimum too; no cost run needed.
+                useSegments = true;
+                return candidate;
+            }
 
             if (PlanFits(text, charset, candidate, eccLevel, eciBits, memoKeys, memoCosts, ref memoCount))
             {
@@ -314,6 +338,17 @@ internal static class RmQRSegmentPlanner
     public static int MinimumPayloadBits(ReadOnlySpan<char> text, EciMode charset, int cciNumeric, int cciAlnum, int cciByte)
         => ComputeCosts(text, charset, cciNumeric, cciAlnum, cciByte, default, out _);
 
+    /// <summary>
+    /// Named entry point for <c>RmQRSegmentPlannerUnitTest</c>: the upper bound the
+    /// version scan uses to accept a candidate without pricing it — the floor plan
+    /// re-priced at <paramref name="version"/>, in payload bits (no ECI prefix).
+    /// </summary>
+    public static int FloorPlanUpperBound(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version)
+    {
+        var floor = ComputeFloor(text, charset, out var runsNumeric, out var runsAlnum, out var runsByte);
+        return UpperBound(floor, runsNumeric, runsAlnum, runsByte, version);
+    }
+
     // ---------------------------------------------------------------
     // Version scan
     // ---------------------------------------------------------------
@@ -358,6 +393,72 @@ internal static class RmQRSegmentPlanner
         }
 
         return cost + eciBits <= 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
+    }
+
+    // ---------------------------------------------------------------
+    // Scan bounds
+    // ---------------------------------------------------------------
+
+    /// <summary>
+    /// The floor cost run: minimal payload bits at the narrowest count indicator
+    /// widths, plus how many runs of each mode the plan achieving it contains. The run
+    /// counts are what let <see cref="UpperBound"/> re-price that same plan at any
+    /// version without a second cost run.
+    /// </summary>
+    private static int ComputeFloor(ReadOnlySpan<char> text, EciMode charset, out int runsNumeric, out int runsAlnum, out int runsByte)
+    {
+        var parentLength = text.Length * StateCount;
+        byte[]? rented = null;
+        Span<byte> parents = parentLength <= MaxStackParents
+            ? stackalloc byte[MaxStackParents]
+            : (rented = ArrayPool<byte>.Shared.Rent(parentLength));
+        try
+        {
+            var window = parents.Slice(0, parentLength);
+            var cost = ComputeCosts(text, charset, MinCountBitsNumeric, MinCountBitsAlnum, MinCountBitsByte, window, out var finalState);
+            CountRuns(window, finalState, text.Length, out runsNumeric, out runsAlnum, out runsByte);
+            return cost;
+        }
+        finally
+        {
+            if (rented is not null)
+                ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
+    }
+
+    /// <summary>
+    /// The floor plan re-priced at <paramref name="version"/>: its payload and run
+    /// structure are unchanged, so only each run's count indicator grows. Being the
+    /// price of a real plan, this is an upper bound on the version's optimum.
+    /// </summary>
+    private static int UpperBound(int floorPayload, int runsNumeric, int runsAlnum, int runsByte, RmQRVersion version)
+        => floorPayload
+            + runsNumeric * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric) - MinCountBitsNumeric)
+            + runsAlnum * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric) - MinCountBitsAlnum)
+            + runsByte * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte) - MinCountBitsByte);
+
+    /// <summary>Counts the runs of each mode on the minimal-cost path, without materialising it.</summary>
+    private static void CountRuns(ReadOnlySpan<byte> parents, int finalState, int length, out int runsNumeric, out int runsAlnum, out int runsByte)
+    {
+        runsNumeric = 0;
+        runsAlnum = 0;
+        runsByte = 0;
+
+        var state = finalState;
+        for (var i = length - 1; i >= 0; i--)
+        {
+            var parent = parents[i * StateCount + state];
+            if (parent == StateStart || ModeIndexOf(parent) != ModeIndexOf(state))
+            {
+                switch (ModeIndexOf(state))
+                {
+                    case 0: runsNumeric++; break;
+                    case 1: runsAlnum++; break;
+                    default: runsByte++; break;
+                }
+            }
+            state = parent;
+        }
     }
 
     // ---------------------------------------------------------------

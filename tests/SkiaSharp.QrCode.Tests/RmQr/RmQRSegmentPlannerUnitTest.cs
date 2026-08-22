@@ -377,6 +377,60 @@ public class RmQRSegmentPlannerUnitTest
     }
 
     /// <summary>
+    /// The version scan accepts a candidate without pricing it when the candidate
+    /// holds an arithmetic upper bound derived from the floor plan. The bound must
+    /// never fall below the version's true cost, or a version the plan does not fit
+    /// would be accepted.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Corpus))]
+    public async Task UpperBound_NeverFallsBelowTheTrueCost(string text)
+    {
+        if (text.Length == 0)
+            return;
+
+        foreach (var charset in new[] { EciMode.Default, EciMode.Utf8 })
+        {
+            if (charset == EciMode.Default && text.Any(c => c > 255))
+                continue;
+
+            foreach (var version in Enum.GetValues<RmQRVersion>())
+            {
+                var bound = RmQRSegmentPlanner.FloorPlanUpperBound(text.AsSpan(), charset, version);
+                var actual = RmQRSegmentPlanner.MinimumPayloadBits(
+                    text.AsSpan(),
+                    charset,
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric),
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric),
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte));
+
+                await Assert.That(bound).IsGreaterThanOrEqualTo(actual);
+            }
+        }
+    }
+
+    /// <summary>
+    /// And it must stay tight enough to be worth having: the floor plan is a real
+    /// plan, so at the narrowest widths the bound is exactly the true cost.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Corpus))]
+    public async Task UpperBound_IsExactAtTheNarrowestWidths(string text)
+    {
+        if (text.Length == 0)
+            return;
+
+        var charset = text.Any(c => c > 255) ? EciMode.Utf8 : EciMode.Default;
+        var floor = RmQRSegmentPlanner.MinimumPayloadBits(text.AsSpan(), charset, 4, 3, 3);
+
+        // R11x27 carries the narrowest widths of any version (4 / 4 / 3), so the bound
+        // there differs from the floor by the alphanumeric run count alone.
+        var bound = RmQRSegmentPlanner.FloorPlanUpperBound(text.AsSpan(), charset, RmQRVersion.R11x27);
+        await Assert.That(bound).IsGreaterThanOrEqualTo(floor);
+        await Assert.That(bound - floor).IsLessThanOrEqualTo(RmQRSegmentPlanner.MaxSegments);
+    }
+
+    /// <summary>
     /// <see cref="RmQRSegmentPlanner.MaxSegments"/> has to exceed the number of runs
     /// any version could hold, or a legitimate plan would silently fall back.
     /// </summary>

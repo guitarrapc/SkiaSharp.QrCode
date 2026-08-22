@@ -845,11 +845,11 @@ It is opt-in because planning is a search over candidate versions. It allocates 
 
 | Content (120 characters) | Single | Optimal | |
 |---|--:|--:|---|
-| all digits | 714 ns | 763 ns | short-circuited: one mode is provably optimal |
-| all lowercase | 989 ns | 2,510 ns | searched, split never wins |
-| 60 lowercase + 60 digits | 989 ns | 7,161 ns | searched, split wins a version |
+| all digits | 510 ns | 522 ns | short-circuited: one mode is provably optimal |
+| all lowercase | 918 ns | 1,921 ns | searched, split never wins |
+| 60 lowercase + 60 digits | 1,080 ns | 4,555 ns | searched, split wins a version |
 
-Cost is linear in length at a fixed shape (20 / 60 / 120 / 150 characters of half letters half digits: 1.8 / 4.8 / 8.5 / 12.0 µs). So the expensive cases are the rewarding ones: you pay in proportion to what you gain. All-numeric content skips planning entirely, and content longer than 361 characters — which no rMQR symbol holds in any mode — is rejected without planning.
+Cost is linear in length at a fixed shape (20 / 60 / 120 / 150 characters of half letters half digits: 0.9 / 2.4 / 4.3 / 5.9 µs). So the expensive cases are the rewarding ones: you pay in proportion to what you gain. All-numeric content skips planning entirely, and content longer than 361 characters — which no rMQR symbol holds in any mode — is rejected without planning.
 
 Two practical rules: if your payload has a **known shape** (a URL followed by a numeric ID, say), `Optimal` wins every time and the cost is predictable. If it is **arbitrary user input**, decide whether a few microseconds per symbol is worth the chance of a smaller one. Note also that the zero-allocation two-call pattern (`GetRequiredBufferSize` then `CreateRmQRCode(span, destination)`) plans once per call, so it pays twice.
 

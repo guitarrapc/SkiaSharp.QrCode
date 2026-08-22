@@ -1,5 +1,6 @@
 using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
+using SkiaSharp.QrCode.Internals;
 using SkiaSharp.QrCode.Internals.RmQr;
 
 namespace SkiaSharp.QrCode.Tests;
@@ -96,6 +97,66 @@ public class RmQRSegmentationTest
                 await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
             }
         }
+    }
+
+    /// <summary>
+    /// The version scan prunes and short-circuits candidates instead of pricing every
+    /// one. This pins it against the definitional answer: the best-ranked version
+    /// whose exhaustively computed mixed-mode cost fits. An unsound bound or an
+    /// over-eager skip shows up here as a wrong version, not merely a slow one.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(Corpus))]
+    public async Task Optimal_SelectsWhatAnExhaustiveScanSelects(string content)
+    {
+        foreach (var ecc in new[] { RmQREccLevel.M, RmQREccLevel.H })
+        {
+            foreach (var strategy in Strategies())
+            {
+                var actual = RmQRCodeGenerator.CreateRmQRCode(content, ecc, fitStrategy: strategy, segmentation: RmQRSegmentation.Optimal).Version;
+                var expected = ExhaustiveBestVersion(content, ecc, strategy);
+                await Assert.That(actual).IsEqualTo(expected);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Definitional reference: price every version from scratch, keep those that hold
+    /// the content, and take the best by the strategy comparator. Deliberately does no
+    /// pruning, no memoisation and no single-mode ceiling.
+    /// </summary>
+    private static RmQRVersion ExhaustiveBestVersion(string content, RmQREccLevel ecc, RmQRFitStrategy strategy)
+    {
+        var analysis = TextAnalyzer.Analyze(content.AsSpan(), EciMode.Default);
+        var charset = analysis.EciMode;
+        var eciBits = charset == EciMode.Default ? 0 : 11;
+
+        RmQRVersion? best = null;
+        foreach (var version in Enum.GetValues<RmQRVersion>())
+        {
+            int cost;
+            if (content.Length == 0)
+            {
+                // Empty content never plans; the single-mode fit is the answer.
+                cost = 3 + RmQRConstants.GetCountIndicatorLength(version, analysis.EncodingMode);
+            }
+            else
+            {
+                cost = RmQRSegmentPlanner.MinimumPayloadBits(
+                    content.AsSpan(),
+                    charset,
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric),
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric),
+                    RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte));
+            }
+
+            if (cost + eciBits > 8 * RmQRConstants.GetDataCodewordCount(version, ecc))
+                continue;
+            if (best is null || RmQRVersionSelector.IsBetter(version, best.Value, strategy))
+                best = version;
+        }
+
+        return best ?? throw new InvalidOperationException("nothing fits");
     }
 
     [Test]

@@ -36,9 +36,9 @@ public enum RmQRSegmentation
     /// allocates nothing, but its cost is driven by how much the split helps rather
     /// than by how mixed the content looks: the more a split lowers the bit cost, the
     /// more candidate versions become plausible and the more of them get priced. At
-    /// 120 characters, all digits costs 1.07x a <see cref="Single"/> encode (planning
-    /// is short-circuited), all lowercase 2.5x (searched, never wins), and half
-    /// letters half digits 7.2x (searched, wins a version). Cost is linear in length
+    /// 120 characters, all digits costs 1.0x a <see cref="Single"/> encode (planning
+    /// is short-circuited), all lowercase 2.1x (searched, never wins), and half
+    /// letters half digits 4.2x (searched, wins a version). Cost is linear in length
     /// at a fixed shape. Content longer than 361 characters — which no rMQR symbol
     /// holds in any mode — is rejected without planning.
     /// </para>
