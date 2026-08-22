@@ -843,7 +843,7 @@ var pngBytes = new RmQRCodeImageBuilder(content)
 
 `Optimal` minimizes bits, not symbol dimensions: the version it lands on is still whichever one `RmQRFitStrategy` ranks best among those the plan fits.
 
-It is opt-in because planning is a search over candidate versions. It allocates nothing, but it is not free, and the cost is driven by **how much the split helps**, not by how "mixed" the input looks. The more a split lowers the bit cost, the more candidate versions become plausible and the more of them the search has to price:
+It is opt-in because planning is a search over candidate versions. Planning allocates nothing, but it is not free, and the cost is driven by **how much the split helps**, not by how "mixed" the input looks. The more a split lowers the bit cost, the more candidate versions become plausible and the more of them the search has to price:
 
 | Content | Single | Optimal | |
 |---|--:|--:|---|

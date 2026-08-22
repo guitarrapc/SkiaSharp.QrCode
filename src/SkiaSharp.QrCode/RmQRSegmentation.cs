@@ -21,8 +21,9 @@ public enum RmQRSegmentation
     /// content that overflows every version in a single mode.
     /// </summary>
     /// <remarks>
-    /// Opt-in because it searches candidate versions; it allocates nothing, and content
-    /// no split can help is ruled out before the search starts. Fewer core modules is
+    /// Opt-in because it searches candidate versions; the search itself allocates
+    /// nothing, and content no split can help is ruled out before it starts. Fewer
+    /// core modules is
     /// not the same as a smaller image: <see cref="RmQRFitStrategy"/> ranks by core
     /// modules while the quiet zone adds to each dimension, so a flatter symbol can
     /// render onto a larger grid. Size buffers with the same segmentation you encode

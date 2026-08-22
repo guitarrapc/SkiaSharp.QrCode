@@ -291,6 +291,11 @@ internal static class RmQRSegmentPlanner
     };
 
     /// <summary>Encoded byte count of a Byte-mode run, i.e. the value its count indicator carries.</summary>
+    /// <remarks>
+    /// Deliberately asks <see cref="Encoding.UTF8"/> rather than reusing the planner's
+    /// own per-character model: comparing the two is what would catch an error in that
+    /// model, so they have to stay independent computations.
+    /// </remarks>
     public static int ByteUnitCount(ReadOnlySpan<char> text, EciMode charset)
     {
         if (charset != EciMode.Utf8)
@@ -298,7 +303,19 @@ internal static class RmQRSegmentPlanner
 #if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
         return Encoding.UTF8.GetByteCount(text);
 #else
-        return Encoding.UTF8.GetByteCount(text.ToString());
+        // netstandard2.0 has no span overload, and the pointer overload would mean
+        // enabling unsafe across the library, which this project has declined. Rent
+        // rather than ToString(), so planning stays allocation-free on every target.
+        var rented = ArrayPool<char>.Shared.Rent(Math.Max(text.Length, 1));
+        try
+        {
+            text.CopyTo(rented);
+            return Encoding.UTF8.GetByteCount(rented, 0, text.Length);
+        }
+        finally
+        {
+            ArrayPool<char>.Shared.Return(rented, clearArray: false);
+        }
 #endif
     }
 
