@@ -9,7 +9,16 @@ namespace QRInteropFixtures;
 /// <param name="ErrorCorrectionLevel">"M" or "H", the RmQREccLevel name.</param>
 /// <param name="Height">Symbol height in modules (7, 9, 11, 13, 15, 17).</param>
 /// <param name="Width">Symbol width in modules (27, 43, 59, 77, 99, 139).</param>
-/// <param name="Mode">"Numeric", "Alphanumeric" or "Byte".</param>
+/// <param name="Mode">"Numeric", "Alphanumeric", "Byte" or "Kanji". Kanji is decode-only
+/// for this library, so those cases exist purely to exercise the decoder; only qrtool
+/// can produce them (libzint emits Byte mode with ECI 20 for the same input).</param>
+/// <param name="Utf8">Whether the payload needs a UTF-8-capable generator; libzint cases must leave this false.</param>
+/// <param name="ShiftJisHex">
+/// Kanji cases only: the exact Shift_JIS bytes to hand the generator, hex-encoded.
+/// Normally left null, and the bytes come from CP932-encoding <paramref name="PayloadText"/>.
+/// It exists for the cells where JIS X 0208 and CP932 disagree, which .NET cannot encode
+/// at all (U+301C is not in CP932), so the case has to state the bytes itself.
+/// </param>
 public sealed record RmQRFixtureCaseDefinition(string Id, string PayloadText, string ErrorCorrectionLevel, int Height, int Width, string Mode, bool Utf8 = false, string? ShiftJisHex = null)
 {
     public string VersionName => $"R{Height}x{Width}";
