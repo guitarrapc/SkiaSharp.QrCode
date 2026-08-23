@@ -20,7 +20,9 @@ namespace SkiaSharp.QrCode;
 /// </list>
 /// <para>
 /// Micro QR has no ECI mode; text that is not ISO-8859-1-representable is encoded
-/// as raw UTF-8 bytes in Byte mode. Kanji mode is not implemented.
+/// as raw UTF-8 bytes in Byte mode. Kanji mode is not written;
+/// <see cref="MicroQRCodeDecoder"/> does read the Kanji segments (M3 and M4) that
+/// other encoders produce, so the two directions are deliberately asymmetric.
 /// </para>
 /// </remarks>
 public static class MicroQRCodeGenerator

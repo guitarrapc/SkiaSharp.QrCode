@@ -28,16 +28,16 @@ Behavior: shared Otsu threshold and finder candidates → local grid frames arou
 |---|---|
 | Versions | All 32 (R7x43 … R17x139), identified by width × height and cross-checked against the format information |
 | ECC levels | M, H |
-| Data modes | Numeric, Alphanumeric, Byte (UTF-8 / ISO-8859-1 heuristics as the other symbologies), ECI headers 1 / 3 / 26 / 27 |
+| Data modes | Numeric, Alphanumeric, Byte (UTF-8 / ISO-8859-1 heuristics as the other symbologies), Kanji (JIS X 0208; decode only), ECI headers 1 / 3 / 26 / 27 |
 | Quiet zone | Matrix: any light border, uniform or not (dark bounding box = core). Image: 1, 2 and 4 modules verified; the finder scan needs some light margin around the finder |
 | Error correction | Reed-Solomon per block at full strength ⌊ecc/2⌋ codewords per block, corrections reported |
 | Format information | Matrix: either copy alone suffices (≤ 3 bit errors per copy corrected; only copies naming the version the dimensions give count, the closer of those wins, so a copy miscorrected toward another version's word cannot veto the valid one). Image: the finder-side copy must be readable (≤ 3 bit errors); it is what names the version before any grid is sampled, the sub-finder-side copy is a consistency gate on the perspective path |
 | Output | `string` (allocates the result only) or `Span<char>` (allocation-free steady state, image path included) |
-| Image envelope | Clean renders of every version × ECC at 3-13 px/module and non-integer scales; non-square modules; translation; right-angle and arbitrary rotation (every integer degree verified for R7x43 / R13x77); mirroring; reflectance reversal; JPEG q60, low contrast, additive noise; extreme aspect ratios; keystone 2 % and 4 % along either axis up to R17x139, also combined with 30° rotation or mirroring; the 144-symbol external PNG corpus |
+| Image envelope | Clean renders of every version × ECC at 3-13 px/module and non-integer scales; non-square modules; translation; right-angle and arbitrary rotation (every integer degree verified for R7x43 / R13x77); mirroring; reflectance reversal; JPEG q60, low contrast, additive noise; extreme aspect ratios; keystone 2 % and 4 % along either axis up to R17x139, also combined with 30° rotation or mirroring; the 148-symbol external PNG corpus |
 
 ### Not supported
 
-- Kanji mode segments (`UnsupportedContent`), FNC1, Structured Append (rMQR does not define it), ECI assignments other than the four above (`UnsupportedContent`)
+- FNC1, Structured Append (rMQR does not define it), ECI assignments other than the four above, (all `UnsupportedContent`); Kanji cells outside the JIS X 0208 repertoire are reported separately as `UnmappedCharacter`
 - Strong perspective, uneven lighting, blur, and heavily styled symbols below about 5 px/module (rounded modules + gradients make the finder runs too fuzzy; the same styling decodes at 8+ px/module)
 
 ## Why
@@ -70,7 +70,7 @@ Behavior: shared Otsu threshold and finder candidates → local grid frames arou
 
 ## Lessons learned
 
-- With the encoder proven module-exact against two external lineages, the decoder round trip is a weak test on its own; the strong ones were the corpus (144 external symbols, both lineages, payload + version + ECC) and the damage classes (t per block corrected in every block of every version × ECC, t + 1 in one block never decoding cleanly, format copies singly / jointly damaged, format-vs-dimension contradiction, remainder bits ignored).
+- With the encoder proven module-exact against two external lineages, the decoder round trip is a weak test on its own; the strong ones were the corpus (148 external symbols, both lineages, payload + version + ECC) and the damage classes (t per block corrected in every block of every version × ECC, t + 1 in one block never decoding cleanly, format copies singly / jointly damaged, format-vs-dimension contradiction, remainder bits ignored).
 - The two format copies make the format decoder trivially robust: one copy can be destroyed outright. The arbitration rule that holds up is "among the copies naming the version the dimensions give, the closer wins": the review found that arbitrating on distance alone first let a copy miscorrected toward another version's word (5+ errors landing within 3 of it) veto the valid copy, so the matrix decoder now feeds the dimension-derived version into the arbitration.
 - Image detection on a wide symbol is a long-baseline problem: everything measured at the finder is only good to a few percent, and a few percent of 139 modules is several modules. The design that worked was to make the far anchor (sub-finder) authoritative for scale and rotation and to keep every locally measured quantity as an approximation that the anchor overrides.
 - Test payloads must respect per-version capacity (R7x43-M holds 7 alphanumerics): 13 early "decoder failures" were the generator rejecting the payload; the decoder had passed everything.

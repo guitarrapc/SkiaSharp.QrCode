@@ -379,16 +379,18 @@ Yes, SkiaSharp.QrCode works in Blazor WebAssembly & Pure WebAssembly.
 
 Yes, fully supported. See the [Platform-Specific Considerations](#platform-specific-considerations) section for details on required native assets.
 
-### ISO-8859-2 and other encodings supports
+### Are ISO-8859-2 and other encodings supported?
 
-Currently, SkiaSharp.QrCode supports ISO-8859-1 and UTF-8. Other encodings (e.g., ISO-8859-2, Shift JIS) are not supported at this time. This is mainly due to almost all QR code use cases being UTF-8 compatible nowadays. ISO-8859-2 and other legacy encodings are rarely used in practice.
+Encoding: SkiaSharp.QrCode writes ISO-8859-1 and UTF-8. Other encodings (e.g. ISO-8859-2, Shift JIS) are not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice.
+
+Decoding is wider: the decoders also read Kanji mode segments (Shift JIS, JIS X 0208) produced by other encoders. ECI 20 (Shift_JIS) Byte segments are still not read.
 
 | Supported | Encoding Mode | Encoding |
 | --- | --- | --- |
 | Supported | Numeric | ISO-8859-1 |
 | Supported | Alphanumeric | ISO-8859-1 |
 | Supported | Byte | UTF-8 |
-| Not Supported | Kanji | Shift-JIS |
+| Decode only | Kanji | Shift JIS (JIS X 0208) |
 
 ### Does SVG output require SkiaSharp.Svg or other packages?
 
@@ -461,15 +463,17 @@ QR codes support four levels of error correction, which allow the code to remain
 
 QR codes support different encoding modes optimized for specific character types. SkiaSharp.QrCode automatically selects the most efficient mode for your content.
 
-> [!WARNING]
-> Kanji encoding is not supported. Use Byte mode for Japanese text.
+> [!NOTE]
+> Kanji is decode only. The decoders read Kanji segments produced by other encoders (JIS X 0208), but the generators always write Japanese text in Byte mode as UTF-8.
+>
+> The mapping is JIS X 0208, not Microsoft CP932. They disagree on seven cells (wave dash, minus sign, the cent / pound / not signs, reverse solidus and the double vertical line), and, within the Kanji-mode range, CP932 additionally defines 83 characters the standard does not: the NEC row 13 block (circled digits, roman numerals, unit ligatures). A symbol whose Kanji segment contains one of those 83 fails to decode with `UnmappedCharacter` — a status distinct from `UnsupportedContent`, so you can tell "a CP932 reader would read this" from "this uses a feature the library does not implement" — rather than being silently rewritten.
 
 | Mode | Character Set | Bits per Character | Example |
 |------|--------------|-------------------|---------|
 | **Numeric** | 0-9 | ~3.3 bits | Phone numbers, postal codes |
 | **Alphanumeric** | 0-9, A-Z, space, $ % * + - . / : | ~5.5 bits | URLs (uppercase), product codes |
 | **Byte** | ISO-8859-1, UTF-8 | 8 bits | Text, mixed-case URLs, non-ASCII text |
-| **Kanji** (**Not supported**) | Shift JIS characters | 13 bits | Japanese text |
+| **Kanji** (**decode only**) | Shift JIS (JIS X 0208) characters | 13 bits | Japanese text from other encoders |
 
 ### Version and Size
 

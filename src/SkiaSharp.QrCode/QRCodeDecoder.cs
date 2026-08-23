@@ -12,8 +12,14 @@ namespace SkiaSharp.QrCode;
 /// <para>
 /// Supported content: Numeric, Alphanumeric and Byte mode segments (ISO-8859-1 and
 /// UTF-8, with or without ECI headers), the full version range 1-40 and all ECC levels.
-/// Kanji mode, FNC1 and Structured Append are detected and reported as
-/// <see cref="QRCodeDecodeStatus.UnsupportedContent"/>.
+/// Kanji mode is decoded as JIS X 0208; the generator never emits it, so Kanji is a
+/// read-only mode here. A Kanji cell outside the JIS X 0208 repertoire (most visibly
+/// the NEC row 13 characters CP932 adds, such as circled digits) fails the WHOLE
+/// symbol with <see cref="QRCodeDecodeStatus.UnmappedCharacter"/> rather than
+/// substituting a replacement character; that status is distinct from
+/// <see cref="QRCodeDecodeStatus.UnsupportedContent"/> so a caller can tell "a CP932
+/// reader would read this" from "this uses a feature we do not implement". FNC1 and
+/// Structured Append are the latter.
 /// </para>
 /// <para>
 /// Byte segments without an ECI header have no declared charset. The decoder uses

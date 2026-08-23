@@ -10,6 +10,18 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 internal static class EncodingModeExtensions
 {
     /// <summary>
+    /// Character count indicator width for Kanji mode (ISO/IEC 18004 Table 3):
+    /// 8 bits for versions 1-9, 10 for 10-26, 12 for 27-40.
+    /// </summary>
+    /// <remarks>
+    /// Kanji sits outside <see cref="EncodingMode"/> because that enum names the modes
+    /// the encoder writes, and this library reads Kanji without emitting it.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetKanjiCountIndicatorLength(int version)
+        => version < 10 ? 8 : version < 27 ? 10 : 12;
+
+    /// <summary>
     /// Gets the bit length of character count indicator based on version and mode
     /// </summary>
     /// <param name="version">QR code version (1-40).</param>

@@ -24,7 +24,9 @@ namespace SkiaSharp.QrCode;
 /// <para>
 /// Modes: Numeric, Alphanumeric and Byte. Byte mode emits ECI assignment 3 for
 /// ISO-8859-1 and assignment 26 for UTF-8 (automatically selected by default, or
-/// explicitly requested); Kanji is intentionally unsupported, use UTF-8 instead.
+/// explicitly requested). Kanji is not written, use UTF-8 instead;
+/// <see cref="RmQRCodeDecoder"/> does read the Kanji segments other encoders produce,
+/// so the two directions are deliberately asymmetric.
 /// The quiet zone defaults to the ISO/IEC 23941 value of 2 modules.
 /// </para>
 /// </remarks>

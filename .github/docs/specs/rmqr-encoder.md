@@ -105,7 +105,7 @@ Rectangular geometry rule shared by every rendering entry: the symbol (quiet zon
 
 ### Not implemented
 
-- Kanji mode, intentionally (tables keep the column only for specification completeness;
+- Kanji mode, intentionally for ENCODING (the decoder reads it since the Kanji decode work; the tables' Kanji column is load-bearing there;
   Japanese text uses Byte mode with UTF-8 ECI, matching the Standard QR product policy)
 - FNC1, Structured Append (rMQR does not define Structured Append)
 
@@ -148,10 +148,12 @@ Version index is height-major (all widths of height 7, then 9, …); it is the 5
 | 30 | R17x99 | 17 x 99 | 23, 49, 75 | 160 | 100 / 3 / 20 | 56 / 4 / 26 | 8 / 8 / 7 |
 | 31 | R17x139 | 17 x 139 | 27, 55, 83, 111 | 232 | 152 / 4 / 20 | 76 / 6 / 26 | 9 / 8 / 8 |
 
-Kanji count-indicator widths are not in this table: the mode is intentionally unsupported and
-cannot be verified with the available oracle command lines. `RmQRConstants.GetKanjiCountIndicatorLength`
-carries them spec-transcribed with an "unverified" comment (values 2-7, monotone below the byte
-widths) only to keep the constants table complete.
+Kanji count-indicator widths are not in this table: the mode is not encoded.
+`RmQRConstants.GetKanjiCountIndicatorLength` carries them (values 2-7, monotone below the byte
+widths), pinned by the narrowest-field derivation below and, since the decoder shipped, read for
+real by the qrtool Kanji fixtures. That exercise is partial: the four Kanji fixtures cover
+R11x43, R13x59, R15x59 and R17x139, i.e. widths 4, 5 and 7, so widths 2, 3 and 6 still rest on
+the derivation alone.
 
 Data capacity in characters (Numeric / Alphanumeric / Byte), single segment, no ECI header:
 
@@ -242,7 +244,7 @@ The corollary is why this cannot be made free: whether a split helps is only kno
 
 **ECI.** One prefix ahead of the first run: an rMQR decoder carries the declared charset across the runs that follow, so a plan needs no repetition. Its 11 bits are part of the cost the version scan compares.
 
-**Kanji.** Still unsupported, so a Japanese payload mixes Byte (UTF-8) with Numeric runs rather than reaching for 13-bit Kanji.
+**Kanji.** Still not encoded, so a Japanese payload mixes Byte (UTF-8) with Numeric runs rather than reaching for 13-bit Kanji. The decoder reads Kanji segments other encoders produce.
 
 ### 3. Fit the version
 
@@ -290,7 +292,7 @@ The single mask is applied to data modules while placing. Both format copies com
 - Superseded 2026-08-18: emitting UTF-8 without ECI made decoding depend on reader heuristics.
   rMQR supports ECI unlike Micro QR, so the encoder will explicitly emit ISO-8859-1 assignment
   3 or UTF-8 assignment 26, following Standard QR's policy. Kanji mode remains intentionally
-  unsupported; ECI + Byte mode is the interoperable Unicode path.
+  un-encoded (the decoder reads it); ECI + Byte mode is the interoperable Unicode path.
 
 ## Decisions
 
@@ -301,7 +303,7 @@ The single mask is applied to data modules while placing. Both format copies com
 | Default fit strategy | `MinimizeArea` (fewest modules), **confirmed in Phase 5.6**: both reference encoders choose the same versions automatically (libzint and qrtool with no version option: 12 digits at M → R11x27, 15 → R13x27, 100 → R11x77, measured by `probe-rmqr`), so the default keeps interoperability parity and the printable-area argument; the surprise case (12 digits at M: R11x27 (297) rather than the flatter R7x43 (301)) is documented in the generator XML docs and pinned by `RmQRCodeGeneratorUnitTest`; users wanting the flattest symbol use `MinimizeHeight` or a fixed `RmQRHeight` (README example lands with the rendering surface in 5.7) | User feedback after release |
 | Explicit-canvas layout | Uniform scale, centered (letterbox) | - |
 | ECI on encode | Implemented 2026-08-18: none for ASCII; assignment 3 for ISO-8859-1; assignment 26 for UTF-8. Only R7x43-H cannot hold an ECI header plus a one-byte payload | Additional charset demand (cross-symbology decision) |
-| Kanji | Intentionally unsupported; use Byte mode with UTF-8 ECI (tables retain the column only for specification completeness) | Cross-symbology policy change backed by concrete demand |
+| Kanji | Not encoded; use Byte mode with UTF-8 ECI. Decoding is supported (JIS X 0208), so the tables' Kanji column is load-bearing | Encoding: a policy change backed by concrete demand |
 | Mixed-mode segmentation | Opt-in via `RmQRSegmentation.Optimal`, defaulting to `Single`. Changing the default would move the emitted bit stream and therefore the rendered symbol for every existing caller, and planning is a search that cannot be free (whether a split helps is only knowable by planning it). The bounds make it roughly free where it cannot help, which weakens but does not remove the argument | A major version allows changing the default, at which point `Single` is only ever better by accident; the breakage would be callers relying on the "too long" exception, plus any caller pinned to today's rendered dimensions (see the quiet-zone note above) |
 | Segmentation surface | Two values rather than three. A `WhenNeeded` middle value ("plan only when the single mode does not fit") was evaluated and rejected: for a requested version `Optimal` already costs nothing when the single mode fits, so the value only added the top-end rescue, and the bounds later made the ordinary case roughly free as well | A concrete caller needs the rescue without ever wanting a smaller symbol |
 | Interleaver | Lifted `BinaryInterleaver` to `Internals.BinaryEncoders` (Phase 5.4): it never used the version, only the `ECCInfo` block structure; the remainder-bit count became a parameter | - |
@@ -319,7 +321,7 @@ Performed 2026-08-15 with the pinned qrtool 0.13.2 binary (`--variant rmqr`, `--
 | Data codewords per version × ECC | Reproduce all 192 capacities from data codewords + count widths | 192/192 |
 | Total codewords | Free-module count from an independent function-pattern painter must equal 8 × total + remainder (0..7) | 32/32 after correcting R17x59 (88, not the initially recalled 90; 90 would also require 31 ECC per block at H, above the 30 maximum) |
 | Count indicator widths (N/A/B) | Read the first data codewords of one-character payloads from oracle matrices (inverse zigzag + unmask + deinterleave), width = position of the count's leading 1 | 96/96 (three numeric widths of the initial recall were off by one and corrected) |
-| Count indicator widths (Kanji) | No oracle here emits Kanji, so the column is pinned by derivation: Table 3 takes the narrowest count field that still expresses the largest count the version's M-level data capacity allows. The rule is validated by reproducing all 96 measured N/A/B widths above, then applied to Kanji | 32/32 after correcting R17x99 (6, not the transcribed 7) |
+| Count indicator widths (Kanji) | No oracle emitted Kanji when this column was written, so it is pinned by derivation: Table 3 takes the narrowest count field that still expresses the largest count the version's M-level data capacity allows. The rule is validated by reproducing all 96 measured N/A/B widths above, then applied to Kanji | 32/32 after correcting R17x99 (6, not the transcribed 7) |
 | Format information | Both 18-bit copies of all 64 version × ECC symbols equal BCH(18,6) of (ECC bit, version index) XOR the copy's mask | 128/128 |
 | Mask, zigzag start and direction, interleaving | The R7x43-M "1" symbol yields exactly the predicted codewords `22 20 EC 11` and multi-block versions deinterleave to the predicted streams | Confirmed |
 | Alignment column positions, sub-finder and corner patterns | Visual inspection of R7x43 / R9x59 / R11x27 plus the free-module count agreement above | Consistent |
@@ -354,4 +356,4 @@ Implementation lessons, consolidated from the retired phase-by-phase progress lo
 ## Validation
 
 Per phase (every exit met): structural table tests + oracle format/dimension tests (5.1), naive-reference parity for the bit stream (5.3), interleave reference (5.4), extraction test over all 64 combinations (5.5), the `spot-check-rmqr` zxing-cpp gate over every version × ECC × mode (5.6), module-to-pixel rendering parity (5.7); Standard and Micro QR benchmarks flat at every step. The 2026-08-18 ECI follow-up adds exact assignment-3/26 streams, ECI capacity-boundary and exhaustive selector parity tests, public class/span/sizing round trips, unsupported-charset validation, and a 318-symbol zxing-cpp text/bytes/version/ECC gate with 63 ECI-3 and 63 ECI-26 symbols.
-- A table column that no oracle can reach still has a check available: derive it. The Kanji count widths sat in the tables for months marked "spec-transcribed, unverified" because no oracle in this repo emits Kanji — but Table 3's own rule (narrowest count field that still holds the largest count the version's data capacity allows) reproduces all 96 measured Numeric/Alphanumeric/Byte widths exactly, which validates the rule on evidence and then applies it to the column that has none. It found R17x99 transcribed as 7 where the rule gives 6, latent since Phase 5.1b and invisible to every test because the mode is unimplemented. The bound tests that did cover the column (`b >= k >= 2`) passed on the wrong value; a loose invariant on an unverified column is not coverage.
+- A table column no oracle in this repo could reach at the time still had a check available: derive it. The Kanji count widths sat in the tables for months marked "spec-transcribed, unverified" because no oracle in this repo was known to emit Kanji at the time (qrtool can, found later) — but Table 3's own rule (narrowest count field that still holds the largest count the version's data capacity allows) reproduces all 96 measured Numeric/Alphanumeric/Byte widths exactly, which validates the rule on evidence and then applies it to the column that had none. It found R17x99 transcribed as 7 where the rule gives 6, latent since Phase 5.1b and, until the decoder shipped, invisible to every test because nothing read the column. The bound tests that did cover the column (`b >= k >= 2`) passed on the wrong value; a loose invariant on an unverified column is not coverage.

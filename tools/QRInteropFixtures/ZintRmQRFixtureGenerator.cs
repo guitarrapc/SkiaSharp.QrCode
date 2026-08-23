@@ -30,8 +30,11 @@ public sealed class ZintRmQRFixtureGenerator : IRmQRFixtureGenerator
         }
     }
 
-    /// <summary>libzint (through the ZXingCpp wrapper) rejects non-ASCII input.</summary>
-    public bool SupportsCase(RmQRFixtureCaseDefinition caseDefinition) => !caseDefinition.Utf8;
+    /// <summary>
+    /// libzint (through the ZXingCpp wrapper) rejects non-ASCII input, and it never
+    /// selects Kanji mode: given Shift_JIS bytes it emits Byte mode with ECI 20.
+    /// </summary>
+    public bool SupportsCase(RmQRFixtureCaseDefinition caseDefinition) => !caseDefinition.Utf8 && caseDefinition.Mode != KanjiPayload.ModeName;
 
     public GeneratedFixture Generate(RmQRFixtureCaseDefinition caseDefinition)
     {

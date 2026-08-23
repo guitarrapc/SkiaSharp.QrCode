@@ -31,9 +31,7 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// </para>
 /// <para>
 /// Measured ratios, the per-bit cost model behind having no size switch, and the
-/// rejected alternatives are recorded in .github/docs/specs/rmqr-decoder.md; the kernel
-/// search log is <c>MICRO_OPTIMIZATION_RmQrExtractArm.md</c> in the private
-/// MicroBenchmarks repository.
+/// rejected alternatives are recorded in .github/docs/specs/rmqr-decoder.md.
 /// </para>
 /// </remarks>
 internal static partial class RmQRMatrixDecoder

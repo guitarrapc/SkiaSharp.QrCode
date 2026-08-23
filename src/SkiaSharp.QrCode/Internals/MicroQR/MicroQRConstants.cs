@@ -147,7 +147,8 @@ internal static class MicroQRConstants
 
     /// <summary>
     /// Mode availability per version (ISO/IEC 18004): M1 numeric only, M2 adds
-    /// alphanumeric, M3/M4 add byte (Kanji is not implemented, see the symbology spec).
+    /// alphanumeric, M3/M4 add byte. Kanji is decode-only, so it is absent here; its
+    /// count width lives in <see cref="GetKanjiCountIndicatorLength"/>.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool IsModeSupported(MicroQRVersion version, EncodingMode mode) => mode switch
@@ -169,6 +170,26 @@ internal static class MicroQRConstants
         EncodingMode.Alphanumeric or EncodingMode.Byte => (int)version + 1,
         _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by Micro QR."),
     };
+
+    /// <summary>
+    /// Character count indicator width for Kanji mode (ISO/IEC 18004 Table 3):
+    /// 3 bits for M3, 4 for M4. M1 and M2 do not define Kanji mode, and their mode
+    /// indicators (0 and 1 bit wide) cannot express its value, so it never reaches here.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetKanjiCountIndicatorLength(MicroQRVersion version)
+    {
+        if (version < MicroQRVersion.M3)
+            ThrowKanjiNotDefined(version);
+
+        return (int)version;
+    }
+
+    // Outlined so the inlined body above stays a compare and a move; the interpolated
+    // message would otherwise be built into every call site.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowKanjiNotDefined(MicroQRVersion version)
+        => throw new ArgumentOutOfRangeException(nameof(version), $"Micro QR version {version} does not define Kanji mode.");
 
     /// <summary>Terminator length in bits: 3/5/7/9 for M1-M4 (ISO/IEC 18004 Table 2).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

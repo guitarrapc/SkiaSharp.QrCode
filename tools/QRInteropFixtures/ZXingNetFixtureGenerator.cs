@@ -20,11 +20,23 @@ public sealed class ZXingNetFixtureGenerator : IFixtureGenerator
 
     public GeneratedFixture Generate(FixtureCaseDefinition caseDefinition)
     {
-        var hints = caseDefinition.Utf8
-            ? new Dictionary<EncodeHintType, object> { [EncodeHintType.CHARACTER_SET] = "UTF-8" }
-            : null;
+        // Kanji mode: ZXing's chooseMode returns KANJI only when the requested charset
+        // is Shift_JIS and every character is double-byte, and .NET needs the CodePages
+        // provider before it can resolve that charset at all.
+        var kanji = caseDefinition.Mode == KanjiPayload.ModeName;
+        if (kanji)
+            _ = KanjiPayload.ShiftJis;
+
+        var hints = (kanji, caseDefinition.Utf8) switch
+        {
+            (true, _) => new Dictionary<EncodeHintType, object> { [EncodeHintType.CHARACTER_SET] = "Shift_JIS" },
+            (_, true) => new Dictionary<EncodeHintType, object> { [EncodeHintType.CHARACTER_SET] = "UTF-8" },
+            _ => null,
+        };
 
         var qr = ZXingEncoder.encode(caseDefinition.PayloadText, ToZXingEccLevel(caseDefinition.ErrorCorrectionLevel), hints);
+        if (kanji && qr.Mode != Mode.KANJI)
+            throw new InvalidOperationException($"ZXing encoded case {caseDefinition.Id} in {qr.Mode} mode, not Kanji; the payload must be entirely JIS X 0208 double-byte characters.");
         var matrix = qr.Matrix;
         var size = matrix.Width;
         if (matrix.Height != size)
@@ -54,7 +66,7 @@ public sealed class ZXingNetFixtureGenerator : IFixtureGenerator
             MaskPattern = qr.MaskPattern,
             PayloadText = caseDefinition.PayloadText,
             PayloadUtf8Hex = Convert.ToHexString(Encoding.UTF8.GetBytes(caseDefinition.PayloadText)),
-            EciCharset = caseDefinition.Utf8 ? "UTF-8" : null,
+            EciCharset = caseDefinition.Utf8 ? "UTF-8" : null, // Kanji mode carries no ECI: the mode itself declares JIS X 0208
             QuietZoneModules = FixtureWriter.QuietZoneModules,
             PixelsPerModule = FixtureWriter.PixelsPerModule,
         };
@@ -76,6 +88,7 @@ public sealed class ZXingNetFixtureGenerator : IFixtureGenerator
         if (mode == Mode.NUMERIC) return "Numeric";
         if (mode == Mode.ALPHANUMERIC) return "Alphanumeric";
         if (mode == Mode.BYTE) return "Byte";
+        if (mode == Mode.KANJI) return "Kanji";
         throw new NotSupportedException($"Unexpected ZXing mode '{mode}' in the Standard QR corpus.");
     }
 

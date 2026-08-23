@@ -92,18 +92,36 @@ Sibling namespaces bound the blast radius instead: a Micro QR change cannot touc
 
 `QRCodeData` is a shipped public type whose contract is square, 21–177 modules, versions 1–40, with a serialization format that encodes exactly that. Generalizing it would either break the serialization contract or turn every member into a symbology-conditional. Sibling data types keep the shipped contract byte-for-byte stable and let rectangular geometry be designed without compatibility constraints.
 
-### Why Kanji mode is intentionally unsupported
+### Why Kanji mode is read but never written
 
-The library intentionally does not implement Kanji segments for Standard QR: UTF-8 Byte mode
-covers Japanese text, while the Shift JIS-based 13-bit Kanji mode has limited demand and adds a
-second charset-specific encode/decode path. The same product policy applies to rMQR. Standard QR
-and rMQR declare UTF-8 with ECI; Micro QR has no ECI mode and keeps its existing raw-UTF-8 plus
-reader-heuristic behavior. All decoders recognize a Kanji mode indicator and return
-`UnsupportedContent` rather than misdecoding it.
+Kanji is asymmetric on purpose: all three decoders read it, no generator emits it.
 
-Capacity/constants tables retain the Kanji column only for specification completeness. That is
-not a commitment to implement the mode; adding it would require an explicit cross-symbology
-policy change backed by concrete demand.
+Reading it is an interoperability obligation. Japanese-market encoders do emit Kanji mode, and a
+decoder that rejects those symbols cannot read them at all, which is a hole no caller can work
+around. Writing it is a different decision: UTF-8 Byte mode already carries Japanese text, and
+emitting Kanji would change the default output of shipped generators. Decoding changes no output,
+so it ships on its own.
+
+The consequence is a deliberate round-trip asymmetry: `Decode(Encode(x)) == x` holds, but
+`Encode(Decode(y))` does not reproduce a Kanji symbol `y`. The capacity tables therefore keep the
+Kanji column for the decoder's count-indicator widths, not as a commitment to encode.
+
+**The mapping is JIS X 0208, not CP932.** The two disagree on seven Shift_JIS cells (0x815F,
+0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA: reverse solidus, wave dash, double vertical line,
+minus sign, and the cent / pound / not signs), and, within the Kanji-mode range, CP932
+additionally assigns 83 characters the standard does not, all of them NEC row 13 (0x8740-0x879C:
+circled digits, roman numerals, unit ligatures). Choosing CP932 would have
+mangled exactly the characters Japanese payloads use in URLs and price strings. The shared
+`ShiftJisKanjiTable` holds the 6,879-cell JIS X 0208 repertoire and nothing else; cells outside it
+are reported as `QRCodeDecodeStatus.UnmappedCharacter` rather than replaced, so a corrupt symbol never
+becomes a plausible wrong answer and a caller can tell "a CP932 reader would read this" from the
+structural `UnsupportedContent` cases (FNC1, Structured Append, unmapped ECI). The
+table costs 16 KB of RVA data, shared by all three symbologies, with no allocation and no static
+constructor. Full derivation and oracle evidence: [Kanji mode decode plan](../plans/kanji-mode-decode-plan.md).
+
+Still unsupported and still reported as `UnsupportedContent`: ECI 20 (Shift_JIS) byte-mode
+segments, which need the wider CP932 single-byte plus double-byte range, and (Standard QR) FNC1
+and Structured Append.
 
 ### Allocation contract
 
@@ -137,7 +155,8 @@ mechanism.
 
 | Decision | Choice | Revisit when |
 |---|---|---|
-| Kanji mode (all symbologies) | Intentionally unsupported; use UTF-8 Byte mode (with ECI where the symbology supports it) | Cross-symbology policy change backed by concrete demand |
+| Kanji mode (all symbologies) | Decode only, JIS X 0208 mapping; encoders keep emitting UTF-8 Byte mode (with ECI where the symbology supports it) | Encoding: a policy change backed by concrete demand, since it alters shipped generator output |
+| ECI 20 (Shift_JIS) byte segments | Unsupported; reported as `UnsupportedContent` (structural, unlike the per-character `UnmappedCharacter`) | Demand for symbols that pair ECI 20 with Byte mode; needs the full CP932 range, roughly twice the Kanji table |
 | Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR and rMQR scanning are their own explicitly-typed entries (`MicroQRCodeDecoder`, `RmQRCodeDecoder`); the Playground tries the three in that order | - |
 | Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) | - |
 | `QRCodeData` | Frozen for Standard QR | Never (compatibility contract) |

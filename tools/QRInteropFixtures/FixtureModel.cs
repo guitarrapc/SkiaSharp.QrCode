@@ -3,8 +3,18 @@ using System.Text.Json;
 
 namespace QRInteropFixtures;
 
-/// <summary>Input definition of one corpus case, independent of any generator.</summary>
-public sealed record FixtureCaseDefinition(string Id, string PayloadText, string ErrorCorrectionLevel, bool Utf8 = false);
+/// <summary>Input definition of one Standard QR corpus case, independent of any generator.</summary>
+/// <param name="Id">Case name, and the file stem of the three fixture files.</param>
+/// <param name="PayloadText">Expected decode result.</param>
+/// <param name="ErrorCorrectionLevel">"L", "M", "Q" or "H", requested and honored by the generator.</param>
+/// <param name="Utf8">Requests a UTF-8 ECI segment; recorded as <c>eciCharset</c> in the manifest.</param>
+/// <param name="Mode">
+/// Normally null: the generator picks the mode and reports what it chose. Set to "Kanji"
+/// to force ISO/IEC 18004 Kanji mode, which ZXing.Net selects only when the requested
+/// charset is Shift_JIS and every character is JIS X 0208 double-byte. Kanji is
+/// decode-only for this library, so those cases exist purely to exercise the decoder.
+/// </param>
+public sealed record FixtureCaseDefinition(string Id, string PayloadText, string ErrorCorrectionLevel, bool Utf8 = false, string? Mode = null);
 
 /// <summary>
 /// Manifest written as case-name.json. Field set matches the schema documented in

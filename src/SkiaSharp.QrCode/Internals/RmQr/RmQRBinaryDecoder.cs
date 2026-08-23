@@ -8,7 +8,7 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// rMQR bit-stream decoder (ISO/IEC 23941 7.4): 3-bit mode indicators, per-version
 /// character count indicator widths, terminator <c>000</c> (possibly shortened at
 /// capacity), ECI segments (parsed, mapped to the charsets the shared byte decoder
-/// knows), Kanji reported as <see cref="QRCodeDecodeStatus.UnsupportedContent"/>.
+/// knows), Kanji decoded as JIS X 0208 via the shared <see cref="ShiftJisKanjiTable"/>.
 /// Segment payloads decode through the shared <see cref="SegmentDecoders"/>.
 /// </summary>
 internal static class RmQRBinaryDecoder
@@ -105,7 +105,16 @@ internal static class RmQRBinaryDecoder
                             break;
                         }
                     case ModeKanji:
-                        return QRCodeDecodeStatus.UnsupportedContent;
+                        {
+                            var countBits = RmQRConstants.GetKanjiCountIndicatorLength(version);
+                            if (totalBits - reader.BitPosition < countBits)
+                                return QRCodeDecodeStatus.InvalidBitstream;
+                            var count = reader.Reads(countBits);
+                            var status = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
+                            if (status != QRCodeDecodeStatus.Success)
+                                return status;
+                            break;
+                        }
                     default:
                         return QRCodeDecodeStatus.InvalidBitstream; // 101, 110 are reserved
                 }

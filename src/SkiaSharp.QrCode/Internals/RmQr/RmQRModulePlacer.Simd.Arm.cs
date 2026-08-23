@@ -27,8 +27,7 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// </para>
 /// <para>
 /// Measured ratios and the designs that were rejected are recorded in
-/// .github/docs/specs/rmqr-encoder.md; the kernel search log is
-/// <c>RmQrPlaceArmBenchmark</c> in the private MicroBenchmarks repository.
+/// .github/docs/specs/rmqr-encoder.md.
 /// </para>
 /// </remarks>
 internal static partial class RmQRModulePlacer

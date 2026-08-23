@@ -258,7 +258,7 @@ The encoder produces a module matrix, not an image. Color, pixels-per-module, sh
 ## Decisions
 
 - **Single segment per input.** It keeps the API and implementation auditable and makes mode selection a single pass. The trade-off is non-minimal symbols for mixed-mode payloads.
-- **No Kanji mode.** Unicode input is represented as UTF-8 Byte mode with ECI 26. This avoids Shift-JIS tables and an additional encoding dependency, at the cost of lower capacity for Japanese text.
+- **No Kanji mode when encoding.** Unicode input is represented as UTF-8 Byte mode with ECI 26, at the cost of lower capacity for Japanese text. This originally also avoided shipping a Shift_JIS table; that argument lapsed when Kanji DECODING shipped and the assembly gained the 16 KB JIS X 0208 table, so the remaining reasons are output stability and not adding an encoding dependency.
 - **ASCII omits ECI by default.** This minimizes overhead and maximizes compatibility. Latin-1 and wider Unicode receive explicit ECI declarations under automatic selection.
 - **BOM is explicit and UTF-8-only.** `utf8BOM` affects the stream only when the selected data mode is Byte and the effective ECI is UTF-8.
 - **Version can be forced.** Fixed-size applications need control over symbol dimensions, so `requestedVersion` bypasses minimum-fit selection rather than acting as a lower bound.

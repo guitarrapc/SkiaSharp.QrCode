@@ -1,0 +1,17 @@
+{
+  "id": "m3-l-kanji",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "MicroQR",
+  "version": 3,
+  "width": 15,
+  "height": 15,
+  "errorCorrectionLevel": "L",
+  "mode": "Kanji",
+  "maskPattern": 1,
+  "payloadText": "\u65E5\u672C\u8A9E",
+  "payloadUtf8Hex": "E697A5E69CACE8AA9E",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

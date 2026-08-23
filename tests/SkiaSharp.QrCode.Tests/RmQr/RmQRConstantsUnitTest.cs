@@ -232,10 +232,10 @@ public class RmQRConstantsUnitTest
         // that can still express the largest count the version's M-level data capacity
         // allows. Derived from the data codeword count alone, that rule reproduces all
         // 96 oracle-verified Numeric / Alphanumeric / Byte widths — which is what makes
-        // it usable on the Kanji column, the one column no oracle in this repo can emit
-        // (Kanji mode is intentionally unimplemented, so a wrong width would sit latent
-        // until someone adds the mode). It caught R17x99 Kanji transcribed as 7 where
-        // the rule gives 6.
+        // it usable on the Kanji column, which had no oracle when it was written (qrtool
+        // can emit Kanji, found later; its four fixtures now read widths 4, 5 and 7, so
+        // 2, 3 and 6 still rest on this derivation alone). It caught R17x99 Kanji
+        // transcribed as 7 where the rule gives 6.
         var dataBits = RmQRConstants.GetDataCodewordCount(version, RmQREccLevel.M) * 8;
 
         await Assert.That(RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric)).IsEqualTo(NarrowestCountWidth(dataBits, NumericBits));

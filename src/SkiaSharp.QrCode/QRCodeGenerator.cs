@@ -10,6 +10,12 @@ namespace SkiaSharp.QrCode;
 /// QR code generator based on ISO/IEC 18004 standard.
 /// Supports QR code versions 1-40 with multiple encoding modes and error correction levels.
 /// </summary>
+/// <remarks>
+/// Encoding modes written here are Numeric, Alphanumeric and Byte (ISO-8859-1 / UTF-8,
+/// with ECI). Kanji mode is never written, Japanese text goes out as UTF-8 in Byte
+/// mode; <see cref="QRCodeDecoder"/> does read Kanji segments other encoders produce,
+/// so the two directions are deliberately asymmetric.
+/// </remarks>
 public static class QRCodeGenerator
 {
     // -----------------------------------------------------

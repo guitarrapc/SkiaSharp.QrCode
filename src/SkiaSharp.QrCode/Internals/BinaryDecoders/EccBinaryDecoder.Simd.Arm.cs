@@ -25,8 +25,7 @@ namespace SkiaSharp.QrCode.Internals.BinaryDecoders;
 /// </code>
 /// <para>
 /// Three design points, each of which was measured against its alternative rather
-/// than assumed (full record in the private MicroBenchmarks repo,
-/// MICRO_OPTIMIZATION_EccDecodeArm.md):
+/// than assumed; the number that decided each one is quoted with it:
 /// </para>
 /// <para>
 /// <b>Table reads, not multiplies, for the data terms.</b> <c>c·α^(k·i)</c> depends

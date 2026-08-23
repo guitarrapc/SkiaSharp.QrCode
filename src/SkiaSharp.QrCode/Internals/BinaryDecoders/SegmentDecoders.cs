@@ -29,6 +29,9 @@ internal static class SegmentDecoders
     // the inverse of CharacterSets.GetAlphanumericValue.
     private const string AlphanumericChars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
 
+    // ISO/IEC 18004 8.4.5: each Kanji character is one 13-bit compacted Shift_JIS value.
+    private const int KanjiBitsPerCharacter = 13;
+
     /// <summary>Decodes a numeric segment payload of <paramref name="count"/> digits.</summary>
     public static QRCodeDecodeStatus DecodeNumericPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
     {
@@ -112,6 +115,47 @@ internal static class SegmentDecoders
             if (value >= 45)
                 return QRCodeDecodeStatus.InvalidBitstream;
             destination[charsWritten++] = AlphanumericChars[value];
+        }
+
+        return QRCodeDecodeStatus.Success;
+    }
+
+    /// <summary>
+    /// Decodes a Kanji segment payload of <paramref name="count"/> characters
+    /// (ISO/IEC 18004 8.4.5): 13 bits per character, JIS X 0208 via
+    /// <see cref="ShiftJisKanjiTable"/>.
+    /// </summary>
+    /// <remarks>
+    /// Decode only: no symbology emits Kanji mode, so this reads symbols other
+    /// encoders produced. Unmapped cells fail the segment rather than yielding a
+    /// replacement character, because a Kanji segment carries no redundancy of its
+    /// own and a guessed character is indistinguishable from a correct one.
+    /// </remarks>
+    public static QRCodeDecodeStatus DecodeKanjiPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
+    {
+        // Bitstream sufficiency first; see DecodeNumericPayload for why the order matters.
+        if (totalBits - reader.BitPosition < count * KanjiBitsPerCharacter)
+            return QRCodeDecodeStatus.InvalidBitstream;
+
+        if (destination.Length - charsWritten < count)
+            return QRCodeDecodeStatus.DestinationTooSmall;
+
+        for (var i = 0; i < count; i++)
+        {
+            var value = reader.Reads(KanjiBitsPerCharacter);
+            var mapped = ShiftJisKanjiTable.Lookup(value);
+            if (mapped == '\0')
+            {
+                // A value no Shift_JIS pair can express is corruption; a well-formed
+                // value outside the JIS X 0208 repertoire is a character we cannot map.
+                // The two get different statuses because they call for different things
+                // from the caller: discard the symbol, or hand it to a CP932 reader.
+                return ShiftJisKanjiTable.IsStructurallyValid(value)
+                    ? QRCodeDecodeStatus.UnmappedCharacter
+                    : QRCodeDecodeStatus.InvalidBitstream;
+            }
+
+            destination[charsWritten++] = mapped;
         }
 
         return QRCodeDecodeStatus.Success;

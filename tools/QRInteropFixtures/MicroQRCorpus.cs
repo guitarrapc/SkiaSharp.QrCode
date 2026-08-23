@@ -40,5 +40,15 @@ public static class MicroQRCorpus
         // heuristically). libzint rejects non-ASCII input through the ZXingCpp
         // wrapper, so this case comes from the qrtool lineage only.
         new("m4-l-utf8-japanese", "こんにちは", "L", 4, "Byte", Utf8: true),
+
+        // Kanji mode (ISO/IEC 18004 8.4.5): M3 and M4 only, the versions whose mode
+        // indicator is wide enough to express it. Decode-only for this library, and
+        // qrtool is the only lineage here that can emit it (libzint rejects non-ASCII
+        // input through the ZXingCpp wrapper, and M1/M2 have no Kanji mode at all).
+        new("m3-l-kanji", "日本語", "L", 3, "Kanji"),
+        new("m3-m-kanji", "漢字", "M", 3, "Kanji"),
+        new("m4-l-kanji", "日本語試験", "L", 4, "Kanji"),
+        new("m4-m-kanji", "日本語符", "M", 4, "Kanji"),
+        new("m4-q-kanji", "漢字", "Q", 4, "Kanji"),
     ];
 }
