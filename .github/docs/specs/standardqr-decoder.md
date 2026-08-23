@@ -38,7 +38,7 @@ Matrix-level decoding takes an exact module matrix as input, so the tiers apply 
 |---|---|
 | Versions | 1–40 |
 | ECC levels | All |
-| Segment modes | Numeric, Alphanumeric, Byte |
+| Segment modes | Numeric, Alphanumeric, Byte, Kanji (JIS X 0208; decode only, the generator never emits it) |
 | ECI | ISO-8859-1, UTF-8 |
 | Text handling | UTF-8 BOM, multi-segment streams |
 | Image transforms | Arbitrary rotation, mirroring, reflectance reversal (light-on-dark) |

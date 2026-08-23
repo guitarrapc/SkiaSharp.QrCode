@@ -108,8 +108,9 @@ Kanji column for the decoder's count-indicator widths, not as a commitment to en
 
 **The mapping is JIS X 0208, not CP932.** The two disagree on seven Shift_JIS cells (0x815F,
 0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA: reverse solidus, wave dash, double vertical line,
-minus sign, and the cent / pound / not signs), and CP932 additionally assigns 1,144 cells outside
-the standard's repertoire, most visibly the NEC row 13 circled digits. Choosing CP932 would have
+minus sign, and the cent / pound / not signs), and, within the Kanji-mode range, CP932
+additionally assigns 83 characters the standard does not, all of them NEC row 13 (0x8740-0x879C:
+circled digits, roman numerals, unit ligatures). Choosing CP932 would have
 mangled exactly the characters Japanese payloads use in URLs and price strings. The shared
 `ShiftJisKanjiTable` holds the 6,879-cell JIS X 0208 repertoire and nothing else; cells outside it
 are reported rather than replaced, so a corrupt symbol never becomes a plausible wrong answer. The

@@ -16,13 +16,13 @@ namespace SkiaSharp.QrCode.Internals;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The mapping is JIS X 0208, not Microsoft CP932. The two disagree on seven
-/// cells (0x815F, 0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA: reverse
-/// solidus, wave dash, double vertical line, minus sign, and the cent / pound /
-/// not signs) and CP932 additionally assigns 1,144 cells outside the standard's
-/// repertoire, most visibly the NEC row 13 circled digits. Those stay unmapped
-/// here, so a symbol carrying them is reported as unsupported rather than
-/// silently rewritten.
+/// The mapping is JIS X 0208, not Microsoft CP932; the two disagree, and the
+/// cells CP932 adds stay unmapped here so a symbol carrying them is reported
+/// as unsupported rather than silently rewritten. The canonical statement of
+/// the divergence set and the reasoning is the scope decision in
+/// .github/docs/specs/qrcode-symbologies.md; keep the counts out of this file
+/// so a regeneration cannot reintroduce a stale copy (they were wrong in four
+/// places once already).
 /// </para>
 /// <para>
 /// Unmapped cells hold 0, which is never a legitimate JIS X 0208 mapping. The

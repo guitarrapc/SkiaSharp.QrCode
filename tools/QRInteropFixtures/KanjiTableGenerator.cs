@@ -8,8 +8,8 @@ namespace QRInteropFixtures;
 ///
 /// Provenance matters more than convenience here: hand-transcribing ~6,900
 /// mappings is not reviewable, and a table copied from CP932 would silently
-/// mis-map the seven cells where JIS X 0208 disagrees plus the 1,144 CP932-only
-/// cells. So the values come from the sweep (an external reader applying JIS X
+/// mis-map the seven cells where JIS X 0208 disagrees plus the 83 NEC row 13
+/// characters CP932 adds inside the Kanji-mode range. So the values come from the sweep (an external reader applying JIS X
 /// 0208), and this generator refuses to emit unless the swept data satisfies the
 /// standard's own published invariants and its delta against .NET CP932 is
 /// exactly the seven documented cells.
@@ -62,7 +62,24 @@ public static class KanjiTableGenerator
         var outputPath = Path.Combine(repoRoot, "src", "SkiaSharp.QrCode", "Internals", "ShiftJisKanjiTable.cs");
         File.WriteAllText(outputPath, Emit(table), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         Console.WriteLine($"wrote {outputPath} ({new FileInfo(outputPath).Length:N0} bytes source, {IndexCount * 2:N0} bytes of table data)");
+
+        // ShiftJisKanjiTableUnitTest.Table_MatchesItsGoldenDigest pins every entry
+        // against this value; a regeneration that legitimately changes the data has to
+        // update it, and a bare hex mismatch in CI is not a useful instruction.
+        Console.WriteLine($"golden digest (GoldenDigest in ShiftJisKanjiTableUnitTest): {Digest(table)}");
         return 0;
+    }
+
+    /// <summary>SHA-256 of the emitted table, little-endian UTF-16 code units.</summary>
+    private static string Digest(char[] table)
+    {
+        var bytes = new byte[IndexCount * 2];
+        for (var index = 0; index < IndexCount; index++)
+        {
+            bytes[index * 2] = (byte)table[index];
+            bytes[index * 2 + 1] = (byte)(table[index] >> 8);
+        }
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
     }
 
     private static char ParseCodePoint(string field)
@@ -170,13 +187,13 @@ public static class KanjiTableGenerator
             /// </summary>
             /// <remarks>
             /// <para>
-            /// The mapping is JIS X 0208, not Microsoft CP932. The two disagree on seven
-            /// cells (0x815F, 0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA: reverse
-            /// solidus, wave dash, double vertical line, minus sign, and the cent / pound /
-            /// not signs) and CP932 additionally assigns 1,144 cells outside the standard's
-            /// repertoire, most visibly the NEC row 13 circled digits. Those stay unmapped
-            /// here, so a symbol carrying them is reported as unsupported rather than
-            /// silently rewritten.
+            /// The mapping is JIS X 0208, not Microsoft CP932; the two disagree, and the
+            /// cells CP932 adds stay unmapped here so a symbol carrying them is reported
+            /// as unsupported rather than silently rewritten. The canonical statement of
+            /// the divergence set and the reasoning is the scope decision in
+            /// .github/docs/specs/qrcode-symbologies.md; keep the counts out of this file
+            /// so a regeneration cannot reintroduce a stale copy (they were wrong in four
+            /// places once already).
             /// </para>
             /// <para>
             /// Unmapped cells hold 0, which is never a legitimate JIS X 0208 mapping. The

@@ -381,7 +381,9 @@ Yes, fully supported. See the [Platform-Specific Considerations](#platform-speci
 
 ### ISO-8859-2 and other encodings supports
 
-Currently, SkiaSharp.QrCode supports ISO-8859-1 and UTF-8. Other encodings (e.g., ISO-8859-2, Shift JIS) are not supported at this time. This is mainly due to almost all QR code use cases being UTF-8 compatible nowadays. ISO-8859-2 and other legacy encodings are rarely used in practice.
+Encoding: SkiaSharp.QrCode writes ISO-8859-1 and UTF-8. Other encodings (e.g. ISO-8859-2, Shift JIS) are not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice.
+
+Decoding is wider: the decoders also read Kanji mode segments (Shift JIS, JIS X 0208) produced by other encoders. ECI 20 (Shift_JIS) Byte segments are still not read.
 
 | Supported | Encoding Mode | Encoding |
 | --- | --- | --- |
@@ -463,6 +465,8 @@ QR codes support different encoding modes optimized for specific character types
 
 > [!NOTE]
 > Kanji is decode only. The decoders read Kanji segments produced by other encoders (JIS X 0208), but the generators always write Japanese text in Byte mode as UTF-8.
+>
+> The mapping is JIS X 0208, not Microsoft CP932. They disagree on seven cells (wave dash, minus sign, the cent / pound / not signs, reverse solidus and the double vertical line), and, within the Kanji-mode range, CP932 additionally defines 83 characters the standard does not: the NEC row 13 block (circled digits, roman numerals, unit ligatures). A symbol whose Kanji segment contains one of those 83 fails to decode with `UnsupportedContent` rather than being silently rewritten.
 
 | Mode | Character Set | Bits per Character | Example |
 |------|--------------|-------------------|---------|

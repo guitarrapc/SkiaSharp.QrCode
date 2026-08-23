@@ -78,6 +78,31 @@ public class SegmentDecodersKanjiUnitTest
         await Assert.That(text).IsEqualTo("\\〜‖−¢£¬");
     }
 
+    /// <summary>
+    /// A segment whose payload ends exactly on the last available bit is legal: the
+    /// terminator is shortened away at capacity (ISO/IEC 18004 7.4.9). The sufficiency
+    /// guard must therefore reject only <c>&lt;</c>, never <c>&lt;=</c>.
+    /// </summary>
+    /// <remarks>
+    /// Eight characters pack into 104 bits = 13 bytes with nothing left over, so
+    /// <c>totalBits</c> equals <c>count * 13</c> exactly. The numeric, alphanumeric and
+    /// byte decoders each had an exact-fill case already; Kanji did not, and an
+    /// off-by-one there rejects a valid symbol rather than accepting an invalid one.
+    /// </remarks>
+    [Test]
+    public async Task DecodeKanjiPayload_PayloadEndsExactlyAtCapacity_Succeeds()
+    {
+        var indices = new[] { 0x93FA, 0x967B, 0x8CEA, 0x889F, 0x82B1, 0x82F1, 0x82C9, 0x8A45 }.Select(Index13).ToArray();
+        var packed = Pack(indices);
+
+        await Assert.That(packed.Length * 8).IsEqualTo(indices.Length * 13).Because("the stream must fill its last byte exactly");
+
+        var (status, text) = Decode(packed, count: indices.Length, destinationLength: indices.Length);
+
+        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("日本語亜こんに界");
+    }
+
     [Test]
     public async Task DecodeKanjiPayload_ZeroCount_WritesNothing()
     {

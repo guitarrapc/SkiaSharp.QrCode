@@ -32,7 +32,6 @@ internal static class MicroQRBinaryDecoder
     // Mode indicator values (ISO/IEC 18004 Table 2, Micro QR column).
     private const int ModeNumeric = 0;
     private const int ModeAlphanumeric = 1;
-    private const int ModeByte = 2;
     private const int ModeKanji = 3;
 
     /// <summary>
@@ -102,6 +101,28 @@ internal static class MicroQRBinaryDecoder
                     continue;
                 }
 
+                // Kanji sits here, not as a switch arm and not earlier.
+                //
+                // Not earlier: it must follow the truncated-count check above. Skipping
+                // that lets BitReader read past the capacity, and since the buffer ends
+                // there too it throws InvalidOperationException out of a bool-returning
+                // TryDecode. (The zero-count rule below it is behaviour-neutral for
+                // Kanji; only the truncated-count one matters.)
+                //
+                // Not a switch arm: a fourth arm crosses Roslyn's jump-table threshold,
+                // and the M2 numeric / M4 byte decode benchmarks measured 12-15 % slower
+                // with it. A bisect pinned that to this file, but not to the jump table
+                // specifically -- an isolated micro-benchmark of the dispatch shows only
+                // noise, so code layout is the likelier mechanism. Treat the shape as
+                // measured-better, not as an explained win.
+                if (modeValue == ModeKanji)
+                {
+                    var kanjiStatus = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
+                    if (kanjiStatus != QRCodeDecodeStatus.Success)
+                        return kanjiStatus;
+                    continue;
+                }
+
                 switch (modeValue)
                 {
                     case ModeNumeric:
@@ -118,22 +139,11 @@ internal static class MicroQRBinaryDecoder
                                 return status;
                             break;
                         }
-                    case ModeByte:
+                    default:
                         {
                             // Micro QR data codewords top out at 16 bytes (M4-L).
                             rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
                             var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, ByteSegmentCharset.Unspecified, rentedBytes, destination, ref charsWritten);
-                            if (status != QRCodeDecodeStatus.Success)
-                                return status;
-                            break;
-                        }
-                    default:
-                        {
-                            // Kanji, the only value left once 4-7 are rejected above.
-                            // Kept as default rather than an explicit case so the arms
-                            // stay contiguous 0-2 and the switch keeps the shape it had
-                            // before Kanji decoding existed.
-                            var status = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
                             if (status != QRCodeDecodeStatus.Success)
                                 return status;
                             break;

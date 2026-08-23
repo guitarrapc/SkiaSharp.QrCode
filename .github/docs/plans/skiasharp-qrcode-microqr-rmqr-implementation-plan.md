@@ -453,7 +453,7 @@ spread in every pairing, M2's placer share is too small to surface.
   `MicroQRMatrixDecoder` (inverse zigzag + on-the-fly unmask reusing the encoder's own
   `IsFunctionModule`/`GetMaskBit`, single RS block, no deinterleave, stackalloc-only),
   `MicroQRBinaryDecoder` (mode/count framing, terminator = zero-count Numeric segment,
-  stream bounded by dataBitCount for the M1/M3 half codeword, Kanji → UnsupportedContent),
+  stream bounded by dataBitCount for the M1/M3 half codeword, Kanji → UnsupportedContent; Kanji decoding landed later, see the [Kanji mode decode plan](kanji-mode-decode-plan.md)),
   and a new `MicroQRConstants` ISO Table 9 error-correction-capacity table (2t + p = ecc)
   enforced after RS correction. Segment payload decoding (numeric/alphanumeric/byte
   groups, UTF-8/Latin-1 heuristics) extracted from `QRBinaryDecoder` into shared

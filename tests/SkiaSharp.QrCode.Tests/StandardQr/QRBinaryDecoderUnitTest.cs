@@ -204,6 +204,44 @@ public class QRBinaryDecoderUnitTest
         await Assert.That(text).IsEquivalentTo("〜");
     }
 
+    /// <summary>
+    /// A Kanji segment that fills the last data codeword exactly, with the terminator
+    /// shortened away (ISO/IEC 18004 7.4.9), is legal and must decode.
+    /// </summary>
+    [Test]
+    public async Task KanjiSegment_FillsCapacityExactly_Succeeds()
+    {
+        // 4 + 8 + 4 × 13 = 64 bits = 8 data codewords, no terminator.
+        var data = Build(
+            (ModeKanji, 4), (4, 8),
+            (Kanji(0x93FA), 13), (Kanji(0x967B), 13), (Kanji(0x8CEA), 13), (Kanji(0x889F), 13));
+
+        await Assert.That(data.Length).IsEqualTo(8).Because("the stream must fill its last byte exactly");
+
+        var status = Decode(data, out var text);
+
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEquivalentTo("日本語亜");
+    }
+
+    /// <summary>
+    /// A zero-count Kanji segment is empty, not a terminator: decoding continues into
+    /// the segment after it. Only the Standard QR terminator (mode 0000) ends a stream.
+    /// </summary>
+    [Test]
+    public async Task KanjiSegment_ZeroCount_IsAnEmptySegmentAndDecodingContinues()
+    {
+        var data = Build(
+            (ModeKanji, 4), (0, 8),
+            (ModeNumeric, 4), (1, 10), (7, 4),
+            (ModeTerminator, 4));
+
+        var status = Decode(data, out var text);
+
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEquivalentTo("7");
+    }
+
     /// <summary>NEC row 13 is CP932-only: well-formed, but outside the chosen repertoire.</summary>
     [Test]
     public async Task KanjiSegment_CellOutsideJisX0208_ReturnsUnsupportedContent()
@@ -218,6 +256,24 @@ public class QRBinaryDecoderUnitTest
     {
         // Low byte 0x3F would require Shift_JIS trail byte 0x7F, which does not exist.
         var data = Build((ModeKanji, 4), (1, 8), (0x3F, 13), (ModeTerminator, 4));
+
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+    }
+
+    /// <summary>
+    /// A Kanji count indicator one bit short of its width is a truncated segment. The
+    /// guard has to be pinned from the near side too: leaving zero bits proves only
+    /// that a far-away shortfall is caught, and a guard weakened by one bit then lets
+    /// <see cref="BitReader"/> read past the buffer and throw out of a bool-returning
+    /// <c>TryDecode</c>.
+    /// </summary>
+    [Test]
+    public async Task KanjiSegment_CountIndicatorOneBitShort_ReturnsInvalidBitstream()
+    {
+        // Numeric "12" then a Kanji indicator at bit 21, leaving 7 of the 8 count bits.
+        var data = Build((ModeNumeric, 4), (2, 10), (12, 7), (ModeKanji, 4));
+
+        await Assert.That(data.Length * 8 - 25).IsEqualTo(7).Because("exactly one bit short of the 8-bit count field");
 
         await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
     }

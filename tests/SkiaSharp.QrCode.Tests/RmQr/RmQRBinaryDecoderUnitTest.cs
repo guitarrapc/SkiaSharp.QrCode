@@ -6,7 +6,7 @@ namespace SkiaSharp.QrCode.Tests;
 /// <summary>
 /// rMQR bit-stream decoding (ISO/IEC 23941 7.4): 3-bit mode indicators, per-version
 /// count widths, terminator, ECI segments (parsed even though the encoder never
-/// emits them), Kanji reported as unsupported, malformed streams rejected.
+/// emits them), Kanji decoded as JIS X 0208, malformed streams rejected.
 /// </summary>
 public class RmQRBinaryDecoderUnitTest
 {
@@ -130,6 +130,21 @@ public class RmQRBinaryDecoderUnitTest
         await Assert.That(text).IsEqualTo("界");
     }
 
+    /// <summary>
+    /// A non-empty Kanji segment does not end the stream: the segment after it decodes
+    /// too, and its characters land after the Kanji ones.
+    /// </summary>
+    [Test]
+    public async Task Decode_KanjiFollowedByAnotherSegment_ConcatenatesBoth()
+    {
+        // R7x43: Kanji count 2 bits, Numeric count 4 bits.
+        var data = Bits("100 01 " + Kanji(0x93FA) + " 001 0011 0001111011 000", 6);
+        var (status, text) = Decode(data, RmQRVersion.R7x43);
+
+        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("日123");
+    }
+
     [Test]
     public async Task Decode_KanjiCellOutsideJisX0208_ReportsUnsupportedContent()
     {
@@ -142,6 +157,80 @@ public class RmQRBinaryDecoderUnitTest
     {
         var data = Bits("100 01 0000000111111 000", 6); // low byte 0x3F: no such Shift_JIS trail byte
         await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+    }
+
+    /// <summary>
+    /// A zero-count Kanji segment is empty, not a terminator: decoding continues into
+    /// the segment after it. Only mode <c>000</c> ends an rMQR stream.
+    /// </summary>
+    [Test]
+    public async Task Decode_KanjiZeroCount_IsAnEmptySegmentAndDecodingContinues()
+    {
+        var data = Bits("100 00 001 0001 0111 000", 6); // empty Kanji, then Numeric "7"
+        var (status, text) = Decode(data, RmQRVersion.R7x43);
+
+        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("7");
+    }
+
+    /// <summary>
+    /// A Kanji mode indicator whose count field is cut off by the capacity is a
+    /// truncated segment, and must be reported as such.
+    /// </summary>
+    /// <remarks>
+    /// The matrix decoder passes <c>TotalDataCodewords * 8</c> as the bit count over a
+    /// buffer of exactly that many codewords, so the capacity and the buffer end
+    /// together. Drop the guard and <see cref="BitReader"/> reads past both, throwing
+    /// <see cref="InvalidOperationException"/> out of a bool-returning <c>TryDecode</c>.
+    /// </remarks>
+    [Test]
+    public async Task Decode_KanjiTruncatedCountIndicator_ReportsInvalidBitstream()
+    {
+        // R7x43-M holds 48 bits. Nine empty Kanji segments (3-bit mode + 2-bit count)
+        // consume 45, leaving a Kanji mode indicator with 0 bits for its count.
+        var data = Bits(string.Concat(Enumerable.Repeat("100 00 ", 9)) + "100", 6);
+
+        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+    }
+
+    /// <summary>
+    /// The same guard from the near side: one bit short, not all of them. Pinning only
+    /// the zero-bits case lets the guard be weakened by one bit unnoticed, and a
+    /// one-bit overrun is exactly what makes <see cref="BitReader"/> throw.
+    /// </summary>
+    [Test]
+    public async Task Decode_KanjiCountIndicatorOneBitShort_ReportsInvalidBitstream()
+    {
+        // Three Kanji characters (3 + 2 + 39 = 44 bits of 48), then a Kanji mode
+        // indicator at bit 44, leaving 1 of the 2 count bits.
+        var data = Bits("100 11 " + Kanji(0x93FA) + Kanji(0x967B) + Kanji(0x8CEA) + " 100", 6);
+
+        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+    }
+
+    /// <summary>
+    /// The decoder parses untrusted input, so no stream may make it throw. This is what
+    /// protects every bounds guard in the loop, including ones no targeted test names;
+    /// Standard QR has had the equivalent since its decoder shipped.
+    /// </summary>
+    [Test]
+    public async Task Decode_RandomGarbage_NeverThrows()
+    {
+        var random = new Random(20260823);
+        var destination = new char[512];
+        foreach (var version in Enum.GetValues<RmQRVersion>())
+        {
+            for (var round = 0; round < 200; round++)
+            {
+                var data = new byte[random.Next(1, 40)];
+                random.NextBytes(data);
+                // Never above the buffer: a caller-supplied bit count past the buffer is
+                // outside the contract, and the matrix decoder never produces one.
+                var dataBitCount = random.Next(0, data.Length * 8 + 1);
+
+                RmQRBinaryDecoder.DecodeBitStream(data, dataBitCount, version, destination, out _);
+            }
+        }
     }
 
     [Test]

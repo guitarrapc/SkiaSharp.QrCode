@@ -64,7 +64,7 @@ Built in implementation-plan Phase 5.1a, BEFORE the tables (its symbols are the 
 
 Payloads are fixed literals or fixed cyclic patterns; the tool keeps its own copy of the version / capacity table (`RmQRVersionTable`, values from [rMQR Encoder](rmqr-encoder.md)) so it never depends on the library it produces oracles for.
 
-**Sanity gate** (`RmQRSanityGate`): every fixture is rendered and decoded with the pinned zxing-cpp reader before it is written; the payload is compared on raw bytes (`Bytes` vs `payloadUtf8Hex`, because UTF-8 without ECI is exposed with a legacy-charset `Text` guess), `Extra("Version")` must equal `R{H}x{W}` and `Extra("EcLevel")` the manifest ECC; the reader's `DataMask` (4) is recorded. Kanji fixtures are the exception to the raw-byte comparison: a Kanji segment puts the Shift_JIS bytes in `Bytes`, so the gate compares `Text` instead, which is the reader's JIS X 0208 reading and exactly what this library's decoder has to reproduce. All 144 cases passed on first generation.
+**Sanity gate** (`RmQRSanityGate`): every fixture is rendered and decoded with the pinned zxing-cpp reader before it is written; the payload is compared on raw bytes (`Bytes` vs `payloadUtf8Hex`, because UTF-8 without ECI is exposed with a legacy-charset `Text` guess), `Extra("Version")` must equal `R{H}x{W}` and `Extra("EcLevel")` the manifest ECC; the reader's `DataMask` (4) is recorded. Kanji fixtures are the exception to the raw-byte comparison: a Kanji segment puts the Shift_JIS bytes in `Bytes`, so the gate compares `Text` instead, which is the reader's JIS X 0208 reading and exactly what this library's decoder has to reproduce. All 144 cases passed on first generation (the corpus has since grown to 148 with the Kanji cases).
 
 ### Consuming tests
 

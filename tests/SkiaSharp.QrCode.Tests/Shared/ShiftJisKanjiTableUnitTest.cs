@@ -175,22 +175,81 @@ public class ShiftJisKanjiTableUnitTest
     /// the repertoire", which is what lets the decoder report InvalidBitstream and
     /// UnsupportedContent for the two different causes of a zero lookup.
     /// </summary>
+    /// <remarks>
+    /// The expected set is built by enumerating real Shift_JIS lead/trail pairs and
+    /// compacting them, not by restating the production predicate. Mirroring the
+    /// implementation would pin its constants while proving nothing about the rule.
+    /// </remarks>
     [Test]
     public async Task StructuralValidity_AcceptsExactlyTheExpressibleShiftJisPairs()
     {
-        var valid = 0;
-        for (var index = 0; index < ShiftJisKanjiTable.IndexCount; index++)
+        var reachable = new bool[ShiftJisKanjiTable.IndexCount];
+        var pairs = 0;
+        foreach (var (low, high) in new[] { (0x8140, 0x9FFC), (0xE040, 0xEBBF) })
         {
-            var low = index % 0xC0;
-            var expected = low <= 0xBC && low != 0x3F;
-            await Assert.That(ShiftJisKanjiTable.IsStructurallyValid(index)).IsEqualTo(expected)
-                .Because($"index {index} (low byte 0x{low:X2})");
-            if (expected) valid++;
+            for (var lead = low >> 8; lead <= high >> 8; lead++)
+            {
+                for (var trail = 0x40; trail <= 0xFC; trail++)
+                {
+                    if (trail == 0x7F) continue; // never a Shift_JIS trail byte
+                    var sjis = (lead << 8) | trail;
+                    if (sjis < low || sjis > high) continue;
+                    reachable[Index13(sjis)] = true;
+                    pairs++;
+                }
+            }
         }
 
-        // 42 full lead bytes × 188 expressible trails, plus lead 0xEB capped at 0xEBBF.
-        await Assert.That(valid).IsEqualTo(8023);
+        for (var index = 0; index < ShiftJisKanjiTable.IndexCount; index++)
+        {
+            await Assert.That(ShiftJisKanjiTable.IsStructurallyValid(index)).IsEqualTo(reachable[index])
+                .Because($"index {index} is {(reachable[index] ? "reachable" : "unreachable")} from a Shift_JIS pair");
+        }
+
+        // No two pairs collapse onto one index, so the count is also the pair count.
+        await Assert.That(reachable.Count(static r => r)).IsEqualTo(pairs);
+        await Assert.That(pairs).IsEqualTo(8023);
     }
+
+    /// <summary>Values outside the 13-bit index space are rejected rather than read.</summary>
+    [Test]
+    [Arguments(-1)]
+    [Arguments(8192)]
+    [Arguments(int.MaxValue)]
+    [Arguments(int.MinValue)]
+    public async Task StructuralValidity_RejectsIndicesOutsideTheThirteenBitSpace(int index13)
+    {
+        await Assert.That(ShiftJisKanjiTable.IsStructurallyValid(index13)).IsFalse();
+    }
+
+    /// <summary>
+    /// Pins all 8,192 entries at once. The other tests here constrain only WHICH cells
+    /// are assigned; a table whose readings were permuted within a row satisfies every
+    /// one of them, and that is exactly how a regenerated table can go wrong. Update
+    /// this hash only together with a deliberate, reviewed regeneration.
+    /// </summary>
+    [Test]
+    public async Task Table_MatchesItsGoldenDigest()
+    {
+        var bytes = new byte[ShiftJisKanjiTable.IndexCount * 2];
+        for (var index = 0; index < ShiftJisKanjiTable.IndexCount; index++)
+        {
+            var value = ShiftJisKanjiTable.Lookup(index);
+            bytes[index * 2] = (byte)value;
+            bytes[index * 2 + 1] = (byte)(value >> 8);
+        }
+
+        var digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+
+        await Assert.That(digest).IsEqualTo(GoldenDigest);
+    }
+
+    /// <summary>
+    /// SHA-256 of the 16,384-byte table, little-endian UTF-16 code units. On a
+    /// deliberate regeneration, `generate-kanji-table` prints the new value; paste it
+    /// here in the same reviewed change.
+    /// </summary>
+    private const string GoldenDigest = "7C0016107C60919AF564AA12482CB915BBA964D74E2A107D172C7C1C9490D2E2";
 
     /// <summary>Every assigned cell is structurally expressible; the reverse does not hold.</summary>
     [Test]

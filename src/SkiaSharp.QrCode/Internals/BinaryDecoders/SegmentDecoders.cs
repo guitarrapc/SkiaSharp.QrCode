@@ -1,5 +1,4 @@
 using System.Buffers;
-using System.Runtime.CompilerServices;
 using System.Text;
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
 
@@ -131,14 +130,7 @@ internal static class SegmentDecoders
     /// encoders produced. Unmapped cells fail the segment rather than yielding a
     /// replacement character, because a Kanji segment carries no redundancy of its
     /// own and a guessed character is indistinguishable from a correct one.
-    /// <para>
-    /// Not inlined on purpose: Kanji is a cold arm in all three bitstream loops (no
-    /// generator in this library emits it), so it should not spend their inlining
-    /// budget. This was not shown to move any benchmark, it keeps the hot loops the
-    /// size they were.
-    /// </para>
     /// </remarks>
-    [MethodImpl(MethodImplOptions.NoInlining)]
     public static QRCodeDecodeStatus DecodeKanjiPayload(ref BitReader reader, int totalBits, int count, Span<char> destination, ref int charsWritten)
     {
         // Bitstream sufficiency first; see DecodeNumericPayload for why the order matters.

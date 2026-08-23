@@ -134,8 +134,8 @@ internal static class RmQRConstants
     // The count widths below predate Kanji decode support: no oracle emitted Kanji then, so that
     // column is pinned by derivation instead: Table 3 takes the narrowest count field
     // that still expresses the largest count the version's M-level data capacity
-    // allows, a rule that reproduces all 96 verified widths exactly. The table is kept
-    // so adding the mode later is a data + segment change.
+    // allows, a rule that reproduces all 96 verified widths exactly. The column is now read on every Kanji
+    // segment the decoder meets.
     private static ReadOnlySpan<byte> numericCountBits =>
     [
         4, 5, 6, 7, 7,
@@ -318,7 +318,11 @@ internal static class RmQRConstants
         _ => byteCountBits[Index(version)],
     }; // unsupported modes throw from GetModeIndex, the single "not supported by rMQR" message on every path
 
-    /// <summary>Kanji count indicator width; spec-transcribed, pinned by the narrowest-field derivation and exercised by the qrtool Kanji fixtures.</summary>
+    /// <summary>
+    /// Kanji count indicator width; spec-transcribed, pinned by the narrowest-field
+    /// derivation and read for real by the qrtool Kanji fixtures, which cover widths
+    /// 4, 5 and 7 (R11x43 / R13x59 / R15x59 / R17x139); 2, 3 and 6 rest on the derivation.
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetKanjiCountIndicatorLength(RmQRVersion version) => kanjiCountBits[Index(version)];
 

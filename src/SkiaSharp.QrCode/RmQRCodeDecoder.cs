@@ -18,7 +18,10 @@ namespace SkiaSharp.QrCode;
 /// strength (⌊ecc/2⌋ per block) and reported in <see cref="RmQRCodeDecodeInfo.ErrorsCorrected"/>.
 /// Numeric, Alphanumeric and Byte segments (ISO-8859-1 / UTF-8, with or without ECI)
 /// are supported, plus Kanji segments decoded as JIS X 0208; the generator never emits
-/// Kanji, so it is a read-only mode here.
+/// Kanji, so it is a read-only mode here. A Kanji cell outside the JIS X 0208
+/// repertoire fails the whole symbol with
+/// <see cref="QRCodeDecodeStatus.UnsupportedContent"/> rather than substituting a
+/// replacement character.
 /// </remarks>
 public static class RmQRCodeDecoder
 {
