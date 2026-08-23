@@ -379,7 +379,7 @@ Yes, SkiaSharp.QrCode works in Blazor WebAssembly & Pure WebAssembly.
 
 Yes, fully supported. See the [Platform-Specific Considerations](#platform-specific-considerations) section for details on required native assets.
 
-### ISO-8859-2 and other encodings supports
+### Are ISO-8859-2 and other encodings supported?
 
 Encoding: SkiaSharp.QrCode writes ISO-8859-1 and UTF-8. Other encodings (e.g. ISO-8859-2, Shift JIS) are not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice.
 
