@@ -151,6 +151,32 @@ public class QRBinaryDecoderUnitTest
         await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.UnsupportedContent);
     }
 
+    /// <summary>
+    /// Every mode's count indicator has to be bounded from the NEAR side, one bit
+    /// short, not only by leaving no room at all. A guard weakened by one bit lets
+    /// <see cref="BitReader"/> read past the buffer — <c>totalBits</c> is
+    /// <c>data.Length * 8</c> here, so capacity and buffer end together — and it throws
+    /// <see cref="InvalidOperationException"/> out of a bool-returning <c>TryDecode</c>.
+    /// </summary>
+    /// <remarks>
+    /// Each stream is 32 bits: a complete leading segment, the mode indicator under
+    /// test, and filler that is one bit short of that mode's count width. The filler is
+    /// never read — the guard fires first — so its content does not matter.
+    /// </remarks>
+    [Test]
+    [Arguments("0010" + "000000001" + "001010", ModeNumeric, 9)]        // 10-bit numeric count, 9 bits left
+    [Arguments("0100" + "00000001" + "01000001", ModeAlphanumeric, 8)]  // 9-bit alphanumeric count, 8 bits left
+    [Arguments("0001" + "0000000010" + "0001100", ModeByte, 7)]         // 8-bit byte count, 7 bits left
+    public async Task CountIndicatorOneBitShort_ReturnsInvalidBitstream(string prefix, int mode, int bitsLeft)
+    {
+        var data = Build((Convert.ToInt32(prefix, 2), prefix.Length), (mode, 4), (0, bitsLeft));
+
+        await Assert.That(data.Length * 8).IsEqualTo(prefix.Length + 4 + bitsLeft)
+            .Because("the stream must end exactly on the byte boundary the filler was sized for");
+
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+    }
+
     // Kanji mode (decode only: no generator in this library emits it)
 
     /// <summary>ISO/IEC 18004 8.4.5 compaction, so the streams below read as hand-made.</summary>
