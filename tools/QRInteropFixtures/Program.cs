@@ -1,5 +1,10 @@
 using QRInteropFixtures;
 
+// ZXing.Net resolves Shift_JIS through static initializers that run on first use, so
+// the CodePages provider has to be registered before any encoding happens; otherwise
+// Kanji-mode cases silently fall back to Byte mode.
+_ = KanjiPayload.ShiftJis;
+
 // Regenerates the committed fixture corpus under tests/SkiaSharp.QrCode.Tests/Fixtures/.
 // Fixtures are produced by external (non-SkiaSharp.QrCode) encoders so the corpus can
 // serve as an independent conformance oracle. See
@@ -36,9 +41,30 @@ if (command == "probe-rmqr-capacity")
     // Backs the Correction cap decision in specs/rmqr-decoder.md.
     return RmQRCapacityProbe.Run();
 }
+if (command == "generate-kanji-table")
+{
+    // Emits src/SkiaSharp.QrCode/Internals/ShiftJisKanjiTable.cs from the sweep data.
+    return KanjiTableGenerator.Run(FindRepoRoot());
+}
+if (command == "probe-kanji-sweep")
+{
+    // Sweeps every Kanji-mode cell through qrtool + zxing-cpp and diffs against CP932.
+    return KanjiSweepProbe.Run(FindRepoRoot());
+}
+if (command == "probe-kanji-mapping")
+{
+    // Which Shift_JIS mapping (JIS X 0208 vs CP932) each oracle reader applies.
+    return KanjiMappingProbe.Run(FindRepoRoot());
+}
+if (command == "probe-kanji")
+{
+    // Which external encoder lineages can emit Kanji mode, per symbology.
+    // Backs the fixture plan for Kanji decode support.
+    return KanjiProbe.Run();
+}
 if (command != "regenerate")
 {
-    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity]");
+    Console.Error.WriteLine($"Unknown command '{command}'. Usage: dotnet run --project tools/QRInteropFixtures -- [regenerate|spot-check-microqr|spot-check-rmqr|probe-creator|probe-rmqr|probe-rmqr-capacity|probe-kanji|probe-kanji-mapping|probe-kanji-sweep|generate-kanji-table]");
     return 1;
 }
 

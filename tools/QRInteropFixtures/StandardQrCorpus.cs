@@ -40,7 +40,30 @@ public static class StandardQrCorpus
         cases.Add(new("byte-utf8-japanese-h", "こんにちは世界、QRコードのテストです。", "H", Utf8: true));
         cases.Add(new("byte-utf8-emoji-m", "Emoji 🎌 test ✅ done", "M", Utf8: true));
 
+        // Kanji mode (ISO/IEC 18004 8.4.5): this library reads it but never emits it,
+        // so these are the only symbols that exercise the JIS X 0208 decode path.
+        // ZXing.Net encodes through .NET CP932, so payloads stay clear of the seven
+        // cells where CP932 and JIS X 0208 disagree; those live in the qrtool-generated
+        // rMQR case, where the corpus supplies the Shift_JIS bytes directly.
+        cases.Add(new("kanji-hello-m", "こんにちは世界", "M", Mode: "Kanji"));
+        cases.Add(new("kanji-hello-h", "こんにちは世界", "H", Mode: "Kanji"));
+        cases.Add(new("kanji-mixed-scripts-m", "日本語漢字符号化試験用文字列", "M", Mode: "Kanji"));
+        cases.Add(new("kanji-hiragana-katakana-l", "ひらがなカタカナ漢字混在", "L", Mode: "Kanji"));
+        cases.Add(new("kanji-long-q", RepeatKanji(120), "Q", Mode: "Kanji"));
+
         return cases;
+    }
+
+    /// <summary>A fixed cyclic run of JIS X 0208 characters, for the larger Kanji versions.</summary>
+    private static string RepeatKanji(int count)
+    {
+        const string Cycle = "日本語漢字符号化試験用文字列";
+        var sb = new StringBuilder(count);
+        while (sb.Length < count)
+        {
+            sb.Append(Cycle, 0, Math.Min(Cycle.Length, count - sb.Length));
+        }
+        return sb.ToString();
     }
 
     private static string Digits(int count)

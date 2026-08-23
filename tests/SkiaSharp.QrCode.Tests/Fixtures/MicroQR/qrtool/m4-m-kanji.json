@@ -1,0 +1,17 @@
+{
+  "id": "m4-m-kanji",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "MicroQR",
+  "version": 4,
+  "width": 17,
+  "height": 17,
+  "errorCorrectionLevel": "M",
+  "mode": "Kanji",
+  "maskPattern": 0,
+  "payloadText": "\u65E5\u672C\u8A9E\u7B26",
+  "payloadUtf8Hex": "E697A5E69CACE8AA9EE7ACA6",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

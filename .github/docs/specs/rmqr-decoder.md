@@ -37,7 +37,7 @@ Behavior: shared Otsu threshold and finder candidates → local grid frames arou
 
 ### Not supported
 
-- Kanji mode segments (`UnsupportedContent`), FNC1, Structured Append (rMQR does not define it), ECI assignments other than the four above (`UnsupportedContent`)
+- FNC1, Structured Append (rMQR does not define it), ECI assignments other than the four above (`UnsupportedContent`). Kanji mode segments are decoded (JIS X 0208) since the Kanji decode work, but never encoded
 - Strong perspective, uneven lighting, blur, and heavily styled symbols below about 5 px/module (rounded modules + gradients make the finder runs too fuzzy; the same styling decodes at 8+ px/module)
 
 ## Why

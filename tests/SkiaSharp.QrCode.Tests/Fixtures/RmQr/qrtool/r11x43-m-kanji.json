@@ -1,0 +1,18 @@
+{
+  "id": "r11x43-m-kanji",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 12,
+  "versionName": "R11x43",
+  "width": 43,
+  "height": 11,
+  "errorCorrectionLevel": "M",
+  "mode": "Kanji",
+  "maskPattern": 4,
+  "payloadText": "\u65E5\u672C\u8A9E\u6F22\u5B57",
+  "payloadUtf8Hex": "E697A5E69CACE8AA9EE6BCA2E5AD97",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

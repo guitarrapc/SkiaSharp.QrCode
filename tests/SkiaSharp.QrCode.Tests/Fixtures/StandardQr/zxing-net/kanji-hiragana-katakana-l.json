@@ -1,0 +1,17 @@
+{
+  "id": "kanji-hiragana-katakana-l",
+  "generator": "zxing-net",
+  "generatorVersion": "0.16.11\u002Ba334de0239ee1cbd2aadef3396929fa031d2292b",
+  "symbolType": "StandardQR",
+  "version": 2,
+  "width": 25,
+  "height": 25,
+  "errorCorrectionLevel": "L",
+  "mode": "Kanji",
+  "maskPattern": 0,
+  "payloadText": "\u3072\u3089\u304C\u306A\u30AB\u30BF\u30AB\u30CA\u6F22\u5B57\u6DF7\u5728",
+  "payloadUtf8Hex": "E381B2E38289E3818CE381AAE382ABE382BFE382ABE3838AE6BCA2E5AD97E6B7B7E59CA8",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8
+}

@@ -1,0 +1,18 @@
+{
+  "id": "r15x59-m-kanji-jisx0208-divergent",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 24,
+  "versionName": "R15x59",
+  "width": 59,
+  "height": 15,
+  "errorCorrectionLevel": "M",
+  "mode": "Kanji",
+  "maskPattern": 4,
+  "payloadText": "\\\u301C\u2016\u2212\u00A2\u00A3\u00AC",
+  "payloadUtf8Hex": "5CE3809CE28096E28892C2A2C2A3C2AC",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

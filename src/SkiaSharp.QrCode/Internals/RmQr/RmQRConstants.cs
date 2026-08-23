@@ -29,7 +29,7 @@ internal static class RmQRConstants
     /// <summary>Terminator is 000 (3 bits), shortened at capacity.</summary>
     public const int TerminatorLength = 3;
 
-    /// <summary>Kanji mode indicator value; the mode itself is not implemented (symbology scope decision).</summary>
+    /// <summary>Kanji mode indicator value; decoded but never encoded (symbology scope decision).</summary>
     public const int KanjiModeIndicatorValue = 0b100;
 
     // XOR masks applied to the 18-bit BCH word of each format-information copy.
@@ -131,7 +131,7 @@ internal static class RmQRConstants
 
     // Character count indicator widths per version index (ISO/IEC 23941 Table 3).
     // Numeric / Alphanumeric / Byte were read back from oracle bit streams (96/96).
-    // No oracle here emits Kanji (the mode is intentionally unimplemented), so that
+    // The count widths below predate Kanji decode support: no oracle emitted Kanji then, so that
     // column is pinned by derivation instead: Table 3 takes the narrowest count field
     // that still expresses the largest count the version's M-level data capacity
     // allows, a rule that reproduces all 96 verified widths exactly. The table is kept
@@ -318,7 +318,7 @@ internal static class RmQRConstants
         _ => byteCountBits[Index(version)],
     }; // unsupported modes throw from GetModeIndex, the single "not supported by rMQR" message on every path
 
-    /// <summary>Kanji count indicator width; spec-transcribed, unverified (Kanji mode is not implemented).</summary>
+    /// <summary>Kanji count indicator width; spec-transcribed, pinned by the narrowest-field derivation and exercised by the qrtool Kanji fixtures.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetKanjiCountIndicatorLength(RmQRVersion version) => kanjiCountBits[Index(version)];
 

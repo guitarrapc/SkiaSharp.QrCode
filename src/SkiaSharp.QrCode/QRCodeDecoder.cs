@@ -12,7 +12,8 @@ namespace SkiaSharp.QrCode;
 /// <para>
 /// Supported content: Numeric, Alphanumeric and Byte mode segments (ISO-8859-1 and
 /// UTF-8, with or without ECI headers), the full version range 1-40 and all ECC levels.
-/// Kanji mode, FNC1 and Structured Append are detected and reported as
+/// Kanji mode is decoded as JIS X 0208; the generator never emits it, so Kanji is a
+/// read-only mode here. FNC1 and Structured Append are detected and reported as
 /// <see cref="QRCodeDecodeStatus.UnsupportedContent"/>.
 /// </para>
 /// <para>

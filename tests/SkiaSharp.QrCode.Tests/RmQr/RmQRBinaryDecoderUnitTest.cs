@@ -99,11 +99,49 @@ public class RmQRBinaryDecoderUnitTest
         await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.UnsupportedContent);
     }
 
-    [Test]
-    public async Task Decode_Kanji_ReportsUnsupportedContent()
+    // Kanji mode (decode only; the rMQR encoder never emits it)
+
+    /// <summary>ISO/IEC 18004 8.4.5 compaction, rendered as a 13-bit string.</summary>
+    private static string Kanji(int sjis)
     {
-        var data = Bits("100 00001 1000000000000 000", 6);
+        var shifted = sjis >= 0xE040 ? sjis - 0xC140 : sjis - 0x8140;
+        return Convert.ToString(((shifted >> 8) * 0xC0) + (shifted & 0xFF), 2).PadLeft(13, '0');
+    }
+
+    /// <summary>R7x43 Kanji: 3-bit mode indicator 100, 2-bit count, 13 bits per character.</summary>
+    [Test]
+    public async Task Decode_Kanji_DecodesToJisX0208()
+    {
+        var data = Bits("100 10 " + Kanji(0x93FA) + Kanji(0x967B) + " 000", 6);
+        var (status, text) = Decode(data, RmQRVersion.R7x43);
+
+        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("日本");
+    }
+
+    /// <summary>A wider version uses a wider count indicator; R13x139 Kanji is 7 bits.</summary>
+    [Test]
+    public async Task Decode_Kanji_UsesThePerVersionCountWidth()
+    {
+        var data = Bits("100 0000001 " + Kanji(0x8A45) + " 000", 20);
+        var (status, text) = Decode(data, RmQRVersion.R13x139);
+
+        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("界");
+    }
+
+    [Test]
+    public async Task Decode_KanjiCellOutsideJisX0208_ReportsUnsupportedContent()
+    {
+        var data = Bits("100 01 " + Kanji(0x8740) + " 000", 6); // NEC row 13, CP932-only
         await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.UnsupportedContent);
+    }
+
+    [Test]
+    public async Task Decode_KanjiStructurallyImpossibleCell_ReportsInvalidBitstream()
+    {
+        var data = Bits("100 01 0000000111111 000", 6); // low byte 0x3F: no such Shift_JIS trail byte
+        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
     }
 
     [Test]

@@ -10,7 +10,8 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 /// <remarks>
 /// Inverse of <see cref="QRBinaryEncoder"/>. Supports the segments the encoder can
 /// produce, Numeric, Alphanumeric, Byte (ISO-8859-1 / UTF-8) and ECI headers, plus
-/// multi-segment streams from other encoders. Kanji mode, FNC1 and Structured Append
+/// multi-segment streams from other encoders. Kanji mode is decoded as JIS X 0208
+/// (decode only: this library never emits it). FNC1 and Structured Append
 /// are recognized but reported as <see cref="QRCodeDecodeStatus.UnsupportedContent"/>.
 /// <para>
 /// Byte segments without an ECI header have no declared charset (ISO/IEC 18004
@@ -132,6 +133,16 @@ internal static class QRBinaryDecoder
                             break;
                         }
                     case ModeKanji:
+                        {
+                            var countBits = EncodingModeExtensions.GetKanjiCountIndicatorLength(version);
+                            if (totalBits - reader.BitPosition < countBits)
+                                return QRCodeDecodeStatus.InvalidBitstream;
+                            var count = reader.Reads(countBits);
+                            var status = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
+                            if (status != QRCodeDecodeStatus.Success)
+                                return status;
+                            break;
+                        }
                     case ModeStructuredAppend:
                     case ModeFnc1First:
                     case ModeFnc1Second:

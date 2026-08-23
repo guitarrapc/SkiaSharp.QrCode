@@ -1,0 +1,17 @@
+{
+  "id": "kanji-hello-m",
+  "generator": "zxing-net",
+  "generatorVersion": "0.16.11\u002Ba334de0239ee1cbd2aadef3396929fa031d2292b",
+  "symbolType": "StandardQR",
+  "version": 1,
+  "width": 21,
+  "height": 21,
+  "errorCorrectionLevel": "M",
+  "mode": "Kanji",
+  "maskPattern": 0,
+  "payloadText": "\u3053\u3093\u306B\u3061\u306F\u4E16\u754C",
+  "payloadUtf8Hex": "E38193E38293E381ABE381A1E381AFE4B896E7958C",
+  "eciCharset": null,
+  "quietZoneModules": 4,
+  "pixelsPerModule": 8
+}

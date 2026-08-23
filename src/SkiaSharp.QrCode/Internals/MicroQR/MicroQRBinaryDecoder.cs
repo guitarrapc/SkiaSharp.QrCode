@@ -12,8 +12,9 @@ namespace SkiaSharp.QrCode.Internals.MicroQR;
 /// Standard QR (ISO/IEC 18004 Table 2/3):
 /// <list type="bullet">
 /// <item>Mode indicator is version − 1 bits wide (M1 has none; Numeric is implied).
-/// Values: Numeric = 0, Alphanumeric = 1, Byte = 2, Kanji = 3 (reported as
-/// <see cref="QRCodeDecodeStatus.UnsupportedContent"/>); M4 values 4-7 are undefined.</item>
+/// Values: Numeric = 0, Alphanumeric = 1, Byte = 2, Kanji = 3 (decoded as JIS X 0208
+/// via the shared <see cref="ShiftJisKanjiTable"/>, M3 and M4 only since narrower mode
+/// indicators cannot express it); M4 values 4-7 are undefined.</item>
 /// <item>Character count indicator is 3-6 bits (Numeric = version + 2, others = version + 1).</item>
 /// <item>The terminator (2·version + 1 zero bits) is exactly a Numeric mode
 /// indicator followed by an all-zero count, a zero-count Numeric segment ends the
@@ -31,6 +32,7 @@ internal static class MicroQRBinaryDecoder
     // Mode indicator values (ISO/IEC 18004 Table 2, Micro QR column).
     private const int ModeNumeric = 0;
     private const int ModeAlphanumeric = 1;
+    private const int ModeByte = 2;
     private const int ModeKanji = 3;
 
     /// <summary>
@@ -60,19 +62,27 @@ internal static class MicroQRBinaryDecoder
 
                 // M1 has no mode indicator; Numeric is implied.
                 var modeValue = modeBits == 0 ? ModeNumeric : reader.Reads(modeBits);
-                if (modeValue == ModeKanji)
-                    return QRCodeDecodeStatus.UnsupportedContent;
                 if (modeValue > ModeKanji)
                     return QRCodeDecodeStatus.InvalidBitstream; // M4 indicators 4-7 are undefined
 
-                var mode = modeValue switch
+                // Kanji is outside EncodingMode (that enum names the modes the encoder
+                // writes), so it takes an early branch and leaves the three encodable
+                // modes on exactly the shape they had before Kanji decoding existed.
+                int countBits;
+                if (modeValue == ModeKanji)
                 {
-                    ModeNumeric => EncodingMode.Numeric,
-                    ModeAlphanumeric => EncodingMode.Alphanumeric,
-                    _ => EncodingMode.Byte,
-                };
-
-                var countBits = MicroQRConstants.GetCountIndicatorLength(version, mode);
+                    countBits = MicroQRConstants.GetKanjiCountIndicatorLength(version);
+                }
+                else
+                {
+                    var mode = modeValue switch
+                    {
+                        ModeNumeric => EncodingMode.Numeric,
+                        ModeAlphanumeric => EncodingMode.Alphanumeric,
+                        _ => EncodingMode.Byte,
+                    };
+                    countBits = MicroQRConstants.GetCountIndicatorLength(version, mode);
+                }
                 if (totalBits - reader.BitPosition < countBits)
                 {
                     // A Numeric indicator (all zero bits) running out of room is a
@@ -108,11 +118,22 @@ internal static class MicroQRBinaryDecoder
                                 return status;
                             break;
                         }
-                    default:
+                    case ModeByte:
                         {
                             // Micro QR data codewords top out at 16 bytes (M4-L).
                             rentedBytes ??= ArrayPool<byte>.Shared.Rent(data.Length);
                             var status = SegmentDecoders.DecodeBytePayload(ref reader, totalBits, count, ByteSegmentCharset.Unspecified, rentedBytes, destination, ref charsWritten);
+                            if (status != QRCodeDecodeStatus.Success)
+                                return status;
+                            break;
+                        }
+                    default:
+                        {
+                            // Kanji, the only value left once 4-7 are rejected above.
+                            // Kept as default rather than an explicit case so the arms
+                            // stay contiguous 0-2 and the switch keeps the shape it had
+                            // before Kanji decoding existed.
+                            var status = SegmentDecoders.DecodeKanjiPayload(ref reader, totalBits, count, destination, ref charsWritten);
                             if (status != QRCodeDecodeStatus.Success)
                                 return status;
                             break;

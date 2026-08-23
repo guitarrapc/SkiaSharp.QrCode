@@ -88,7 +88,7 @@ public class RmQrFixtureTest
         await Assert.That(manifest.Version).IsEqualTo(index + 1);                       // RmQRVersion / libzint numbering
         await Assert.That(manifest.VersionName).IsEqualTo($"R{manifest.Height}x{manifest.Width}");
         await Assert.That(new[] { "M", "H" }.Contains(manifest.ErrorCorrectionLevel)).IsTrue();
-        await Assert.That(new[] { "Numeric", "Alphanumeric", "Byte" }.Contains(manifest.Mode)).IsTrue();
+        await Assert.That(new[] { "Numeric", "Alphanumeric", "Byte", "Kanji" }.Contains(manifest.Mode)).IsTrue();
         await Assert.That(manifest.MaskPattern).IsEqualTo(4);                            // reader-sourced: rMQR's single mask = Standard QR pattern 4
         await Assert.That(manifest.QuietZoneModules).IsEqualTo(2);
         await Assert.That(manifest.EciCharset).IsNull();

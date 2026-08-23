@@ -22,7 +22,8 @@ public enum QRCodeDecodeStatus
 
     /// <summary>
     /// The bitstream is well-formed but uses a feature this decoder does not support
-    /// (Kanji mode, FNC1, Structured Append, or an unsupported ECI charset).
+    /// (FNC1, Structured Append, an unsupported ECI charset, or a Kanji cell outside
+    /// the JIS X 0208 repertoire).
     /// </summary>
     UnsupportedContent,
 

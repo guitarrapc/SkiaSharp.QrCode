@@ -61,6 +61,10 @@ public sealed class QrtoolRmQRFixtureGenerator : IRmQRFixtureGenerator
         string output;
         try
         {
+            // Kanji mode takes raw Shift_JIS bytes; every other mode takes UTF-8 text.
+            if (caseDefinition.Mode == KanjiPayload.ModeName)
+                File.WriteAllBytes(payloadFile, KanjiPayload.ToShiftJisBytes(caseDefinition.PayloadText, caseDefinition.ShiftJisHex));
+            else
             File.WriteAllText(payloadFile, caseDefinition.PayloadText, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             output = Run($"encode --variant rmqr --symbol-version {caseDefinition.Height} {caseDefinition.Width} --error-correction-level {level} --mode {mode} --margin 0 --type ascii --read-from \"{payloadFile}\"");
         }

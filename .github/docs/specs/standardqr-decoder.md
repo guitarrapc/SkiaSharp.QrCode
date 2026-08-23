@@ -48,7 +48,6 @@ Matrix-level decoding takes an exact module matrix as input, so the tiers apply 
 
 The following are detected and reported; they are never misdecoded:
 
-- Kanji mode
 - FNC1
 - Structured Append
 - Other ECI charsets
@@ -85,7 +84,7 @@ Real-world photo robustness (strong perspective, uneven lighting, blur) is delib
 - **Version comes from the matrix size, not the version information blocks.** At the matrix level the size is exact; at the image level the dimension estimate is snapped to the nearest valid size. Reading the v7+ version info blocks would only matter for heavily damaged symbols, which are Tier-3 inputs (out of scope).
 - **Format decoding by exhaustive Hamming match, not BCH syndrome decoding.** There are only 32 valid patterns; comparing against all of them is simpler, branch-free, and naturally yields the minimum-distance decision.
 - **Byte-mode charset heuristic.** Without an ECI header the spec default is ISO-8859-1, but UTF-8 payloads are common in the wild. The decoder validates the payload as UTF-8 (strict RFC 3629) and falls back to ISO-8859-1, ASCII decodes identically either way, so the heuristic can only affect high-byte payloads.
-- **Kanji mode is rejected, not decoded.** Shift-JIS conversion needs `System.Text.Encoding.CodePages` on modern TFMs, a new dependency for a mode our encoder never produces. Revisit only on concrete demand.
+- **Kanji mode is decoded but never encoded.** Japanese-market encoders emit it, and a decoder that rejects those symbols leaves callers no way through; emitting it would change shipped generator output, which is a separate decision. The Shift_JIS conversion runs off a generated 16 KB JIS X 0208 table rather than `System.Text.Encoding.CodePages`, so no dependency is added, and the mapping is JIS X 0208 rather than CP932 (they disagree on seven cells). See [QR Symbology Architecture](qrcode-symbologies.md).
 
 ---
 

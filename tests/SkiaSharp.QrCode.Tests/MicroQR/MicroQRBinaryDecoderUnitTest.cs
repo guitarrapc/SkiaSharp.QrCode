@@ -78,11 +78,53 @@ public class MicroQRBinaryDecoderUnitTest
         await Assert.That(decoded).IsEqualTo(text);
     }
 
-    [Test]
-    public async Task DecodeBitStream_KanjiModeIndicator_ReportsUnsupportedContent()
+    // Kanji mode (decode only; M3 and M4 are the only versions that define it)
+
+    /// <summary>Bit-string builder for hand-made streams (MSB first, zero-padded).</summary>
+    private static byte[] Bits(string bits)
     {
-        // M4: 3-bit mode indicator 011 = Kanji, then a plausible count field.
-        var (status, _) = Decode([0b011_00001, 0x00, 0x00], dataBitCount: 80, MicroQRVersion.M4);
+        var clean = bits.Replace(" ", "");
+        var result = new byte[(clean.Length + 7) / 8];
+        for (var i = 0; i < clean.Length; i++)
+            if (clean[i] == '1')
+                result[i >> 3] |= (byte)(0x80 >> (i & 7));
+        return result;
+    }
+
+    /// <summary>ISO/IEC 18004 8.4.5 compaction, rendered as a 13-bit string.</summary>
+    private static string Kanji(int sjis)
+    {
+        var shifted = sjis >= 0xE040 ? sjis - 0xC140 : sjis - 0x8140;
+        return Convert.ToString(((shifted >> 8) * 0xC0) + (shifted & 0xFF), 2).PadLeft(13, '0');
+    }
+
+    /// <summary>M4 Kanji: 3-bit mode indicator 011, 4-bit count, 13 bits per character.</summary>
+    [Test]
+    public async Task DecodeBitStream_M4Kanji_DecodesToJisX0208()
+    {
+        var stream = "011" + "0010" + Kanji(0x93FA) + Kanji(0x967B);
+        var (status, text) = Decode(Bits(stream), dataBitCount: stream.Length, MicroQRVersion.M4);
+
+        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("日本");
+    }
+
+    /// <summary>M3 Kanji: 2-bit mode indicator 11, 3-bit count.</summary>
+    [Test]
+    public async Task DecodeBitStream_M3Kanji_DecodesToJisX0208()
+    {
+        var stream = "11" + "001" + Kanji(0x889F);
+        var (status, text) = Decode(Bits(stream), dataBitCount: stream.Length, MicroQRVersion.M3);
+
+        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEqualTo("亜");
+    }
+
+    [Test]
+    public async Task DecodeBitStream_M4Kanji_CellOutsideJisX0208_ReportsUnsupportedContent()
+    {
+        var stream = "011" + "0001" + Kanji(0x8740); // NEC row 13, CP932-only
+        var (status, _) = Decode(Bits(stream), dataBitCount: stream.Length, MicroQRVersion.M4);
 
         await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.UnsupportedContent);
     }

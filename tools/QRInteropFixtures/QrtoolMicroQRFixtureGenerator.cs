@@ -63,7 +63,11 @@ public sealed class QrtoolMicroQRFixtureGenerator : IMicroQRFixtureGenerator
         string output;
         try
         {
-            File.WriteAllText(payloadFile, caseDefinition.PayloadText, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            // Kanji mode takes raw Shift_JIS bytes; every other mode takes UTF-8 text.
+            if (caseDefinition.Mode == KanjiPayload.ModeName)
+                File.WriteAllBytes(payloadFile, KanjiPayload.ToShiftJisBytes(caseDefinition.PayloadText, caseDefinition.ShiftJisHex));
+            else
+                File.WriteAllText(payloadFile, caseDefinition.PayloadText, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             output = Run($"encode --variant micro --symbol-version {caseDefinition.Version} --error-correction-level {level} --mode {mode} --margin 0 --type ascii --read-from \"{payloadFile}\"");
         }
         finally

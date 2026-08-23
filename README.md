@@ -388,7 +388,7 @@ Currently, SkiaSharp.QrCode supports ISO-8859-1 and UTF-8. Other encodings (e.g.
 | Supported | Numeric | ISO-8859-1 |
 | Supported | Alphanumeric | ISO-8859-1 |
 | Supported | Byte | UTF-8 |
-| Not Supported | Kanji | Shift-JIS |
+| Decode only | Kanji | Shift JIS (JIS X 0208) |
 
 ### Does SVG output require SkiaSharp.Svg or other packages?
 
@@ -461,15 +461,15 @@ QR codes support four levels of error correction, which allow the code to remain
 
 QR codes support different encoding modes optimized for specific character types. SkiaSharp.QrCode automatically selects the most efficient mode for your content.
 
-> [!WARNING]
-> Kanji encoding is not supported. Use Byte mode for Japanese text.
+> [!NOTE]
+> Kanji is decode only. The decoders read Kanji segments produced by other encoders (JIS X 0208), but the generators always write Japanese text in Byte mode as UTF-8.
 
 | Mode | Character Set | Bits per Character | Example |
 |------|--------------|-------------------|---------|
 | **Numeric** | 0-9 | ~3.3 bits | Phone numbers, postal codes |
 | **Alphanumeric** | 0-9, A-Z, space, $ % * + - . / : | ~5.5 bits | URLs (uppercase), product codes |
 | **Byte** | ISO-8859-1, UTF-8 | 8 bits | Text, mixed-case URLs, non-ASCII text |
-| **Kanji** (**Not supported**) | Shift JIS characters | 13 bits | Japanese text |
+| **Kanji** (**decode only**) | Shift JIS (JIS X 0208) characters | 13 bits | Japanese text from other encoders |
 
 ### Version and Size
 

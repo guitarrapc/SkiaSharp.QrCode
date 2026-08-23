@@ -76,6 +76,22 @@ public static class RmQRCorpus
         cases.Add(new("r13x59-m-utf8-japanese", "こんにちは世界", "M", 13, 59, "Byte", Utf8: true));      // 21 bytes of 36
         cases.Add(new("r17x139-h-utf8-mixed", "rMQR 矩形コード ✓ naïve café", "H", 17, 139, "Byte", Utf8: true));
 
+        // Kanji mode (ISO/IEC 23941 7.4.5, mode indicator 100): decode-only for this
+        // library, so external symbols are the only way to exercise it. qrtool takes
+        // the payload as raw Shift_JIS bytes; libzint cannot produce Kanji at all.
+        cases.Add(new("r11x43-m-kanji", "日本語漢字", "M", 11, 43, "Kanji"));
+        cases.Add(new("r13x59-h-kanji", "漢字試験", "H", 13, 59, "Kanji"));
+        cases.Add(new("r17x139-m-kanji-long", Cyclic("日本語漢字符号化試験用文字列", 60), "M", 17, 139, "Kanji"));
+
+        // The seven cells where JIS X 0208 and CP932 disagree, with the Shift_JIS bytes
+        // pinned because .NET cannot encode the JIS X 0208 readings (U+301C is not in
+        // CP932). This is the fixture that fails if the table is ever rebuilt from CP932.
+        cases.Add(new(
+            "r15x59-m-kanji-jisx0208-divergent",
+            "\\〜‖−¢£¬",
+            "M", 15, 59, "Kanji",
+            ShiftJisHex: "815F81608161817C8191819281CA"));
+
         return [.. cases];
     }
 

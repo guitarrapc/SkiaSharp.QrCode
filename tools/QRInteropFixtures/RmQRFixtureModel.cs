@@ -10,7 +10,7 @@ namespace QRInteropFixtures;
 /// <param name="Height">Symbol height in modules (7, 9, 11, 13, 15, 17).</param>
 /// <param name="Width">Symbol width in modules (27, 43, 59, 77, 99, 139).</param>
 /// <param name="Mode">"Numeric", "Alphanumeric" or "Byte".</param>
-public sealed record RmQRFixtureCaseDefinition(string Id, string PayloadText, string ErrorCorrectionLevel, int Height, int Width, string Mode, bool Utf8 = false)
+public sealed record RmQRFixtureCaseDefinition(string Id, string PayloadText, string ErrorCorrectionLevel, int Height, int Width, string Mode, bool Utf8 = false, string? ShiftJisHex = null)
 {
     public string VersionName => $"R{Height}x{Width}";
 }

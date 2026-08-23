@@ -31,7 +31,11 @@ public sealed class ZintMicroQRFixtureGenerator : IMicroQRFixtureGenerator
     }
 
     /// <summary>libzint (through the ZXingCpp wrapper) rejects non-ASCII input for Micro QR.</summary>
-    public bool SupportsCase(MicroQRFixtureCaseDefinition caseDefinition) => !caseDefinition.Utf8;
+    /// <summary>
+    /// libzint (through the ZXingCpp wrapper) rejects non-ASCII input, and it never
+    /// selects Kanji mode: given Shift_JIS bytes it emits Byte mode instead.
+    /// </summary>
+    public bool SupportsCase(MicroQRFixtureCaseDefinition caseDefinition) => !caseDefinition.Utf8 && caseDefinition.Mode != KanjiPayload.ModeName;
 
     public GeneratedFixture Generate(MicroQRFixtureCaseDefinition caseDefinition)
     {

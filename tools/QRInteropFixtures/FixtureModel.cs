@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace QRInteropFixtures;
 
 /// <summary>Input definition of one corpus case, independent of any generator.</summary>
-public sealed record FixtureCaseDefinition(string Id, string PayloadText, string ErrorCorrectionLevel, bool Utf8 = false);
+public sealed record FixtureCaseDefinition(string Id, string PayloadText, string ErrorCorrectionLevel, bool Utf8 = false, string? Mode = null);
 
 /// <summary>
 /// Manifest written as case-name.json. Field set matches the schema documented in

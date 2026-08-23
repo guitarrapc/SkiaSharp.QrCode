@@ -1,0 +1,18 @@
+{
+  "id": "r13x59-h-kanji",
+  "generator": "qrtool",
+  "generatorVersion": "0.13.2",
+  "symbolType": "rMQR",
+  "version": 19,
+  "versionName": "R13x59",
+  "width": 59,
+  "height": 13,
+  "errorCorrectionLevel": "H",
+  "mode": "Kanji",
+  "maskPattern": 4,
+  "payloadText": "\u6F22\u5B57\u8A66\u9A13",
+  "payloadUtf8Hex": "E6BCA2E5AD97E8A9A6E9A893",
+  "eciCharset": null,
+  "quietZoneModules": 2,
+  "pixelsPerModule": 8
+}

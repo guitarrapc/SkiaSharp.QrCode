@@ -141,7 +141,6 @@ public class QRBinaryDecoderUnitTest
     // Unsupported content (recognized but rejected, never misdecoded)
 
     [Test]
-    [Arguments(ModeKanji)]
     [Arguments(ModeStructuredAppend)]
     [Arguments(ModeFnc1First)]
     [Arguments(ModeFnc1Second)]
@@ -150,6 +149,85 @@ public class QRBinaryDecoderUnitTest
         var data = Build((mode, 4), (0, 12));
 
         await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.UnsupportedContent);
+    }
+
+    // Kanji mode (decode only: no generator in this library emits it)
+
+    /// <summary>ISO/IEC 18004 8.4.5 compaction, so the streams below read as hand-made.</summary>
+    private static int Kanji(int sjis)
+    {
+        var shifted = sjis >= 0xE040 ? sjis - 0xC140 : sjis - 0x8140;
+        return ((shifted >> 8) * 0xC0) + (shifted & 0xFF);
+    }
+
+    [Test]
+    public async Task KanjiSegment_DecodesToJisX0208()
+    {
+        // Version 1 Kanji count indicator is 8 bits; 7 characters at 13 bits each.
+        var data = Build(
+            (ModeKanji, 4), (7, 8),
+            (Kanji(0x82B1), 13), (Kanji(0x82F1), 13), (Kanji(0x82C9), 13),
+            (Kanji(0x82BF), 13), (Kanji(0x82CD), 13), (Kanji(0x90A2), 13), (Kanji(0x8A45), 13),
+            (ModeTerminator, 4));
+
+        var status = Decode(data, out var text);
+
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEquivalentTo("こんにちは世界");
+    }
+
+    /// <summary>A Kanji segment can sit beside the other modes in one stream.</summary>
+    [Test]
+    public async Task KanjiSegment_MixedWithOtherModes_ConcatenatesInOrder()
+    {
+        var data = Build(
+            (ModeAlphanumeric, 4), (1, 9), (10, 6),
+            (ModeKanji, 4), (1, 8), (Kanji(0x889F), 13),
+            (ModeNumeric, 4), (1, 10), (7, 4),
+            (ModeTerminator, 4));
+
+        var status = Decode(data, out var text);
+
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEquivalentTo("A亜7");
+    }
+
+    /// <summary>The wave dash is the cell a CP932-derived table would silently get wrong.</summary>
+    [Test]
+    public async Task KanjiSegment_DivergentCell_UsesJisX0208Reading()
+    {
+        var data = Build((ModeKanji, 4), (1, 8), (Kanji(0x8160), 13), (ModeTerminator, 4));
+
+        var status = Decode(data, out var text);
+
+        await Assert.That(status).IsEquivalentTo(QRCodeDecodeStatus.Success);
+        await Assert.That(text).IsEquivalentTo("〜");
+    }
+
+    /// <summary>NEC row 13 is CP932-only: well-formed, but outside the chosen repertoire.</summary>
+    [Test]
+    public async Task KanjiSegment_CellOutsideJisX0208_ReturnsUnsupportedContent()
+    {
+        var data = Build((ModeKanji, 4), (1, 8), (Kanji(0x8740), 13), (ModeTerminator, 4));
+
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.UnsupportedContent);
+    }
+
+    [Test]
+    public async Task KanjiSegment_StructurallyImpossibleCell_ReturnsInvalidBitstream()
+    {
+        // Low byte 0x3F would require Shift_JIS trail byte 0x7F, which does not exist.
+        var data = Build((ModeKanji, 4), (1, 8), (0x3F, 13), (ModeTerminator, 4));
+
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
+    }
+
+    [Test]
+    public async Task KanjiSegment_CountExceedsRemainingBits_ReturnsInvalidBitstream()
+    {
+        var data = Build((ModeKanji, 4), (40, 8), (Kanji(0x889F), 13), (ModeTerminator, 4));
+
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.InvalidBitstream);
     }
 
     [Test]

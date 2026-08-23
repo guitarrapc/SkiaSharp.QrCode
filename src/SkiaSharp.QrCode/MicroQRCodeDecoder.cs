@@ -11,8 +11,8 @@ namespace SkiaSharp.QrCode;
 /// <remarks>
 /// <para>
 /// Supported content: Numeric, Alphanumeric and Byte mode segments (ISO-8859-1 and
-/// UTF-8), all versions M1-M4 and all legal ECC levels. Kanji mode is detected and
-/// reported as <see cref="QRCodeDecodeStatus.UnsupportedContent"/>. Micro QR has no
+/// UTF-8), all versions M1-M4 and all legal ECC levels, plus Kanji mode segments in
+/// M3 and M4 (decoded as JIS X 0208; this library never emits them). Micro QR has no
 /// ECI mode; byte segments use UTF-8 when the payload validates as UTF-8 and
 /// ISO-8859-1 otherwise (matching this library's encoder).
 /// </para>
