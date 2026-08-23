@@ -188,8 +188,9 @@ public static class KanjiTableGenerator
             /// <remarks>
             /// <para>
             /// The mapping is JIS X 0208, not Microsoft CP932; the two disagree, and the
-            /// cells CP932 adds stay unmapped here so a symbol carrying them is reported
-            /// as unsupported rather than silently rewritten. The canonical statement of
+            /// cells CP932 adds stay unmapped here, so a symbol carrying them is reported
+            /// as QRCodeDecodeStatus.UnmappedCharacter rather than silently rewritten. The
+            /// canonical statement of
             /// the divergence set and the reasoning is the scope decision in
             /// .github/docs/specs/qrcode-symbologies.md; keep the counts out of this file
             /// so a regeneration cannot reintroduce a stale copy (they were wrong in four
@@ -199,8 +200,9 @@ public static class KanjiTableGenerator
             /// Unmapped cells hold 0, which is never a legitimate JIS X 0208 mapping. The
             /// caller separates the two reasons a cell can be unmapped with
             /// <see cref="IsStructurallyValid"/>: a value no Shift_JIS pair can express is a
-            /// corrupt bitstream, a well-formed value outside the repertoire is unsupported
-            /// content.
+            /// corrupt bitstream (QRCodeDecodeStatus.InvalidBitstream), a well-formed value
+            /// outside the repertoire is a character this mapping has no reading for
+            /// (QRCodeDecodeStatus.UnmappedCharacter).
             /// </para>
             /// </remarks>
             internal static class ShiftJisKanjiTable
@@ -227,7 +229,8 @@ public static class KanjiTableGenerator
 
                 /// <summary>
                 /// True when some Shift_JIS pair in the Kanji-mode ranges can produce this
-                /// value. False means the bitstream is corrupt, not merely unsupported.
+                /// value. False means the bitstream is corrupt, not merely unmapped: the two
+                /// get different statuses, InvalidBitstream and UnmappedCharacter.
                 /// </summary>
                 [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public static bool IsStructurallyValid(int index13)

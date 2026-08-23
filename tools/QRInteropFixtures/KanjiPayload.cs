@@ -18,6 +18,13 @@ public static class KanjiPayload
 
     private static Encoding? shiftJis;
 
+    /// <summary>
+    /// CP932 that THROWS on an unencodable character instead of substituting '?'.
+    /// </summary>
+    /// <remarks>
+    /// Registering the provider is also what makes ZXing.Net able to resolve Shift_JIS
+    /// at all, so touching this property early is load-bearing beyond its return value.
+    /// </remarks>
     public static Encoding ShiftJis
     {
         get
@@ -25,7 +32,7 @@ public static class KanjiPayload
             if (shiftJis is null)
             {
                 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-                shiftJis = Encoding.GetEncoding(932);
+                shiftJis = Encoding.GetEncoding(932, EncoderFallback.ExceptionFallback, DecoderFallback.ReplacementFallback);
             }
             return shiftJis;
         }
@@ -35,18 +42,27 @@ public static class KanjiPayload
     /// The bytes to hand an encoder for this case: the explicit ones when the case
     /// pins them, otherwise the CP932 encoding of the payload text.
     /// </summary>
+    /// <remarks>
+    /// Detection of an unencodable character is the encoder's job, not a scan of the
+    /// output for '?'. That scan cannot work: CP932 substitutes '?' for what it cannot
+    /// encode, so a payload that legitimately contains '?' makes the substitution
+    /// indistinguishable from the real thing, and the corpus would ship a fixture
+    /// asserting text the symbol does not carry — exactly the failure the corpus exists
+    /// to catch.
+    /// </remarks>
     public static byte[] ToShiftJisBytes(string payloadText, string? shiftJisHex)
     {
         if (shiftJisHex is not null)
             return Convert.FromHexString(shiftJisHex);
 
-        var bytes = ShiftJis.GetBytes(payloadText);
-        // A '?' that the payload did not contain means CP932 dropped a character:
-        // silently shipping it would put a fixture in the corpus that asserts the
-        // wrong text, which is exactly what the corpus exists to catch.
-        if (!payloadText.Contains('?') && Array.IndexOf(bytes, (byte)'?') >= 0)
-            throw new InvalidOperationException($"CP932 cannot encode \"{payloadText}\"; pin the Shift_JIS bytes on the case instead.");
-
-        return bytes;
+        try
+        {
+            return ShiftJis.GetBytes(payloadText);
+        }
+        catch (EncoderFallbackException ex)
+        {
+            throw new InvalidOperationException(
+                $"CP932 cannot encode '{ex.CharUnknown}' in \"{payloadText}\"; pin the Shift_JIS bytes on the case with ShiftJisHex instead.", ex);
+        }
     }
 }
