@@ -146,10 +146,10 @@ public class RmQRBinaryDecoderUnitTest
     }
 
     [Test]
-    public async Task Decode_KanjiCellOutsideJisX0208_ReportsUnsupportedContent()
+    public async Task Decode_KanjiCellOutsideJisX0208_ReportsUnmappedCharacter()
     {
         var data = Bits("100 01 " + Kanji(0x8740) + " 000", 6); // NEC row 13, CP932-only
-        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.UnsupportedContent);
+        await Assert.That(Decode(data, RmQRVersion.R7x43).Status).IsEqualTo(QRCodeDecodeStatus.UnmappedCharacter);
     }
 
     [Test]

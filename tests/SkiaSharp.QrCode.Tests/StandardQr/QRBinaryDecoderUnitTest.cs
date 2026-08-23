@@ -244,11 +244,11 @@ public class QRBinaryDecoderUnitTest
 
     /// <summary>NEC row 13 is CP932-only: well-formed, but outside the chosen repertoire.</summary>
     [Test]
-    public async Task KanjiSegment_CellOutsideJisX0208_ReturnsUnsupportedContent()
+    public async Task KanjiSegment_CellOutsideJisX0208_ReturnsUnmappedCharacter()
     {
         var data = Build((ModeKanji, 4), (1, 8), (Kanji(0x8740), 13), (ModeTerminator, 4));
 
-        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.UnsupportedContent);
+        await Assert.That(Decode(data, out _)).IsEquivalentTo(QRCodeDecodeStatus.UnmappedCharacter);
     }
 
     [Test]

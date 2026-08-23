@@ -146,11 +146,11 @@ public class MicroQRBinaryDecoderUnitTest
     }
 
     [Test]
-    public async Task DecodeBitStream_M4Kanji_CellOutsideJisX0208_ReportsUnsupportedContent()
+    public async Task DecodeBitStream_M4Kanji_CellOutsideJisX0208_ReportsUnmappedCharacter()
     {
         var (status, _) = DecodeAtCapacity("011" + "0001" + Kanji(0x8740), MicroQRVersion.M4); // NEC row 13, CP932-only
 
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.UnsupportedContent);
+        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.UnmappedCharacter);
     }
 
     [Test]

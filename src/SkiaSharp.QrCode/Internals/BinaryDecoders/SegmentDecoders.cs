@@ -147,9 +147,11 @@ internal static class SegmentDecoders
             if (mapped == '\0')
             {
                 // A value no Shift_JIS pair can express is corruption; a well-formed
-                // value outside the JIS X 0208 repertoire is content we cannot render.
+                // value outside the JIS X 0208 repertoire is a character we cannot map.
+                // The two get different statuses because they call for different things
+                // from the caller: discard the symbol, or hand it to a CP932 reader.
                 return ShiftJisKanjiTable.IsStructurallyValid(value)
-                    ? QRCodeDecodeStatus.UnsupportedContent
+                    ? QRCodeDecodeStatus.UnmappedCharacter
                     : QRCodeDecodeStatus.InvalidBitstream;
             }
 

@@ -1,6 +1,6 @@
 # Migration
 
-- **v1.2.0 decodes Kanji mode segments.** Behaviour change in the decoders: symbols that previously returned `UnsupportedContent` now return `Success` with text. See [Kanji mode decoding](#kanji-mode-decoding).
+- **v1.2.0 decodes Kanji mode segments, and adds `QRCodeDecodeStatus.UnmappedCharacter`.** Behaviour change in the decoders: symbols that previously returned `UnsupportedContent` now return `Success` with text, or `UnmappedCharacter` when a character has no JIS X 0208 mapping. The new enum member is appended, so existing values keep their numbers. See [Kanji mode decoding](#kanji-mode-decoding).
 - **v1.2.0 adds a `segmentation` argument to the rMQR generator.** Source compatible and behaviour preserving; recompile if you referenced the binary. See [rMQR mixed-mode segmentation](#rmqr-mixed-mode-segmentation) below.
 - **After v1.1.0, the image builders share a common base class.** Source compatible; recompile if you referenced the binary. See [image builder base class](#image-builder-base-class) below.
 - **v1.0.0 removes the obsolete `QrCode` class.** If you still use `QrCode`, see [from before v1.0.0 to v1.0.0](#from-before-v100-to-v100) below.
@@ -13,7 +13,7 @@
 
 - **Behaviour change, not source or binary breaking.** A symbol carrying a Kanji segment previously decoded to `QRCodeDecodeStatus.UnsupportedContent`; it now returns `Success` with the decoded text. Code that branches on `UnsupportedContent` to hand the symbol to another reader will stop taking that branch, and `TryDecode` now writes characters into a destination span where it previously wrote none.
 - **The mapping is JIS X 0208, not CP932.** The two disagree on seven Shift_JIS cells (0x815F, 0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA: reverse solidus, wave dash, double vertical line, minus sign, and the cent / pound / not signs). If you compare output against a CP932-based reader such as ZXing.Net, expect those seven to differ.
-- **CP932-only characters are rejected, not substituted.** Within the Kanji-mode range CP932 defines 83 characters JIS X 0208 does not: the NEC row 13 block (circled digits, roman numerals, unit ligatures). A Kanji segment containing one fails the whole symbol with `UnsupportedContent`.
+- **CP932-only characters are rejected, not substituted.** Within the Kanji-mode range CP932 defines 83 characters JIS X 0208 does not: the NEC row 13 block (circled digits, roman numerals, unit ligatures). A Kanji segment containing one fails the whole symbol with the new `QRCodeDecodeStatus.UnmappedCharacter`, which is deliberately distinct from `UnsupportedContent` so a caller can route just these symbols to a CP932-capable reader.
 - **ECI 20 (Shift_JIS) Byte segments are still unsupported** and still report `UnsupportedContent`.
 
 ## rMQR mixed-mode segmentation

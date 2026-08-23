@@ -20,7 +20,7 @@ namespace SkiaSharp.QrCode;
 /// are supported, plus Kanji segments decoded as JIS X 0208; the generator never emits
 /// Kanji, so it is a read-only mode here. A Kanji cell outside the JIS X 0208
 /// repertoire fails the whole symbol with
-/// <see cref="QRCodeDecodeStatus.UnsupportedContent"/> rather than substituting a
+/// <see cref="QRCodeDecodeStatus.UnmappedCharacter"/> rather than substituting a
 /// replacement character.
 /// </remarks>
 public static class RmQRCodeDecoder

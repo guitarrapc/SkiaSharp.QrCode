@@ -144,9 +144,31 @@ public class SegmentDecodersKanjiUnitTest
     }
 
     /// <summary>
-    /// Well-formed cells outside JIS X 0208 (NEC row 13, the tail past 0xEAA4) are
-    /// unsupported content, not a corrupt bitstream: the symbol was read correctly,
-    /// the chosen mapping simply has no character for it.
+    /// The three outcomes a Kanji cell can produce must be distinguishable by status
+    /// alone, because they call for different things from the caller: decode the text,
+    /// hand the symbol to a CP932-capable reader, or treat the symbol as corrupt.
+    /// </summary>
+    [Test]
+    public async Task DecodeKanjiPayload_TheThreeOutcomesHaveDistinctStatuses()
+    {
+        var mapped = Decode(Pack(Index13(0x82B1)), count: 1, destinationLength: 1).Status;
+        var unmapped = Decode(Pack(Index13(0x8740)), count: 1, destinationLength: 1).Status;   // NEC row 13, CP932-only
+        var impossible = Decode(Pack(0x3F), count: 1, destinationLength: 1).Status;            // no such Shift_JIS pair
+
+        await Assert.That(mapped).IsEqualTo(QRCodeDecodeStatus.Success);
+        await Assert.That(unmapped).IsEqualTo(QRCodeDecodeStatus.UnmappedCharacter);
+        await Assert.That(impossible).IsEqualTo(QRCodeDecodeStatus.InvalidBitstream);
+
+        // The point of the new status: "this symbol is readable by a CP932 reader" must
+        // not be confused with "this symbol uses a feature we do not implement".
+        await Assert.That(unmapped).IsNotEqualTo(QRCodeDecodeStatus.UnsupportedContent);
+        await Assert.That(unmapped).IsNotEqualTo(impossible);
+    }
+
+    /// <summary>
+    /// Well-formed cells outside JIS X 0208 (NEC row 13, the tail past 0xEAA4) are an
+    /// unmapped character, not a corrupt bitstream and not an unsupported feature: the
+    /// symbol was read correctly, the chosen mapping simply has no character for it.
     /// </summary>
     [Test]
     [Arguments(0x8740)] // NEC row 13, CP932-only
@@ -154,10 +176,10 @@ public class SegmentDecodersKanjiUnitTest
     [Arguments(0x8540)] // row 9, unassigned in both
     [Arguments(0xEAA5)] // first cell past the repertoire
     [Arguments(0xEBBF)] // last cell of the Kanji-mode range
-    public async Task DecodeKanjiPayload_UnassignedCell_ReportsUnsupportedContent(int sjis)
+    public async Task DecodeKanjiPayload_UnassignedCell_ReportsUnmappedCharacter(int sjis)
     {
         var (status, _) = Decode(Pack(Index13(sjis)), count: 1, destinationLength: 1);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.UnsupportedContent);
+        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.UnmappedCharacter);
     }
 
     /// <summary>
@@ -181,6 +203,6 @@ public class SegmentDecodersKanjiUnitTest
     {
         var indices = new[] { Index13(0x82B1), Index13(0x8740), Index13(0x82F1) };
         var (status, _) = Decode(Pack(indices), count: 3, destinationLength: 3);
-        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.UnsupportedContent);
+        await Assert.That(status).IsEqualTo(QRCodeDecodeStatus.UnmappedCharacter);
     }
 }

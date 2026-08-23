@@ -37,7 +37,7 @@ Behavior: shared Otsu threshold and finder candidates → local grid frames arou
 
 ### Not supported
 
-- FNC1, Structured Append (rMQR does not define it), ECI assignments other than the four above, and Kanji cells outside the JIS X 0208 repertoire (all `UnsupportedContent`)
+- FNC1, Structured Append (rMQR does not define it), ECI assignments other than the four above, (all `UnsupportedContent`); Kanji cells outside the JIS X 0208 repertoire are reported separately as `UnmappedCharacter`
 - Strong perspective, uneven lighting, blur, and heavily styled symbols below about 5 px/module (rounded modules + gradients make the finder runs too fuzzy; the same styling decodes at 8+ px/module)
 
 ## Why

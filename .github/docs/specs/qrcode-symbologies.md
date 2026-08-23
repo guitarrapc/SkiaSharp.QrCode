@@ -113,7 +113,9 @@ additionally assigns 83 characters the standard does not, all of them NEC row 13
 circled digits, roman numerals, unit ligatures). Choosing CP932 would have
 mangled exactly the characters Japanese payloads use in URLs and price strings. The shared
 `ShiftJisKanjiTable` holds the 6,879-cell JIS X 0208 repertoire and nothing else; cells outside it
-are reported rather than replaced, so a corrupt symbol never becomes a plausible wrong answer. The
+are reported as `QRCodeDecodeStatus.UnmappedCharacter` rather than replaced, so a corrupt symbol never
+becomes a plausible wrong answer and a caller can tell "a CP932 reader would read this" from the
+structural `UnsupportedContent` cases (FNC1, Structured Append, unmapped ECI). The
 table costs 16 KB of RVA data, shared by all three symbologies, with no allocation and no static
 constructor. Full derivation and oracle evidence: [Kanji mode decode plan](../plans/kanji-mode-decode-plan.md).
 
@@ -154,7 +156,7 @@ mechanism.
 | Decision | Choice | Revisit when |
 |---|---|---|
 | Kanji mode (all symbologies) | Decode only, JIS X 0208 mapping; encoders keep emitting UTF-8 Byte mode (with ECI where the symbology supports it) | Encoding: a policy change backed by concrete demand, since it alters shipped generator output |
-| ECI 20 (Shift_JIS) byte segments | Unsupported; reported as `UnsupportedContent` | Demand for symbols that pair ECI 20 with Byte mode; needs the full CP932 range, roughly twice the Kanji table |
+| ECI 20 (Shift_JIS) byte segments | Unsupported; reported as `UnsupportedContent` (structural, unlike the per-character `UnmappedCharacter`) | Demand for symbols that pair ECI 20 with Byte mode; needs the full CP932 range, roughly twice the Kanji table |
 | Image detection default | Standard QR only (`QRCodeDecoder`); Micro QR and rMQR scanning are their own explicitly-typed entries (`MicroQRCodeDecoder`, `RmQRCodeDecoder`); the Playground tries the three in that order | - |
 | Shared detection primitives (Otsu, run-ratio scan) | Lifted to `Internals.ImageDecoders` (Phase 4b, second consumer appeared) | - |
 | `QRCodeData` | Frozen for Standard QR | Never (compatibility contract) |

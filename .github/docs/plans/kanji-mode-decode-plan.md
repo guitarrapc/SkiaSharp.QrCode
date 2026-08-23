@@ -12,6 +12,8 @@ It defines WHAT is built, in WHICH order, and WHY. HOW each piece is verified fo
 
 **Out of scope.** Kanji mode *encoding*. Emitting Kanji would change the default output of shipped generators for Japanese payloads, which is a separate compatibility decision. Decoding changes no output, so it is backward compatible and can ship on its own. This asymmetry (`Decode(Encode(x)) == x` holds; `Encode(Decode(y))` does not reproduce `y`) must be documented in the decoder specs.
 
+**Added in review.** `QRCodeDecodeStatus.UnmappedCharacter`, appended to the enum so existing values keep their numbers. A Kanji cell outside JIS X 0208 now reports it instead of `UnsupportedContent`, because the two ask different things of the caller: the structural cases (FNC1, Structured Append, unmapped ECI) are properties of the symbol that no reader choice fixes, while an unmapped character means the symbol is well formed and a CP932-capable reader would read it. `KanjiUnmappedCharacterEndToEndTest` builds a real version 1-L symbol from hand-made codewords and proves the status survives both the matrix and the image path, the latter being the one that retries on non-terminal statuses and could have lost it.
+
 **Also out of scope.** ECI 20 (Shift_JIS) byte-mode segments. They are adjacent (the divergence probe shows libzint emits exactly this for Japanese input) but need the full CP932 single-byte + double-byte range, roughly twice the table. Kanji mode is the narrower, higher-value target; ECI 20 stays a follow-up.
 
 ## Guiding Decisions
@@ -59,7 +61,7 @@ The three symbologies already carry their own Kanji character-count-indicator ta
 
 The Kanji-mode range is wider than JIS X 0208: 0xEAA5–0xEBBF is assigned by neither JIS X 0208 nor CP932, and 4 of every 192 index slots are structurally impossible (trail byte outside 0x40–0xFC minus 0x7F). Silently emitting a replacement character would turn a corrupt symbol into a plausible-looking wrong answer, which is the failure mode this library treats as worse than a rejection.
 
-Table entry `0` marks "not mapped" (U+0000 is never a legitimate JIS X 0208 mapping). On a zero hit the decoder distinguishes the two causes and reports accordingly: a structurally impossible pair is `InvalidBitstream`, an unassigned but well-formed cell is `UnsupportedContent`. The distinguishing arithmetic sits on the error path only, so the happy path stays a single indexed load.
+Table entry `0` marks "not mapped" (U+0000 is never a legitimate JIS X 0208 mapping). On a zero hit the decoder distinguishes the two causes and reports accordingly: a structurally impossible pair is `InvalidBitstream`, an unassigned but well-formed cell is `UnmappedCharacter`. The distinguishing arithmetic sits on the error path only, so the happy path stays a single indexed load.
 
 ## Oracle Findings (probe results, 2026-08-23)
 
