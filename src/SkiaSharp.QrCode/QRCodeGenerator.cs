@@ -690,8 +690,14 @@ public static class QRCodeGenerator
     /// - Character count indicator (8-16 bits, version-dependent)
     /// - Data (variable)
     /// </remarks>
-    private static bool TryGetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM, out int selectedVersion)
+    internal static bool TryGetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM, out int selectedVersion)
     {
+        selectedVersion = 0;
+
+        // Past this the Byte-mode bit count wraps and an absurd payload reads as a fit.
+        if (length > CapacityGuard.MaxPriceableDataLength)
+            return false;
+
         // ECI header overhead if eci specified
         var eciHeaderBits = eciMode.GetStandardQrHeaderBits();
         var modeIndicatorBits = ModeIndicatorBits;
@@ -733,7 +739,6 @@ public static class QRCodeGenerator
             }
         }
 
-        selectedVersion = 0;
         return false;
 
         // Calculates actual bit count for numeric encoding.

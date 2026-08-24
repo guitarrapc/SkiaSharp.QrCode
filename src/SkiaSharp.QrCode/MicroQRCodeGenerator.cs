@@ -177,7 +177,7 @@ public static class MicroQRCodeGenerator
     /// The version fit without the "does not fit" throw. Argument errors still throw:
     /// those hold of the arguments alone, independently of the text.
     /// </summary>
-    private static bool TrySelectVersion(in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion, out MicroQRVersion selected)
+    internal static bool TrySelectVersion(in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion, out MicroQRVersion selected)
     {
         if ((uint)eccLevel > (uint)MicroQREccLevel.Q)
             throw new ArgumentOutOfRangeException(nameof(eccLevel), $"Invalid Micro QR ECC level: {eccLevel}");
@@ -185,6 +185,10 @@ public static class MicroQRCodeGenerator
         var mode = analysis.EncodingMode;
         var dataLength = analysis.DataLength;
         selected = default;
+
+        // Past this the Byte-mode bit count wraps and an absurd payload reads as a fit.
+        if (dataLength > CapacityGuard.MaxPriceableDataLength)
+            return false;
 
         if (requestedVersion is { } version)
         {

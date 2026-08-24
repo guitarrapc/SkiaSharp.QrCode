@@ -50,11 +50,13 @@ internal static class RmQRVersionSelector
 
     /// <summary>Whether <paramref name="dataLength"/> units of <paramref name="mode"/> fit the version at the ECC level.</summary>
     public static bool Fits(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode, int dataLength)
-        => GetRequiredBits(version, mode, dataLength) <= 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
+        => dataLength <= CapacityGuard.MaxPriceableDataLength
+        && GetRequiredBits(version, mode, dataLength) <= 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
 
     /// <summary>Whether the data and optional ECI prefix fit the version at the ECC level.</summary>
     public static bool Fits(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode, int dataLength, EciMode eciMode)
-        => GetRequiredBits(version, mode, dataLength, eciMode) <= 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
+        => dataLength <= CapacityGuard.MaxPriceableDataLength
+        && GetRequiredBits(version, mode, dataLength, eciMode) <= 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
 
     /// <summary>
     /// Largest data length (digits / characters / bytes) that fits a version × ECC × mode,

@@ -360,30 +360,42 @@ public class TryGetRequiredBufferSizeTest
         await Assert.That(() => QRCodeGenerator.TryGetRequiredBufferSize("1", ECCLevel.M, out _, quietZoneSize: int.MaxValue)).Throws<ArgumentOutOfRangeException>();
     }
 
-    public static IEnumerable<(string content, ECCLevel ecc)> StandardAgreementCases()
+    public static IEnumerable<(string content, ECCLevel ecc, bool utf8BOM, EciMode eciMode)> StandardAgreementCases()
     {
-        string[] contents = ["", "1", "hello world", new string('a', 2953), new string('a', 2954), new string('0', 7089), new string('0', 7090)];
+        // The BOM adds 3 bytes and ECI a 12-bit header, so both shift the version boundary;
+        // the cases straddle it at v40-L (2,953 bytes / 7,089 digits) and at v1.
+        string[] contents =
+        [
+            "", "1", "hello world", "日本語",
+            new string('a', 2953), new string('a', 2954),
+            new string('a', 2950), new string('a', 2951),
+            new string('0', 7089), new string('0', 7090),
+            new string('a', 17), new string('a', 18),
+        ];
+
         foreach (var content in contents)
             foreach (var ecc in Enum.GetValues<ECCLevel>())
-                yield return (content, ecc);
+                foreach (var eciMode in new[] { EciMode.Default, EciMode.Iso8859_1, EciMode.Utf8 })
+                    foreach (var utf8BOM in new[] { false, true })
+                        yield return (content, ecc, utf8BOM, eciMode);
     }
 
     [Test]
     [MethodDataSource(nameof(StandardAgreementCases))]
-    public async Task StandardQR_Agrees_WithThrowingOverload(string content, ECCLevel ecc)
+    public async Task StandardQR_Agrees_WithThrowingOverload(string content, ECCLevel ecc, bool utf8BOM, EciMode eciMode)
     {
         QRCodeCalculatedSize thrown = default;
         var threw = false;
         try
         {
-            thrown = QRCodeGenerator.GetRequiredBufferSize(content, ecc);
+            thrown = QRCodeGenerator.GetRequiredBufferSize(content, ecc, utf8BOM, eciMode);
         }
         catch (Exception e) when (e is ArgumentException or InvalidOperationException)
         {
             threw = true;
         }
 
-        var ok = QRCodeGenerator.TryGetRequiredBufferSize(content, ecc, out var size);
+        var ok = QRCodeGenerator.TryGetRequiredBufferSize(content, ecc, out var size, utf8BOM, eciMode);
 
         await Assert.That(ok).IsEqualTo(!threw);
         if (ok)
