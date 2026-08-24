@@ -255,6 +255,72 @@ public static class RmQRCodeGenerator
         return new RmQRCodeCalculatedSize(totalWidth * totalHeight, totalWidth, totalHeight, version);
     }
 
+    /// <inheritdoc cref="GetRequiredBufferSize(ReadOnlySpan{char}, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, int, RmQRSegmentation)"/>
+    /// <summary>
+    /// Non-throwing <see cref="GetRequiredBufferSize"/>: <c>false</c> means the content
+    /// does not fit, and nothing else. Argument errors throw exactly as that overload
+    /// raises them (rationale: specs/rmqr-encoder.md).
+    /// </summary>
+    /// <param name="size">Dimensions and version on success; <c>default</c> when the content does not fit.</param>
+    /// <returns><c>true</c> when the content fits.</returns>
+    public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
+        => TryGetRequiredBufferSizeCore(text, eccLevel, EciMode.Default, out size, requestedVersion, fitStrategy, height, quietZoneSize, segmentation);
+
+    /// <inheritdoc cref="TryGetRequiredBufferSize"/>
+    /// <param name="eciMode">Character encoding declaration.</param>
+    public static bool TryGetRequiredBufferSizeWithEci(ReadOnlySpan<char> text, RmQREccLevel eccLevel, EciMode eciMode, out RmQRCodeCalculatedSize size, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
+        => TryGetRequiredBufferSizeCore(text, eccLevel, eciMode, out size, requestedVersion, fitStrategy, height, quietZoneSize, segmentation);
+
+    private static bool TryGetRequiredBufferSizeCore(ReadOnlySpan<char> text, RmQREccLevel eccLevel, EciMode eciMode, out RmQRCodeCalculatedSize size, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, int quietZoneSize, RmQRSegmentation segmentation)
+    {
+        size = default;
+        ValidateQuietZone(quietZoneSize);
+
+        bool fits;
+        RmQRVersion version;
+        if (segmentation != RmQRSegmentation.Single)
+        {
+            fits = TryPlanOptimalVersion(text, eccLevel, eciMode, requestedVersion, fitStrategy, height, segmentation, out version);
+        }
+        else
+        {
+            ValidateEci(text, eciMode);
+            var analysis = TextAnalyzer.Analyze(text, eciMode);
+            fits = RmQRVersionSelector.TrySelect(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height, out version);
+        }
+
+        if (!fits)
+            return false;
+
+        var totalWidth = RmQRConstants.GetWidth(version) + quietZoneSize * 2;
+        var totalHeight = RmQRConstants.GetHeight(version) + quietZoneSize * 2;
+        size = new RmQRCodeCalculatedSize(totalWidth * totalHeight, totalWidth, totalHeight, version);
+        return true;
+    }
+
+    /// <summary>
+    /// Mixed-mode fit without the "content is too long" throw. Mirrors
+    /// <see cref="PrepareConfigurationOptimal"/>, fallback included, so the version
+    /// reported here is the version an encode would use.
+    /// </summary>
+    private static bool TryPlanOptimalVersion(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, RmQRSegmentation segmentation, out RmQRVersion version)
+    {
+        ValidateOptimalEntry(textSpan, eciMode, segmentation);
+
+        var analysis = TextAnalyzer.Analyze(textSpan, eciMode);
+        if (!RmQRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out version, out var useSegments))
+            return false;
+
+        if (!useSegments)
+            return true;
+
+        Span<RmQRSegment> plan = stackalloc RmQRSegment[RmQRSegmentPlanner.MaxSegments];
+        if (RmQRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out _))
+            return true;
+
+        return RmQRVersionSelector.TrySelect(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height, out version);
+    }
+
     private static void ValidateQuietZone(int quietZoneSize)
     {
         // (139 + 2·qz) × (17 + 2·qz) must stay far below int.MaxValue; 10000 modules of

@@ -60,6 +60,8 @@ Decoding: matrix-level entry points are symbology-explicit (matrix size alone di
 
 Image builders: one builder per symbology, all deriving from `QRCodeImageBuilderBase<TSelf>` (self-referential generic, so fluent chains keep the concrete type). The base carries every shared option and the complete raster/SVG output surface; a symbology builder adds only its typed options (ECC/version) and connects its data model through three `private protected` hooks. Two guards keep the surfaces from drifting: the base class makes output-method omissions structurally impossible, and `QrImageBuilderApiParityTest` (reflection over the public surfaces with a documented allowed-difference list) catches asymmetry in what cannot be shared, the symbology-typed static helpers. The rMQR builder extends the same base and the same parity test.
 
+Sizing: every generator exposes `GetRequiredBufferSize` and its non-throwing twin `TryGetRequiredBufferSize`, with one contract across all three symbologies — `false` means the content does not fit, and argument errors keep throwing exactly as the `Get` overload raises them. The reasoning, including why this is a `Try` overload rather than a dedicated exception type and why undefined enum values are not folded into `false`, is recorded once in [rmqr-encoder.md](rmqr-encoder.md); the other two symbologies follow it rather than restating it. rMQR adds `TryGetRequiredBufferSizeWithEci` for the ECI-explicit path.
+
 Exact API names and shapes are finalized per-symbology at implementation time, spec-first, following the API-driven development principle in [DESIGN.md](../DESIGN.md).
 
 ### Data model direction

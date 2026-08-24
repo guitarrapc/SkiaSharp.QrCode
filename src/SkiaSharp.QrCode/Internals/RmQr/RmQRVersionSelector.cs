@@ -374,6 +374,29 @@ internal static class RmQRVersionSelector
     }
 
     /// <summary>
+    /// <c>Select</c> without the capacity throw: same argument validation, but a content
+    /// that does not fit returns false with <paramref name="version"/> at <c>default</c>.
+    /// </summary>
+    public static bool TrySelect(EncodingMode mode, int dataLength, EciMode eciMode, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, out RmQRVersion version)
+    {
+        ValidateFitArguments(eccLevel, fitStrategy, height, requestedVersion, eciMode);
+
+        if (requestedVersion is { } requested)
+        {
+            if (!Fits(requested, eccLevel, mode, dataLength, eciMode))
+            {
+                version = default;
+                return false;
+            }
+
+            version = requested;
+            return true;
+        }
+
+        return TrySelectAutoFit(mode, dataLength, eciMode, eccLevel, fitStrategy, height, out version);
+    }
+
+    /// <summary>
     /// The auto-fit scan order for a strategy: version numbers (1-32), best first.
     /// Exposed for <see cref="RmQRSegmentPlanner"/>, which walks the same ranking but
     /// with a per-version bit cost that no table can precompute.

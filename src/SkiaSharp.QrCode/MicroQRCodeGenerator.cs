@@ -127,6 +127,29 @@ public static class MicroQRCodeGenerator
         return new MicroQRCodeCalculatedSize(totalSize * totalSize, totalSize, config.Version);
     }
 
+    /// <inheritdoc cref="GetRequiredBufferSize"/>
+    /// <summary>
+    /// Non-throwing <see cref="GetRequiredBufferSize"/>: <c>false</c> means the content
+    /// does not fit, which here includes an encoding mode the version / ECC level does
+    /// not offer, since the text is what picks the mode. Argument errors throw exactly
+    /// as that overload raises them (rationale: specs/rmqr-encoder.md).
+    /// </summary>
+    /// <param name="size">Matrix size and version on success; <c>default</c> when the content does not fit.</param>
+    /// <returns><c>true</c> when the content fits.</returns>
+    public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, MicroQRVersion? requestedVersion = null, int quietZoneSize = DefaultQuietZone)
+    {
+        size = default;
+        ValidateQuietZone(quietZoneSize);
+
+        var analysis = TextAnalyzer.Analyze(text, EciMode.Default);
+        if (!TrySelectVersion(in analysis, eccLevel, requestedVersion, out var version))
+            return false;
+
+        var totalSize = MicroQRConstants.SizeFromVersion(version) + quietZoneSize * 2;
+        size = new MicroQRCodeCalculatedSize(totalSize * totalSize, totalSize, version);
+        return true;
+    }
+
     private static void ValidateQuietZone(int quietZoneSize)
     {
         // 17 + 2·qz squared must stay far below int.MaxValue; 10000 modules of
@@ -140,15 +163,28 @@ public static class MicroQRCodeGenerator
     /// </summary>
     private static MicroQRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion)
     {
-        if ((uint)eccLevel > (uint)MicroQREccLevel.Q)
-            throw new ArgumentOutOfRangeException(nameof(eccLevel), $"Invalid Micro QR ECC level: {eccLevel}");
-
         // Micro QR has no ECI, so analysis runs with the default charset rules;
         // for Byte mode the analyzer's DataLength is already the encoded byte
         // count (ISO-8859-1 char count or UTF-8 byte count).
         var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default);
+        if (TrySelectVersion(in analysis, eccLevel, requestedVersion, out var version))
+            return new MicroQRConfiguration(version, eccLevel, analysis.EncodingMode);
+
+        throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, requestedVersion);
+    }
+
+    /// <summary>
+    /// The version fit without the "does not fit" throw. Argument errors still throw:
+    /// those hold of the arguments alone, independently of the text.
+    /// </summary>
+    private static bool TrySelectVersion(in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion, out MicroQRVersion selected)
+    {
+        if ((uint)eccLevel > (uint)MicroQREccLevel.Q)
+            throw new ArgumentOutOfRangeException(nameof(eccLevel), $"Invalid Micro QR ECC level: {eccLevel}");
+
         var mode = analysis.EncodingMode;
         var dataLength = analysis.DataLength;
+        selected = default;
 
         if (requestedVersion is { } version)
         {
@@ -157,17 +193,44 @@ public static class MicroQRCodeGenerator
             if (!MicroQRConstants.IsValidCombination(version, eccLevel))
                 throw new ArgumentException($"ECC level {eccLevel} is not valid for Micro QR version {version} (M1: ErrorDetectionOnly; M2/M3: L, M; M4: L, M, Q).", nameof(eccLevel));
             if (!MicroQRConstants.IsModeSupported(version, mode))
-                throw new ArgumentException($"Encoding mode {mode} is not available on Micro QR version {version} (M1: Numeric; M2: +Alphanumeric; M3/M4: +Byte).", nameof(requestedVersion));
+                return false;
             if (GetRequiredBits(version, mode, dataLength) > MicroQRConstants.GetDataBitCapacity(version, eccLevel))
-            {
-                throw new ArgumentException(
-                    $"Content is too long for Micro QR {version} at ECC level {eccLevel}: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
-                    $"but the maximum is {FormatDataLength(GetMaxDataLength(version, eccLevel, mode), mode)}. " +
-                    "Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content.",
-                    nameof(requestedVersion));
-            }
+                return false;
 
-            return new MicroQRConfiguration(version, eccLevel, mode);
+            selected = version;
+            return true;
+        }
+
+        for (var candidate = MicroQRVersion.M1; candidate <= MicroQRVersion.M4; candidate++)
+        {
+            if (!MicroQRConstants.IsValidCombination(candidate, eccLevel) || !MicroQRConstants.IsModeSupported(candidate, mode))
+                continue;
+            if (GetRequiredBits(candidate, mode, dataLength) <= MicroQRConstants.GetDataBitCapacity(candidate, eccLevel))
+            {
+                selected = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The actionable "does not fit" error, built off the success path: which constraint
+    /// binds (mode availability versus length) and what the applicable maximum is.
+    /// </summary>
+    private static ArgumentException NotFittingError(EncodingMode mode, int dataLength, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion)
+    {
+        if (requestedVersion is { } version)
+        {
+            if (!MicroQRConstants.IsModeSupported(version, mode))
+                return new ArgumentException($"Encoding mode {mode} is not available on Micro QR version {version} (M1: Numeric; M2: +Alphanumeric; M3/M4: +Byte).", nameof(requestedVersion));
+
+            return new ArgumentException(
+                $"Content is too long for Micro QR {version} at ECC level {eccLevel}: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
+                $"but the maximum is {FormatDataLength(GetMaxDataLength(version, eccLevel, mode), mode)}. " +
+                "Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content.",
+                nameof(requestedVersion));
         }
 
         var bestMax = -1;
@@ -176,8 +239,6 @@ public static class MicroQRCodeGenerator
         {
             if (!MicroQRConstants.IsValidCombination(candidate, eccLevel) || !MicroQRConstants.IsModeSupported(candidate, mode))
                 continue;
-            if (GetRequiredBits(candidate, mode, dataLength) <= MicroQRConstants.GetDataBitCapacity(candidate, eccLevel))
-                return new MicroQRConfiguration(candidate, eccLevel, mode);
 
             var candidateMax = GetMaxDataLength(candidate, eccLevel, mode);
             if (candidateMax > bestMax)
@@ -191,13 +252,13 @@ public static class MicroQRCodeGenerator
         // problem, not a length problem; say which constraint binds.
         if (bestMax < 0)
         {
-            throw new ArgumentException(
+            return new ArgumentException(
                 $"Micro QR cannot encode {mode} mode at ECC level {eccLevel}: {nameof(MicroQREccLevel.ErrorDetectionOnly)} limits the symbol to M1 " +
                 "(Numeric only, 5 digits); Alphanumeric requires M2+, Byte requires M3+, and level Q requires M4. " +
                 "Choose another ECC level or use Standard QR (QRCodeGenerator).");
         }
 
-        throw new ArgumentException(
+        return new ArgumentException(
             $"Content is too long for Micro QR: {FormatDataLength(dataLength, mode)} in {mode} mode, " +
             $"but ECC level {eccLevel} fits at most {FormatDataLength(bestMax, mode)} ({bestVersion}). " +
             "Shorten the content, lower the ECC level, or use Standard QR (QRCodeGenerator) for longer content.");

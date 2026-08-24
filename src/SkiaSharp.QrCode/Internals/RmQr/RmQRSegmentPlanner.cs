@@ -96,6 +96,21 @@ internal static class RmQRSegmentPlanner
     /// </summary>
     public static RmQRVersion SelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, out bool useSegments)
     {
+        if (TrySelectVersion(text, in analysis, eccLevel, requestedVersion, fitStrategy, height, out var version, out useSegments))
+            return version;
+
+        // Neither one mode nor a mixed plan fits: the single-mode selector owns the
+        // message. Only the Numeric shortcut can reach here with a requested version,
+        // and it wants that wording, so forwarding it unchanged is correct.
+        return Select(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height);
+    }
+
+    /// <summary>
+    /// <see cref="SelectVersion"/> without the capacity throw; argument errors still
+    /// throw, in the same order and with the same messages.
+    /// </summary>
+    public static bool TrySelectVersion(ReadOnlySpan<char> text, in TextAnalysisResult analysis, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, out RmQRVersion selected, out bool useSegments)
+    {
         useSegments = false;
         var charset = analysis.EciMode;
         var mode = analysis.EncodingMode;
@@ -109,7 +124,7 @@ internal static class RmQRSegmentPlanner
         // lowers its payload and every extra run adds a header. Numeric-only — an
         // Alphanumeric or Byte payload can still hide a digit run worth splitting off.
         if (mode == EncodingMode.Numeric)
-            return Select(mode, dataLength, charset, eccLevel, requestedVersion, fitStrategy, height);
+            return RmQRVersionSelector.TrySelect(mode, dataLength, charset, eccLevel, requestedVersion, fitStrategy, height, out selected);
 
         var eciBits = charset == EciMode.Default ? 0 : EciHeaderBits;
 
@@ -117,14 +132,15 @@ internal static class RmQRSegmentPlanner
         {
             // Single mode already fits: mixing cannot shrink a fixed version, so the
             // stream stays exactly as it is today.
+            selected = requested;
             if (Fits(requested, eccLevel, mode, dataLength, charset))
-                return requested;
+                return true;
 
             // One candidate, so pricing it here would decide what building the plan
             // decides anyway; TryBuildPlan rejects a plan the version cannot hold and
             // the caller falls back to the single-mode selector, which owns the error.
             useSegments = true;
-            return requested;
+            return true;
         }
 
         // Ceiling: the version single-mode encoding lands on, when there is one. When
@@ -138,7 +154,10 @@ internal static class RmQRSegmentPlanner
         // a pathological length from paying for one (the floor run below is not itself
         // guarded, unlike the per-version runs in PlanFits).
         if (text.Length is 0 or > MaxPlannableChars)
-            return hasSingle ? single : Select(mode, dataLength, charset, eccLevel, null, fitStrategy, height);
+        {
+            selected = single;
+            return hasSingle;
+        }
 
         var order = RmQRVersionSelector.GetFitOrder(fitStrategy);
         var heightMask = RmQRVersionSelector.GetFitHeightMask(fitStrategy, height);
@@ -181,22 +200,20 @@ internal static class RmQRSegmentPlanner
                 // Holds the floor plan re-priced at this version, so it holds the
                 // optimum too; no cost run needed.
                 useSegments = true;
-                return candidate;
+                selected = candidate;
+                return true;
             }
 
             if (PlanFits(text, charset, candidate, eccLevel, eciBits, memoKeys, memoCosts, ref memoCount))
             {
                 useSegments = true;
-                return candidate;
+                selected = candidate;
+                return true;
             }
         }
 
-        if (hasSingle)
-            return single;
-
-        // Neither one mode nor a mixed plan fits: the single-mode selector owns the
-        // "content is too long" message.
-        return Select(mode, dataLength, charset, eccLevel, null, fitStrategy, height);
+        selected = single;
+        return hasSingle;
     }
 
     /// <summary>
