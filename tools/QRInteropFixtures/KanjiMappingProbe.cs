@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using System.Text;
-using ZXing;
 using ZXingCpp;
 using CppFormat = ZXingCpp.BarcodeFormat;
 

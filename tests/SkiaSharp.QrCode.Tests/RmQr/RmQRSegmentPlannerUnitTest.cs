@@ -1,5 +1,4 @@
 using System.Text;
-using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Internals;
 using SkiaSharp.QrCode.Internals.RmQr;
 
@@ -263,26 +262,26 @@ public class RmQRSegmentPlannerUnitTest
     public async Task BuildPlan_CostMatchesTheScanCost()
     {
         foreach (var target in SampleVersions())
-        foreach (var text in Corpus())
-        {
-            if (text.Length == 0)
-                continue;
-            var charset = text.Any(c => c > 255) ? EciMode.Utf8 : EciMode.Default;
-            var capacityBits = 8 * RmQRConstants.GetDataCodewordCount(target.Version, target.Ecc);
-            var scan = RmQRSegmentPlanner.MinimumPayloadBits(
-                text.AsSpan(),
-                charset,
-                RmQRConstants.GetCountIndicatorLength(target.Version, EncodingMode.Numeric),
-                RmQRConstants.GetCountIndicatorLength(target.Version, EncodingMode.Alphanumeric),
-                RmQRConstants.GetCountIndicatorLength(target.Version, EncodingMode.Byte));
-            var eciBits = charset == EciMode.Default ? 0 : 11;
-            if (scan + eciBits > capacityBits)
-                continue; // TryBuildPlan legitimately rejects a plan that does not fit
+            foreach (var text in Corpus())
+            {
+                if (text.Length == 0)
+                    continue;
+                var charset = text.Any(c => c > 255) ? EciMode.Utf8 : EciMode.Default;
+                var capacityBits = 8 * RmQRConstants.GetDataCodewordCount(target.Version, target.Ecc);
+                var scan = RmQRSegmentPlanner.MinimumPayloadBits(
+                    text.AsSpan(),
+                    charset,
+                    RmQRConstants.GetCountIndicatorLength(target.Version, EncodingMode.Numeric),
+                    RmQRConstants.GetCountIndicatorLength(target.Version, EncodingMode.Alphanumeric),
+                    RmQRConstants.GetCountIndicatorLength(target.Version, EncodingMode.Byte));
+                var eciBits = charset == EciMode.Default ? 0 : 11;
+                if (scan + eciBits > capacityBits)
+                    continue; // TryBuildPlan legitimately rejects a plan that does not fit
 
-            var plan = BuildPlan(text, charset, target.Version, target.Ecc);
-            await Assert.That(plan.Length).IsGreaterThan(0);
-            await Assert.That(MeasurePlan(plan, target.Version)).IsEqualTo(scan);
-        }
+                var plan = BuildPlan(text, charset, target.Version, target.Ecc);
+                await Assert.That(plan.Length).IsGreaterThan(0);
+                await Assert.That(MeasurePlan(plan, target.Version)).IsEqualTo(scan);
+            }
     }
 
     /// <summary>

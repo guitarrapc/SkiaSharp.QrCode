@@ -1,4 +1,3 @@
-using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Image;
 using SkiaSharp.QrCode.Internals;
 using SkiaSharp.QrCode.Internals.RmQr;

@@ -371,47 +371,49 @@ public class LuminanceConverterParityTest
         var alphaModes = ao < 0 ? new[] { false } : [false, true];
 
         foreach (var premultiplied in alphaModes)
-        foreach (var alphaShape in ao < 0 ? new[] { 3 } : [0, 1, 2, 3])
         {
-            foreach (var width in new[] { 1, 7, 8, 9, 16, 17, 20, 24, 31, 32, 33, 40, 139, 376 })
+            foreach (var alphaShape in ao < 0 ? new[] { 3 } : [0, 1, 2, 3])
             {
-                if (width >= AlwaysVectorWidth)
-                    floor += 4;
-                if (!LuminanceConverter.IsVectorTierTaken(width, ro, go, bo))
-                    continue;
-
-                foreach (var height in new[] { 1, 3 })
-                // A padded row as well as a tight one: the exactly-sized source below is
-                // what proves the last block does not read into the next row's padding.
-                foreach (var pad in new[] { 0, 12 })
+                foreach (var width in new[] { 1, 7, 8, 9, 16, 17, 20, 24, 31, 32, 33, 40, 139, 376 })
                 {
-                    covered++;
-                    var rowBytes = width * 4 + pad;
-                    var pixels = MakePixels(width, height, rowBytes, alphaShape, width + alphaShape, ao);
+                    if (width >= AlwaysVectorWidth)
+                        floor += 4;
+                    if (!LuminanceConverter.IsVectorTierTaken(width, ro, go, bo))
+                        continue;
 
-                    var expected = new byte[width * height];
-                    LuminanceConverter.ConvertRgbaForTest(pixels, expected, width, height, rowBytes, ro, go, bo, ao, premultiplied, LuminanceConverter.ConvertTier.Scalar);
+                    foreach (var height in new[] { 1, 3 })
+                        // A padded row as well as a tight one: the exactly-sized source below is
+                        // what proves the last block does not read into the next row's padding.
+                        foreach (var pad in new[] { 0, 12 })
+                        {
+                            covered++;
+                            var rowBytes = width * 4 + pad;
+                            var pixels = MakePixels(width, height, rowBytes, alphaShape, width + alphaShape, ao);
 
-                    // Destination is longer than the converter's region; only the first
-                    // width × height bytes are handed over as its span.
-                    var backing = new byte[width * height + TailBytes];
-                    backing.AsSpan().Fill(Poison);
-                    var destination = backing.AsSpan(0, width * height);
+                            var expected = new byte[width * height];
+                            LuminanceConverter.ConvertRgbaForTest(pixels, expected, width, height, rowBytes, ro, go, bo, ao, premultiplied, LuminanceConverter.ConvertTier.Scalar);
 
-                    // Exactly sized source too, so an overread past rowBytes × height is
-                    // not silently satisfied by the next object on the heap.
-                    var exact = pixels.AsSpan(0, rowBytes * height);
-                    LuminanceConverter.ConvertRgbaForTest(exact, destination, width, height, rowBytes, ro, go, bo, ao, premultiplied, LuminanceConverter.ConvertTier.Vector);
+                            // Destination is longer than the converter's region; only the first
+                            // width × height bytes are handed over as its span.
+                            var backing = new byte[width * height + TailBytes];
+                            backing.AsSpan().Fill(Poison);
+                            var destination = backing.AsSpan(0, width * height);
 
-                    await Assert.That(backing.AsSpan(0, width * height).ToArray())
-                        .IsEquivalentTo(expected, CollectionOrdering.Matching)
-                        .Because($"layout {layout}, {width}x{height}, alphaShape {alphaShape}, premultiplied {premultiplied}");
+                            // Exactly sized source too, so an overread past rowBytes × height is
+                            // not silently satisfied by the next object on the heap.
+                            var exact = pixels.AsSpan(0, rowBytes * height);
+                            LuminanceConverter.ConvertRgbaForTest(exact, destination, width, height, rowBytes, ro, go, bo, ao, premultiplied, LuminanceConverter.ConvertTier.Vector);
 
-                    for (var i = width * height; i < backing.Length; i++)
-                    {
-                        await Assert.That(backing[i]).IsEqualTo(Poison)
-                            .Because($"layout {layout}, {width}x{height}, rowBytes {rowBytes}, alphaShape {alphaShape}, premultiplied {premultiplied}: wrote {i - width * height + 1} byte(s) past the destination");
-                    }
+                            await Assert.That(backing.AsSpan(0, width * height).ToArray())
+                                .IsEquivalentTo(expected, CollectionOrdering.Matching)
+                                .Because($"layout {layout}, {width}x{height}, alphaShape {alphaShape}, premultiplied {premultiplied}");
+
+                            for (var i = width * height; i < backing.Length; i++)
+                            {
+                                await Assert.That(backing[i]).IsEqualTo(Poison)
+                                    .Because($"layout {layout}, {width}x{height}, rowBytes {rowBytes}, alphaShape {alphaShape}, premultiplied {premultiplied}: wrote {i - width * height + 1} byte(s) past the destination");
+                            }
+                        }
                 }
             }
         }

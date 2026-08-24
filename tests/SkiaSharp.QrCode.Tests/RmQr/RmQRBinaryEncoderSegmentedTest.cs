@@ -1,5 +1,3 @@
-using System.Text;
-using SkiaSharp.QrCode;
 using SkiaSharp.QrCode.Internals;
 using SkiaSharp.QrCode.Internals.RmQr;
 

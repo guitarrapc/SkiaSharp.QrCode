@@ -91,14 +91,14 @@ public class QRCodeDecodeEndToEnd
     [Benchmark]
     public string QR_Byte_V40_H_Decode()
     {
-        QRCodeDecoder.TryDecode(_byteLongHModules, _byteLongHSize,out var text, out _);
+        QRCodeDecoder.TryDecode(_byteLongHModules, _byteLongHSize, out var text, out _);
         return text;
     }
 
     [Benchmark]
     public string Image_Byte_Url_V6_M_Decode()
     {
-        QRCodeDecoder.TryDecodeImage(_byteUrlLuminance, _byteUrlImageSize, _byteUrlImageSize,out var text, out _);
+        QRCodeDecoder.TryDecodeImage(_byteUrlLuminance, _byteUrlImageSize, _byteUrlImageSize, out var text, out _);
         return text;
     }
 
