@@ -223,6 +223,27 @@ finally
 }
 ```
 
+When the content is user-supplied, use `TryGetRequiredBufferSize` instead. It answers the same question and returns `false` when the content does not fit, so overflow costs a branch rather than an exception — worth the switch for Micro QR (M1 holds 5 digits) and rMQR (5–150 bytes), where overflow is an ordinary outcome rather than a defect:
+
+```csharp
+if (!RmQRCodeGenerator.TryGetRequiredBufferSize(userInput, RmQREccLevel.M, out var size))
+    return "Content does not fit an rMQR symbol.";
+
+var buffer = ArrayPool<byte>.Shared.Rent(size.BufferSize);
+try
+{
+    // Passing the resolved version back removes the fit, so no length error can follow.
+    var written = RmQRCodeGenerator.CreateRmQRCode(userInput, RmQREccLevel.M, buffer, requestedVersion: size.Version);
+    var matrix = buffer.AsSpan(0, written);
+}
+finally
+{
+    ArrayPool<byte>.Shared.Return(buffer);
+}
+```
+
+`false` means one thing: the content does not fit. Invalid arguments — an undefined ECC level, a `requestedVersion` and `height` that disagree, a negative quiet zone — still throw, exactly as `GetRequiredBufferSize` throws them, so a caller never renders a configuration mistake as "content too long". This matches how the BCL's configurable `Try` overloads behave (`int.TryParse` with a malformed `NumberStyles`, `Dictionary.TryGetValue` with a null key).
+
 ### Decoders
 
 Use the decoder that matches the expected symbol type. Each decoder accepts generated data, a byte-per-module matrix, an `SKBitmap`, or a grayscale luminance span.

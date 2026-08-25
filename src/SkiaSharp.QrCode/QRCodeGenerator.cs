@@ -36,6 +36,8 @@ public static class QRCodeGenerator
     // │ (4b) │ (0-7b) │ (until dataCapacityBits reached) │
     // └──────┴────────┴──────────────────────────────────┘
 
+    private const int ModeIndicatorBits = 4;
+
     /// <summary>
     /// Creates a QR code from the provided plain text.
     /// </summary>
@@ -286,6 +288,31 @@ public static class QRCodeGenerator
         var (totalSize, bufferSize) = CalculateMatrixSize(baseSize, quietZoneSize);
 
         return new QRCodeCalculatedSize(bufferSize, totalSize, version);
+    }
+
+    /// <inheritdoc cref="GetRequiredBufferSize"/>
+    /// <summary>
+    /// Non-throwing <see cref="GetRequiredBufferSize"/>: <c>false</c> means the content
+    /// exceeds the Version 40 capacity at this ECC level, and nothing else. Argument
+    /// errors throw exactly as that overload raises them (rationale: specs/rmqr-encoder.md).
+    /// </summary>
+    /// <param name="size">Buffer size, matrix size and version on success; <c>default</c> when the content does not fit.</param>
+    /// <returns><c>true</c> when the content fits.</returns>
+    public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, ECCLevel eccLevel, out QRCodeCalculatedSize size, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int quietZoneSize = 4)
+    {
+        size = default;
+        if (quietZoneSize < 0)
+            throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be non-negative, got {quietZoneSize}");
+
+        var analysisResult = TextAnalyzer.Analyze(text, eciMode);
+        if (!TryGetVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, utf8BOM, out var version))
+            return false;
+
+        var baseSize = QRCodeData.SizeFromVersion(version);
+        var (totalSize, bufferSize) = CalculateMatrixSize(baseSize, quietZoneSize);
+
+        size = new QRCodeCalculatedSize(bufferSize, totalSize, version);
+        return true;
     }
 
     /// <summary>
@@ -642,6 +669,20 @@ public static class QRCodeGenerator
     /// <param name="encoding">Encoding mode being used.</param>
     /// <param name="eccLevel">Error correction level.</param>
     /// <returns>Version number (1-40).</returns>
+    private static int GetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM)
+    {
+        if (TryGetVersion(length, encoding, eccLevel, eciMode, utf8BOM, out var version))
+            return version;
+
+        throw new InvalidOperationException($"Data too large for QR code (exceeds Version 40 capacity). " +
+            $"Required: {eciMode.GetStandardQrHeaderBits() + ModeIndicatorBits} header bits + {length} data units, " +
+            $"Mode: {encoding}, ECC: {eccLevel}, ECI: {eciMode}");
+    }
+
+    /// <summary>
+    /// <see cref="GetVersion"/> without the throw; <c>false</c> means no version holds
+    /// the content at this ECC level.
+    /// </summary>
     /// <remarks>
     /// Calculates required bits including:
     /// - ECI header (0 or 12 bits)
@@ -649,16 +690,18 @@ public static class QRCodeGenerator
     /// - Character count indicator (8-16 bits, version-dependent)
     /// - Data (variable)
     /// </remarks>
-    private static int GetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM)
+    internal static bool TryGetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM, out int selectedVersion)
     {
+        selectedVersion = 0;
+
         // ECI header overhead if eci specified
         var eciHeaderBits = eciMode.GetStandardQrHeaderBits();
+        var modeIndicatorBits = ModeIndicatorBits;
 
-        // Mode indicator (4 bits)
-        var modeIndicatorBits = 4;
-
-        // UTF-8 BOM overhead ([0xEF, 0xBB, 0xBF] = 3 bytes = 24 bits) if specified
-        var effectiveLength = length;
+        // UTF-8 BOM overhead ([0xEF, 0xBB, 0xBF] = 3 bytes = 24 bits) if specified.
+        // Widened before the addition, not after: length + 3 wraps on its own near
+        // int.MaxValue, and the later multiply would then price a maximal payload as tiny.
+        long effectiveLength = length;
         if (utf8BOM && encoding == EncodingMode.Byte && eciMode == EciMode.Utf8)
         {
             effectiveLength += 3;
@@ -670,12 +713,14 @@ public static class QRCodeGenerator
         {
             var countIndicatorBits = encoding.GetCountIndicatorLength(version);
 
-            // Data bits (already in length for Byte mode as byte count)
-            var dataBits = encoding switch
+            // Data bits (already in length for Byte mode as byte count). Priced in long:
+            // 8 × effectiveLength wraps int past ~268M bytes and would read as a fit, and
+            // an early length guard here would skip the validation below it.
+            long dataBits = encoding switch
             {
                 EncodingMode.Numeric => CalculateNumericBits(length),
                 EncodingMode.Alphanumeric => CalculateAlphanumericBits(length),
-                EncodingMode.Byte => effectiveLength * 8,
+                EncodingMode.Byte => effectiveLength * 8L,
                 _ => throw new ArgumentOutOfRangeException(nameof(encoding), $"Unsupported encoding mode: {encoding}")
             };
 
@@ -689,19 +734,18 @@ public static class QRCodeGenerator
 
             if (capacityBits >= totalRequiredBits)
             {
-                return version;
+                selectedVersion = version;
+                return true;
             }
         }
 
-        throw new InvalidOperationException($"Data too large for QR code (exceeds Version 40 capacity). " +
-            $"Required: {eciHeaderBits + modeIndicatorBits} header bits + {length} data units, " +
-            $"Mode: {encoding}, ECC: {eccLevel}, ECI: {eciMode}");
+        return false;
 
         // Calculates actual bit count for numeric encoding.
         // 3 digits → 10 bits, 2 digits → 7 bits, 1 digit → 4 bits.
-        static int CalculateNumericBits(int length)
+        static long CalculateNumericBits(int length)
         {
-            var bits = (length / 3) * 10; // Groups of 3
+            var bits = length / 3 * 10L; // Groups of 3
             var remainder = length % 3;
 
             if (remainder == 2)
@@ -714,9 +758,9 @@ public static class QRCodeGenerator
 
         // Calculates actual bit count for alphanumeric encoding.
         // 2 characters → 11 bits, 1 character → 6 bits.
-        static int CalculateAlphanumericBits(int length)
+        static long CalculateAlphanumericBits(int length)
         {
-            var bits = (length / 2) * 11; // Groups of 2
+            var bits = length / 2 * 11L; // Groups of 2
 
             if (length % 2 == 1)
                 bits += 6; // Remaining 1 character

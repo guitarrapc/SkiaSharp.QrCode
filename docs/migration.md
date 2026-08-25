@@ -1,6 +1,7 @@
 # Migration
 
 - **v1.2.0 decodes Kanji mode segments, and adds `QRCodeDecodeStatus.UnmappedCharacter`.** Behaviour change in the decoders: symbols that previously returned `UnsupportedContent` now return `Success` with text, or `UnmappedCharacter` when a character has no JIS X 0208 mapping. The new enum member is appended, so existing values keep their numbers. See [Kanji mode decoding](#kanji-mode-decoding).
+- **v1.2.0 adds `TryGetRequiredBufferSize` to all three generators.** Purely additive; nothing existing changes. See [non-throwing sizing](#non-throwing-sizing) below.
 - **v1.2.0 adds a `segmentation` argument to the rMQR generator.** Source compatible and behaviour preserving; recompile if you referenced the binary. See [rMQR mixed-mode segmentation](#rmqr-mixed-mode-segmentation) below.
 - **After v1.1.0, the image builders share a common base class.** Source compatible; recompile if you referenced the binary. See [image builder base class](#image-builder-base-class) below.
 - **v1.0.0 removes the obsolete `QrCode` class.** If you still use `QrCode`, see [from before v1.0.0 to v1.0.0](#from-before-v100-to-v100) below.
@@ -15,6 +16,22 @@
 - **The mapping is JIS X 0208, not CP932.** The two disagree on seven Shift_JIS cells (0x815F, 0x8160, 0x8161, 0x817C, 0x8191, 0x8192, 0x81CA: reverse solidus, wave dash, double vertical line, minus sign, and the cent / pound / not signs). If you compare output against a CP932-based reader such as ZXing.Net, expect those seven to differ.
 - **CP932-only characters are rejected, not substituted.** Within the Kanji-mode range CP932 defines 83 characters JIS X 0208 does not: the NEC row 13 block (circled digits, roman numerals, unit ligatures). A Kanji segment containing one fails the whole symbol with the new `QRCodeDecodeStatus.UnmappedCharacter`, which is deliberately distinct from `UnsupportedContent` so a caller can route just these symbols to a CP932-capable reader.
 - **ECI 20 (Shift_JIS) Byte segments are still unsupported** and still report `UnsupportedContent`.
+
+## non-throwing sizing
+
+`QRCodeGenerator`, `MicroQRCodeGenerator` and `RmQRCodeGenerator` gained `TryGetRequiredBufferSize`, plus `RmQRCodeGenerator.TryGetRequiredBufferSizeWithEci`. Nothing existing changed: the `GetRequiredBufferSize` overloads keep their signatures, their exceptions and their messages.
+
+```csharp
+if (!MicroQRCodeGenerator.TryGetRequiredBufferSize(userInput, MicroQREccLevel.L, out var size))
+    return "Content does not fit a Micro QR symbol.";
+```
+
+Reach for these when the content is user-supplied. Micro QR holds 5 digits at M1 and rMQR 5–150 bytes, so overflow is an ordinary branch there rather than a defect, and an exception costs one to two orders of magnitude more than the encode itself.
+
+- **`false` means the content does not fit, and nothing else.** For Micro QR that includes content whose encoding mode the requested version or ECC level does not offer, since the text is what picks the mode.
+- **Invalid arguments still throw**, with the same type and message as `GetRequiredBufferSize`: an undefined ECC level, a `requestedVersion` and `height` that disagree, a Micro QR version and ECC level that cannot be combined, a negative quiet zone, or `EciMode.Iso8859_1` declared over content that is not Latin-1. This mirrors the BCL's own configurable `Try` overloads (`int.TryParse` with a malformed `NumberStyles`, `Dictionary.TryGetValue` with a null key) and keeps a caller from reporting a configuration mistake as "content too long".
+- **`true` does not promise the following `Create` call cannot throw** — only that no length-related error can. Pass the returned `Version` back as `requestedVersion` to skip the fit; a destination buffer that is too small still throws.
+- **Pass rMQR's `segmentation` the same value you will encode with**, exactly as with `GetRequiredBufferSize`: the two modes can select different versions.
 
 ## rMQR mixed-mode segmentation
 

@@ -39,14 +39,28 @@ public enum RmQRHeight { H7 = 7, H9 = 9, H11 = 11, H13 = 13, H15 = 15, H17 = 17 
 Generator (`public static class RmQRCodeGenerator`, `DefaultQuietZone = 2`):
 
 ```csharp
-RmQRCodeData CreateRmQRCode(string plainText, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone);
-RmQRCodeData CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone);
-int CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone);   // byte per module, row-major, quiet zone included, returns bytes written
-RmQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone);
+RmQRCodeData CreateRmQRCode(string plainText, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single);
+RmQRCodeData CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single);
+int CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single);   // byte per module, row-major, quiet zone included, returns bytes written
+RmQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single);
+bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single);
+bool TryGetRequiredBufferSizeWithEci(ReadOnlySpan<char> text, RmQREccLevel eccLevel, EciMode eciMode, out RmQRCodeCalculatedSize size, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single);
 public readonly struct RmQRCodeCalculatedSize { int BufferSize; int Width; int Height; RmQRVersion Version; }   // Width/Height include the quiet zone
 ```
 
 `requestedVersion` and `height` together are accepted only when they agree (else `ArgumentException`); `fitStrategy` is ignored when `requestedVersion` is given.
+
+### Reporting "does not fit" without an exception
+
+**What.** `TryGetRequiredBufferSize` / `TryGetRequiredBufferSizeWithEci` answer the same question as `GetRequiredBufferSize` and return `false` instead of throwing when the content does not fit. `false` means that and nothing else: every argument error the throwing overloads raise is raised here too, with the same type, message and precedence.
+
+**Why a `Try` and not a dedicated exception type.** rMQR holds 5 to 150 Byte-mode characters, so for user-supplied content overflow is an ordinary branch rather than a defect, and .NET exceptions cost one to two orders of magnitude more than the encode itself. A dedicated exception type would only narrow the `catch`; it would not remove the throw, and the two are alternatives rather than complements. The decoder already treats its failure path as a first-class outcome (`TryDecode`), so this is the encoder side of the same rule.
+
+**Why argument errors still throw.** The split follows what the BCL does with its own configurable `Try` overloads: `int.TryParse(s, NumberStyles, ...)` throws `ArgumentException` for an undefined `NumberStyles` value or for `AllowHexSpecifier` combined with other flags, `Dictionary.TryGetValue` throws for a null key, and `Uri.TryCreate` throws for an undefined `UriKind` — `false` is reserved for the input failing, not for the options being malformed. Folding an invalid ECC level into `false` would make the caller report "content too long" for content that is nothing of the sort, and would silently change behaviour for anyone moving from `Get` to `Try`. Declaring `EciMode.Iso8859_1` for content that is not Latin-1 throws for the same reason: it is a broken promise about the text, not a capacity outcome.
+
+**What it does not promise.** Only that no *length-related* exception follows. Passing the returned `Version` back as `requestedVersion` removes the fit from the subsequent `CreateRmQRCode`, but a destination buffer that is too small still throws.
+
+**Where the fit lives.** `RmQRVersionSelector.TrySelect` (single mode) and `RmQRSegmentPlanner.TrySelectVersion` (mixed mode) are the non-throwing cores; the throwing `Select` / `SelectVersion` are wrappers that add the message. One selection path, so `Try` and `Get` cannot report different versions — the property `TryGetRequiredBufferSizeTest.RmQR_Agrees_WithThrowingOverload` asserts over content × ECC × strategy × height × segmentation.
 
 Data model (`public class RmQRCodeData`):
 
