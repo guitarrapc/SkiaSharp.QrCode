@@ -108,6 +108,62 @@ public class TryGetRequiredBufferSizeTest
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeWithEci(TooLongForRmQR, RmQREccLevel.M, EciMode.Utf8, out _)).IsFalse();
     }
 
+    public static IEnumerable<(string content, RmQREccLevel ecc, EciMode eciMode, RmQRSegmentation segmentation)> EciAgreementCases()
+    {
+        // Mixed-mode planning under an explicit ECI is its own path: the 12-bit ECI
+        // prefix is priced separately from the per-run headers, so it can land on a
+        // different version than either the non-ECI or the single-mode fit.
+        string[] contents =
+        [
+            "", "1", "abc123", "日本語", "café-42",
+            "https://example.com/p/1234567890123456",
+            new string('a', 60) + new string('0', 60),
+            new string('a', 100) + new string('0', 100),
+        ];
+
+        foreach (var content in contents)
+            foreach (var ecc in new[] { RmQREccLevel.M, RmQREccLevel.H })
+                foreach (var eciMode in new[] { EciMode.Default, EciMode.Utf8 })
+                    foreach (var segmentation in Enum.GetValues<RmQRSegmentation>())
+                        yield return (content, ecc, eciMode, segmentation);
+    }
+
+    [Test]
+    [MethodDataSource(nameof(EciAgreementCases))]
+    public async Task RmQR_WithEci_Agrees_WithThrowingOverload(string content, RmQREccLevel ecc, EciMode eciMode, RmQRSegmentation segmentation)
+    {
+        RmQRCodeCalculatedSize thrown = default;
+        var threw = false;
+        try
+        {
+            thrown = RmQRCodeGenerator.GetRequiredBufferSizeWithEci(content, ecc, eciMode, null, RmQRFitStrategy.MinimizeArea, null, 2, segmentation);
+        }
+        catch (ArgumentException)
+        {
+            threw = true;
+        }
+
+        var ok = RmQRCodeGenerator.TryGetRequiredBufferSizeWithEci(content, ecc, eciMode, out var size, null, RmQRFitStrategy.MinimizeArea, null, 2, segmentation);
+
+        await Assert.That(ok).IsEqualTo(!threw);
+        if (!ok)
+            return;
+
+        await Assert.That(size.Version).IsEqualTo(thrown.Version);
+        await Assert.That(size.BufferSize).IsEqualTo(thrown.BufferSize);
+
+        // The reported size must actually hold the symbol the ECI path then encodes.
+        var buffer = new byte[size.BufferSize];
+        var written = RmQRCodeGenerator.CreateRmQRCodeWithEci(content, ecc, buffer, eciMode, requestedVersion: size.Version, segmentation: segmentation);
+        await Assert.That(written).IsEqualTo(size.BufferSize);
+
+        if (content.Length > 0)
+        {
+            await Assert.That(RmQRCodeDecoder.TryDecode(buffer, size.Width, size.Height, out var decoded, out _)).IsTrue();
+            await Assert.That(decoded).IsEqualTo(content);
+        }
+    }
+
     // ---- rMQR: argument errors still throw ----------------------------------------
 
     [Test]

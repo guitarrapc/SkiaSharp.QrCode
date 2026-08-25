@@ -186,10 +186,6 @@ public static class MicroQRCodeGenerator
         var dataLength = analysis.DataLength;
         selected = default;
 
-        // Past this the Byte-mode bit count wraps and an absurd payload reads as a fit.
-        if (dataLength > CapacityGuard.MaxPriceableDataLength)
-            return false;
-
         if (requestedVersion is { } version)
         {
             if ((uint)((int)version - 1) > 3)
@@ -314,14 +310,20 @@ public static class MicroQRCodeGenerator
     /// sizes). The character count indicator range never binds below the bit
     /// capacity for any version/mode, so no separate range check is needed.
     /// </summary>
-    private static int GetRequiredBits(MicroQRVersion version, EncodingMode mode, int dataLength)
+    /// <remarks>
+    /// Returns <see cref="long"/>: Byte mode costs <c>8 × dataLength</c>, which wraps
+    /// <see cref="int"/> for a span past ~268M bytes and would read as a fit. Widening
+    /// keeps the comparison honest without an early return that would skip the argument
+    /// validation around it.
+    /// </remarks>
+    private static long GetRequiredBits(MicroQRVersion version, EncodingMode mode, int dataLength)
     {
-        var headerBits = MicroQRConstants.GetModeIndicatorLength(version) + MicroQRConstants.GetCountIndicatorLength(version, mode);
+        long headerBits = MicroQRConstants.GetModeIndicatorLength(version) + MicroQRConstants.GetCountIndicatorLength(version, mode);
         var dataBits = mode switch
         {
-            EncodingMode.Numeric => dataLength / 3 * 10 + (dataLength % 3) switch { 2 => 7, 1 => 4, _ => 0 },
-            EncodingMode.Alphanumeric => dataLength / 2 * 11 + dataLength % 2 * 6,
-            EncodingMode.Byte => dataLength * 8,
+            EncodingMode.Numeric => dataLength / 3 * 10L + (dataLength % 3) switch { 2 => 7, 1 => 4, _ => 0 },
+            EncodingMode.Alphanumeric => dataLength / 2 * 11L + dataLength % 2 * 6,
+            EncodingMode.Byte => dataLength * 8L,
             _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by Micro QR."),
         };
         return headerBits + dataBits;

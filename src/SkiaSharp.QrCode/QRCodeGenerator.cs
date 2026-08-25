@@ -694,10 +694,6 @@ public static class QRCodeGenerator
     {
         selectedVersion = 0;
 
-        // Past this the Byte-mode bit count wraps and an absurd payload reads as a fit.
-        if (length > CapacityGuard.MaxPriceableDataLength)
-            return false;
-
         // ECI header overhead if eci specified
         var eciHeaderBits = eciMode.GetStandardQrHeaderBits();
         var modeIndicatorBits = ModeIndicatorBits;
@@ -715,12 +711,14 @@ public static class QRCodeGenerator
         {
             var countIndicatorBits = encoding.GetCountIndicatorLength(version);
 
-            // Data bits (already in length for Byte mode as byte count)
-            var dataBits = encoding switch
+            // Data bits (already in length for Byte mode as byte count). Priced in long:
+            // 8 × effectiveLength wraps int past ~268M bytes and would read as a fit, and
+            // an early length guard here would skip the validation below it.
+            long dataBits = encoding switch
             {
                 EncodingMode.Numeric => CalculateNumericBits(length),
                 EncodingMode.Alphanumeric => CalculateAlphanumericBits(length),
-                EncodingMode.Byte => effectiveLength * 8,
+                EncodingMode.Byte => effectiveLength * 8L,
                 _ => throw new ArgumentOutOfRangeException(nameof(encoding), $"Unsupported encoding mode: {encoding}")
             };
 
@@ -743,9 +741,9 @@ public static class QRCodeGenerator
 
         // Calculates actual bit count for numeric encoding.
         // 3 digits → 10 bits, 2 digits → 7 bits, 1 digit → 4 bits.
-        static int CalculateNumericBits(int length)
+        static long CalculateNumericBits(int length)
         {
-            var bits = (length / 3) * 10; // Groups of 3
+            var bits = length / 3 * 10L; // Groups of 3
             var remainder = length % 3;
 
             if (remainder == 2)
@@ -758,9 +756,9 @@ public static class QRCodeGenerator
 
         // Calculates actual bit count for alphanumeric encoding.
         // 2 characters → 11 bits, 1 character → 6 bits.
-        static int CalculateAlphanumericBits(int length)
+        static long CalculateAlphanumericBits(int length)
         {
-            var bits = (length / 2) * 11; // Groups of 2
+            var bits = length / 2 * 11L; // Groups of 2
 
             if (length % 2 == 1)
                 bits += 6; // Remaining 1 character

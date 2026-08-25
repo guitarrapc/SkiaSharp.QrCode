@@ -14,6 +14,17 @@ internal static class RmQRVersionSelector
     private const int EciHeaderBits = RmQRConstants.ModeIndicatorLength + 8;
 
     /// <summary>
+    /// Longest data length <see cref="GetRequiredBits"/> can price without wrapping
+    /// <see cref="int"/> (Byte mode costs 8 bits per unit; the margin covers the header).
+    /// <see cref="Fits"/> rejects above it rather than widening the arithmetic, because
+    /// <see cref="GetRequiredBits"/> is asserted against exact bit counts elsewhere. The
+    /// rejection is exact, not conservative: the largest symbol holds 361 units. Every
+    /// caller validates its arguments before reaching <see cref="Fits"/>, so short-cutting
+    /// here cannot mask an argument error.
+    /// </summary>
+    private const int MaxPriceableDataLength = (int.MaxValue / 8) - 64;
+
+    /// <summary>
     /// Total bit count for header (3-bit mode + count indicator) plus data. The
     /// count indicator range never binds below the bit capacity for any
     /// version/mode (verified by RmQRConstantsUnitTest), so no range check is needed.
@@ -50,12 +61,12 @@ internal static class RmQRVersionSelector
 
     /// <summary>Whether <paramref name="dataLength"/> units of <paramref name="mode"/> fit the version at the ECC level.</summary>
     public static bool Fits(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode, int dataLength)
-        => dataLength <= CapacityGuard.MaxPriceableDataLength
+        => dataLength <= MaxPriceableDataLength
         && GetRequiredBits(version, mode, dataLength) <= 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
 
     /// <summary>Whether the data and optional ECI prefix fit the version at the ECC level.</summary>
     public static bool Fits(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode, int dataLength, EciMode eciMode)
-        => dataLength <= CapacityGuard.MaxPriceableDataLength
+        => dataLength <= MaxPriceableDataLength
         && GetRequiredBits(version, mode, dataLength, eciMode) <= 8 * RmQRConstants.GetDataCodewordCount(version, eccLevel);
 
     /// <summary>

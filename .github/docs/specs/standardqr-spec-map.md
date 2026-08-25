@@ -31,6 +31,9 @@ Reference tests: [QRBinaryEncoderUnitTest](../../../tests/SkiaSharp.QrCode.Tests
 | Table 9 | ECC characteristics (block counts, codewords per block) | [QRCodeConstants.capacityECCBaseValues](../../../src/SkiaSharp.QrCode/Internals/StandardQr/QRCodeConstants.cs) |
 | Table 1 | Remainder bits per version | [QRCodeConstants.remainderBits](../../../src/SkiaSharp.QrCode/Internals/StandardQr/QRCodeConstants.cs) |
 | Annex E | Alignment pattern center coordinates | [QRCodeConstants.alignmentPatternBaseValues](../../../src/SkiaSharp.QrCode/Internals/StandardQr/QRCodeConstants.cs) |
+| - | Version fit: smallest version holding the analyzed content at the ECC level, including the ECI and UTF-8 BOM header overhead | [QRCodeGenerator.TryGetVersion](../../../src/SkiaSharp.QrCode/QRCodeGenerator.cs) is the scan; `GetVersion` wraps it and owns the "exceeds Version 40" message. Bit pricing is `long` so an oversized Byte payload cannot wrap into a false fit, and the ECC level keeps being validated inside the scan rather than short-cut by a length test. Surfaced publicly as `GetRequiredBufferSize` / `TryGetRequiredBufferSize` (contract in [rmqr-encoder.md](rmqr-encoder.md)) |
+
+Reference tests: [TryGetRequiredBufferSizeTest](../../../tests/SkiaSharp.QrCode.Tests/Shared/TryGetRequiredBufferSizeTest.cs) (`Try` returns true exactly when `Get` does not throw and reports the same size, over content × ECC × ECI × UTF-8 BOM), [CapacityOverflowGuardTest](../../../tests/SkiaSharp.QrCode.Tests/Shared/CapacityOverflowGuardTest.cs) (a length that wraps the bit count is rejected, argument errors still throw at that length, and the published maxima still fit).
 
 ## Error Correction (Reed–Solomon)
 
