@@ -157,15 +157,40 @@ internal static class RmQRVersionSelector
     /// throws <see cref="ArgumentException"/> with an actionable message (actual
     /// length, applicable maximum in mode units, remedy) when the content does not fit.
     /// </summary>
-    /// <remarks>
-    /// Forwards to the ECI overload rather than keeping its own copy of the scan. An
-    /// earlier note here recorded that this forwarding measurably changed end-to-end
-    /// codegen; re-measured 2026-08-25 on <c>RmQR_Numeric_AutoFit_Encode</c> (the path
-    /// this overload owns) it is 148.1 ns → 152.6 ns, overlapping error bars at
-    /// MediumRun, so the duplication is not worth its drift risk.
-    /// </remarks>
     public static RmQRVersion Select(EncodingMode mode, int dataLength, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height)
-        => Select(mode, dataLength, EciMode.Default, eccLevel, requestedVersion, fitStrategy, height);
+    {
+        // Deliberately keep the pre-ECI hot path separate. Forwarding this overload
+        // through the larger ECI selector measurably changes end-to-end JIT codegen.
+        if (!RmQRConstants.IsValidEccLevel(eccLevel))
+            throw new ArgumentOutOfRangeException(nameof(eccLevel), $"Invalid rMQR ECC level: {eccLevel}");
+        if (fitStrategy is < RmQRFitStrategy.MinimizeArea or > RmQRFitStrategy.MinimizeHeight)
+            throw new ArgumentOutOfRangeException(nameof(fitStrategy), $"Invalid rMQR fit strategy: {fitStrategy}");
+        if (height is { } h && h is not (RmQRHeight.H7 or RmQRHeight.H9 or RmQRHeight.H11 or RmQRHeight.H13 or RmQRHeight.H15 or RmQRHeight.H17))
+            throw new ArgumentOutOfRangeException(nameof(height), $"Invalid rMQR height: {height}");
+
+        if (requestedVersion is { } version)
+        {
+            if (!RmQRConstants.IsValidVersion(version))
+                throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Invalid rMQR version: {version}");
+            if (height is { } requiredHeight && RmQRConstants.GetHeight(version) != (int)requiredHeight)
+                throw new ArgumentException($"Requested rMQR version {version} is {RmQRConstants.GetHeight(version)} modules high, but height {requiredHeight} was requested. Specify one or the other, or make them agree.", nameof(height));
+            if (!Fits(version, eccLevel, mode, dataLength))
+                throw NotFittingError(mode, dataLength, EciMode.Default, eccLevel, requestedVersion, height);
+
+            return version;
+        }
+
+        var capacities = FitCapacities[((RmQRConstants.GetModeIndex(mode) * 2 + (int)eccLevel) * 2) * 3 + (int)fitStrategy];
+        var order = FitOrders[(int)fitStrategy];
+        var heightMask = height is { } fitHeight ? FitHeightMasks[(int)fitStrategy][((int)fitHeight - 7) / 2] : uint.MaxValue;
+        for (var j = 0; j < capacities.Length; j++)
+        {
+            if (capacities[j] >= dataLength && (heightMask & (1u << j)) != 0)
+                return (RmQRVersion)order[j];
+        }
+
+        throw NotFittingError(mode, dataLength, EciMode.Default, eccLevel, requestedVersion, height);
+    }
 
     /// <inheritdoc cref="Select(EncodingMode, int, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?)"/>
     /// <summary>Selects a version while accounting for an optional ECI prefix.</summary>
