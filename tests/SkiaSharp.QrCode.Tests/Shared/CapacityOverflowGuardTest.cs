@@ -71,6 +71,27 @@ public class CapacityOverflowGuardTest
     }
 
     [Test]
+    public async Task RmQR_Fits_ReportsTheModeError_AtEveryLength()
+    {
+        // Whether a mode is priceable must not depend on how long the content is; a
+        // length fast-path ahead of the mode switch makes the same call throw at 10 and
+        // answer false at 300M.
+        await Assert.That(() => RmQRVersionSelector.Fits(RmQRVersion.R7x43, RmQREccLevel.M, EncodingMode.ECI, 10)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRVersionSelector.Fits(RmQRVersion.R7x43, RmQREccLevel.M, EncodingMode.ECI, OverflowingByteLength)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRVersionSelector.Fits(RmQRVersion.R7x43, RmQREccLevel.M, EncodingMode.ECI, OverflowingByteLength, EciMode.Utf8)).Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
+    public async Task StandardQR_TryGetVersion_BomDoesNotWrapTheEffectiveLength()
+    {
+        // effectiveLength += 3 must not wrap before the widened multiply, or a maximal
+        // Byte payload reads as Version 1.
+        await Assert.That(QRCodeGenerator.TryGetVersion(int.MaxValue, EncodingMode.Byte, ECCLevel.L, EciMode.Utf8, utf8BOM: true, out _)).IsFalse();
+        await Assert.That(QRCodeGenerator.TryGetVersion(int.MaxValue - 2, EncodingMode.Byte, ECCLevel.L, EciMode.Utf8, utf8BOM: true, out _)).IsFalse();
+        await Assert.That(QRCodeGenerator.TryGetVersion(int.MaxValue, EncodingMode.Numeric, ECCLevel.L, EciMode.Default, utf8BOM: false, out _)).IsFalse();
+    }
+
+    [Test]
     public async Task LargestFittingLengths_StillFit()
     {
         // The guard must not clip legitimate content: these are the published maxima.

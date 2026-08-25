@@ -698,8 +698,10 @@ public static class QRCodeGenerator
         var eciHeaderBits = eciMode.GetStandardQrHeaderBits();
         var modeIndicatorBits = ModeIndicatorBits;
 
-        // UTF-8 BOM overhead ([0xEF, 0xBB, 0xBF] = 3 bytes = 24 bits) if specified
-        var effectiveLength = length;
+        // UTF-8 BOM overhead ([0xEF, 0xBB, 0xBF] = 3 bytes = 24 bits) if specified.
+        // Widened before the addition, not after: length + 3 wraps on its own near
+        // int.MaxValue, and the later multiply would then price a maximal payload as tiny.
+        long effectiveLength = length;
         if (utf8BOM && encoding == EncodingMode.Byte && eciMode == EciMode.Utf8)
         {
             effectiveLength += 3;
