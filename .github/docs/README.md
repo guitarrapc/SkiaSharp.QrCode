@@ -35,3 +35,4 @@ Forward-looking strategy; durable decisions graduate into `specs/` after impleme
 | [skiasharp-qrcode-microqr-rmqr-implementation-plan.md](plans/skiasharp-qrcode-microqr-rmqr-implementation-plan.md) | Micro QR / rMQR implementation order (Phase 0-8) |
 | [skiasharp-qrcode-microqr-rmqr-test-strategy.md](plans/skiasharp-qrcode-microqr-rmqr-test-strategy.md) | Micro QR / rMQR test strategy (oracles, fixtures, CI design) |
 | [kanji-mode-decode-plan.md](plans/kanji-mode-decode-plan.md) | Kanji mode decode support across all three symbologies (JIS X 0208 mapping decision, oracle findings, Phase 1-5) |
+| [generator-api-options-plan.md](plans/generator-api-options-plan.md) | Generator API reshaping into per-symbology options structs, rMQR `*WithEci` deletion, version ranges (Phase 0-5) |
