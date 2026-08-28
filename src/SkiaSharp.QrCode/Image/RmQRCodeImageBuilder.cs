@@ -457,7 +457,15 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
 
     private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
     {
-        var data = _data ?? RmQRCodeGenerator.CreateRmQRCodeWithEci(_content.AsSpan(), _eccLevel, _eciMode, _requestedVersion, _fitStrategy, _height, _quietZoneSize, _segmentation);
+        var data = _data ?? RmQRCodeGenerator.CreateRmQRCode(_content.AsSpan(), _eccLevel, new RmQRCodeGeneratorOptions
+        {
+            EciMode = _eciMode,
+            Version = _requestedVersion,
+            FitStrategy = _fitStrategy,
+            Height = _height,
+            QuietZoneSize = _quietZoneSize,
+            Segmentation = _segmentation,
+        });
         matrixWidth = data.Width;
         matrixHeight = data.Height;
         return data;

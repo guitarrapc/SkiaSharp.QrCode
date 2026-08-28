@@ -174,9 +174,9 @@ public class RmQRDecodeEndToEnd
 
     private static (byte[] modules, (int Width, int Height) size) Build(string content, RmQREccLevel eccLevel, RmQRVersion version)
     {
-        var calculated = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), eccLevel, version, quietZoneSize: 0);
+        var calculated = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), eccLevel, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
         var buffer = new byte[calculated.BufferSize];
-        RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), eccLevel, buffer, version, quietZoneSize: 0);
+        RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), eccLevel, buffer, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
         return (buffer, (calculated.Width, calculated.Height));
     }
 }

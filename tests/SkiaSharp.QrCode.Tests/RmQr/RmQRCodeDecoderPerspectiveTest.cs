@@ -120,7 +120,7 @@ public class RmQRCodeDecoderPerspectiveTest
 
     private static SKBitmap RenderKeystone(string content, RmQRVersion version, float tilt, bool horizontal, float rotateDegrees)
     {
-        var qr = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, version, quietZoneSize: 2);
+        var qr = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 2 });
         var widthPx = qr.Width * 8;
         var heightPx = qr.Height * 8;
 

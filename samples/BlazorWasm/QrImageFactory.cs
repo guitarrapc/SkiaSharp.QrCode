@@ -63,13 +63,13 @@ public static class QrImageFactory
         // A fixed version already pins the height; the fixed-height option applies to
         // automatic selection only (the library rejects a disagreeing pair).
         var fixedVersion = options.Version is >= 1 and <= 32 ? (RmQRVersion)options.Version : (RmQRVersion?)null;
-        return RmQRCodeGenerator.CreateRmQRCode(
-            options.Content.AsSpan(),
-            options.RmEcc,
-            fixedVersion,
-            options.RmFitStrategy,
-            fixedVersion is null ? options.RmHeight : null,
-            Math.Clamp(options.QuietZone, 0, 10));
+        return RmQRCodeGenerator.CreateRmQRCode(options.Content.AsSpan(), options.RmEcc, new RmQRCodeGeneratorOptions
+        {
+            Version = fixedVersion,
+            FitStrategy = options.RmFitStrategy,
+            Height = fixedVersion is null ? options.RmHeight : null,
+            QuietZoneSize = Math.Clamp(options.QuietZone, 0, 10),
+        });
     }
 
     /// <summary>

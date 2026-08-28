@@ -90,7 +90,7 @@ public class RmQRSegmentationEncode
         // Sized from the largest-area version rather than from any shape's content: with
         // the version pinned, GetRequiredBufferSize ignores the text, so this is the
         // maximum every shape can need (3,003 bytes at R17x139 with the quiet zone).
-        _spanDestination = new byte[RmQRCodeGenerator.GetRequiredBufferSize("0".AsSpan(), RmQREccLevel.M, RmQRVersion.R17x139).BufferSize];
+        _spanDestination = new byte[RmQRCodeGenerator.GetRequiredBufferSize("0".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 }).BufferSize];
     }
 
     [Benchmark(Baseline = true, Description = "Single")]
@@ -102,6 +102,6 @@ public class RmQRSegmentationEncode
     [Benchmark(Description = "Optimal")]
     public int OptimalEncodeSpan()
     {
-        return RmQRCodeGenerator.CreateRmQRCode(_content.AsSpan(), RmQREccLevel.M, _spanDestination, segmentation: RmQRSegmentation.Optimal);
+        return RmQRCodeGenerator.CreateRmQRCode(_content.AsSpan(), RmQREccLevel.M, _spanDestination, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
     }
 }

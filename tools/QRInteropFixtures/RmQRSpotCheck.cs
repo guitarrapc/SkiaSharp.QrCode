@@ -36,13 +36,13 @@ public static class RmQRSpotCheck
                     if (eciMode == EciMode.Iso8859_1) eci3Total++;
                     if (eciMode == EciMode.Utf8) eci26Total++;
                     var calculated = eciMode == EciMode.Default
-                        ? RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, version, quietZoneSize: QuietZoneModules)
-                        : RmQRCodeGenerator.GetRequiredBufferSizeWithEci(text.AsSpan(), ecc, eciMode, version, quietZoneSize: QuietZoneModules);
+                        ? RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules })
+                        : RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version, QuietZoneSize = QuietZoneModules });
                     var modules = new byte[calculated.BufferSize];
                     if (eciMode == EciMode.Default)
-                        RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, modules, version, quietZoneSize: QuietZoneModules);
+                        RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules });
                     else
-                        RmQRCodeGenerator.CreateRmQRCodeWithEci(text.AsSpan(), ecc, modules, eciMode, version, quietZoneSize: QuietZoneModules);
+                        RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version, QuietZoneSize = QuietZoneModules });
 
                     var luminance = RenderLuminance(modules, calculated.Width, calculated.Height, PixelsPerModule);
                     var image = new ImageView(luminance, calculated.Width * PixelsPerModule, calculated.Height * PixelsPerModule, ImageFormat.Lum);
@@ -114,7 +114,7 @@ public static class RmQRSpotCheck
     {
         try
         {
-            RmQRCodeGenerator.GetRequiredBufferSizeWithEci(text.AsSpan(), ecc, eciMode, version);
+            RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version });
             return true;
         }
         // Every caller supplies a valid version from the constants table. On this

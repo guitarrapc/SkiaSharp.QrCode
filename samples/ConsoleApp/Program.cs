@@ -1099,7 +1099,7 @@ Console.WriteLine("""
         .ToByteArray();
     File.WriteAllBytes(path, pngBytes);
 
-    var flat = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, fitStrategy: RmQRFitStrategy.MinimizeHeight);
+    var flat = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight });
     var smallest = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M);
     Console.WriteLine($"  ✓ Saved to: {path}");
     Console.WriteLine($"  ✓ 12 digits at M: default fit {smallest.Version} ({smallest.Width - 4}×{smallest.Height - 4} core), MinimizeHeight {flat.Version}");

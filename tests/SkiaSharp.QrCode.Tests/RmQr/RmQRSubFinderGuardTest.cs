@@ -23,7 +23,7 @@ public class RmQRSubFinderGuardTest
 
     private static (byte[] Luminance, int Width, int Height, byte Threshold, float ModuleSize) Render(RmQRVersion version, string content, int modulePixelSize)
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, version);
+        var data = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
         using var bitmap = new RmQRCodeImageBuilder(data).WithModulePixelSize(modulePixelSize).ToBitmap();
         var luminance = new byte[bitmap.Width * bitmap.Height];
         LuminanceConverter.Convert(bitmap, luminance);

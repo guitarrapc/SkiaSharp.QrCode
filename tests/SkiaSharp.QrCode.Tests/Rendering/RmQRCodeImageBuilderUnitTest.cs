@@ -44,7 +44,7 @@ public class RmQRCodeImageBuilderUnitTest
     [Test]
     public async Task WithEciMode_ExplicitUtf8_UsesTheEciAwareGeneratorPath()
     {
-        var expected = RmQRCodeGenerator.CreateRmQRCodeWithEci("a", RmQREccLevel.H, EciMode.Utf8);
+        var expected = RmQRCodeGenerator.CreateRmQRCode("a", RmQREccLevel.H, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
         using var bitmap = new RmQRCodeImageBuilder("a")
             .WithErrorCorrection(RmQREccLevel.H)
             .WithEciMode(EciMode.Utf8)
@@ -71,7 +71,7 @@ public class RmQRCodeImageBuilderUnitTest
         foreach (var ecc in new[] { RmQREccLevel.M, RmQREccLevel.H })
         {
             const int modulePixelSize = 4;
-            var data = RmQRCodeGenerator.CreateRmQRCode("RM" + (int)version, ecc, version);
+            var data = RmQRCodeGenerator.CreateRmQRCode("RM" + (int)version, ecc, new RmQRCodeGeneratorOptions { Version = version });
             using var bitmap = new RmQRCodeImageBuilder(data).WithModulePixelSize(modulePixelSize).ToBitmap();
 
             await Assert.That(bitmap.Width).IsEqualTo(data.Width * modulePixelSize);
@@ -137,7 +137,7 @@ public class RmQRCodeImageBuilderUnitTest
         // Width-only sizing (the static helpers' rule and the no-size default) must give the
         // symbol at exactly that width: no letterbox band from the rounded height, and an
         // opaque image (the wide versions used to lose 1-3 columns to transparent pad).
-        var data = RmQRCodeGenerator.CreateRmQRCode("RM" + (int)version, RmQREccLevel.M, version);
+        var data = RmQRCodeGenerator.CreateRmQRCode("RM" + (int)version, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
         using var bitmap = new RmQRCodeImageBuilder(data).ToBitmap();
         await Assert.That(bitmap.Width).IsEqualTo(512);
         await Assert.That(bitmap.Height).IsEqualTo((int)Math.Round(512d * data.Height / data.Width));
