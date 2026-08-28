@@ -302,7 +302,7 @@ public static class MicroQRCodeGenerator
     private static bool TryGetRequiredBufferSizeRanged(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options)
     {
         if (options.Version.IsAny)
-            return TryGetRequiredBufferSize(text, eccLevel, out size, requestedVersion: null, options.QuietZoneSize);
+            return TryGetRequiredBufferSize(text, eccLevel, out size, requestedVersion: null, quietZoneSize: options.QuietZoneSize);
 
         size = default;
         ValidateQuietZone(options.QuietZoneSize);
