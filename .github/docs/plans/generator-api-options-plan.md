@@ -12,14 +12,14 @@ It defines WHAT is built, in WHICH order, and WHY. HOW each piece is verified fo
 |---|---:|---:|---|
 | `QRCodeGenerator` | 6 | 6 | 5 of 6 (all but `TryGetRequiredBufferSize`) |
 | `MicroQRCodeGenerator` | 5 | 4 | 4 of 5 (all but `TryGetRequiredBufferSize`) |
-| `RmQRCodeGenerator` | **12** | **8** | **none** |
+| `RmQRCodeGenerator` | **10** | **9** | **none** |
 
 `RmQRCodeGenerator` is where the shape has already failed, and it failed in two visible ways.
 
 - **An option escaped into method names.** `EciMode` could not be added to the parameter list without disturbing the positional order, so `CreateRmQRCodeWithEci`, `GetRequiredBufferSizeWithEci` and `TryGetRequiredBufferSizeWithEci` were added instead, doubling the method count. Standard QR passes the same option as an ordinary parameter, so the two symbologies now express one concept two different ways.
 - **Parameter order stopped meaning anything.** `RmQRSegmentation` was added as a trailing optional argument to four methods, because trailing is the only position that preserves source compatibility. `requestedVersion, fitStrategy, height, quietZoneSize, segmentation` is an append log, not a design.
 
-Adding `minVersion` / `maxVersion` in the same style would introduce 2 parameters across 23 methods and take rMQR to 10 parameters. The shape has to change before the next option lands, not after.
+Adding `minVersion` / `maxVersion` in the same style would introduce 2 parameters across 21 methods and take rMQR to 11 parameters. The shape has to change before the next option lands, not after.
 
 ## The release window (this is what sets the order)
 
@@ -233,7 +233,7 @@ No open decisions remain. New ones discovered during implementation are appended
 
 ### Phase 1, rMQR options struct and deletion of the legacy surface, completed 2026-08-28
 
-`RmQRCodeGeneratorOptions` (`readonly record struct`) replaces the rMQR generator's parameter lists. The public surface went from **12 methods with up to 8 parameters to 5 methods with up to 4**, and `CreateRmQRCodeWithEci`, `GetRequiredBufferSizeWithEci` and `TryGetRequiredBufferSizeWithEci` are deleted outright: the ECI-explicit path is now `options with { EciMode = … }`. 201 call sites across 23 files (tests, samples, benchmarks, the Playground, the fixture tools and the rMQR image builder) were migrated. Full suite green on net8.0 and net10.0, 15,413 passed / 0 failed, with **no test expectation changed**.
+`RmQRCodeGeneratorOptions` (`readonly record struct`) replaces the rMQR generator's parameter lists. The public surface went from **10 methods with up to 9 parameters to 5 methods with up to 4**, and `CreateRmQRCodeWithEci`, `GetRequiredBufferSizeWithEci` and `TryGetRequiredBufferSizeWithEci` are deleted outright: the ECI-explicit path is now `options with { EciMode = … }`. 201 call sites across 23 files (tests, samples, benchmarks, the Playground, the fixture tools and the rMQR image builder) were migrated. Full suite green on net8.0 and net10.0, 15,413 passed / 0 failed, with **no test expectation changed**.
 
 **Quiet zone is stored as an offset from 2, not as a `value + 1` sentinel.** Both encodings make `default(T)` mean the ISO/IEC 23941 value while leaving 0 expressible, but only the offset gives the canonical form a unique field value: with `value + 1`, writing `QuietZoneSize = 2` explicitly produces a *different* field than not writing it, so the compiler-generated equality reports two behaviourally identical option sets as unequal. That would have been a latent trap the day someone used the struct as a dictionary key or asserted equality. `QuietZoneSize_WrittenAsItsDefaultValue_IsIndistinguishableFromUnset` pins it, including `GetHashCode`.
 

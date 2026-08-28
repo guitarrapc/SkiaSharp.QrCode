@@ -319,7 +319,9 @@ public static class MicroQRCodeGenerator
     private static MicroQRVersion? ResolveVersion(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options)
     {
         if (options.Version.IsAny)
-            return null;
+            return null;   // the overload this feeds validates the quiet zone itself
+
+        ValidateQuietZone(options.QuietZoneSize);
 
         var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default);
         if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out var version))

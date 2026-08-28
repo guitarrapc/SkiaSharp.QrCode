@@ -416,7 +416,9 @@ public static class QRCodeGenerator
     private static int ResolveVersion(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in QRCodeGeneratorOptions options)
     {
         if (options.Version.IsAny)
-            return AutomaticVersion;
+            return AutomaticVersion;   // the overload this feeds validates the quiet zone itself
+
+        ValidateQuietZoneSize(options.QuietZoneSize);
 
         var analysisResult = TextAnalyzer.Analyze(textSpan, options.EciMode);
         if (!TryGetVersionInRange(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8BOM, options.Version.Min, options.Version.Max, out var version))
