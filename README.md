@@ -220,6 +220,43 @@ var rmqr = RmQRCodeGenerator.CreateRmQRCode("content", RmQREccLevel.M, new RmQRC
 
 `default` is the complete default configuration, so an option you leave out keeps the value the short call would have used.
 
+#### Defaults
+
+| Option | `QRCodeGeneratorOptions` | `MicroQRCodeGeneratorOptions` | `RmQRCodeGeneratorOptions` |
+|---|---|---|---|
+| `EciMode` | `Default` (auto-detect) | — | `Default` (auto-detect) |
+| `Utf8BOM` | `false` | — | — |
+| `Version` | `Any` (1-40) | `Any` (M1-M4) | `null` (fit automatically) |
+| `QuietZoneSize` | `4` | `2` | `2` |
+| `FitStrategy` | — | — | `MinimizeArea` |
+| `Height` | — | — | `null` (any height) |
+| `Segmentation` | — | — | `Single` |
+
+The quiet zone defaults differ because the specifications do: ISO/IEC 18004 requires 4 modules for Standard QR and 2 for Micro QR, ISO/IEC 23941 requires 2 for rMQR. `0` is a valid setting for all three.
+
+`Options.Default` and `default(Options)` are the same value, so these are equivalent:
+
+```csharp
+QRCodeGenerator.CreateQrCode("content", ECCLevel.M);                                  // short call
+QRCodeGenerator.CreateQrCode("content", ECCLevel.M, QRCodeGeneratorOptions.Default);  // same result
+```
+
+#### Changing one option with `with`
+
+The options types are `readonly record struct`, so `with` produces a copy with some members replaced and leaves the original untouched. Useful when a base configuration is shared and one call needs a variation:
+
+```csharp
+var house = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8, QuietZoneSize = 7 };
+
+var borderless = house with { QuietZoneSize = 0 };   // EciMode stays Utf8, house is unchanged
+var pinned     = house with { Version = 20 };
+
+// starting from the defaults reads the same way
+var opts = QRCodeGeneratorOptions.Default with { QuietZoneSize = 0 };
+```
+
+Value equality comes with the record, and two option sets that behave identically compare equal — writing a default explicitly is the same value as leaving it out, so `new QRCodeGeneratorOptions { QuietZoneSize = 4 } == QRCodeGeneratorOptions.Default`.
+
 #### Version ranges
 
 Standard QR and Micro QR take a *range* of acceptable versions rather than a single one, which is what you want when the symbol has to reach a minimum physical size, or must not exceed one. A pinned version is the degenerate case of the same setting.
