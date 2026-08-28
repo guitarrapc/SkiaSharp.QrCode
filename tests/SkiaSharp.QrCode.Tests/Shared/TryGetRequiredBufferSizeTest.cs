@@ -42,8 +42,8 @@ public class TryGetRequiredBufferSizeTest
     public async Task RmQR_RequestedVersionTooSmall_ReturnsFalse()
     {
         // R7x43 at M holds 12 digits; 13 is one over.
-        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize("0123456789012", RmQREccLevel.M, out _, RmQRVersion.R7x43)).IsFalse();
-        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize("012345678901", RmQREccLevel.M, out _, RmQRVersion.R7x43)).IsTrue();
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize("0123456789012", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 })).IsFalse();
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize("012345678901", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 })).IsTrue();
     }
 
     [Test]
@@ -53,7 +53,7 @@ public class TryGetRequiredBufferSizeTest
         // (R7x139, the widest, holds 102). The height is legal, the content is not.
         var content = new string('0', 150);
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _)).IsTrue();
-        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _, height: RmQRHeight.H7)).IsFalse();
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Height = RmQRHeight.H7 })).IsFalse();
     }
 
     // ---- rMQR: mixed-mode segmentation --------------------------------------------
@@ -67,8 +67,8 @@ public class TryGetRequiredBufferSizeTest
 
         await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _)).IsFalse();
 
-        var ok = RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out var size, segmentation: RmQRSegmentation.Optimal);
-        var expected = RmQRCodeGenerator.GetRequiredBufferSize(content, RmQREccLevel.M, segmentation: RmQRSegmentation.Optimal);
+        var ok = RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out var size, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        var expected = RmQRCodeGenerator.GetRequiredBufferSize(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(ok).IsTrue();
         await Assert.That(size.Version).IsEqualTo(expected.Version);
@@ -79,14 +79,14 @@ public class TryGetRequiredBufferSizeTest
     public async Task RmQR_OptimalSegmentation_StillTooLong_ReturnsFalse()
     {
         var content = new string('a', 200) + new string('0', 200);
-        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _, segmentation: RmQRSegmentation.Optimal)).IsFalse();
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal })).IsFalse();
     }
 
     [Test]
     public async Task RmQR_OptimalSegmentation_RequestedVersionTooSmall_ReturnsFalse()
     {
         var content = new string('a', 100) + new string('0', 100);
-        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _, RmQRVersion.R7x43, segmentation: RmQRSegmentation.Optimal)).IsFalse();
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43, Segmentation = RmQRSegmentation.Optimal })).IsFalse();
     }
 
     // ---- rMQR: ECI overload --------------------------------------------------------
@@ -94,8 +94,8 @@ public class TryGetRequiredBufferSizeTest
     [Test]
     public async Task RmQR_WithEci_Fits_MatchesThrowingOverload()
     {
-        var ok = RmQRCodeGenerator.TryGetRequiredBufferSizeWithEci("日本語", RmQREccLevel.M, EciMode.Utf8, out var size);
-        var expected = RmQRCodeGenerator.GetRequiredBufferSizeWithEci("日本語", RmQREccLevel.M, EciMode.Utf8);
+        var ok = RmQRCodeGenerator.TryGetRequiredBufferSize("日本語", RmQREccLevel.M, out var size, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
+        var expected = RmQRCodeGenerator.GetRequiredBufferSize("日本語", RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
 
         await Assert.That(ok).IsTrue();
         await Assert.That(size.Version).IsEqualTo(expected.Version);
@@ -105,7 +105,7 @@ public class TryGetRequiredBufferSizeTest
     [Test]
     public async Task RmQR_WithEci_TooLong_ReturnsFalse()
     {
-        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSizeWithEci(TooLongForRmQR, RmQREccLevel.M, EciMode.Utf8, out _)).IsFalse();
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(TooLongForRmQR, RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8 })).IsFalse();
     }
 
     public static IEnumerable<(string content, RmQREccLevel ecc, EciMode eciMode, RmQRSegmentation segmentation)> EciAgreementCases()
@@ -136,14 +136,14 @@ public class TryGetRequiredBufferSizeTest
         var threw = false;
         try
         {
-            thrown = RmQRCodeGenerator.GetRequiredBufferSizeWithEci(content, ecc, eciMode, null, RmQRFitStrategy.MinimizeArea, null, 2, segmentation);
+            thrown = RmQRCodeGenerator.GetRequiredBufferSize(content, ecc, new RmQRCodeGeneratorOptions { EciMode = eciMode, FitStrategy = RmQRFitStrategy.MinimizeArea, Height = null, QuietZoneSize = 2, Segmentation = segmentation });
         }
         catch (ArgumentException)
         {
             threw = true;
         }
 
-        var ok = RmQRCodeGenerator.TryGetRequiredBufferSizeWithEci(content, ecc, eciMode, out var size, null, RmQRFitStrategy.MinimizeArea, null, 2, segmentation);
+        var ok = RmQRCodeGenerator.TryGetRequiredBufferSize(content, ecc, out var size, new RmQRCodeGeneratorOptions { EciMode = eciMode, FitStrategy = RmQRFitStrategy.MinimizeArea, Height = null, QuietZoneSize = 2, Segmentation = segmentation });
 
         await Assert.That(ok).IsEqualTo(!threw);
         if (!ok)
@@ -154,7 +154,7 @@ public class TryGetRequiredBufferSizeTest
 
         // The reported size must actually hold the symbol the ECI path then encodes.
         var buffer = new byte[size.BufferSize];
-        var written = RmQRCodeGenerator.CreateRmQRCodeWithEci(content, ecc, buffer, eciMode, requestedVersion: size.Version, segmentation: segmentation);
+        var written = RmQRCodeGenerator.CreateRmQRCode(content, ecc, buffer, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = size.Version, Segmentation = segmentation });
         await Assert.That(written).IsEqualTo(size.BufferSize);
 
         if (content.Length > 0)
@@ -170,29 +170,29 @@ public class TryGetRequiredBufferSizeTest
     public async Task RmQR_InvalidArguments_Throw_NotFalse()
     {
         await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", (RmQREccLevel)2, out _)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, (RmQRVersion)0)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, (RmQRVersion)33)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, fitStrategy: (RmQRFitStrategy)5)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, height: (RmQRHeight)10)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, quietZoneSize: -1)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, quietZoneSize: 10_001)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, segmentation: (RmQRSegmentation)7)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Version = (RmQRVersion)0 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Version = (RmQRVersion)33 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { FitStrategy = (RmQRFitStrategy)5 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Height = (RmQRHeight)10 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { QuietZoneSize = -1 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { QuietZoneSize = 10_001 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Segmentation = (RmQRSegmentation)7 })).Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]
     public async Task RmQR_VersionAndHeightContradiction_Throws_NotFalse()
     {
         // Both are individually legal; the caller asked for two different things.
-        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, RmQRVersion.R9x43, height: RmQRHeight.H7)).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("1", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R9x43, Height = RmQRHeight.H7 })).Throws<ArgumentException>();
     }
 
     [Test]
     public async Task RmQR_WithEci_InvalidEciOrCharsetMismatch_Throws_NotFalse()
     {
-        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSizeWithEci("a", RmQREccLevel.M, (EciMode)999, out _)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("a", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { EciMode = (EciMode)999 })).Throws<ArgumentOutOfRangeException>();
         // The caller declared Latin-1 and the content is not Latin-1: a broken promise,
         // not a capacity outcome. Reporting "too long" here would hide the real cause.
-        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSizeWithEci("日本語", RmQREccLevel.M, EciMode.Iso8859_1, out _)).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("日本語", RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 })).Throws<ArgumentException>();
     }
 
     // ---- rMQR: agreement with the throwing overload over a broad matrix -----------
@@ -230,14 +230,14 @@ public class TryGetRequiredBufferSizeTest
         var threw = false;
         try
         {
-            thrown = RmQRCodeGenerator.GetRequiredBufferSize(content, ecc, null, strategy, height, 2, segmentation);
+            thrown = RmQRCodeGenerator.GetRequiredBufferSize(content, ecc, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Height = height, QuietZoneSize = 2, Segmentation = segmentation });
         }
         catch (ArgumentException)
         {
             threw = true;
         }
 
-        var ok = RmQRCodeGenerator.TryGetRequiredBufferSize(content, ecc, out var size, null, strategy, height, 2, segmentation);
+        var ok = RmQRCodeGenerator.TryGetRequiredBufferSize(content, ecc, out var size, new RmQRCodeGeneratorOptions { FitStrategy = strategy, Height = height, QuietZoneSize = 2, Segmentation = segmentation });
 
         await Assert.That(ok).IsEqualTo(!threw);
         if (ok)
@@ -258,11 +258,11 @@ public class TryGetRequiredBufferSizeTest
     {
         // README and migration notes promise this composition: feeding the reported
         // version back removes the fit, so the encode cannot fail on length.
-        var ok = RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out var size, segmentation: segmentation);
+        var ok = RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out var size, new RmQRCodeGeneratorOptions { Segmentation = segmentation });
         await Assert.That(ok).IsTrue();
 
         var buffer = new byte[size.BufferSize];
-        var written = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, buffer, requestedVersion: size.Version, segmentation: segmentation);
+        var written = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Version = size.Version, Segmentation = segmentation });
 
         await Assert.That(written).IsEqualTo(size.BufferSize);
         await Assert.That(RmQRCodeDecoder.TryDecode(buffer, size.Width, size.Height, out var decoded, out _)).IsTrue();

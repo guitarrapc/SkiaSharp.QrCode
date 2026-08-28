@@ -272,13 +272,13 @@ public static partial class QrInterop
 
     private static RmQRCodeData CreateRmData(QrRequest request)
     {
-        return RmQRCodeGenerator.CreateRmQRCode(
-            request.Content.AsSpan(),
-            ParseRmEcc(request.Ecc),
-            ParseRmVersion(request.Version),
-            ParseRmFitStrategy(request.FitStrategy),
-            ParseRmHeight(request.Height),
-            Math.Clamp(request.QuietZone, 0, 10));
+        return RmQRCodeGenerator.CreateRmQRCode(request.Content.AsSpan(), ParseRmEcc(request.Ecc), new RmQRCodeGeneratorOptions
+        {
+            Version = ParseRmVersion(request.Version),
+            FitStrategy = ParseRmFitStrategy(request.FitStrategy),
+            Height = ParseRmHeight(request.Height),
+            QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
+        });
     }
 
     /// <summary>
@@ -568,7 +568,8 @@ public static partial class QrInterop
         var height = ParseRmHeight(request.Height);
         var quietZone = Math.Clamp(request.QuietZone, 0, 10);
 
-        var calculated = RmQRCodeGenerator.GetRequiredBufferSize(request.Content.AsSpan(), ecc, version, fit, height, quietZone);
+        var rmOptions = new RmQRCodeGeneratorOptions { Version = version, FitStrategy = fit, Height = height, QuietZoneSize = quietZone };
+        var calculated = RmQRCodeGenerator.GetRequiredBufferSize(request.Content.AsSpan(), ecc, rmOptions);
         var moduleBuffer = ArrayPool<byte>.Shared.Rent(calculated.BufferSize);
         try
         {
@@ -576,7 +577,7 @@ public static partial class QrInterop
             var stopwatch = Stopwatch.StartNew();
             for (var i = 0; i < count; i++)
             {
-                bytesTotal += RmQRCodeGenerator.CreateRmQRCode(request.Content.AsSpan(), ecc, moduleBuffer, version, fit, height, quietZone);
+                bytesTotal += RmQRCodeGenerator.CreateRmQRCode(request.Content.AsSpan(), ecc, moduleBuffer, rmOptions);
             }
             stopwatch.Stop();
 

@@ -22,9 +22,9 @@ public class RmQRCodeDecoderRobustnessTest
     private static (byte[] Modules, int Width, int Height, string Text) Symbol(RmQRVersion version, RmQREccLevel ecc)
     {
         var text = "R" + (int)version; // 2-3 alphanumeric chars: fits every version × ECC
-        var size = RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, version, quietZoneSize: 0);
+        var size = RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
         var modules = new byte[size.BufferSize];
-        RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, modules, version, quietZoneSize: 0);
+        RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
         return (modules, size.Width, size.Height, text);
     }
 

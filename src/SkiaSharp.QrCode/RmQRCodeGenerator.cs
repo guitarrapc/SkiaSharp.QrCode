@@ -32,7 +32,6 @@ namespace SkiaSharp.QrCode;
 /// </remarks>
 public static class RmQRCodeGenerator
 {
-    private const int DefaultQuietZone = RmQRConstants.QuietZoneModules;
     private const int MaxDataCodewords = 152;   // R17x139-M
     private const int MaxFinalMessageBytes = 233; // R17x139: 232 codewords + remainder byte
 
@@ -41,66 +40,27 @@ public static class RmQRCodeGenerator
     /// </summary>
     /// <param name="plainText">The text to encode.</param>
     /// <param name="eccLevel">Error correction level (M or H).</param>
-    /// <param name="requestedVersion">Specific version, or null to fit automatically.</param>
-    /// <param name="fitStrategy">How to choose among fitting versions when <paramref name="requestedVersion"/> is null.</param>
-    /// <param name="height">Restrict automatic fit to this symbol height (must agree with <paramref name="requestedVersion"/> when both are given).</param>
-    /// <param name="quietZoneSize">Quiet zone width in modules (rMQR specification: 2).</param>
-    /// <param name="segmentation">Whether to split the content into mixed-mode segments (see <see cref="RmQRSegmentation"/>).</param>
+    /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Omit for the defaults.</param>
     /// <returns>An <see cref="RmQRCodeData"/> containing the generated matrix.</returns>
-    /// <exception cref="ArgumentException">Thrown when the data does not fit or the arguments contradict each other.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown for invalid version / ECC / strategy / height / quiet zone / segmentation values.</exception>
-    public static RmQRCodeData CreateRmQRCode(string plainText, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
-        => CreateRmQRCode(plainText.AsSpan(), eccLevel, requestedVersion, fitStrategy, height, quietZoneSize, segmentation);
+    /// <exception cref="ArgumentException">Thrown when the data does not fit or the options contradict each other.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown for invalid version / ECC / strategy / height / quiet zone / segmentation / ECI values.</exception>
+    public static RmQRCodeData CreateRmQRCode(string plainText, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default)
+        => CreateRmQRCode(plainText.AsSpan(), eccLevel, in options);
 
-    /// <summary>Creates an rMQR code with an explicit or automatically resolved ECI mode.</summary>
-    /// <param name="plainText">The text to encode.</param>
-    /// <param name="eccLevel">Error correction level (M or H).</param>
-    /// <param name="eciMode">Character encoding declaration. Default auto-detects ASCII / ISO-8859-1 / UTF-8.</param>
-    /// <param name="requestedVersion">Specific version, or null to fit automatically.</param>
-    /// <param name="fitStrategy">How to choose among fitting versions.</param>
-    /// <param name="height">Optional fixed-height constraint.</param>
-    /// <param name="quietZoneSize">Quiet zone width in modules.</param>
-    /// <param name="segmentation">Whether to split the content into mixed-mode segments (see <see cref="RmQRSegmentation"/>).</param>
-    public static RmQRCodeData CreateRmQRCodeWithEci(string plainText, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
-        => CreateRmQRCodeWithEci(plainText.AsSpan(), eccLevel, eciMode, requestedVersion, fitStrategy, height, quietZoneSize, segmentation);
-
-    /// <inheritdoc cref="CreateRmQRCode(string, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, int, RmQRSegmentation)"/>
+    /// <inheritdoc cref="CreateRmQRCode(string, RmQREccLevel, in RmQRCodeGeneratorOptions)"/>
     /// <param name="textSpan">The text span to encode.</param>
-    public static RmQRCodeData CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
+    /// <param name="eccLevel">Error correction level (M or H).</param>
+    /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Omit for the defaults.</param>
+    public static RmQRCodeData CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default)
     {
+        var quietZoneSize = options.QuietZoneSize;
         ValidateQuietZone(quietZoneSize);
         // One compare on the default path; validation of the value itself lives in the
         // cold method so Single costs a predicted not-taken branch and nothing else.
-        if (segmentation != RmQRSegmentation.Single)
-            return CreateOptimal(textSpan, eccLevel, EciMode.Default, requestedVersion, fitStrategy, height, quietZoneSize, segmentation);
+        if (options.Segmentation != RmQRSegmentation.Single)
+            return CreateOptimal(textSpan, eccLevel, options.EciMode, options.Version, options.FitStrategy, options.Height, quietZoneSize, options.Segmentation);
 
-        var config = PrepareConfigurationAutoEci(textSpan, eccLevel, requestedVersion, fitStrategy, height);
-        var result = new RmQRCodeData(config.Version, quietZoneSize);
-        var coreWidth = result.GetCoreWidth();
-        var coreHeight = result.GetCoreHeight();
-        var coreLength = coreWidth * coreHeight;
-        var rented = ArrayPool<byte>.Shared.Rent(coreLength);
-        try
-        {
-            var core = rented.AsSpan(0, coreLength);
-            WriteCoreModulesAutoEci(textSpan, in config, core, coreWidth);
-            result.SetCoreData(core);
-            return result;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
-        }
-    }
-
-    /// <summary>Creates an rMQR code with an explicit or automatically resolved ECI mode.</summary>
-    public static RmQRCodeData CreateRmQRCodeWithEci(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
-    {
-        ValidateQuietZone(quietZoneSize);
-        if (segmentation != RmQRSegmentation.Single)
-            return CreateOptimal(textSpan, eccLevel, eciMode, requestedVersion, fitStrategy, height, quietZoneSize, segmentation);
-
-        var config = PrepareConfigurationWithEci(textSpan, eccLevel, eciMode, requestedVersion, fitStrategy, height);
+        var config = PrepareConfiguration(textSpan, eccLevel, options.EciMode, options.Version, options.FitStrategy, options.Height);
         var result = new RmQRCodeData(config.Version, quietZoneSize);
         var coreWidth = result.GetCoreWidth();
         var coreHeight = result.GetCoreHeight();
@@ -112,7 +72,7 @@ public static class RmQRCodeGenerator
         try
         {
             var core = rented.AsSpan(0, coreLength);
-            WriteCoreModulesWithEci(textSpan, in config, core, coreWidth);
+            WriteCoreModules(textSpan, in config, core, coreWidth);
             result.SetCoreData(core);
             return result;
         }
@@ -134,55 +94,17 @@ public static class RmQRCodeGenerator
     /// <param name="textSpan">The text span to encode.</param>
     /// <param name="eccLevel">Error correction level (M or H).</param>
     /// <param name="destination">Destination buffer; at least <see cref="RmQRCodeCalculatedSize.BufferSize"/> bytes.</param>
-    /// <param name="requestedVersion">Specific version, or null to fit automatically.</param>
-    /// <param name="fitStrategy">How to choose among fitting versions when <paramref name="requestedVersion"/> is null.</param>
-    /// <param name="height">Restrict automatic fit to this symbol height.</param>
-    /// <param name="quietZoneSize">Quiet zone width in modules.</param>
-    /// <param name="segmentation">Whether to split the content into mixed-mode segments (see <see cref="RmQRSegmentation"/>). Size <paramref name="destination"/> with the same value, since the two modes can select different versions.</param>
+    /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options, since they can select different versions.</param>
     /// <returns>The number of bytes written (width × height, quiet zone included).</returns>
-    /// <exception cref="ArgumentException">Thrown when the destination is too small, the data does not fit, or the arguments contradict each other.</exception>
-    public static int CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
+    /// <exception cref="ArgumentException">Thrown when the destination is too small, the data does not fit, or the options contradict each other.</exception>
+    public static int CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default)
     {
-        // Keep the shipped auto-detect entry point as a direct hot method.
-        // Routing it through the explicit-ECI public method regresses the largest
-        // span encode by ~30% because that method is too large to inline.
+        var quietZoneSize = options.QuietZoneSize;
         ValidateQuietZone(quietZoneSize);
-        if (segmentation != RmQRSegmentation.Single)
-            return CreateOptimalTo(textSpan, eccLevel, EciMode.Default, destination, requestedVersion, fitStrategy, height, quietZoneSize, segmentation);
+        if (options.Segmentation != RmQRSegmentation.Single)
+            return CreateOptimalTo(textSpan, eccLevel, options.EciMode, destination, options.Version, options.FitStrategy, options.Height, quietZoneSize, options.Segmentation);
 
-        var config = PrepareConfigurationAutoEci(textSpan, eccLevel, requestedVersion, fitStrategy, height);
-        var coreWidth = RmQRConstants.GetWidth(config.Version);
-        var coreHeight = RmQRConstants.GetHeight(config.Version);
-        var totalWidth = coreWidth + quietZoneSize * 2;
-        var totalHeight = coreHeight + quietZoneSize * 2;
-        var requiredSize = totalWidth * totalHeight;
-        if (destination.Length < requiredSize)
-            throw new ArgumentException($"Destination buffer too small: {requiredSize} bytes required (version {config.Version}, {totalWidth}x{totalHeight} modules), got {destination.Length} bytes. Use {nameof(GetRequiredBufferSize)} to calculate the required size.", nameof(destination));
-
-        var target = destination.Slice(0, requiredSize);
-        if (quietZoneSize == 0)
-        {
-            WriteCoreModulesAutoEci(textSpan, in config, target, coreWidth);
-            return requiredSize;
-        }
-
-        var margin = quietZoneSize * totalWidth;
-        target.Slice(0, margin + quietZoneSize).Clear();
-        for (var row = 1; row < coreHeight; row++)
-            target.Slice(margin + row * totalWidth - quietZoneSize, 2 * quietZoneSize).Clear();
-        target.Slice(margin + coreHeight * totalWidth - quietZoneSize).Clear();
-        WriteCoreModulesAutoEci(textSpan, in config, target.Slice(margin + quietZoneSize), totalWidth);
-        return requiredSize;
-    }
-
-    /// <summary>Writes an rMQR matrix with an explicit or automatically resolved ECI mode.</summary>
-    public static int CreateRmQRCodeWithEci(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, EciMode eciMode, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
-    {
-        ValidateQuietZone(quietZoneSize);
-        if (segmentation != RmQRSegmentation.Single)
-            return CreateOptimalTo(textSpan, eccLevel, eciMode, destination, requestedVersion, fitStrategy, height, quietZoneSize, segmentation);
-
-        var config = PrepareConfigurationWithEci(textSpan, eccLevel, eciMode, requestedVersion, fitStrategy, height);
+        var config = PrepareConfiguration(textSpan, eccLevel, options.EciMode, options.Version, options.FitStrategy, options.Height);
         var coreWidth = RmQRConstants.GetWidth(config.Version);
         var coreHeight = RmQRConstants.GetHeight(config.Version);
         var totalWidth = coreWidth + quietZoneSize * 2;
@@ -195,7 +117,7 @@ public static class RmQRCodeGenerator
         if (quietZoneSize == 0)
         {
             // The placer writes every core module, no clear needed.
-            WriteCoreModulesWithEci(textSpan, in config, target, coreWidth);
+            WriteCoreModules(textSpan, in config, target, coreWidth);
             return requiredSize;
         }
 
@@ -210,7 +132,7 @@ public static class RmQRCodeGenerator
             target.Slice(margin + row * totalWidth - quietZoneSize, 2 * quietZoneSize).Clear();
         }
         target.Slice(margin + coreHeight * totalWidth - quietZoneSize).Clear();     // last row's right margin + bottom rows
-        WriteCoreModulesWithEci(textSpan, in config, target.Slice(margin + quietZoneSize), totalWidth);
+        WriteCoreModules(textSpan, in config, target.Slice(margin + quietZoneSize), totalWidth);
 
         return requiredSize;
     }
@@ -221,41 +143,26 @@ public static class RmQRCodeGenerator
     /// </summary>
     /// <param name="text">The text to encode.</param>
     /// <param name="eccLevel">Error correction level (M or H).</param>
-    /// <param name="requestedVersion">Specific version, or null to fit automatically.</param>
-    /// <param name="fitStrategy">How to choose among fitting versions when <paramref name="requestedVersion"/> is null.</param>
-    /// <param name="height">Restrict automatic fit to this symbol height.</param>
-    /// <param name="quietZoneSize">Quiet zone width in modules.</param>
-    /// <param name="segmentation">Whether to split the content into mixed-mode segments (see <see cref="RmQRSegmentation"/>).</param>
+    /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings.</param>
     /// <remarks>
-    /// Pass the same <paramref name="segmentation"/> you will encode with: the two
-    /// modes can select different versions, so a buffer sized for one can be too small
-    /// for the other.
+    /// Pass the same <paramref name="options"/> you will encode with: segmentation and
+    /// ECI can select different versions, so a buffer sized for one can be too small for
+    /// the other.
     /// </remarks>
-    /// <exception cref="ArgumentException">Thrown when the data does not fit or the arguments contradict each other.</exception>
-    public static RmQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
+    /// <exception cref="ArgumentException">Thrown when the data does not fit or the options contradict each other.</exception>
+    public static RmQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default)
     {
+        var quietZoneSize = options.QuietZoneSize;
         ValidateQuietZone(quietZoneSize);
-        var version = segmentation != RmQRSegmentation.Single
-            ? PlanOptimalVersion(text, eccLevel, EciMode.Default, requestedVersion, fitStrategy, height, segmentation)
-            : PrepareConfigurationAutoEci(text, eccLevel, requestedVersion, fitStrategy, height).Version;
+        var version = options.Segmentation != RmQRSegmentation.Single
+            ? PlanOptimalVersion(text, eccLevel, options.EciMode, options.Version, options.FitStrategy, options.Height, options.Segmentation)
+            : PrepareConfiguration(text, eccLevel, options.EciMode, options.Version, options.FitStrategy, options.Height).Version;
         var totalWidth = RmQRConstants.GetWidth(version) + quietZoneSize * 2;
         var totalHeight = RmQRConstants.GetHeight(version) + quietZoneSize * 2;
         return new RmQRCodeCalculatedSize(totalWidth * totalHeight, totalWidth, totalHeight, version);
     }
 
-    /// <summary>Calculates dimensions with an explicit or automatically resolved ECI mode.</summary>
-    public static RmQRCodeCalculatedSize GetRequiredBufferSizeWithEci(ReadOnlySpan<char> text, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
-    {
-        ValidateQuietZone(quietZoneSize);
-        var version = segmentation != RmQRSegmentation.Single
-            ? PlanOptimalVersion(text, eccLevel, eciMode, requestedVersion, fitStrategy, height, segmentation)
-            : PrepareConfigurationWithEci(text, eccLevel, eciMode, requestedVersion, fitStrategy, height).Version;
-        var totalWidth = RmQRConstants.GetWidth(version) + quietZoneSize * 2;
-        var totalHeight = RmQRConstants.GetHeight(version) + quietZoneSize * 2;
-        return new RmQRCodeCalculatedSize(totalWidth * totalHeight, totalWidth, totalHeight, version);
-    }
-
-    /// <inheritdoc cref="GetRequiredBufferSize(ReadOnlySpan{char}, RmQREccLevel, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, int, RmQRSegmentation)"/>
+    /// <inheritdoc cref="GetRequiredBufferSize(ReadOnlySpan{char}, RmQREccLevel, in RmQRCodeGeneratorOptions)"/>
     /// <summary>
     /// Non-throwing <see cref="GetRequiredBufferSize"/>: <c>false</c> means the content
     /// does not fit, and nothing else. Argument errors throw exactly as that overload
@@ -263,30 +170,23 @@ public static class RmQRCodeGenerator
     /// </summary>
     /// <param name="size">Dimensions and version on success; <c>default</c> when the content does not fit.</param>
     /// <returns><c>true</c> when the content fits.</returns>
-    public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
-        => TryGetRequiredBufferSizeCore(text, eccLevel, EciMode.Default, out size, requestedVersion, fitStrategy, height, quietZoneSize, segmentation);
-
-    /// <inheritdoc cref="TryGetRequiredBufferSize"/>
-    /// <param name="eciMode">Character encoding declaration.</param>
-    public static bool TryGetRequiredBufferSizeWithEci(ReadOnlySpan<char> text, RmQREccLevel eccLevel, EciMode eciMode, out RmQRCodeCalculatedSize size, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single)
-        => TryGetRequiredBufferSizeCore(text, eccLevel, eciMode, out size, requestedVersion, fitStrategy, height, quietZoneSize, segmentation);
-
-    private static bool TryGetRequiredBufferSizeCore(ReadOnlySpan<char> text, RmQREccLevel eccLevel, EciMode eciMode, out RmQRCodeCalculatedSize size, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, int quietZoneSize, RmQRSegmentation segmentation)
+    public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = default)
     {
         size = default;
+        var quietZoneSize = options.QuietZoneSize;
         ValidateQuietZone(quietZoneSize);
 
         bool fits;
         RmQRVersion version;
-        if (segmentation != RmQRSegmentation.Single)
+        if (options.Segmentation != RmQRSegmentation.Single)
         {
-            fits = TryPlanOptimalVersion(text, eccLevel, eciMode, requestedVersion, fitStrategy, height, segmentation, out version);
+            fits = TryPlanOptimalVersion(text, eccLevel, options.EciMode, options.Version, options.FitStrategy, options.Height, options.Segmentation, out version);
         }
         else
         {
-            ValidateEci(text, eciMode);
-            var analysis = TextAnalyzer.Analyze(text, eciMode);
-            fits = RmQRVersionSelector.TrySelect(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height, out version);
+            ValidateEci(text, options.EciMode);
+            var analysis = TextAnalyzer.Analyze(text, options.EciMode);
+            fits = RmQRVersionSelector.TrySelect(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, options.Version, options.FitStrategy, options.Height, out version);
         }
 
         if (!fits)
@@ -329,16 +229,6 @@ public static class RmQRCodeGenerator
             throw new ArgumentOutOfRangeException(nameof(quietZoneSize), $"Quiet zone size must be 0-10000, got {quietZoneSize}");
     }
 
-    /// <summary>Auto-detects ECI while preserving an isolated no-ECI selector for ASCII.</summary>
-    private static RmQRConfiguration PrepareConfigurationAutoEci(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height)
-    {
-        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default);
-        var version = analysis.EciMode == EciMode.Default
-            ? RmQRVersionSelector.Select(analysis.EncodingMode, analysis.DataLength, eccLevel, requestedVersion, fitStrategy, height)
-            : RmQRVersionSelector.Select(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height);
-        return new RmQRConfiguration(version, eccLevel, analysis);
-    }
-
     /// <summary>
     /// Everything the mixed-mode entry points must reject, gathered off the default
     /// path so <see cref="RmQRSegmentation.Single"/> pays only one compare.
@@ -358,8 +248,8 @@ public static class RmQRCodeGenerator
             throw new ArgumentException("The content contains characters that cannot be represented by ISO-8859-1. Use EciMode.Utf8 or EciMode.Default.", nameof(eciMode));
     }
 
-    /// <summary>Analyzes ECI text and selects / validates the version.</summary>
-    private static RmQRConfiguration PrepareConfigurationWithEci(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height)
+    /// <summary>Analyzes the text under the requested ECI and selects / validates the version.</summary>
+    private static RmQRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height)
     {
         ValidateEci(textSpan, eciMode);
 
@@ -377,8 +267,11 @@ public static class RmQRCodeGenerator
     /// (width × height, rows <paramref name="stride"/> bytes apart, every core module
     /// written; stride == width for a packed core). Allocation-free: fixed stack budgets.
     /// </summary>
-    private static void WriteCoreModulesAutoEci(ReadOnlySpan<char> textSpan, in RmQRConfiguration config, Span<byte> core, int stride)
+    private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in RmQRConfiguration config, Span<byte> core, int stride)
     {
+        // Dispatch on the *resolved* ECI, not the requested one: an explicit
+        // Iso8859_1 / Utf8 is carried through analysis verbatim and never collapses to
+        // Default, so the no-ECI writer is reached only when no ECI is to be emitted.
         if (config.Analysis.EciMode == EciMode.Default)
             WriteCoreModulesWithoutEci(textSpan, in config, core, stride);
         else
@@ -519,7 +412,7 @@ public static class RmQRCodeGenerator
     {
         if (segments.Length == 0)
         {
-            WriteCoreModulesAutoEci(textSpan, in config, core, stride);
+            WriteCoreModules(textSpan, in config, core, stride);
             return;
         }
 

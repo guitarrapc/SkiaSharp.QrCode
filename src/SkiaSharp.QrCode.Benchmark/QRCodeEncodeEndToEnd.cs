@@ -106,6 +106,29 @@ public class QRCodeEncodeEndToEnd
         return MicroQRCodeGenerator.CreateMicroQRCode(_numeric.AsSpan(), MicroQREccLevel.L, _spanDestination);
     }
 
+    // The options overloads against the parameter list overloads they forward to. They are
+    // single-expression forwarders, so these pairs should sit on top of each other; the
+    // point is to keep that a measured fact, since the options overloads are the path new
+    // options are added to and callers will be pointed at.
+
+    [Benchmark(Description = "QR_Byte_V40_L_Encode (Span, options)")]
+    public int QR_Byte_V40_L_EncodeSpanOptions()
+    {
+        return QRCodeGenerator.CreateQrCode(_byteLongL.AsSpan(), ECCLevel.L, _spanDestination, QRCodeGeneratorOptions.Default);
+    }
+
+    [Benchmark(Description = "QR_Numeric_V1_L_Encode (options)")]
+    public QRCodeData QR_Numeric_V1_L_EncodeOptions()
+    {
+        return QRCodeGenerator.CreateQrCode(_numeric, ECCLevel.L, QRCodeGeneratorOptions.Default);
+    }
+
+    [Benchmark(Description = "MicroQR_Numeric_M2_Encode (Span, options)")]
+    public int MicroQR_Numeric_M2_EncodeSpanOptions()
+    {
+        return MicroQRCodeGenerator.CreateMicroQRCode(_numeric.AsSpan(), MicroQREccLevel.L, _spanDestination, MicroQRCodeGeneratorOptions.Default);
+    }
+
     private static string BuildDeterministicText(int length)
     {
         var sb = new StringBuilder(length);

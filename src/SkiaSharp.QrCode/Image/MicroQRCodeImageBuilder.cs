@@ -26,7 +26,7 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     private readonly string? _content;
     private readonly MicroQRCodeData? _data;
     private MicroQREccLevel _eccLevel = MicroQREccLevel.M;
-    private MicroQRVersion? _requestedVersion;
+    private MicroQRVersionRange _versionRange;
 
     public MicroQRCodeImageBuilder(string content) : base(defaultQuietZoneSize: 2)
     {
@@ -333,6 +333,7 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <exception cref="InvalidOperationException"></exception>
+    /// <remarks>The pinned-version case of the <see cref="WithVersion(MicroQRVersionRange)"/> overload.</remarks>
     public MicroQRCodeImageBuilder WithVersion(MicroQRVersion version)
     {
         if (_data is not null)
@@ -340,7 +341,23 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
         if ((uint)((int)version - 1) > 3)
             throw new ArgumentOutOfRangeException(nameof(version), $"Invalid Micro QR version: {version}");
 
-        _requestedVersion = version;
+        _versionRange = MicroQRVersionRange.Exactly(version);
+        return this;
+    }
+
+    /// <summary>
+    /// Configure the versions the generator may choose from, rather than a single one.
+    /// </summary>
+    /// <param name="versionRange">The permitted versions; the smallest one that holds the content is used.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="MicroQRCodeData"/>.</exception>
+    /// <remarks>See <see cref="MicroQRVersionRange"/> for which empty ranges throw and which are a poor fit.</remarks>
+    public MicroQRCodeImageBuilder WithVersion(MicroQRVersionRange versionRange)
+    {
+        if (_data is not null)
+            throw new InvalidOperationException("WithVersion cannot be used when MicroQRCodeData is provided directly.");
+
+        _versionRange = versionRange;
         return this;
     }
 
@@ -348,7 +365,7 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
 
     private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
     {
-        var data = _data ?? MicroQRCodeGenerator.CreateMicroQRCode(_content.AsSpan(), _eccLevel, _requestedVersion, _quietZoneSize);
+        var data = _data ?? MicroQRCodeGenerator.CreateMicroQRCode(_content.AsSpan(), _eccLevel, new MicroQRCodeGeneratorOptions { Version = _versionRange, QuietZoneSize = _quietZoneSize });
         matrixWidth = matrixHeight = data.Size;
         return data;
     }

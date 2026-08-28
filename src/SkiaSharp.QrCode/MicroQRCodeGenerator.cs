@@ -28,7 +28,7 @@ namespace SkiaSharp.QrCode;
 public static class MicroQRCodeGenerator
 {
     private const int MaxCoreSize = 17;
-    private const int DefaultQuietZone = 2; // ISO/IEC 18004: Micro QR requires a 2-module quiet zone
+    internal const int DefaultQuietZone = 2; // ISO/IEC 18004: Micro QR requires a 2-module quiet zone
 
     /// <summary>
     /// Creates a Micro QR code from the provided plain text.
@@ -150,6 +150,49 @@ public static class MicroQRCodeGenerator
         return true;
     }
 
+    // ---- options overloads ---------------------------------------------------------
+    //
+    // These unpack onto the overloads above, not the other way round, so the released ones
+    // keep their exact exceptions and codegen. `options` has no default value on purpose:
+    // with one, CreateMicroQRCode(text, ecc) would be ambiguous between the two sets.
+
+    /// <inheritdoc cref="CreateMicroQRCode(string, MicroQREccLevel, MicroQRVersion?, int)"/>
+    /// <param name="plainText">The text to encode.</param>
+    /// <param name="eccLevel">Error correction level; must be valid for the (selected) version.</param>
+    /// <param name="options">Version and quiet zone settings. Pass <see cref="MicroQRCodeGeneratorOptions.Default"/> for the defaults.</param>
+    public static MicroQRCodeData CreateMicroQRCode(string plainText, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options)
+        => CreateMicroQRCode(plainText.AsSpan(), eccLevel, options);
+
+    /// <inheritdoc cref="CreateMicroQRCode(string, MicroQREccLevel, in MicroQRCodeGeneratorOptions)"/>
+    /// <param name="textSpan">The text span to encode.</param>
+    /// <param name="eccLevel">Error correction level; must be valid for the (selected) version.</param>
+    /// <param name="options">Version and quiet zone settings.</param>
+    public static MicroQRCodeData CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options)
+        => CreateMicroQRCode(textSpan, eccLevel, ResolveVersion(textSpan, eccLevel, options), options.QuietZoneSize);
+
+    /// <inheritdoc cref="CreateMicroQRCode(ReadOnlySpan{char}, MicroQREccLevel, Span{byte}, MicroQRVersion?, int)"/>
+    /// <param name="textSpan">The text span to encode.</param>
+    /// <param name="eccLevel">Error correction level; must be valid for the (selected) version.</param>
+    /// <param name="destination">Destination buffer; at least <see cref="MicroQRCodeCalculatedSize.BufferSize"/> bytes.</param>
+    /// <param name="options">Version and quiet zone settings. Size <paramref name="destination"/> with the same options.</param>
+    public static int CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, in MicroQRCodeGeneratorOptions options)
+        => CreateMicroQRCode(textSpan, eccLevel, destination, ResolveVersion(textSpan, eccLevel, options), options.QuietZoneSize);
+
+    /// <inheritdoc cref="GetRequiredBufferSize(ReadOnlySpan{char}, MicroQREccLevel, MicroQRVersion?, int)"/>
+    /// <param name="text">The text to encode.</param>
+    /// <param name="eccLevel">Error correction level.</param>
+    /// <param name="options">Version and quiet zone settings.</param>
+    public static MicroQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options)
+        => GetRequiredBufferSize(text, eccLevel, ResolveVersion(text, eccLevel, options), options.QuietZoneSize);
+
+    /// <inheritdoc cref="TryGetRequiredBufferSize(ReadOnlySpan{char}, MicroQREccLevel, out MicroQRCodeCalculatedSize, MicroQRVersion?, int)"/>
+    /// <param name="text">The text to encode.</param>
+    /// <param name="eccLevel">Error correction level.</param>
+    /// <param name="size">Matrix size and version on success; <c>default</c> when the content does not fit.</param>
+    /// <param name="options">Version and quiet zone settings.</param>
+    public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options)
+        => TryGetRequiredBufferSizeRanged(text, eccLevel, out size, options);
+
     private static void ValidateQuietZone(int quietZoneSize)
     {
         // 17 + 2·qz squared must stay far below int.MaxValue; 10000 modules of
@@ -213,6 +256,78 @@ public static class MicroQRCodeGenerator
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The smallest version inside <paramref name="range"/> that holds the content, or
+    /// <c>false</c> when none does. A range offering <paramref name="eccLevel"/> nowhere is
+    /// a contradiction and throws; one whose versions cannot carry the required mode, or are
+    /// too short, is an ordinary "does not fit".
+    /// </summary>
+    internal static bool TrySelectVersionInRange(in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersionRange range, out MicroQRVersion selected)
+    {
+        if ((uint)eccLevel > (uint)MicroQREccLevel.Q)
+            throw new ArgumentOutOfRangeException(nameof(eccLevel), $"Invalid Micro QR ECC level: {eccLevel}");
+
+        selected = default;
+        var mode = analysis.EncodingMode;
+        var anyValidCombination = false;
+
+        for (var candidate = range.Min; candidate <= range.Max; candidate++)
+        {
+            if (!MicroQRConstants.IsValidCombination(candidate, eccLevel))
+                continue;
+
+            anyValidCombination = true;
+            if (!MicroQRConstants.IsModeSupported(candidate, mode))
+                continue;
+            if (GetRequiredBits(candidate, mode, analysis.DataLength) <= MicroQRConstants.GetDataBitCapacity(candidate, eccLevel))
+            {
+                selected = candidate;
+                return true;
+            }
+        }
+
+        if (!anyValidCombination)
+        {
+            throw new ArgumentException(
+                $"ECC level {eccLevel} is not available on any Micro QR version in {range} (M1: ErrorDetectionOnly; M2/M3: L, M; M4: L, M, Q).",
+                nameof(eccLevel));
+        }
+
+        return false;
+    }
+
+    /// <summary>The resolved version, or <c>null</c> when unconstrained so selection is unchanged.</summary>
+    private static bool TryGetRequiredBufferSizeRanged(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options)
+    {
+        if (options.Version.IsAny)
+            return TryGetRequiredBufferSize(text, eccLevel, out size, requestedVersion: null, quietZoneSize: options.QuietZoneSize);
+
+        size = default;
+        ValidateQuietZone(options.QuietZoneSize);
+
+        var analysis = TextAnalyzer.Analyze(text, EciMode.Default);
+        if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out var version))
+            return false;
+
+        var totalSize = MicroQRConstants.SizeFromVersion(version) + options.QuietZoneSize * 2;
+        size = new MicroQRCodeCalculatedSize(totalSize * totalSize, totalSize, version);
+        return true;
+    }
+
+    private static MicroQRVersion? ResolveVersion(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options)
+    {
+        if (options.Version.IsAny)
+            return null;   // the overload this feeds validates the quiet zone itself
+
+        ValidateQuietZone(options.QuietZoneSize);
+
+        var analysis = TextAnalyzer.Analyze(textSpan, EciMode.Default);
+        if (!TrySelectVersionInRange(in analysis, eccLevel, options.Version, out var version))
+            throw NotFittingError(analysis.EncodingMode, analysis.DataLength, eccLevel, options.Version.IsExact ? options.Version.Min : null);
+
+        return version;
     }
 
     /// <summary>

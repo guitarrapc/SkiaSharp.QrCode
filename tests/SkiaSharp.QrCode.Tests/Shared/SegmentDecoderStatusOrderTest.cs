@@ -28,9 +28,9 @@ public class SegmentDecoderStatusOrderTest
     [Arguments("Hello!", 6)]
     public async Task ShortBuffer_OnAValidSymbol_ReportsDestinationTooSmall(string content, int expectedLength)
     {
-        var size = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), RmQREccLevel.M, RmQRVersion.R11x27);
+        var size = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
         var modules = new byte[size.BufferSize];
-        RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.M, modules, RmQRVersion.R11x27);
+        RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.M, modules, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
 
         for (var length = 0; length < expectedLength; length++)
         {
@@ -52,7 +52,7 @@ public class SegmentDecoderStatusOrderTest
     [Test]
     public async Task ShortBuffer_ThroughTheImageEntryPoint_ReportsDestinationTooSmall()
     {
-        var data = RmQRCodeGenerator.CreateRmQRCode("123456", RmQREccLevel.M, RmQRVersion.R11x27);
+        var data = RmQRCodeGenerator.CreateRmQRCode("123456", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
         using var bitmap = new RmQRCodeImageBuilder(data).WithModulePixelSize(8).ToBitmap();
         var luminance = new byte[bitmap.Width * bitmap.Height];
         Internals.ImageDecoders.LuminanceConverter.Convert(bitmap, luminance);
@@ -232,7 +232,7 @@ public class SegmentDecoderStatusOrderTest
             await Assert.That(text).IsEqualTo(content);
         }
 
-        var rmqr = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, RmQRVersion.R11x27);
+        var rmqr = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
         await Assert.That(RmQRCodeDecoder.TryDecode(rmqr, out var rmqrText)).IsTrue().Because($"R11x27 '{content}'");
         await Assert.That(rmqrText).IsEqualTo(content);
     }

@@ -68,7 +68,7 @@ public static class RmQRCodeDecoder
     /// <param name="modules">
     /// Module matrix, one byte per module (0 = light, non-zero = dark), flat row-major
     /// order over <paramref name="width"/>, the format produced by
-    /// <see cref="RmQRCodeGenerator.CreateRmQRCode(ReadOnlySpan{char}, RmQREccLevel, Span{byte}, RmQRVersion?, RmQRFitStrategy, RmQRHeight?, int, RmQRSegmentation)"/>.
+    /// <see cref="RmQRCodeGenerator.CreateRmQRCode(ReadOnlySpan{char}, RmQREccLevel, Span{byte}, in RmQRCodeGeneratorOptions)"/>.
     /// A light quiet zone border (uniform or not) is detected and skipped automatically.
     /// </param>
     /// <param name="width">Matrix width in modules (including any quiet zone).</param>

@@ -41,6 +41,22 @@ public class QrImageBuilderApiParityTest
         "WithSegmentation",
     ];
 
+    /// <summary>
+    /// Options the two symbologies with a totally ordered version set have and rMQR does
+    /// not. rMQR's 32 versions have no min/max relation (R7x43, R9x43 and R7x59 cannot be
+    /// ordered), so a version range has no meaning there; it constrains its fit with
+    /// <c>WithFitStrategy</c> and <c>WithHeight</c> instead.
+    /// </summary>
+    /// <remarks>
+    /// Matched on the whole normalized signature rather than the member name, unlike the
+    /// lists above: <c>WithVersion</c> itself is shared by all three builders and only its
+    /// range-taking overload is absent from rMQR.
+    /// </remarks>
+    private static readonly string[] orderedVersionOnlySignatures =
+    [
+        " WithVersion(VERSIONRANGE)",
+    ];
+
     [Test]
     public async Task PublicSurface_CorrespondsOneToOne_ModuloDocumentedDifferences()
     {
@@ -54,7 +70,7 @@ public class QrImageBuilderApiParityTest
 
         var failures = new List<string>();
         Compare("MicroQRCodeImageBuilder", micro, standard.Where(s => !s.Contains(" WithEciMode(")));
-        Compare("RmQRCodeImageBuilder", rmqr);
+        Compare("RmQRCodeImageBuilder", rmqr, standard.Where(s => !orderedVersionOnlySignatures.Any(s.Contains)));
         if (failures.Count > 0)
             Assert.Fail("Image builder surfaces drifted apart.\n" + string.Join("\n", failures));
 
@@ -92,6 +108,27 @@ public class QrImageBuilderApiParityTest
             await Assert.That(typeof(MicroQRCodeImageBuilder).GetMethods().Any(m => m.Name == name)).IsFalse();
             await Assert.That(typeof(RmQRCodeImageBuilder).GetMethods().Any(m => m.Name == name)).IsFalse();
         }
+    }
+
+    [Test]
+    public async Task VersionRangeOverload_ExistsOnStandardAndMicro_AndNotOnRmqr()
+    {
+        // The version constraint is one concept, so it is one method name with two
+        // overloads rather than two names; rMQR has only the pinned one.
+        await Assert.That(HasVersionOverload(typeof(QRCodeImageBuilder), typeof(QRCodeVersionRange))).IsTrue();
+        await Assert.That(HasVersionOverload(typeof(MicroQRCodeImageBuilder), typeof(MicroQRVersionRange))).IsTrue();
+
+        await Assert.That(HasVersionOverload(typeof(QRCodeImageBuilder), typeof(int))).IsTrue();
+        await Assert.That(HasVersionOverload(typeof(MicroQRCodeImageBuilder), typeof(MicroQRVersion))).IsTrue();
+        await Assert.That(HasVersionOverload(typeof(RmQRCodeImageBuilder), typeof(RmQRVersion))).IsTrue();
+
+        var rmqrVersionOverloads = typeof(RmQRCodeImageBuilder).GetMethods().Count(m => m.Name == "WithVersion");
+        await Assert.That(rmqrVersionOverloads).IsEqualTo(1);
+
+        static bool HasVersionOverload(Type builder, Type parameterType)
+            => builder.GetMethods().Any(m => m.Name == "WithVersion"
+                && m.GetParameters().Length == 1
+                && m.GetParameters()[0].ParameterType == parameterType);
     }
 
     [Test]
@@ -133,8 +170,13 @@ public class QrImageBuilderApiParityTest
     /// </summary>
     private static string NormalizeParameter(Type type, string memberName)
     {
-        if (memberName == "WithVersion" && (type == typeof(int) || type == typeof(MicroQRVersion) || type == typeof(RmQRVersion)))
-            return "VERSION";
+        if (memberName == "WithVersion")
+        {
+            if (type == typeof(int) || type == typeof(MicroQRVersion) || type == typeof(RmQRVersion))
+                return "VERSION";
+            if (type == typeof(QRCodeVersionRange) || type == typeof(MicroQRVersionRange))
+                return "VERSIONRANGE";
+        }
         return Normalize(type);
     }
 

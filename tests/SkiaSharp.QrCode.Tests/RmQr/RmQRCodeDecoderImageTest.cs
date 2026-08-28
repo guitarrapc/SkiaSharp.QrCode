@@ -24,7 +24,7 @@ public class RmQRCodeDecoderImageTest
     }
 
     private static RmQRCodeData Create(string content, RmQREccLevel eccLevel, RmQRVersion? version = null, int quietZone = 2)
-        => RmQRCodeGenerator.CreateRmQRCode(content, eccLevel, version, quietZoneSize: quietZone);
+        => RmQRCodeGenerator.CreateRmQRCode(content, eccLevel, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
 
     private static SKBitmap RenderBitmap(RmQRCodeData data, int modulePixelSize)
         => new RmQRCodeImageBuilder(data).WithModulePixelSize(modulePixelSize).ToBitmap();

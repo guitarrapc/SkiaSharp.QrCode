@@ -28,9 +28,9 @@ public class RmQRCodeGeneratorUnitTest
         // 12 digits at M fit R7x43 (301 modules) but R11x27 (297) is smaller: the default
         // (and libzint / qrtool auto) choose R11x27; MinimizeHeight gives the flatter R7x43.
         await Assert.That(RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M).Version).IsEqualTo(RmQRVersion.R11x27);
-        await Assert.That(RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, fitStrategy: RmQRFitStrategy.MinimizeHeight).Version).IsEqualTo(RmQRVersion.R7x43);
+        await Assert.That(RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight }).Version).IsEqualTo(RmQRVersion.R7x43);
         await Assert.That(RmQRCodeGenerator.CreateRmQRCode(new string('0', 100), RmQREccLevel.M).Version).IsEqualTo(RmQRVersion.R11x77);
-        await Assert.That(RmQRCodeGenerator.CreateRmQRCode(new string('0', 100), RmQREccLevel.M, height: RmQRHeight.H7).Version).IsEqualTo(RmQRVersion.R7x139);
+        await Assert.That(RmQRCodeGenerator.CreateRmQRCode(new string('0', 100), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = RmQRHeight.H7 }).Version).IsEqualTo(RmQRVersion.R7x139);
     }
 
     // ---- data model / dimensions ---------------------------------------------------
@@ -42,19 +42,19 @@ public class RmQRCodeGeneratorUnitTest
         var text = "RM" + (int)version; // alphanumeric, 3-4 chars: fits every version × ECC (R7x43-H holds 3)
         const int quietZone = 2;
 
-        var data = RmQRCodeGenerator.CreateRmQRCode(text, ecc, version, quietZoneSize: quietZone);
+        var data = RmQRCodeGenerator.CreateRmQRCode(text, ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
         await Assert.That(data.Version).IsEqualTo(version);
         await Assert.That(data.Width).IsEqualTo(RmQRConstants.GetWidth(version) + 2 * quietZone);
         await Assert.That(data.Height).IsEqualTo(RmQRConstants.GetHeight(version) + 2 * quietZone);
 
-        var calculated = RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, version, quietZoneSize: quietZone);
+        var calculated = RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
         await Assert.That(calculated.Version).IsEqualTo(version);
         await Assert.That(calculated.Width).IsEqualTo(data.Width);
         await Assert.That(calculated.Height).IsEqualTo(data.Height);
         await Assert.That(calculated.BufferSize).IsEqualTo(data.Width * data.Height);
 
         var buffer = new byte[calculated.BufferSize];
-        var written = RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, buffer, version, quietZoneSize: quietZone);
+        var written = RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, buffer, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
         await Assert.That(written).IsEqualTo(calculated.BufferSize);
         for (var row = 0; row < data.Height; row++)
             for (var col = 0; col < data.Width; col++)
@@ -75,13 +75,13 @@ public class RmQRCodeGeneratorUnitTest
     public async Task Create_QuietZoneZero_WritesCoreDirectly()
     {
         var text = "0123456789";
-        var calculated = RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), RmQREccLevel.M, quietZoneSize: 0);
+        var calculated = RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = 0 });
         await Assert.That(calculated.Version).IsEqualTo(RmQRVersion.R11x27);
         await Assert.That(calculated.Width).IsEqualTo(27);
         await Assert.That(calculated.Height).IsEqualTo(11);
         var buffer = new byte[calculated.BufferSize];
-        RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), RmQREccLevel.M, buffer, quietZoneSize: 0);
-        var data = RmQRCodeGenerator.CreateRmQRCode(text, RmQREccLevel.M, quietZoneSize: 0);
+        RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { QuietZoneSize = 0 });
+        var data = RmQRCodeGenerator.CreateRmQRCode(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = 0 });
         for (var i = 0; i < buffer.Length; i++)
             if ((buffer[i] != 0) != data[i / 27, i % 27])
                 Assert.Fail($"module {i} differs");
@@ -93,7 +93,7 @@ public class RmQRCodeGeneratorUnitTest
     {
         var fixture = FixtureLoader.Load("RmQr", "zint-libzint/r17x139-m-numeric-max");
         var (oracle, width, height) = FixtureLoader.ReadRectangularMatrix(fixture.MatrixPath);
-        var data = RmQRCodeGenerator.CreateRmQRCode(fixture.Manifest.PayloadText, RmQREccLevel.M, RmQRVersion.R17x139, quietZoneSize: 0);
+        var data = RmQRCodeGenerator.CreateRmQRCode(fixture.Manifest.PayloadText, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139, QuietZoneSize = 0 });
         for (var row = 0; row < height; row++)
             for (var col = 0; col < width; col++)
                 if (data[row, col] != (oracle[row * width + col] != 0))
@@ -105,8 +105,8 @@ public class RmQRCodeGeneratorUnitTest
     public async Task Create_DefaultEci_AutoDetectsUtf8_AndExplicitUtf8Matches()
     {
         const string text = "こんにちは世界";
-        var automatic = RmQRCodeGenerator.CreateRmQRCode(text, RmQREccLevel.M, requestedVersion: RmQRVersion.R13x59, quietZoneSize: 0);
-        var explicitUtf8 = RmQRCodeGenerator.CreateRmQRCodeWithEci(text, RmQREccLevel.M, EciMode.Utf8, requestedVersion: RmQRVersion.R13x59, quietZoneSize: 0);
+        var automatic = RmQRCodeGenerator.CreateRmQRCode(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R13x59, QuietZoneSize = 0 });
+        var explicitUtf8 = RmQRCodeGenerator.CreateRmQRCode(text, RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Version = RmQRVersion.R13x59, QuietZoneSize = 0 });
 
         await Assert.That(automatic.GetRawData().AsSpan().SequenceEqual(explicitUtf8.GetRawData())).IsTrue();
         await Assert.That(RmQRCodeDecoder.TryDecode(automatic, out var decoded, out var info)).IsTrue();
@@ -118,33 +118,33 @@ public class RmQRCodeGeneratorUnitTest
     public async Task Create_DefaultEci_AutoDetectsLatin1_AndAccountsForItsHeaderAtCapacityBoundary()
     {
         const string text = "éé";
-        var automaticSize = RmQRCodeGenerator.GetRequiredBufferSize(text, RmQREccLevel.H, fitStrategy: RmQRFitStrategy.MinimizeHeight);
-        var explicitSize = RmQRCodeGenerator.GetRequiredBufferSizeWithEci(text, RmQREccLevel.H, EciMode.Iso8859_1, fitStrategy: RmQRFitStrategy.MinimizeHeight);
+        var automaticSize = RmQRCodeGenerator.GetRequiredBufferSize(text, RmQREccLevel.H, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight });
+        var explicitSize = RmQRCodeGenerator.GetRequiredBufferSize(text, RmQREccLevel.H, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1, FitStrategy = RmQRFitStrategy.MinimizeHeight });
 
         await Assert.That(automaticSize).IsEqualTo(explicitSize);
         await Assert.That(automaticSize.Version).IsNotEqualTo(RmQRVersion.R7x43);
-        var automatic = RmQRCodeGenerator.CreateRmQRCode(text, RmQREccLevel.H, fitStrategy: RmQRFitStrategy.MinimizeHeight, quietZoneSize: 0);
-        var explicitLatin1 = RmQRCodeGenerator.CreateRmQRCodeWithEci(text, RmQREccLevel.H, EciMode.Iso8859_1, fitStrategy: RmQRFitStrategy.MinimizeHeight, quietZoneSize: 0);
+        var automatic = RmQRCodeGenerator.CreateRmQRCode(text, RmQREccLevel.H, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight, QuietZoneSize = 0 });
+        var explicitLatin1 = RmQRCodeGenerator.CreateRmQRCode(text, RmQREccLevel.H, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1, FitStrategy = RmQRFitStrategy.MinimizeHeight, QuietZoneSize = 0 });
         await Assert.That(automatic.GetRawData().AsSpan().SequenceEqual(explicitLatin1.GetRawData())).IsTrue();
     }
 
     [Test]
     public async Task Create_ExplicitEci_ChangesAsciiStream_AndLatin1RoundTrips()
     {
-        var noEci = RmQRCodeGenerator.CreateRmQRCode("a", RmQREccLevel.M, requestedVersion: RmQRVersion.R7x43, quietZoneSize: 0);
-        var utf8 = RmQRCodeGenerator.CreateRmQRCodeWithEci("a", RmQREccLevel.M, EciMode.Utf8, requestedVersion: RmQRVersion.R7x43, quietZoneSize: 0);
+        var noEci = RmQRCodeGenerator.CreateRmQRCode("a", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43, QuietZoneSize = 0 });
+        var utf8 = RmQRCodeGenerator.CreateRmQRCode("a", RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Version = RmQRVersion.R7x43, QuietZoneSize = 0 });
         await Assert.That(noEci.GetRawData().AsSpan().SequenceEqual(utf8.GetRawData())).IsFalse();
 
-        var latin1 = RmQRCodeGenerator.CreateRmQRCodeWithEci("Café", RmQREccLevel.M, EciMode.Iso8859_1);
+        var latin1 = RmQRCodeGenerator.CreateRmQRCode("Café", RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 });
         var automaticLatin1 = RmQRCodeGenerator.CreateRmQRCode("Café", RmQREccLevel.M);
         await Assert.That(automaticLatin1.GetRawData().AsSpan().SequenceEqual(latin1.GetRawData())).IsTrue();
         await Assert.That(RmQRCodeDecoder.TryDecode(latin1, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo("Café");
 
-        var size = RmQRCodeGenerator.GetRequiredBufferSizeWithEci("Café".AsSpan(), RmQREccLevel.M, EciMode.Iso8859_1);
+        var size = RmQRCodeGenerator.GetRequiredBufferSize("Café".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 });
         var destination = new byte[size.BufferSize + 4];
         destination.AsSpan().Fill(0xA5);
-        var written = RmQRCodeGenerator.CreateRmQRCodeWithEci("Café".AsSpan(), RmQREccLevel.M, destination, EciMode.Iso8859_1);
+        var written = RmQRCodeGenerator.CreateRmQRCode("Café".AsSpan(), RmQREccLevel.M, destination, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 });
         await Assert.That(written).IsEqualTo(size.BufferSize);
         for (var row = 0; row < size.Height; row++)
             for (var col = 0; col < size.Width; col++)
@@ -158,15 +158,22 @@ public class RmQRCodeGeneratorUnitTest
     [Test]
     public async Task Create_ExplicitIso88591_RejectsUnrepresentableText()
     {
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCodeWithEci("日本語", RmQREccLevel.M, EciMode.Iso8859_1)).Throws<ArgumentException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCodeWithEci("a", RmQREccLevel.M, (EciMode)999)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("日本語", RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 })).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("a", RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = (EciMode)999 })).Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]
-    public async Task ExistingDefaultLiteralPosition_RemainsSourceCompatible()
+    public async Task DefaultLiteralInTheOptionsSlot_ResolvesAndMeansAllDefaults()
     {
+        // `default` in the options position has to bind to RmQRCodeGeneratorOptions and not
+        // to the Span<byte> destination overload. It compiles either way for a string first
+        // argument, so the assertion is that it produced a symbol rather than an empty write.
         var data = RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, default);
+        var omitted = RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M);
+
         await Assert.That(data).IsNotNull();
+        await Assert.That(data.Version).IsEqualTo(omitted.Version);
+        await Assert.That(data.GetRawData().AsSpan().SequenceEqual(omitted.GetRawData())).IsTrue();
     }
 
     // ---- validation and messages ------------------------------------------------------
@@ -175,13 +182,13 @@ public class RmQRCodeGeneratorUnitTest
     public async Task Create_RejectsInvalidArguments()
     {
         await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", (RmQREccLevel)2)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, (RmQRVersion)0)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, (RmQRVersion)33)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, fitStrategy: (RmQRFitStrategy)5)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, height: (RmQRHeight)10)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, quietZoneSize: -1)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, quietZoneSize: 10_001)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, RmQRVersion.R9x43, height: RmQRHeight.H7)).Throws<ArgumentException>();
+        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = (RmQRVersion)0 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = (RmQRVersion)33 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = (RmQRFitStrategy)5 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = (RmQRHeight)10 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = -1 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = 10_001 })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("1", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R9x43, Height = RmQRHeight.H7 })).Throws<ArgumentException>();
     }
 
     [Test]
@@ -200,12 +207,12 @@ public class RmQRCodeGeneratorUnitTest
         await Assert.That(auto.Message).Contains("R17x139");
         await Assert.That(auto.Message).Contains("QRCodeGenerator");
 
-        var fixedVersion = await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("ABCDEFGH", RmQREccLevel.M, RmQRVersion.R7x43)).Throws<ArgumentException>();
+        var fixedVersion = await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("ABCDEFGH", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 })).Throws<ArgumentException>();
         await Assert.That(fixedVersion!.Message).Contains("R7x43");
         await Assert.That(fixedVersion.Message).Contains("8 characters");
         await Assert.That(fixedVersion.Message).Contains("7 characters");
 
-        var fixedHeight = await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode(new string('7', 103), RmQREccLevel.M, height: RmQRHeight.H7)).Throws<ArgumentException>();
+        var fixedHeight = await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode(new string('7', 103), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Height = RmQRHeight.H7 })).Throws<ArgumentException>();
         await Assert.That(fixedHeight!.Message).Contains("103 digits");
         await Assert.That(fixedHeight.Message).Contains("102 digits");
     }
@@ -225,20 +232,20 @@ public class RmQRCodeGeneratorUnitTest
         // not allocate; Debug builds are excluded per repo notes.
         var latin = "the quick brown fox jumps over the lazy dog?! the quick brown fox jumps over the lazy dog?! the quick brown fox";
         var utf8 = "rMQR 矩形コード ✓ naïve café";
-        var size = RmQRCodeGenerator.GetRequiredBufferSize(latin.AsSpan(), RmQREccLevel.M, RmQRVersion.R17x139);
+        var size = RmQRCodeGenerator.GetRequiredBufferSize(latin.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
         var buffer = new byte[size.BufferSize];
         for (var i = 0; i < 3; i++)
         {
-            RmQRCodeGenerator.CreateRmQRCode(latin.AsSpan(), RmQREccLevel.M, buffer, RmQRVersion.R17x139);
-            RmQRCodeGenerator.CreateRmQRCode(utf8.AsSpan(), RmQREccLevel.H, buffer, RmQRVersion.R17x139);
+            RmQRCodeGenerator.CreateRmQRCode(latin.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
+            RmQRCodeGenerator.CreateRmQRCode(utf8.AsSpan(), RmQREccLevel.H, buffer, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
             RmQRCodeGenerator.CreateRmQRCode("012345678901".AsSpan(), RmQREccLevel.M, buffer);
         }
 
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < 16; i++)
         {
-            RmQRCodeGenerator.CreateRmQRCode(latin.AsSpan(), RmQREccLevel.M, buffer, RmQRVersion.R17x139);
-            RmQRCodeGenerator.CreateRmQRCode(utf8.AsSpan(), RmQREccLevel.H, buffer, RmQRVersion.R17x139);
+            RmQRCodeGenerator.CreateRmQRCode(latin.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
+            RmQRCodeGenerator.CreateRmQRCode(utf8.AsSpan(), RmQREccLevel.H, buffer, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
             RmQRCodeGenerator.CreateRmQRCode("012345678901".AsSpan(), RmQREccLevel.M, buffer);
         }
         var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
@@ -255,11 +262,11 @@ public class RmQRCodeGeneratorUnitTest
         var text = new string('7', 3);
         foreach (var quietZone in new[] { 0, 1, 2, 5 })
         {
-            var data = RmQRCodeGenerator.CreateRmQRCode(text, ecc, version, quietZoneSize: quietZone);
-            var size = RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, version, quietZoneSize: quietZone);
+            var data = RmQRCodeGenerator.CreateRmQRCode(text, ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
+            var size = RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
             var buffer = new byte[size.BufferSize + 4];
             buffer.AsSpan().Fill(0xA5);
-            var written = RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, buffer, version, quietZoneSize: quietZone);
+            var written = RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, buffer, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
             await Assert.That(written).IsEqualTo(size.BufferSize);
             for (var row = 0; row < data.Height; row++)
                 for (var col = 0; col < data.Width; col++)

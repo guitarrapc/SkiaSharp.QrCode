@@ -1,8 +1,9 @@
 # Migration
 
 - **v1.2.0 decodes Kanji mode segments, and adds `QRCodeDecodeStatus.UnmappedCharacter`.** Behaviour change in the decoders: symbols that previously returned `UnsupportedContent` now return `Success` with text, or `UnmappedCharacter` when a character has no JIS X 0208 mapping. The new enum member is appended, so existing values keep their numbers. See [Kanji mode decoding](#kanji-mode-decoding).
+- **v1.2.0 adds generator options structs and version ranges.** Purely additive for Standard QR and Micro QR: every existing overload keeps its signature, exceptions and output. See [generator options](#generator-options) below.
+- **v1.2.0 introduces rMQR**, whose generator takes `RmQRCodeGeneratorOptions` rather than a parameter list. New in this release, so there is nothing to migrate from. See [rMQR](#rmqr) below.
 - **v1.2.0 adds `TryGetRequiredBufferSize` to all three generators.** Purely additive; nothing existing changes. See [non-throwing sizing](#non-throwing-sizing) below.
-- **v1.2.0 adds a `segmentation` argument to the rMQR generator.** Source compatible and behaviour preserving; recompile if you referenced the binary. See [rMQR mixed-mode segmentation](#rmqr-mixed-mode-segmentation) below.
 - **After v1.1.0, the image builders share a common base class.** Source compatible; recompile if you referenced the binary. See [image builder base class](#image-builder-base-class) below.
 - **v1.0.0 removes the obsolete `QrCode` class.** If you still use `QrCode`, see [from before v1.0.0 to v1.0.0](#from-before-v100-to-v100) below.
 - v0.11.0 introduces further improvements to Icon handling. See the IconData section below.
@@ -19,7 +20,7 @@
 
 ## non-throwing sizing
 
-`QRCodeGenerator`, `MicroQRCodeGenerator` and `RmQRCodeGenerator` gained `TryGetRequiredBufferSize`, plus `RmQRCodeGenerator.TryGetRequiredBufferSizeWithEci`. Nothing existing changed: the `GetRequiredBufferSize` overloads keep their signatures, their exceptions and their messages.
+`QRCodeGenerator`, `MicroQRCodeGenerator` and `RmQRCodeGenerator` gained `TryGetRequiredBufferSize`. Nothing existing changed: the `GetRequiredBufferSize` overloads keep their signatures, their exceptions and their messages.
 
 ```csharp
 if (!MicroQRCodeGenerator.TryGetRequiredBufferSize(userInput, MicroQREccLevel.L, out var size))
@@ -33,23 +34,84 @@ Reach for these when the content is user-supplied. Micro QR holds 5 digits at M1
 - **`true` does not promise the following `Create` call cannot throw** — only that no length-related error can. Pass the returned `Version` back as `requestedVersion` to skip the fit; a destination buffer that is too small still throws.
 - **Pass rMQR's `segmentation` the same value you will encode with**, exactly as with `GetRequiredBufferSize`: the two modes can select different versions.
 
-## rMQR mixed-mode segmentation
+## generator options
 
-`RmQRCodeGenerator.CreateRmQRCode`, `CreateRmQRCodeWithEci`, `GetRequiredBufferSize` and `GetRequiredBufferSizeWithEci` gained a trailing optional `RmQRSegmentation segmentation` argument, and `RmQRCodeImageBuilder` gained `WithSegmentation`.
+`QRCodeGenerator` and `MicroQRCodeGenerator` gained an overload of every entry point that takes an options struct instead of a parameter list. **No behaviour changed**: the parameter list overloads keep their signatures, their exceptions and their output, and the options overloads are an additional way to spell the same calls.
 
-- **Behaviour unchanged by default.** The argument defaults to `RmQRSegmentation.Single`, which is the existing single-mode encoding; every symbol you generate today is byte for byte the same.
-- **Source compatible**, including positional calls, because the new argument is last.
-- **Binary breaking**, as with any added parameter: assemblies compiled against v1.1.1 or earlier must be recompiled (no code changes needed).
+One resolution detail, since adding overloads can move a call: `Create…(text, eccLevel, default)` now binds to the options overload rather than to the third parameter of the parameter list, because a candidate that needs no optional-parameter substitution wins. The symbol it produces is identical, since `default` meant "all defaults" under both readings. It also *fixes* three shapes that did not compile before: `CreateQrCode(text, ecc, default)`, `CreateQrCode(span, ecc, default)` and `CreateMicroQRCode(span, ecc, default)` were ambiguous between the `bool` / `MicroQRVersion?` overload and the `Span<byte>` destination overload, and now resolve.
 
-Pass `RmQRSegmentation.Optimal` to let the generator split mixed content into Numeric / Alphanumeric / Byte runs. It never selects a symbol with more core modules than `Single`, it emits the `Single` bit stream verbatim whenever splitting would not shrink it, and it additionally encodes content that overflows every version in a single mode.
+```csharp
+// unchanged, and still the shortest correct call
+var a = QRCodeGenerator.CreateQrCode("https://example.com", ECCLevel.M);
 
-Two things to know before opting in: the quiet zone adds a fixed 4 modules to each dimension, so a symbol with fewer core modules can still render onto a *larger* grid with a different aspect ratio; and `GetRequiredBufferSize` must be passed the same `segmentation` as the encode, or the destination buffer can be too small.
+// the same thing with options
+var b = QRCodeGenerator.CreateQrCode("https://example.com", ECCLevel.M, new QRCodeGeneratorOptions
+{
+    EciMode = EciMode.Utf8,
+    QuietZoneSize = 0,
+});
+```
+
+New options go on the struct from now on; the parameter lists are frozen at their current shape. `QRCodeGeneratorOptions.Default` is `default`, so an option you do not set keeps the value the parameter list would have applied — including the quiet zone, which is 4 for Standard QR and 2 for Micro QR.
+
+The options parameter has **no default value** on these two symbologies, so pass `QRCodeGeneratorOptions.Default` explicitly if you want the defaults through that overload. Giving it one would make `CreateQrCode(text, eccLevel)` ambiguous between the two sets.
+
+### version ranges
+
+`QRCodeGeneratorOptions.Version` is a `QRCodeVersionRange`, not a single version, and Micro QR has `MicroQRVersionRange`. A pinned version is the degenerate case, so there is one setting rather than two that could contradict each other.
+
+```csharp
+Version = 15                                  // pin version 15
+Version = new(10, 20)                         // versions 10 to 20, both inclusive
+Version = QRCodeVersionRange.AtLeast(10)      // 10 or larger
+Version = configuredVersion                   // an int?; null means automatic
+// omitted                                    // automatic, exactly as before
+```
+
+Bounds are **inclusive**, unlike C#'s `..` range syntax whose end is exclusive. They are validated when the range is constructed, so an impossible one is rejected before any generator sees it.
+
+Two things behave differently from the `requestedVersion` parameter, and only through the options overloads:
+
+- **A pinned version is checked against the content.** `Version = 1` with content that does not fit version 1 throws an `ArgumentException` naming the version, ECC level and mode. The `requestedVersion` parameter still behaves as it did, failing inside the encoder with `ArgumentOutOfRangeException (Parameter 'length')`.
+- **`GetRequiredBufferSize` honours the version.** The parameter list overload has no version parameter and is unchanged; the options overload reports the version the range resolves to, and `TryGetRequiredBufferSize` returns `false` when no version in the range holds the content.
+
+`-1` means automatic only in `QRCodeImageBuilder.WithVersion(int)`, which is unchanged. It is **not** accepted by the range type: use `null`, or leave `Version` unset. A `-1` that reached a range would otherwise silently produce an automatically sized symbol where a pinned one was asked for.
+
+### image builders
+
+`QRCodeImageBuilder.WithVersion` and the Micro QR equivalent gained an overload taking the range type. `WithVersion(int)` and `WithVersion(MicroQRVersion)` are unchanged, including `WithVersion(-1)` meaning automatic.
+
+One behaviour change: `WithVersion(n)` followed by `ToByteArray()` with content too large for version *n* now throws an `ArgumentException` that names the problem, where it previously failed inside the encoder with `ArgumentOutOfRangeException (Parameter 'length')`.
+
+## rMQR
+
+rMQR (ISO/IEC 23941) is new in v1.2.0, so nothing here is a migration. Its generator takes an options struct rather than a parameter list, and unlike the other two it has no parameter list overloads at all:
+
+```csharp
+var data = RmQRCodeGenerator.CreateRmQRCode("https://example.com", RmQREccLevel.M);
+
+var constrained = RmQRCodeGenerator.CreateRmQRCode("https://example.com", RmQREccLevel.M, new RmQRCodeGeneratorOptions
+{
+    Height = RmQRHeight.H9,
+    Segmentation = RmQRSegmentation.Optimal,
+});
+```
+
+Because there is nothing to collide with, the options parameter is defaulted here: `CreateRmQRCode(text, eccLevel)` is the full-defaults call.
+
+There is no version *range* for rMQR. Its 32 versions are not totally ordered (R7x43, R9x43 and R7x59 have no min/max relation), so fit is constrained with `FitStrategy` and `Height` instead.
+
+### mixed-mode segmentation
+
+Set `Segmentation = RmQRSegmentation.Optimal` to let the generator split mixed content into Numeric / Alphanumeric / Byte runs. It never selects a symbol with more core modules than `Single`, it emits the `Single` bit stream verbatim whenever splitting would not shrink it, and it additionally encodes content that overflows every version in a single mode.
+
+Two things to know before opting in: the quiet zone adds a fixed 4 modules to each dimension, so a symbol with fewer core modules can still render onto a *larger* grid with a different aspect ratio; and `GetRequiredBufferSize` must be passed the same `Segmentation` as the encode, or the destination buffer can be too small.
 
 ```csharp
 var optimal = RmQRCodeGenerator.CreateRmQRCode(
     "https://example.com/p/1234567890123456",
     RmQREccLevel.M,
-    segmentation: RmQRSegmentation.Optimal);   // R15x43 instead of R11x77
+    new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });   // R15x43 instead of R11x77
 ```
 
 ## image builder base class
