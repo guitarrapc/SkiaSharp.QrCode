@@ -85,7 +85,7 @@ The intersection of the three sets is one `int` with three different correct def
 
 The generators are the allocation-free path; an options *class* would put an allocation in front of every `Span<byte>` overload and defeat the point. `record struct` supplies `with`, value equality and a `ToString` for free, which makes call sites read as `QRCodeGeneratorOptions.Default with { ... }`.
 
-The cost is real and has to be designed for rather than discovered: **any option whose natural default is not the zero value needs a sentinel**, because `default(T)` must remain a valid, correct "everything default" value. Today that is `QuietZoneSize` (default 4, and 0 is a legitimate caller choice, so the backing field stores `value + 1` and 0 means unset). Any future option in the same situation must do the same. An options struct whose `default` is subtly wrong is worse than the parameter list it replaced.
+The cost is real and has to be designed for rather than discovered: **any option whose natural default is not the zero value needs a sentinel**, because `default(T)` must remain a valid, correct "everything default" value. Today that is `QuietZoneSize`, whose default is 4 (Standard QR) or 2 (the other two) while 0 is a legitimate caller choice and so cannot double as "unset". It stores the **offset from the default** rather than a `value + 1` sentinel, for the reason recorded in the Phase 1 log: only the offset makes the canonical form unique, so writing the default explicitly produces the same value as not writing it and the generated equality does not call two identical option sets different. Any future option in the same situation must do the same. An options struct whose `default` is subtly wrong is worse than the parameter list it replaced.
 
 ### `requestedVersion` and a version range do not coexist
 
@@ -379,3 +379,43 @@ The changed path costs one stack-allocated struct per image and swaps the parame
 
 - **A benchmark whose name matches the area is not automatically a benchmark of the change.** `QRCodeImageEndToEnd` looked like the obvious gate for a builder change and is not one, because its `[GlobalSetup]` pre-generates the symbol. It was only caught by reading the benchmark bodies after running them. Reading what a benchmark actually calls has to come before treating its numbers as a gate.
 - **The failing test in this phase was the new test, and its data was wrong rather than the code.** `WithVersionExactly_EqualsWithVersionInt(1)` pinned version 1 for a 32-byte payload that needs version 3, so both spellings correctly threw and the assertion compared nothing. Rewritten to derive the smallest fitting version and sweep it plus both count-indicator bands. **A parameterised test that hardcodes a version has to be checked against the payload it is given.**
+
+### Phase 5, specs, migration and measurement, completed 2026-08-28
+
+Documentation caught up with what Phases 1-4 built, and the plan's release gate is now met. Suite green on net8.0 and net10.0, 15,729 passed / 0 failed in Release; package validation silent; `dotnet build` clean of warnings.
+
+**Documents changed**
+
+- `specs/rmqr-encoder.md`: the API section transcribed the deleted 12-method surface verbatim. Rewritten around `RmQRCodeGeneratorOptions`, with the `= default` asymmetry, the `default(T)` sentinel rule, and why rMQR has no version range.
+- `specs/qrcode-symbologies.md`: the API direction rule now lives here once, since it is cross-cutting: options structs are where new options go, released parameter lists are frozen, `default(T)` must be the complete default configuration, options are not shared across symbologies, and a version range exists only where versions are totally ordered.
+- `specs/standardqr-encoder.md`: version range semantics under version selection, including the two behaviours that differ from the `requestedVersion` parameter and are confined to the options overloads.
+- `specs/microqr-spec-map.md`: the range row in the capacity table, recording the ECC-contradiction versus mode-exclusion split.
+- `docs/migration.md`: new `generator options` and `rMQR` sections.
+- Root `README.md`: a generator options section with version ranges, and every rMQR example moved off the deleted named arguments.
+
+**A pre-existing documentation error was corrected, not just the stale signatures.** `docs/migration.md` told readers that adding rMQR's `segmentation` argument was "binary breaking: assemblies compiled against v1.1.1 or earlier must be recompiled". No assembly can be compiled against those methods, because rMQR does not exist in v1.1.1. The whole section described a migration from an API that never shipped; it is now an introduction to a new symbology.
+
+**The README examples were executed, not just written.** A temporary test compiled every new snippet and asserted the versions the prose claims: `R7x43` for `MinimizeHeight`, `R11x77` single versus `R15x43` optimal, `R17x139` for the 200-character mixed payload that throws without segmentation, and the five `Version =` spellings resolving as documented. All passed. Documentation that claims a specific output is a testable claim and was treated as one.
+
+**Benchmark gate: passed on the evidence that is interpretable, and one part of the run is not.** Baseline is a `git worktree` at the Phase 0 commit, so this measures the whole plan rather than one phase.
+
+| | Baseline (Phase 0) | After (Phase 5) |
+|---|---:|---:|
+| `RmQR_Numeric_R7x43_Encode` | 157.7 ns | 142.6 ns |
+| `RmQR_Byte_R17x139_Encode` | 930.3 ns | 898.6 ns |
+| `RmQR_Latin1_ECI_R17x139_Encode (Span)` | 1,016.4 ns | 882.3 ns |
+| `RmQR_Numeric_AutoFit_Encode (Span)` | 198.4 ns | 169.2 ns |
+| `MicroQR_Numeric_M2_Encode` | 128.5 ns | 126.0 ns |
+| `MicroQR_Byte_M4_Encode` | 163.0 ns | 164.8 ns |
+| `QR_Numeric_V1_L_Encode` | 934.2 ns | 940.7 ns |
+| `QR_Alphanumeric_V1_M_Encode (Span)` | 1,013.7 ns | 973.2 ns |
+
+The rMQR and Micro QR runs were clean (error bars of ±0.3 to ±3 ns on the small rows) and every row is flat or faster, with **allocation byte-identical everywhere**. rMQR is where the largest reshaping happened and it got slightly faster, consistent with what Phase 1 measured.
+
+**The Standard QR V40 rows are not interpretable from this session and are deliberately not quoted.** They read 100-133 us against an 84 us baseline across two runs, with error bars up to ±19,000 ns, while the small rows in the same runs stayed flat — a machine-wide slowdown, not a code effect. Nothing in Phase 5 touches encoding at all (documents and comments only), and Phase 3, which did touch version selection, measured `QR_Byte_V40_L_Encode` at 75.6 us against an 82.1 us baseline. The gate rests on the small and medium rows, which are stable, and on allocation being unchanged.
+
+**Lessons learned**
+
+- **Repeating the run is what separates noise from signal, again.** One Standard QR run showed `QR_Numeric_V1_L_Encode (options)` at 1,319 ns against 963 ns for the parameter list, which reads as a 37 % regression on the path callers are pointed at. The repeat put them at 914 ns and 941 ns, with the options row *faster*. This is the third time in this plan that a single run produced a plausible, wrong number; the rule recorded in Phase 3 held.
+- **Documentation is code that has not been compiled.** Every rMQR example in the README used named arguments (`segmentation:`, `fitStrategy:`, `requestedVersion:`) that Phase 1 deleted, so they had been broken for four phases without anything noticing. Nothing in the build or test suite reads the README. Extracting the snippets into a throwaway test found them immediately, and would have found them in Phase 1.
+- **A stale spec is not the worst case; a spec that is wrong about history is.** The migration document's claim about v1.1.1 was not merely out of date, it described a compatibility hazard that never existed, which would have sent a reader looking for a recompile they never needed.

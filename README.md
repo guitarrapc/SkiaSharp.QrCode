@@ -200,6 +200,44 @@ var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, quietZoneSize: 
 var isDark = qrData[row, col];
 ```
 
+### Generator options
+
+Beyond the short calls above, every generator entry point has an overload taking an options struct. This is where new options are added, so it is the form to reach for when you need more than the defaults.
+
+```csharp
+var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, new QRCodeGeneratorOptions
+{
+    EciMode = EciMode.Utf8,
+    QuietZoneSize = 0,
+});
+
+var rmqr = RmQRCodeGenerator.CreateRmQRCode("content", RmQREccLevel.M, new RmQRCodeGeneratorOptions
+{
+    Height = RmQRHeight.H9,
+    Segmentation = RmQRSegmentation.Optimal,
+});
+```
+
+`default` is the complete default configuration, so an option you leave out keeps the value the short call would have used.
+
+#### Version ranges
+
+Standard QR and Micro QR take a *range* of acceptable versions rather than a single one, which is what you want when the symbol has to reach a minimum physical size, or must not exceed one. A pinned version is the degenerate case of the same setting.
+
+```csharp
+new QRCodeGeneratorOptions { Version = 15 }                              // exactly version 15
+new QRCodeGeneratorOptions { Version = new(10, 20) }                     // 10 to 20, both inclusive
+new QRCodeGeneratorOptions { Version = QRCodeVersionRange.AtLeast(10) }  // 10 or larger
+new QRCodeGeneratorOptions { Version = configuredVersion }               // an int?; null means automatic
+new QRCodeGeneratorOptions { }                                           // automatic
+```
+
+The smallest version in the range that holds the content is used; if none does, `GetRequiredBufferSize` throws and `TryGetRequiredBufferSize` returns `false`. Bounds are inclusive, and are validated when the range is built, so an impossible range is rejected before a generator sees it.
+
+Because an `int?` converts implicitly, an optional version needs no branch at the call site — that is the job the old `-1` convention did, without the magic number.
+
+rMQR has no version range: its 32 versions are not ordered by size (R7x43, R9x43 and R7x59 have no min/max relation), so it constrains fit with `FitStrategy` and `Height` instead.
+
 ### Zero-allocation APIs
 
 All three generators can write a module matrix to a caller-provided `Span<byte>`. All three decoders can read a module span and write text to a caller-provided `Span<char>`. Use these overloads when you want to pool or reuse buffers.
@@ -233,7 +271,7 @@ var buffer = ArrayPool<byte>.Shared.Rent(size.BufferSize);
 try
 {
     // Passing the resolved version back removes the fit, so no length error can follow.
-    var written = RmQRCodeGenerator.CreateRmQRCode(userInput, RmQREccLevel.M, buffer, requestedVersion: size.Version);
+    var written = RmQRCodeGenerator.CreateRmQRCode(userInput, RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Version = size.Version });
     var matrix = buffer.AsSpan(0, written);
 }
 finally
@@ -242,7 +280,7 @@ finally
 }
 ```
 
-`false` means one thing: the content does not fit. Invalid arguments — an undefined ECC level, a `requestedVersion` and `height` that disagree, a negative quiet zone — still throw, exactly as `GetRequiredBufferSize` throws them, so a caller never renders a configuration mistake as "content too long". This matches how the BCL's configurable `Try` overloads behave (`int.TryParse` with a malformed `NumberStyles`, `Dictionary.TryGetValue` with a null key).
+`false` means one thing: the content does not fit. Invalid arguments — an undefined ECC level, a `Version` and `Height` that disagree, a negative quiet zone — still throw, exactly as `GetRequiredBufferSize` throws them, so a caller never renders a configuration mistake as "content too long". This matches how the BCL's configurable `Try` overloads behave (`int.TryParse` with a malformed `NumberStyles`, `Dictionary.TryGetValue` with a null key).
 
 ### Decoders
 
@@ -833,7 +871,7 @@ var pngBytes = new RmQRCodeImageBuilder("https://example.com/r/12345")
     .ToByteArray();
 
 // Prefer the shortest available height
-var flat = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, fitStrategy: RmQRFitStrategy.MinimizeHeight);
+var flat = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M, new RmQRCodeGeneratorOptions { FitStrategy = RmQRFitStrategy.MinimizeHeight });
 Console.WriteLine(flat.Version); // R7x43
 ```
 
@@ -841,7 +879,7 @@ Console.WriteLine(flat.Version); // R7x43
 
 By default the whole content is encoded in one mode, so a single lowercase letter pushes an otherwise numeric payload into Byte mode. `RmQRSegmentation.Optimal` instead splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits. That does two things: it often drops the symbol by a version or more, and it encodes content that no single mode fits at any version. It never selects a symbol with more core modules than the default, and it emits the default bit stream unchanged whenever splitting would not shrink it.
 
-> **Core modules, not the rendered grid.** `RmQRFitStrategy` ranks by core modules while the quiet zone adds a fixed 4 modules to each dimension, so minimizing `height × width` does not minimize `(height + 4) × (width + 4)`. A flatter, wider symbol can therefore have fewer core modules but a *larger* rendered grid — 24 characters at ECC H go from R15x59 (885 core, 63×19 rendered) to R11x77 (847 core, 81×15 rendered). So a rendered image can get wider, and `GetRequiredBufferSize` must be passed the same `segmentation` as the encode or the destination buffer can be too small.
+> **Core modules, not the rendered grid.** `RmQRFitStrategy` ranks by core modules while the quiet zone adds a fixed 4 modules to each dimension, so minimizing `height × width` does not minimize `(height + 4) × (width + 4)`. A flatter, wider symbol can therefore have fewer core modules but a *larger* rendered grid — 24 characters at ECC H go from R15x59 (885 core, 63×19 rendered) to R11x77 (847 core, 81×15 rendered). So a rendered image can get wider, and `GetRequiredBufferSize` must be passed the same `Segmentation` as the encode or the destination buffer can be too small.
 
 ```csharp
 using SkiaSharp.QrCode;
@@ -852,13 +890,13 @@ const string content = "https://example.com/p/1234567890123456";
 var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M);
 Console.WriteLine(single.Version);  // R11x77 - one Byte segment, 313 bits
 
-var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, segmentation: RmQRSegmentation.Optimal);
+var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 Console.WriteLine(optimal.Version); // R15x43 - Byte + Numeric, 249 bits
 
 // 200 characters is 50 over the largest Byte-mode capacity, but fits once split
 var mixed = new string('a', 100) + new string('7', 100);
 RmQRCodeGenerator.CreateRmQRCode(mixed, RmQREccLevel.M);                                  // throws: too long
-RmQRCodeGenerator.CreateRmQRCode(mixed, RmQREccLevel.M, segmentation: RmQRSegmentation.Optimal); // R17x139
+RmQRCodeGenerator.CreateRmQRCode(mixed, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal }); // R17x139
 
 // Also available on the image builder
 var pngBytes = new RmQRCodeImageBuilder(content)

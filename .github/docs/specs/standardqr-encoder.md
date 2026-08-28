@@ -133,6 +133,19 @@ The version calculation does not reserve four mandatory terminator bits: the ter
 
 When `requestedVersion` is supplied, automatic selection is bypassed. It is intended for callers that need a fixed symbol size and already know the payload fits.
 
+#### Version ranges (options overloads)
+
+`QRCodeGeneratorOptions.Version` is a `QRCodeVersionRange` rather than a single version, and the scan runs over `[Min, Max]` instead of 1 to 40. A pinned version is the degenerate `Exactly(n)` case, so there is one concept rather than a requested version and a range that could contradict each other. The range's bounds are validated when it is constructed, before any generator is called, and both are **inclusive** — which is why this is a domain type and not C#'s `..`, whose end is exclusive and would make `1..40` mean 1 through 39.
+
+Two behaviours differ from the `requestedVersion` parameter, and both are confined to the options overloads:
+
+- **A range narrower than 1-40 is checked for fit.** `Exactly(n)` reports content that does not fit version *n* as an `ArgumentException` (or `false` from `TryGetRequiredBufferSize`), where the parameter hands the version straight to the encoder and fails deep inside with `ArgumentOutOfRangeException (Parameter 'length')` from a span slice. The parameter's behaviour is unchanged; only the new surface checks.
+- **Sizing honours the version.** `GetRequiredBufferSize` has no `requestedVersion` parameter, so an ignored `Version` would have been a silent trap. The options overloads report the version the range resolves to, matching what Micro QR and rMQR already do.
+
+`QRCodeVersionRange.Any` short-circuits to the same automatic path the parameter list overloads take, so the default costs nothing extra; only a constrained range pays for the additional text analysis its resolution needs.
+
+**The scan does not assume the fit predicate is monotone in the version**, even though it is. It could plausibly not be: the character-count indicator widens at versions 10 and 27, so a larger version costs more header bits. Scanning `[Min, Max]` is correct either way, and `VersionRangeTest.StandardQr_FitsIsMonotoneInVersion` sweeps 3 modes × 4 ECC levels × 3 ECI modes × 58 lengths × 40 versions to keep the monotonicity a checked fact rather than an assumption the code rests on.
+
 ### 4. Build the data codewords
 
 `QRBinaryEncoder` writes MSB-first through `BitWriter`:

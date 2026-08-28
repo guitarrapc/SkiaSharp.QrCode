@@ -80,9 +80,9 @@ public class ImageBuilderVersionRangeTest
 
             if (!unbranched.AsSpan().SequenceEqual(branched))
                 Assert.Fail($"configured={configured}: branched and unbranched builder chains differ");
-        }
 
-        await Assert.That(true).IsTrue();
+            await Assert.That(unbranched.Length).IsGreaterThan(0);
+        }
     }
 
     [Test]

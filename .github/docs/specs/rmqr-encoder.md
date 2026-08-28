@@ -23,9 +23,13 @@ Text
   -> RmQRCodeData or byte-per-module matrix
 ```
 
-### Public entry points (signatures frozen 2026-08-15, Phase 5.0 review)
+### Public entry points (reshaped 2026-08-28, see [generator-api-options-plan.md](../plans/generator-api-options-plan.md))
 
-Names and overload sets mirror the shipped `MicroQR*` family member for member (reviewed against `MicroQRCodeGenerator`, `MicroQRCodeDecoder`, `MicroQRCodeImageBuilder`, `MicroQRCodeData`, the renderer overloads and `QrImageBuilderApiParityTest`); the only additions are the rectangular geometry and the two fit parameters. Names below are the contract the implementation phases code against; a deviation is a spec change first.
+Names and overload sets mirror the shipped `MicroQR*` family member for member (reviewed against `MicroQRCodeGenerator`, `MicroQRCodeDecoder`, `MicroQRCodeImageBuilder`, `MicroQRCodeData`, the renderer overloads and `QrImageBuilderApiParityTest`); the only additions are the rectangular geometry and the fit options. Names below are the contract the implementation phases code against; a deviation is a spec change first.
+
+**Options are carried by `RmQRCodeGeneratorOptions`, not by a parameter list.** The original shape put every option in the signature, which failed twice before it shipped: `EciMode` could not be positioned without disturbing the existing order, so it escaped into method names (`CreateRmQRCodeWithEci` and two siblings, doubling the method count), and `RmQRSegmentation` had to be appended to four signatures because trailing is the only source-compatible position. The surface went from 12 methods with up to 8 parameters to 5 with up to 4. Because no rMQR API had ever been released, the old shape was deleted outright rather than obsoleted.
+
+`options` carries a `= default` here and not on Standard QR or Micro QR: those two keep their released parameter list overloads, so a defaulted options parameter would make `CreateQrCode(text, ecc)` ambiguous between the two sets. rMQR has no such collision.
 
 Enumerations:
 
@@ -39,20 +43,34 @@ public enum RmQRHeight { H7 = 7, H9 = 9, H11 = 11, H13 = 13, H15 = 15, H17 = 17 
 Generator (`public static class RmQRCodeGenerator`, `DefaultQuietZone = 2`):
 
 ```csharp
-RmQRCodeData CreateRmQRCode(string plainText, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single);
-RmQRCodeData CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single);
-int CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single);   // byte per module, row-major, quiet zone included, returns bytes written
-RmQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single);
-bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single);
-bool TryGetRequiredBufferSizeWithEci(ReadOnlySpan<char> text, RmQREccLevel eccLevel, EciMode eciMode, out RmQRCodeCalculatedSize size, RmQRVersion? requestedVersion = null, RmQRFitStrategy fitStrategy = RmQRFitStrategy.MinimizeArea, RmQRHeight? height = null, int quietZoneSize = DefaultQuietZone, RmQRSegmentation segmentation = RmQRSegmentation.Single);
+public readonly record struct RmQRCodeGeneratorOptions
+{
+    static RmQRCodeGeneratorOptions Default { get; }        // == default
+    EciMode EciMode { get; init; }                          // Default; only Default / Iso8859_1 / Utf8 accepted
+    RmQRVersion? Version { get; init; }                     // null = fit automatically
+    RmQRFitStrategy FitStrategy { get; init; }              // MinimizeArea
+    RmQRHeight? Height { get; init; }                       // null = every height
+    int QuietZoneSize { get; init; }                        // 2 (ISO/IEC 23941)
+    RmQRSegmentation Segmentation { get; init; }            // Single
+}
+
+RmQRCodeData CreateRmQRCode(string plainText, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default);
+RmQRCodeData CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default);
+int CreateRmQRCode(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, Span<byte> destination, in RmQRCodeGeneratorOptions options = default);   // byte per module, row-major, quiet zone included, returns bytes written
+RmQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default);
+bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = default);
 public readonly struct RmQRCodeCalculatedSize { int BufferSize; int Width; int Height; RmQRVersion Version; }   // Width/Height include the quiet zone
 ```
 
-`requestedVersion` and `height` together are accepted only when they agree (else `ArgumentException`); `fitStrategy` is ignored when `requestedVersion` is given.
+`Version` and `Height` together are accepted only when they agree (else `ArgumentException`); `FitStrategy` is ignored when `Version` is given.
+
+**`default(RmQRCodeGeneratorOptions)` has to be the complete default configuration**, because it is what every unadorned call sends. Any member whose documented default is not the zero value therefore encodes an offset; `QuietZoneSize` is the only one today (2, with 0 a legitimate choice that cannot double as "unset"). It stores the offset from 2 rather than a `value + 1` sentinel so the canonical form stays unique: writing 2 explicitly must produce the same value as not writing it, or the generated equality reports two identical option sets as different.
+
+**There is no version *range* here, unlike Standard QR and Micro QR.** Those two are totally ordered by capacity, so "at least" and "at most" mean something. rMQR's 32 versions are not: R7x43, R9x43 and R7x59 have no min/max relation. Fit is constrained by `FitStrategy` and `Height` instead, which is the vocabulary that fits a two-dimensional size space. If a bound is ever wanted here it is a width in modules, not a version range.
 
 ### Reporting "does not fit" without an exception
 
-**What.** `TryGetRequiredBufferSize` / `TryGetRequiredBufferSizeWithEci` answer the same question as `GetRequiredBufferSize` and return `false` instead of throwing when the content does not fit. `false` means that and nothing else: every argument error the throwing overloads raise is raised here too, with the same type, message and precedence.
+**What.** `TryGetRequiredBufferSize` answers the same question as `GetRequiredBufferSize` and returns `false` instead of throwing when the content does not fit. `false` means that and nothing else: every argument error the throwing overloads raise is raised here too, with the same type, message and precedence.
 
 **Why a `Try` and not a dedicated exception type.** rMQR holds 5 to 150 Byte-mode characters, so for user-supplied content overflow is an ordinary branch rather than a defect, and .NET exceptions cost one to two orders of magnitude more than the encode itself. A dedicated exception type would only narrow the `catch`; it would not remove the throw, and the two are alternatives rather than complements. The decoder already treats its failure path as a first-class outcome (`TryDecode`), so this is the encoder side of the same rule.
 
