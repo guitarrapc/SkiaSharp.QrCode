@@ -54,12 +54,35 @@ public class ImageBuilderVersionRangeTest
     [Test]
     public async Task StandardQr_AutomaticSpellings_AllAgree()
     {
+        int? absent = null;
         var untouched = new QRCodeImageBuilder(Content).ToByteArray();
         var minusOne = new QRCodeImageBuilder(Content).WithVersion(-1).ToByteArray();
         var any = new QRCodeImageBuilder(Content).WithVersion(QRCodeVersionRange.Any).ToByteArray();
+        var nullable = new QRCodeImageBuilder(Content).WithVersion(absent).ToByteArray();
 
         await Assert.That(minusOne).IsEquivalentTo(untouched);
         await Assert.That(any).IsEquivalentTo(untouched);
+        await Assert.That(nullable).IsEquivalentTo(untouched);
+    }
+
+    [Test]
+    public async Task StandardQr_OptionalVersion_FlowsThroughTheBuilderWithoutABranch()
+    {
+        // The fluent chain stays one expression whether or not a version was configured.
+        foreach (int? configured in new int?[] { null, 20 })
+        {
+            var unbranched = new QRCodeImageBuilder(Content).WithVersion(configured).ToByteArray();
+
+            var builder = new QRCodeImageBuilder(Content);
+            if (configured.HasValue)
+                builder = builder.WithVersion(configured.Value);
+            var branched = builder.ToByteArray();
+
+            if (!unbranched.AsSpan().SequenceEqual(branched))
+                Assert.Fail($"configured={configured}: branched and unbranched builder chains differ");
+        }
+
+        await Assert.That(true).IsTrue();
     }
 
     [Test]

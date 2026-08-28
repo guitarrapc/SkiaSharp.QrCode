@@ -108,6 +108,107 @@ public class VersionRangeTest
         await Assert.That(() => MicroQRVersionRange.Between(MicroQRVersion.M3, MicroQRVersion.M2)).Throws<ArgumentOutOfRangeException>();
     }
 
+    // ---- terse spellings -------------------------------------------------------------
+
+    [Test]
+    public async Task StandardRange_Constructor_IsInclusiveOnBothEnds()
+    {
+        // The reason this is not System.Range: 1..40 there means 1 to 39.
+        var range = new QRCodeVersionRange(10, 20);
+
+        await Assert.That(range.Min).IsEqualTo(10);
+        await Assert.That(range.Max).IsEqualTo(20);
+        await Assert.That(range.Contains(20)).IsTrue();
+        await Assert.That(range).IsEqualTo(QRCodeVersionRange.Between(10, 20));
+        await Assert.That(new QRCodeVersionRange(1, 40)).IsEqualTo(QRCodeVersionRange.Any);
+    }
+
+    [Test]
+    public async Task StandardRange_Constructor_ValidatesLikeTheFactories()
+    {
+        await Assert.That(() => new QRCodeVersionRange(0, 20)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new QRCodeVersionRange(10, 41)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new QRCodeVersionRange(20, 10)).Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
+    public async Task StandardRange_ImplicitFromInt_PinsThatVersion()
+    {
+        QRCodeVersionRange range = 15;
+        await Assert.That(range).IsEqualTo(QRCodeVersionRange.Exactly(15));
+
+        var options = new QRCodeGeneratorOptions { Version = 15 };
+        await Assert.That(QRCodeGenerator.CreateQrCode(Digits, ECCLevel.M, options).Version).IsEqualTo(15);
+    }
+
+    [Test]
+    public async Task StandardRange_ImplicitFromInt_RejectsTheLegacyAutomaticSentinel()
+    {
+        // -1 is automatic only in the released WithVersion(int) builder method. Accepting it
+        // here would let a -1 arriving through a variable silently mean "any version".
+        await Assert.That(() => { QRCodeVersionRange _ = -1; }).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => { QRCodeVersionRange _ = 0; }).Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
+    public async Task MicroRange_ConstructorAndImplicitConversion()
+    {
+        await Assert.That(new MicroQRVersionRange(MicroQRVersion.M2, MicroQRVersion.M3)).IsEqualTo(MicroQRVersionRange.Between(MicroQRVersion.M2, MicroQRVersion.M3));
+        await Assert.That(new MicroQRVersionRange(MicroQRVersion.M1, MicroQRVersion.M4)).IsEqualTo(MicroQRVersionRange.Any);
+        await Assert.That(() => new MicroQRVersionRange(MicroQRVersion.M3, MicroQRVersion.M2)).Throws<ArgumentOutOfRangeException>();
+
+        MicroQRVersionRange pinned = MicroQRVersion.M3;
+        await Assert.That(pinned).IsEqualTo(MicroQRVersionRange.Exactly(MicroQRVersion.M3));
+
+        MicroQRVersionRange absent = (MicroQRVersion?)null;
+        await Assert.That(absent).IsEqualTo(MicroQRVersionRange.Any);
+    }
+
+    // ---- an optional version needs no branch ------------------------------------------
+
+    [Test]
+    public async Task StandardRange_ImplicitFromNullableInt_TreatsAbsenceAsAutomatic()
+    {
+        // The job the old `requestedVersion: -1` convention was really doing: a caller whose
+        // version is optional passes it straight through. `null` says that with a type
+        // instead of a magic number, so -1 stays an error.
+        int? absent = null;
+        int? configured = 12;
+        int? mistyped = -1;
+
+        await Assert.That((QRCodeVersionRange)absent).IsEqualTo(QRCodeVersionRange.Any);
+        await Assert.That((QRCodeVersionRange)configured).IsEqualTo(QRCodeVersionRange.Exactly(12));
+        await Assert.That(() => { QRCodeVersionRange _ = mistyped; }).Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
+    public async Task StandardQr_OptionalVersion_NeedsNoBranchAndMatchesTheBranchedForm()
+    {
+        foreach (int? configured in new int?[] { null, 12 })
+        {
+            // one expression, whether or not a version was configured
+            var unbranched = QRCodeGenerator.CreateQrCode(Digits, ECCLevel.M, new QRCodeGeneratorOptions { Version = configured });
+
+            var branched = configured.HasValue
+                ? QRCodeGenerator.CreateQrCode(Digits, ECCLevel.M, new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Exactly(configured.Value) })
+                : QRCodeGenerator.CreateQrCode(Digits, ECCLevel.M, QRCodeGeneratorOptions.Default);
+
+            await Assert.That(unbranched.Version).IsEqualTo(branched.Version);
+            if (!unbranched.GetRawData().AsSpan().SequenceEqual(branched.GetRawData()))
+                Assert.Fail($"configured={configured}: branched and unbranched forms differ");
+        }
+    }
+
+    [Test]
+    public async Task NullLiteral_IsAcceptedAndMeansAutomatic()
+    {
+        // A side effect of the nullable conversion: `Version = null` compiles even though
+        // the property is a non-nullable struct. It reads as "no version specified", which
+        // is what it does.
+        await Assert.That(new QRCodeGeneratorOptions { Version = null }.Version.IsAny).IsTrue();
+        await Assert.That(new MicroQRCodeGeneratorOptions { Version = null }.Version.IsAny).IsTrue();
+    }
+
     // ---- the design assumption the range scan rests on -------------------------------
 
     [Test]

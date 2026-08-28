@@ -335,6 +335,33 @@ A range-taking `WithVersion` overload on `QRCodeImageBuilder` and `MicroQRCodeIm
 
 **The API parity test was the right place for the rMQR asymmetry to surface, and it did.** `QrImageBuilderApiParityTest` fails the moment one builder grows a member the others lack, which is exactly what adding a range overload to two of three does. The fix is to declare the difference, not to work around it: a new `orderedVersionOnlySignatures` list records that rMQR has no version range because its 32 versions are not totally ordered, alongside the existing `standardOnlyMembers` and `rmqrOnlyMembers`. This is the one existing test file the phase touched, and touching it is the mechanism working as designed rather than a defect.
 
+**C#'s `..` range syntax was considered for the version constraint and rejected.** `System.Range`'s end is exclusive, so `WithVersion(1..40)` would read as versions 1 through 40 and mean 1 through 39, with 40 reachable only by writing the non-existent version 41. `Index` is also zero-based, so `..10` is `Index(0)..Index(10)` against a 1-based version space, and `Range` carries no length so `^` cannot be resolved or validated at construction. Documenting the type as inclusive while it looks exactly like the language feature would be precisely the class of trap the canonical-form and sentinel work exists to remove. A second, independent blocker was measured rather than assumed: `System.Range` in a public signature fails to compile for netstandard2.0 with `CS0051`, because PolySharp emits the polyfill as `internal`; making it public would have the library export `System.Range` and collide with any consumer assembly doing the same. Note the BCL does not use `System.Range` for inclusive domain ranges either, `RangeAttribute(1, 40)` being its own precedent.
+
+**What the terseness complaint actually wanted was fixed instead**, with a public inclusive constructor and an implicit conversion from a single version:
+
+| Intent | Spelling |
+|---|---|
+| automatic | omit `Version` |
+| pin one version | `Version = 15` |
+| both bounds | `Version = new(10, 20)` |
+| one bound | `Version = QRCodeVersionRange.AtLeast(10)` |
+
+`AtLeast` / `AtMost` keep their factories because a constructor cannot express them without writing the 1 or the 40 out, which is exactly the knowledge the named form exists to hide. The factories are now one-liners over the constructor, so validation lives in one place.
+
+**An optional version has to flow through without a branch, and that is what the sentinel was really buying.** The first cut of the terse spellings fixed verbosity and missed this: a caller whose version comes from configuration or a nullable field could write `Version = 15` but not "15 or nothing", so they were forced into
+
+```csharp
+var options = configured.HasValue
+    ? new QRCodeGeneratorOptions { Version = configured.Value, EciMode = eci }
+    : new QRCodeGeneratorOptions { EciMode = eci };
+```
+
+`requestedVersion: -1` never had that problem, because the sentinel let one expression carry both cases. **The fix is an implicit conversion from `int?`, not the sentinel back**: `null` is the language's own typed spelling of "no value", so `Version = configured` works with `configured` an `int?`, while `-1` keeps throwing. The optionality that made the sentinel useful is recovered; the magic number that made it dangerous is not. The same conversion makes `WithVersion(configured)` bind to the range overload, so the fluent chain stays one expression too.
+
+A side effect worth knowing: `Version = null` now compiles even though the property is a non-nullable struct, and means automatic. It reads as what it does, and is pinned by a test so it is a decision rather than an accident.
+
+**The implicit conversion deliberately rejects -1.** It is automatic only in the released `WithVersion(int)` builder method, which cannot change. Accepting it here would put the sentinel back into the vocabulary of the type built to remove it, make -1 an arbitrary exception among invalid ints (`0` and `-2` still throw), and — the reason that actually decided it — let a -1 arriving through a variable, a parsed config value or a defaulted field silently produce an automatically sized symbol where a pinned one was asked for. A wrong answer with no exception is worse than a throw. Before this change `Version = -1` did not compile at all; the implicit conversion trades that compile error for a construction-time throw on one value, in exchange for `Version = 15` on every valid one.
+
 **Declaring the difference had to move from the member name to the whole signature.** The existing exclusion lists match on `" {name}("`, which was enough while the difference was a distinctly named method. With an overload, `WithVersion` itself is shared by all three builders and only `WithVersion(VERSIONRANGE)` is absent from rMQR, so a name-based exclusion would have hidden the shared overload too and stopped guarding it. The list now holds normalized signatures.
 
 **Benchmarks: the existing image benchmark does not cover the path this phase changed.** `QRCodeImageEndToEnd` calls `QRCodeImageBuilder.GetPngBytes(QRCodeData, size)` with a symbol generated in `[GlobalSetup]`, so it takes the pre-built-data branch of `ResolveSymbol` and never reaches the generation call that was rewritten. It was run anyway (two runs each side) and is flat with **byte-identical allocation** on all four rows (5.44 / 20.44 / 19.44 / 41.91 KB), which does establish that rendering and its allocation are untouched.

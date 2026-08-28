@@ -27,8 +27,17 @@ public readonly record struct MicroQRVersionRange
     private readonly byte _min;
     private readonly byte _max;
 
-    private MicroQRVersionRange(MicroQRVersion min, MicroQRVersion max)
+    /// <summary>An inclusive range from <paramref name="min"/> to <paramref name="max"/>.</summary>
+    /// <param name="min">The lowest permitted version.</param>
+    /// <param name="max">The highest permitted version, inclusive.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when either bound is not M1-M4, or <paramref name="min"/> exceeds <paramref name="max"/>.</exception>
+    public MicroQRVersionRange(MicroQRVersion min, MicroQRVersion max)
     {
+        ValidateBound(min, nameof(min));
+        ValidateBound(max, nameof(max));
+        if (min > max)
+            throw new ArgumentOutOfRangeException(nameof(min), $"Version range minimum {min} must not exceed maximum {max}.");
+
         _min = (byte)(min == MinVersion ? 0 : (int)min);
         _max = (byte)(max == MaxVersion ? 0 : (int)max);
     }
@@ -50,39 +59,34 @@ public readonly record struct MicroQRVersionRange
 
     /// <summary>Exactly <paramref name="version"/>, with no automatic selection.</summary>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="version"/> is not M1-M4.</exception>
-    public static MicroQRVersionRange Exactly(MicroQRVersion version)
-    {
-        ValidateBound(version, nameof(version));
-        return new MicroQRVersionRange(version, version);
-    }
+    public static MicroQRVersionRange Exactly(MicroQRVersion version) => new(version, version);
 
     /// <summary><paramref name="version"/> or larger.</summary>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="version"/> is not M1-M4.</exception>
-    public static MicroQRVersionRange AtLeast(MicroQRVersion version)
-    {
-        ValidateBound(version, nameof(version));
-        return new MicroQRVersionRange(version, MaxVersion);
-    }
+    public static MicroQRVersionRange AtLeast(MicroQRVersion version) => new(version, MaxVersion);
 
     /// <summary><paramref name="version"/> or smaller.</summary>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="version"/> is not M1-M4.</exception>
-    public static MicroQRVersionRange AtMost(MicroQRVersion version)
-    {
-        ValidateBound(version, nameof(version));
-        return new MicroQRVersionRange(MinVersion, version);
-    }
+    public static MicroQRVersionRange AtMost(MicroQRVersion version) => new(MinVersion, version);
 
+    /// <inheritdoc cref="MicroQRVersionRange(MicroQRVersion, MicroQRVersion)"/>
     /// <summary>An inclusive range from <paramref name="min"/> to <paramref name="max"/>.</summary>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when either bound is not M1-M4, or <paramref name="min"/> exceeds <paramref name="max"/>.</exception>
-    public static MicroQRVersionRange Between(MicroQRVersion min, MicroQRVersion max)
-    {
-        ValidateBound(min, nameof(min));
-        ValidateBound(max, nameof(max));
-        if (min > max)
-            throw new ArgumentOutOfRangeException(nameof(min), $"Version range minimum {min} must not exceed maximum {max}.");
+    public static MicroQRVersionRange Between(MicroQRVersion min, MicroQRVersion max) => new(min, max);
 
-        return new MicroQRVersionRange(min, max);
-    }
+    /// <summary>A single version, as <see cref="Exactly"/>.</summary>
+    /// <param name="version">The version to pin.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="version"/> is not M1-M4.</exception>
+    /// <remarks>Lets an option set read <c>Version = MicroQRVersion.M3</c>.</remarks>
+    public static implicit operator MicroQRVersionRange(MicroQRVersion version) => Exactly(version);
+
+    /// <summary>A single version, or <see cref="Any"/> when there is none.</summary>
+    /// <param name="version">The version to pin, or <c>null</c> for automatic selection.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="version"/> has a value that is not M1-M4.</exception>
+    /// <remarks>
+    /// Lets a caller whose version is optional pass it through without branching on whether
+    /// it was configured.
+    /// </remarks>
+    public static implicit operator MicroQRVersionRange(MicroQRVersion? version) => version.HasValue ? Exactly(version.GetValueOrDefault()) : Any;
 
     /// <summary>Whether <paramref name="version"/> falls inside this range.</summary>
     public bool Contains(MicroQRVersion version) => version >= Min && version <= Max;
