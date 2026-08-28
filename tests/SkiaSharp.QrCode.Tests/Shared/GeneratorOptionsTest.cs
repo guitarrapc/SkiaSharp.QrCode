@@ -273,6 +273,29 @@ public class GeneratorOptionsTest
     }
 
     [Test]
+    public async Task DefaultLiteralAsTheThirdArgument_StillMeansAllDefaults()
+    {
+        // Adding the options overloads moved this call: `default` now binds to the options
+        // parameter rather than to `utf8BOM` / `requestedVersion`, because a candidate that
+        // needs no optional-parameter substitution wins. Both readings mean "all defaults",
+        // so the symbol must be unchanged. (Three sibling shapes did not compile at all
+        // before, being ambiguous with the Span<byte> destination overload.)
+        var standardDefault = QRCodeGenerator.CreateQrCode("hello world", ECCLevel.M, default);
+        var standardOmitted = QRCodeGenerator.CreateQrCode("hello world", ECCLevel.M);
+        await Assert.That(standardDefault.Version).IsEqualTo(standardOmitted.Version);
+        await Assert.That(standardDefault.GetRawData().AsSpan().SequenceEqual(standardOmitted.GetRawData())).IsTrue();
+
+        var microDefault = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L, default);
+        var microOmitted = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
+        await Assert.That(microDefault.Version).IsEqualTo(microOmitted.Version);
+        await Assert.That(microDefault.GetRawData().AsSpan().SequenceEqual(microOmitted.GetRawData())).IsTrue();
+
+        // the span spellings, which were ambiguous before the options overloads existed
+        await Assert.That(QRCodeGenerator.CreateQrCode("hello world".AsSpan(), ECCLevel.M, default).Version).IsEqualTo(standardOmitted.Version);
+        await Assert.That(MicroQRCodeGenerator.CreateMicroQRCode("12345".AsSpan(), MicroQREccLevel.L, default).Version).IsEqualTo(microOmitted.Version);
+    }
+
+    [Test]
     public async Task Options_NegativeQuietZone_ThrowsFromEveryEntryPoint()
     {
         var standard = new QRCodeGeneratorOptions { QuietZoneSize = -1 };

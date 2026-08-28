@@ -36,7 +36,9 @@ Reach for these when the content is user-supplied. Micro QR holds 5 digits at M1
 
 ## generator options
 
-`QRCodeGenerator` and `MicroQRCodeGenerator` gained an overload of every entry point that takes an options struct instead of a parameter list. **Nothing existing changed**: the parameter list overloads keep their signatures, their exceptions and their output, and the options overloads are an additional way to spell the same calls.
+`QRCodeGenerator` and `MicroQRCodeGenerator` gained an overload of every entry point that takes an options struct instead of a parameter list. **No behaviour changed**: the parameter list overloads keep their signatures, their exceptions and their output, and the options overloads are an additional way to spell the same calls.
+
+One resolution detail, since adding overloads can move a call: `Create…(text, eccLevel, default)` now binds to the options overload rather than to the third parameter of the parameter list, because a candidate that needs no optional-parameter substitution wins. The symbol it produces is identical, since `default` meant "all defaults" under both readings. It also *fixes* three shapes that did not compile before: `CreateQrCode(text, ecc, default)`, `CreateQrCode(span, ecc, default)` and `CreateMicroQRCode(span, ecc, default)` were ambiguous between the `bool` / `MicroQRVersion?` overload and the `Span<byte>` destination overload, and now resolve.
 
 ```csharp
 // unchanged, and still the shortest correct call

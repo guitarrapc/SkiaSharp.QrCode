@@ -2,7 +2,7 @@ namespace SkiaSharp.QrCode;
 
 /// <summary>
 /// Optional settings for <see cref="MicroQRCodeGenerator"/>. <c>default</c> is the complete
-/// default configuration:
+/// default configuration (automatic version, 2-module quiet zone), so set only what you need:
 /// <c>new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M3, QuietZoneSize = 0 }</c>.
 /// </summary>
 /// <remarks>
