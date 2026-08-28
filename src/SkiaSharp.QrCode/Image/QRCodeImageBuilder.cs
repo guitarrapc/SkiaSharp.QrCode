@@ -349,10 +349,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <exception cref="InvalidOperationException"></exception>
-    /// <remarks>
-    /// The pinned-version case of the <see cref="WithVersion(QRCodeVersionRange)"/> overload;
-    /// -1 is <see cref="QRCodeVersionRange.Any"/>.
-    /// </remarks>
+    /// <remarks>The pinned case of <see cref="WithVersion(QRCodeVersionRange)"/>; -1 is <see cref="QRCodeVersionRange.Any"/>.</remarks>
     public QRCodeImageBuilder WithVersion(int version)
     {
         if (_qrCodeData is not null)
@@ -370,11 +367,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <param name="versionRange">The permitted versions; the smallest one that holds the content is used.</param>
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="QRCodeData"/>.</exception>
-    /// <remarks>
-    /// Use this when the symbol has to reach a minimum physical size, or must not exceed
-    /// one: <c>WithVersion(QRCodeVersionRange.AtLeast(10))</c>. Building the range
-    /// validates its bounds, so an impossible one is rejected before it reaches a builder.
-    /// </remarks>
+    /// <remarks>For a symbol that must reach, or not exceed, a physical size. An <c>int?</c> converts implicitly, so an optional version needs no branch.</remarks>
     public QRCodeImageBuilder WithVersion(QRCodeVersionRange versionRange)
     {
         if (_qrCodeData is not null)

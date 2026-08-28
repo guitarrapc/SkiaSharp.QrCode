@@ -152,12 +152,9 @@ public static class MicroQRCodeGenerator
 
     // ---- options overloads ---------------------------------------------------------
     //
-    // Same operations, spelled with MicroQRCodeGeneratorOptions instead of a parameter
-    // list. They unpack onto the overloads above rather than the other way round, so the
-    // released overloads keep their exact exceptions, messages and codegen; nothing here
-    // adds behaviour. `options` deliberately has no default value: with one,
-    // CreateMicroQRCode(text, ecc) would be ambiguous between these and the released
-    // overloads. See plans/generator-api-options-plan.md.
+    // These unpack onto the overloads above, not the other way round, so the released ones
+    // keep their exact exceptions and codegen. `options` has no default value on purpose:
+    // with one, CreateMicroQRCode(text, ecc) would be ambiguous between the two sets.
 
     /// <inheritdoc cref="CreateMicroQRCode(string, MicroQREccLevel, MicroQRVersion?, int)"/>
     /// <param name="plainText">The text to encode.</param>
@@ -263,16 +260,10 @@ public static class MicroQRCodeGenerator
 
     /// <summary>
     /// The smallest version inside <paramref name="range"/> that holds the content, or
-    /// <c>false</c> when none does.
+    /// <c>false</c> when none does. A range offering <paramref name="eccLevel"/> nowhere is
+    /// a contradiction and throws; one whose versions cannot carry the required mode, or are
+    /// too short, is an ordinary "does not fit".
     /// </summary>
-    /// <remarks>
-    /// A range can rule out every version for two different reasons, and they are not the
-    /// same kind of answer. If no version in the range offers <paramref name="eccLevel"/>
-    /// at all, the arguments contradict each other whatever the content is, so that throws
-    /// exactly as pinning such a version does. If versions are available but none carries
-    /// the mode the text requires, or none is long enough, that is an ordinary "does not
-    /// fit" and returns <c>false</c>, because the text is what picks the mode.
-    /// </remarks>
     internal static bool TrySelectVersionInRange(in TextAnalysisResult analysis, MicroQREccLevel eccLevel, MicroQRVersionRange range, out MicroQRVersion selected)
     {
         if ((uint)eccLevel > (uint)MicroQREccLevel.Q)
@@ -307,10 +298,7 @@ public static class MicroQRCodeGenerator
         return false;
     }
 
-    /// <summary>
-    /// The version a ranged option set resolves to, or <c>null</c> when the range is
-    /// unconstrained so the parameter list overloads can select as they always have.
-    /// </summary>
+    /// <summary>The resolved version, or <c>null</c> when unconstrained so selection is unchanged.</summary>
     private static bool TryGetRequiredBufferSizeRanged(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options)
     {
         if (options.Version.IsAny)

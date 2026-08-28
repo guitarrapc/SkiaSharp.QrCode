@@ -320,17 +320,11 @@ public static class QRCodeGenerator
 
     // ---- options overloads ------------------------------------------------------------
     //
-    // Same operations, spelled with QRCodeGeneratorOptions instead of a parameter list.
-    // The Create overloads unpack onto the parameter list overloads rather than the other
-    // way round, so the released ones keep their exact exceptions, messages and codegen.
-    // `options` deliberately has no default value: with one, CreateQrCode(text, ecc) would
-    // be ambiguous between these and the released overloads.
-    //
-    // The sizing pair is the exception, and the one place these overloads do more than the
-    // released ones: GetRequiredBufferSize has never had a version parameter, so an ignored
-    // Version would be a silent trap. They honour it, and report a version too small for
-    // the content the way Micro QR and rMQR already do.
-    // See plans/generator-api-options-plan.md.
+    // These unpack onto the parameter list overloads, not the other way round, so the
+    // released ones keep their exact exceptions and codegen. `options` has no default value
+    // on purpose: with one, CreateQrCode(text, ecc) would be ambiguous between the two sets.
+    // The sizing pair is where these do more: GetRequiredBufferSize has no version parameter,
+    // so an ignored Version would be a silent trap.
 
     /// <inheritdoc cref="CreateQrCode(string, ECCLevel, bool, EciMode, int, int)"/>
     /// <param name="plainText">The text to encode in the QR code.</param>
@@ -415,14 +409,10 @@ public static class QRCodeGenerator
            $"Widen the version range, lower the ECC level, or leave it at QRCodeVersionRange.Any for automatic selection.";
 
     /// <summary>
-    /// The version a ranged option set resolves to: the smallest version in the range that
-    /// holds the content, or the parameter list overloads' automatic marker when the range
-    /// is unconstrained, so the default path stays exactly what it was.
+    /// The smallest version in the range that holds the content, or the automatic marker
+    /// when unconstrained so the default path is unchanged. A constrained range costs one
+    /// extra text analysis, since the overload it forwards to analyses again.
     /// </summary>
-    /// <remarks>
-    /// A constrained range costs one extra text analysis, because the released overload it
-    /// forwards to analyses again. Only calls that actually constrain the version pay it.
-    /// </remarks>
     private static int ResolveVersion(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in QRCodeGeneratorOptions options)
     {
         if (options.Version.IsAny)

@@ -351,11 +351,7 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     /// <param name="versionRange">The permitted versions; the smallest one that holds the content is used.</param>
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="MicroQRCodeData"/>.</exception>
-    /// <remarks>
-    /// M1-M4 differ in the modes and ECC levels they offer, not only in capacity, so a
-    /// range can leave nothing usable for either reason; see <see cref="MicroQRVersionRange"/>
-    /// for which of the two throws and which is reported as a poor fit.
-    /// </remarks>
+    /// <remarks>See <see cref="MicroQRVersionRange"/> for which empty ranges throw and which are a poor fit.</remarks>
     public MicroQRCodeImageBuilder WithVersion(MicroQRVersionRange versionRange)
     {
         if (_data is not null)
