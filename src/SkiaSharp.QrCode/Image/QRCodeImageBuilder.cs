@@ -35,7 +35,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     private readonly QRCodeData? _qrCodeData;
     private ECCLevel _eccLevel = ECCLevel.M;
     private EciMode _eciMode = EciMode.Default;
-    private int _requestedVersion = -1;
+    private QRCodeVersionRange _versionRange;
 
     // rendering (Standard QR-only options; Micro QR has a single finder pattern
     // and no ECC headroom for overlays)
@@ -349,6 +349,10 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     /// <returns>This builder instance for method chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException"></exception>
     /// <exception cref="InvalidOperationException"></exception>
+    /// <remarks>
+    /// The pinned-version case of the <see cref="WithVersion(QRCodeVersionRange)"/> overload;
+    /// -1 is <see cref="QRCodeVersionRange.Any"/>.
+    /// </remarks>
     public QRCodeImageBuilder WithVersion(int version)
     {
         if (_qrCodeData is not null)
@@ -356,7 +360,27 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
         if (version is not -1 and (< 1 or > 40))
             throw new ArgumentOutOfRangeException(nameof(version), "Version must be between 1 and 40, or -1 for automatic selection.");
 
-        _requestedVersion = version;
+        _versionRange = version == -1 ? QRCodeVersionRange.Any : QRCodeVersionRange.Exactly(version);
+        return this;
+    }
+
+    /// <summary>
+    /// Configure the versions the generator may choose from, rather than a single one.
+    /// </summary>
+    /// <param name="versionRange">The permitted versions; the smallest one that holds the content is used.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="QRCodeData"/>.</exception>
+    /// <remarks>
+    /// Use this when the symbol has to reach a minimum physical size, or must not exceed
+    /// one: <c>WithVersion(QRCodeVersionRange.AtLeast(10))</c>. Building the range
+    /// validates its bounds, so an impossible one is rejected before it reaches a builder.
+    /// </remarks>
+    public QRCodeImageBuilder WithVersion(QRCodeVersionRange versionRange)
+    {
+        if (_qrCodeData is not null)
+            throw new InvalidOperationException("WithVersion cannot be used when QRCodeData is provided directly.");
+
+        _versionRange = versionRange;
         return this;
     }
 
@@ -386,7 +410,12 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
 
     private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
     {
-        var qrCodeData = _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, eciMode: _eciMode, requestedVersion: _requestedVersion, quietZoneSize: _quietZoneSize);
+        var qrCodeData = _qrCodeData ?? QRCodeGenerator.CreateQrCode(_content.AsSpan(), _eccLevel, new QRCodeGeneratorOptions
+        {
+            EciMode = _eciMode,
+            Version = _versionRange,
+            QuietZoneSize = _quietZoneSize,
+        });
         matrixWidth = matrixHeight = qrCodeData.Size;
         return qrCodeData;
     }

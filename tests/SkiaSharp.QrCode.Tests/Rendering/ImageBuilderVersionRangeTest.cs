@@ -1,0 +1,136 @@
+using SkiaSharp.QrCode.Image;
+
+namespace SkiaSharp.QrCode.Tests;
+
+/// <summary>
+/// The range-taking <c>WithVersion</c> overload on the Standard QR and Micro QR image
+/// builders, and the existing version-taking overload keeping its meaning as the pinned case
+/// (plans/generator-api-options-plan.md, Phase 4).
+/// </summary>
+/// <remarks>
+/// The builders now assemble an options value instead of passing positional arguments, so
+/// what these tests pin is that the version constraint survives the trip: a builder
+/// configured with a range must render the same image as one handed the symbol the
+/// generator produces for that same range.
+/// </remarks>
+public class ImageBuilderVersionRangeTest
+{
+    private const string Content = "https://example.com/p/1234567890";
+    private const string MicroContent = "1234567890";
+
+    // ---- Standard QR ------------------------------------------------------------------
+
+    [Test]
+    public async Task StandardQr_WithVersionOverload_MatchesTheGeneratorForTheSameRange()
+    {
+        var range = QRCodeVersionRange.AtLeast(15);
+        var options = new QRCodeGeneratorOptions { Version = range };
+
+        var viaBuilder = new QRCodeImageBuilder(Content).WithVersion(range).ToByteArray();
+        var viaData = new QRCodeImageBuilder(QRCodeGenerator.CreateQrCode(Content, ECCLevel.M, options)).ToByteArray();
+
+        await Assert.That(viaBuilder).IsEquivalentTo(viaData);
+    }
+
+    [Test]
+    public async Task StandardQr_WithVersionExactly_EqualsWithVersionInt()
+    {
+        // The smallest version that holds the content, plus both count-indicator
+        // boundaries and the top of the range.
+        var smallest = QRCodeGenerator.GetRequiredBufferSize(Content.AsSpan(), ECCLevel.M).Version;
+
+        foreach (var version in new[] { smallest, 10, 27, 40 })
+        {
+            var pinned = new QRCodeImageBuilder(Content).WithVersion(version).ToByteArray();
+            var ranged = new QRCodeImageBuilder(Content).WithVersion(QRCodeVersionRange.Exactly(version)).ToByteArray();
+
+            if (!ranged.AsSpan().SequenceEqual(pinned))
+                Assert.Fail($"version {version}: WithVersion(int) and WithVersion(Exactly) rendered differently");
+        }
+
+        await Assert.That(smallest).IsLessThan(10);   // the loop really does cover three distinct bands
+    }
+
+    [Test]
+    public async Task StandardQr_AutomaticSpellings_AllAgree()
+    {
+        var untouched = new QRCodeImageBuilder(Content).ToByteArray();
+        var minusOne = new QRCodeImageBuilder(Content).WithVersion(-1).ToByteArray();
+        var any = new QRCodeImageBuilder(Content).WithVersion(QRCodeVersionRange.Any).ToByteArray();
+
+        await Assert.That(minusOne).IsEquivalentTo(untouched);
+        await Assert.That(any).IsEquivalentTo(untouched);
+    }
+
+    [Test]
+    public async Task StandardQr_WithVersionOverload_RejectsAPreBuiltSymbol()
+    {
+        var data = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M);
+
+        await Assert.That(() => new QRCodeImageBuilder(data).WithVersion(QRCodeVersionRange.AtLeast(15))).Throws<InvalidOperationException>();
+        await Assert.That(() => new QRCodeImageBuilder(data).WithVersion(15)).Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task StandardQr_RangeThatCannotHoldTheContent_ReportsItAsAnArgumentError()
+    {
+        // Before Phase 4 the builder handed the version straight to the encoder, which
+        // failed deep inside with ArgumentOutOfRangeException (Parameter 'length'). Going
+        // through the options overload means the fit is checked up front instead.
+        var builder = new QRCodeImageBuilder(new string('A', 500)).WithVersion(1);
+
+        var error = Assert.Throws<ArgumentException>(() => builder.ToByteArray());
+        await Assert.That(error!.Message).Contains("does not fit");
+    }
+
+    // ---- Micro QR ---------------------------------------------------------------------
+
+    [Test]
+    public async Task MicroQr_WithVersionOverload_MatchesTheGeneratorForTheSameRange()
+    {
+        var range = MicroQRVersionRange.AtLeast(MicroQRVersion.M4);
+        var options = new MicroQRCodeGeneratorOptions { Version = range };
+
+        var viaBuilder = new MicroQRCodeImageBuilder(MicroContent).WithErrorCorrection(MicroQREccLevel.L).WithVersion(range).ToByteArray();
+        var viaData = new MicroQRCodeImageBuilder(MicroQRCodeGenerator.CreateMicroQRCode(MicroContent, MicroQREccLevel.L, options)).ToByteArray();
+
+        await Assert.That(viaBuilder).IsEquivalentTo(viaData);
+    }
+
+    [Test]
+    [Arguments(MicroQRVersion.M3)]
+    [Arguments(MicroQRVersion.M4)]
+    public async Task MicroQr_WithVersionExactly_EqualsWithVersionInt(MicroQRVersion version)
+    {
+        var pinned = new MicroQRCodeImageBuilder(MicroContent).WithErrorCorrection(MicroQREccLevel.L).WithVersion(version).ToByteArray();
+        var ranged = new MicroQRCodeImageBuilder(MicroContent).WithErrorCorrection(MicroQREccLevel.L).WithVersion(MicroQRVersionRange.Exactly(version)).ToByteArray();
+
+        await Assert.That(ranged).IsEquivalentTo(pinned);
+    }
+
+    [Test]
+    public async Task MicroQr_AutomaticSpellings_Agree()
+    {
+        var untouched = new MicroQRCodeImageBuilder(MicroContent).WithErrorCorrection(MicroQREccLevel.L).ToByteArray();
+        var any = new MicroQRCodeImageBuilder(MicroContent).WithErrorCorrection(MicroQREccLevel.L).WithVersion(MicroQRVersionRange.Any).ToByteArray();
+
+        await Assert.That(any).IsEquivalentTo(untouched);
+    }
+
+    [Test]
+    public async Task MicroQr_WithVersionOverload_RejectsAPreBuiltSymbol()
+    {
+        var data = MicroQRCodeGenerator.CreateMicroQRCode(MicroContent, MicroQREccLevel.L);
+
+        await Assert.That(() => new MicroQRCodeImageBuilder(data).WithVersion(MicroQRVersionRange.AtLeast(MicroQRVersion.M4))).Throws<InvalidOperationException>();
+    }
+
+    [Test]
+    public async Task MicroQr_RangeThatCannotCarryTheMode_ReportsItAsAnArgumentError()
+    {
+        // Byte content needs M3 or M4; capping the range at M2 leaves nothing usable.
+        var builder = new MicroQRCodeImageBuilder("hello").WithErrorCorrection(MicroQREccLevel.L).WithVersion(MicroQRVersionRange.AtMost(MicroQRVersion.M2));
+
+        await Assert.That(() => builder.ToByteArray()).Throws<ArgumentException>();
+    }
+}

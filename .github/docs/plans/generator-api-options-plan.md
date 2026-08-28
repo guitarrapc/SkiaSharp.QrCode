@@ -43,7 +43,7 @@ Within that gate, rMQR still goes first, because it is the phase whose cost woul
 - Deletion of the rMQR `*WithEci` family and of the long-parameter rMQR overloads, replaced by an options-based surface.
 - Version range types for the two symbologies whose versions are totally ordered: `QRCodeVersionRange` (1-40) and `MicroQRVersionRange` (M1-M4), subsuming today's `requestedVersion`.
 - SDK package validation against the last released package, as the mechanism that keeps the released contract intact while the surface above it is reshaped.
-- Builder wiring (`WithVersionRange`) and documentation.
+- Builder wiring (a range-taking `WithVersion` overload) and documentation.
 
 **Out of scope.**
 
@@ -170,7 +170,7 @@ Exit criteria: the rMQR public surface is exactly the 5 methods listed above and
 
 ### Phase 4, builders
 
-- `QRCodeImageBuilder.WithVersionRange(QRCodeVersionRange)` and the Micro QR equivalent. `WithVersion(int)` stays and maps to `Exactly`.
+- A `QRCodeImageBuilder.WithVersion(QRCodeVersionRange)` overload and the Micro QR equivalent. `WithVersion(int)` stays and maps to `Exactly`.
 - Builders construct an options value internally rather than passing positional arguments, which removes the long call in `QRCodeImageBuilder`.
 - The rMQR builder gains nothing new here beyond forwarding through `RmQRCodeGeneratorOptions`; its existing `WithFitStrategy` / `WithHeight` / `WithSegmentation` are already the right surface.
 
@@ -322,3 +322,33 @@ Allocation is byte-identical on every row (112 / 160 / 368 B on the allocating p
 - **The apparent +29 % regression this produced was worth chasing rather than waving away.** It was investigated as a possible real regression, and what settled it was the baseline showing the same row at 88.4 us while the changed build showed 76.2 us: the changed build measured *faster* than the baseline on the row that supposedly regressed. A regression cannot do that.
 - **Phase 2's `minimumVersion > requestedVersion` fit test was a latent assumption that this phase removed.** It happened to be correct, and the sweep now proves it, but it was written without checking. The replacement does not depend on it being true.
 - **`EncodingMode` is internal, so it cannot appear in a public test method signature.** The monotonicity data source had to yield only public types and loop the modes inside the body. Worth knowing before designing a `MethodDataSource` around internal enums.
+
+### Phase 4, builders, completed 2026-08-28
+
+A range-taking `WithVersion` overload on `QRCodeImageBuilder` and `MicroQRCodeImageBuilder`, and both builders now assemble an options value in `ResolveSymbol` instead of passing positional arguments. `WithVersion` keeps its signature and becomes the pinned case: `-1` maps to `Any`, anything else to `Exactly`. The rMQR builder is unchanged, as planned. Suite green on net8.0 and net10.0, 15,711 passed / 0 failed in Release; package validation silent.
+
+**The change is six lines of production code per builder**, and the diff deletions are exactly the private version field, its assignment and the generator call in each.
+
+**`WithVersion(n)` with content that does not fit version *n* now throws a different exception, and that is a deliberate improvement.** The builder used to hand the version straight to the parameter list overload, which failed inside the encoder with `ArgumentOutOfRangeException (Parameter 'length')` from a span slice. Routing through the options overload checks the fit first, so it is now an `ArgumentException` naming the version, the ECC level and the mode. `ArgumentOutOfRangeException` derives from `ArgumentException`, so the change is only visible to a caller catching the derived type specifically — implausible for an exception that never named anything useful, but it is a behaviour change on a released API and belongs in the Phase 5 migration notes.
+
+**The version constraint is one method name with two overloads, not two names.** `WithVersionRange` was written first and then folded into a `WithVersion(QRCodeVersionRange)` overload, on review. Three reasons, and the first is the strongest: this plan's own Guiding Decision says the range is a single concept with the fixed version as its degenerate case, so splitting it back into two method names contradicts the type that was built to unify it. Second, it disagreed with the options struct the builder wraps: `QRCodeGeneratorOptions` has one `Version` member of range type, not a `Version` plus a `VersionRange`. Third, `WithVersionRange(QRCodeVersionRange)` names the method after its parameter type, which the type already says. Nothing was released, so the correction was free.
+
+**The API parity test was the right place for the rMQR asymmetry to surface, and it did.** `QrImageBuilderApiParityTest` fails the moment one builder grows a member the others lack, which is exactly what adding a range overload to two of three does. The fix is to declare the difference, not to work around it: a new `orderedVersionOnlySignatures` list records that rMQR has no version range because its 32 versions are not totally ordered, alongside the existing `standardOnlyMembers` and `rmqrOnlyMembers`. This is the one existing test file the phase touched, and touching it is the mechanism working as designed rather than a defect.
+
+**Declaring the difference had to move from the member name to the whole signature.** The existing exclusion lists match on `" {name}("`, which was enough while the difference was a distinctly named method. With an overload, `WithVersion` itself is shared by all three builders and only `WithVersion(VERSIONRANGE)` is absent from rMQR, so a name-based exclusion would have hidden the shared overload too and stopped guarding it. The list now holds normalized signatures.
+
+**Benchmarks: the existing image benchmark does not cover the path this phase changed.** `QRCodeImageEndToEnd` calls `QRCodeImageBuilder.GetPngBytes(QRCodeData, size)` with a symbol generated in `[GlobalSetup]`, so it takes the pre-built-data branch of `ResolveSymbol` and never reaches the generation call that was rewritten. It was run anyway (two runs each side) and is flat with **byte-identical allocation** on all four rows (5.44 / 20.44 / 19.44 / 41.91 KB), which does establish that rendering and its allocation are untouched.
+
+| | Baseline (2 runs) | After (2 runs) |
+|---|---|---|
+| `Small_512px` | 5.083 / 5.180 ms | 4.831 / 4.753 ms |
+| `Small_2048px` | 79.5 / 75.4 ms | 74.0 / 72.9 ms |
+| `Large_512px` | 9.882 / 9.305 ms | 9.313 / 9.061 ms |
+| `Large_2048px` | 86.8 / 76.7 ms | 76.3 / 74.9 ms |
+
+The changed path costs one stack-allocated struct per image and swaps the parameter list overload for the options overload, which Phase 2 measured as equal at the generator level (874 ns against 823 ns on the ~900 ns case). Against a 5-80 ms image that is unmeasurable, so no benchmark was added for it: one would not resolve anything. **The coverage gap is real and worth recording**: no benchmark exercises `new QRCodeImageBuilder(content).ToByteArray()`, the generate-and-render path most callers actually use. That is a suite gap that predates this plan.
+
+**Lessons learned**
+
+- **A benchmark whose name matches the area is not automatically a benchmark of the change.** `QRCodeImageEndToEnd` looked like the obvious gate for a builder change and is not one, because its `[GlobalSetup]` pre-generates the symbol. It was only caught by reading the benchmark bodies after running them. Reading what a benchmark actually calls has to come before treating its numbers as a gate.
+- **The failing test in this phase was the new test, and its data was wrong rather than the code.** `WithVersionExactly_EqualsWithVersionInt(1)` pinned version 1 for a 32-byte payload that needs version 3, so both spellings correctly threw and the assertion compared nothing. Rewritten to derive the smallest fitting version and sweep it plus both count-indicator bands. **A parameterised test that hardcodes a version has to be checked against the payload it is given.**
