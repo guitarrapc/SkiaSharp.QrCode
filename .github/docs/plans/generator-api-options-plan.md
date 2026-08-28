@@ -42,7 +42,7 @@ Within that gate, rMQR still goes first, because it is the phase whose cost woul
 - Per-symbology options structs: `QRCodeGeneratorOptions`, `MicroQRCodeGeneratorOptions`, `RmQRCodeGeneratorOptions`.
 - Deletion of the rMQR `*WithEci` family and of the long-parameter rMQR overloads, replaced by an options-based surface.
 - Version range types for the two symbologies whose versions are totally ordered: `QRCodeVersionRange` (1-40) and `MicroQRVersionRange` (M1-M4), subsuming today's `requestedVersion`.
-- Public API approval tests, as the mechanism that makes every step above reviewable.
+- SDK package validation against the last released package, as the mechanism that keeps the released contract intact while the surface above it is reshaped.
 - Builder wiring (`WithVersionRange`) and documentation.
 
 **Out of scope.**
@@ -117,19 +117,24 @@ Whether the wider Standard QR / Micro QR parameter lists (`utf8BOM`, `eciMode`, 
 
 ### Prior art
 
-The options-struct shape is not novel; the specific reason for choosing it over more overloads is the count in the table above. Two .NET QR libraries were read while deciding: `Net.Codecrete.QrCodeGenerator` reached 9 parameters on `EncodeTextAdvanced` and suppresses the analyser warning rather than changing shape, which is the outcome this plan exists to avoid; it also supplies the `minVersion` / `maxVersion` semantics being adopted here. `QRCoder` supplied the public API approval test pattern used in Phase 0.
+The options-struct shape is not novel; the specific reason for choosing it over more overloads is the count in the table above. Two .NET QR libraries were read while deciding: `Net.Codecrete.QrCodeGenerator` reached 9 parameters on `EncodeTextAdvanced` and suppresses the analyser warning rather than changing shape, which is the outcome this plan exists to avoid; it also supplies the `minVersion` / `maxVersion` semantics being adopted here, and it already enables SDK package validation, which is what Phase 0 adopts.
 
 ## Implementation Order
 
-### Phase 0, freeze the surface with public API approval tests
+### Phase 0, pin the released contract with SDK package validation
 
-Blocking: every later phase is reviewed through this diff.
+Blocking: this is what makes Phase 2's "additive only" claim a checked fact rather than an intention.
 
-- New `tests/SkiaSharp.QrCode.ApiTests` project using `PublicApiGenerator`, generating the public API of `SkiaSharp.QrCode` for each of the four TFMs (netstandard2.0, netstandard2.1, net8.0, net10.0) and comparing against committed approved files.
-- Follow the established pattern of one approved file per group of TFMs that produce identical output, and a separate file per TFM that diverges. The `#if NET8_0_OR_GREATER` blocks in this library make divergence likely, so the test must report which TFMs differ rather than merely failing.
-- Wire into CI alongside the existing test run.
+- `EnablePackageValidation` and `PackageValidationBaselineVersion` on the library project, baselined against the newest released package (1.1.1). The SDK then compares the package under construction against the real published artifact and errors on any breaking change, and separately cross-checks the four framework assets against each other.
+- Wire into CI: validation runs on `Pack`, which `dotnet build` never invokes, so the build workflow needs an explicit pack step or a pull request never sees it. The release workflow already packs, so it is covered there for free.
 
-Deliverable: a baseline approved file set at current HEAD. **No production code changes in this phase**, so the diff is purely additive and the baseline is trustworthy.
+**What this does and does not cover, stated plainly.** It answers *"did we break a consumer of the released package?"* authoritatively, against the published artifact rather than against a file in this repository that a developer can regenerate. It does **not** produce a reviewable listing of the surface: additions are not breaking, so the new options structs, the new overloads and the version range types pass in silence, and the Phase 1 rMQR deletion is invisible to it because no released package contains rMQR. Those are reviewed as ordinary source diffs.
+
+That split is acceptable because the risks are not symmetric. The rMQR deletion is deliberate and legible in one file's diff; breaking a released Standard QR overload in Phase 2 is an accident that no reviewer reliably catches by eye, and that is the one this phase makes impossible.
+
+**The baseline must be bumped to 1.2.0 once 1.2.0 is published.** From that moment the reshaped rMQR surface is itself frozen, which is exactly the release-window argument above turned into a mechanically enforced rule rather than a note in a document.
+
+Deliverable: two properties, one CI step. **No production code changes in this phase.**
 
 ### Phase 1, rMQR options struct and deletion of the legacy surface
 
@@ -146,7 +151,7 @@ Every phase gates 1.2.0, but this is the one whose *cost* changes if the release
 - Update the in-repo call sites: roughly 191 across tests, samples, benchmarks and the Playground, of which about 62 use a `*WithEci` method. Mechanical, but it is the bulk of the phase's diff and must not be mixed with behaviour changes.
 - Behaviour must be bit-identical. The existing rMQR test suite is the proof and must pass with only call-shape edits, no expectation edits. **An expectation change in this phase is a defect**, not a rebaseline.
 
-Exit criteria: approval diff shows 12 methods removed and 5 added, nothing else; full suite green on net8.0 and net10.0; encode benchmarks within the guardrail (see Risks).
+Exit criteria: the rMQR public surface is exactly the 5 methods listed above and the source diff shows no other API change; full suite green on net8.0 and net10.0; encode benchmarks within the guardrail (see Risks). Package validation is silent here by design, because no released package contains rMQR, so the source diff is the review.
 
 ### Phase 2, Standard QR and Micro QR options structs, additive
 
@@ -183,12 +188,12 @@ Exit criteria: approval diff shows 12 methods removed and 5 added, nothing else;
 
 - **Passing options by `in` through the encode path could cost time.** The generators currently take scalars that the JIT keeps in registers through several inlined layers; a struct behind an `in` reference is not automatically free. This is the one performance-relevant risk in the plan and the reason Phase 1 and Phase 2 each carry a benchmark gate rather than deferring measurement to Phase 5. If a regression appears, the likely fix is passing the struct by value (it is small) rather than reverting the shape.
 - **The quiet-zone sentinel is the kind of detail that survives review and fails in production.** A test that constructs `default(T)` and asserts a quiet zone of 4, for each of the three structs, is mandatory in the phase that introduces them.
-- **Phase 1 is a large mechanical diff.** Mixing any behaviour change into it makes the approval diff unreadable. If something needs fixing in rMQR encoding, it is a separate commit before or after, never inside.
+- **Phase 1 is a large mechanical diff, and the one phase no tool checks.** Package validation is silent on rMQR, so the source diff is the only review it gets. Mixing any behaviour change into it makes that diff unreadable. If something needs fixing in rMQR encoding, it is a separate commit before or after, never inside.
 
 ## Working Rules
 
 - Test-first is mandatory for every `src/` change: failing test, then implementation, then the full suite on net8.0 and net10.0.
-- Every phase's public API approval diff is reviewed as part of that phase, not at the end.
+- Package validation runs in CI on every pull request. A phase that touches the public surface of Standard QR or Micro QR must keep it green **without** a suppression file. If a suppression looks necessary, that is a breaking change and a decision to escalate, not a file to generate.
 - Phase 1 and Phase 2 are behaviour-preserving by definition. A changed test expectation in either is a defect to investigate, not a baseline to update.
 - Progress logging (mandatory): when a phase completes, append an entry to the Progress log below recording what was done, lessons learned, and benchmark deltas, or an explicit statement of why benchmarks are not applicable.
 
@@ -205,4 +210,23 @@ No open decisions remain. New ones discovered during implementation are appended
 
 ## Progress log
 
-_No phases completed yet._
+
+### Phase 0, SDK package validation, completed 2026-08-28
+
+`EnablePackageValidation` plus `PackageValidationBaselineVersion` = 1.1.1 on the library project, and a `dotnet pack` step in the build workflow scoped to one runner. **No production code changed**, so benchmarks are not applicable. Full solution suite unaffected and green.
+
+**PublicApiGenerator was implemented first and then removed.** An approval-test project was built, working, and produced a 518-line committed baseline; it was replaced on a maintainer decision to keep the API contract on first-party SDK tooling rather than a third-party reflection-based test. The replacement is not equivalent, and the difference is worth recording rather than glossing:
+
+- **Package validation is the stronger guarantee where the two overlap.** It compares against the artifact actually published to NuGet, not against a file in this repository that any contributor can regenerate. An approval baseline can be rubber-stamped in the same commit that breaks it; a published package cannot.
+- **It also checks something the approval test never did.** Compatible-framework validation asserts that a consumer compiled against one framework asset works against another. The approval test only observed that the four surfaces happened to be textually identical, which is a weaker and different statement.
+- **It gives up the reviewable listing.** Additions are not breaking, so the whole point of Phases 2 to 4 passes in silence, and Phase 1 is invisible to it because no released package contains rMQR. Those phases are now reviewed as ordinary source diffs. That was accepted knowingly: the deletion is deliberate and legible, and the accident worth machine-checking is breaking a released overload.
+
+**Verified, not assumed, that it catches a break.** Turning `QRCodeGenerator.GetRequiredBufferSize` from `public` to `internal` and packing produced `CP0002` for all four framework assets, naming the exact member and both sides of the comparison, and failed the build. Reverted. A validation gate that has never been observed failing is not known to be a gate.
+
+**Lessons learned**
+
+- **Package validation runs on `Pack`, and `dotnet build` never invokes `Pack`.** Enabling the property alone would have left every pull request unvalidated while looking configured; only the release workflow, which packs, would have caught anything, at the worst possible moment. The build workflow needed an explicit pack step.
+- **A passing local `dotnet pack` may not have validated anything.** The target is incremental against `obj/Release/Microsoft.NET.ApiCompat.ValidatePackage.semaphore`, and a second pack over the same output logs `Skipping target "RunPackageValidation" because all output files are up-to-date`. This was observed, not theorised. CI is safe because a fresh checkout has no semaphore, and the CI sequence (build, then `pack --no-build`) was confirmed to run the target. Locally, delete `src/SkiaSharp.QrCode/obj/Release` before trusting a green pack.
+- The CI pack passes `-p:GenerateSBOM=false`. That step exists to validate the API, not to produce a shippable package, and SBOM generation adds seconds and a network dependency for license lookup to every pull request for no benefit. The release workflow still generates it.
+- **`EciModeExtensions` is public with no public members**, found while reading the surface during the discarded approval work: every method on it is `internal`, and it has been that way since at least 1.1.1. Package validation will not report it, since it is not a break. Recorded here so it is not lost: it is dead public surface for the post-Phase-5 obsolete pass to absorb.
+- **All four framework assets have an identical public surface today.** The `#if NET8_0_OR_GREATER` and `#if SIMD_SUPPORTED` blocks are all behind internal types. Worth knowing for Phase 3, where `QRCodeVersionRange` could be the first public type to need a `netstandard2.0` variation, and would be the first thing compatible-framework validation has to reason about.

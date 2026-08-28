@@ -46,6 +46,13 @@ jobs:
             8.0.x
       - name: Build
         run: dotnet build -c Release
+      # Package validation (EnablePackageValidation) only runs on Pack, not on Build, so a PR
+      # would otherwise never see it. One runner is enough: the comparison is against the
+      # baseline package on NuGet and does not depend on the host OS. SBOM generation is off
+      # because this pack exists to validate the API, not to produce a shippable package.
+      - name: Validate package API compatibility
+        if: matrix.rid == 'linux-x64'
+        run: dotnet pack -c Release --no-build -o ./artifacts -p:GenerateSBOM=false
       - name: Test
         # skip output with multiple modules may stuck test
         run: dotnet test -c Release --no-build --max-parallel-test-modules 1 --timeout 8m
