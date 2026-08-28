@@ -337,14 +337,14 @@ public static class QRCodeGenerator
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
     /// <param name="options">Encoding, version and quiet zone settings. Pass <see cref="QRCodeGeneratorOptions.Default"/> for the defaults.</param>
     public static QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, in QRCodeGeneratorOptions options)
-        => CreateQrCode(plainText.AsSpan(), eccLevel, options.Utf8BOM, options.EciMode, ResolveRequestedVersion(options), options.QuietZoneSize);
+        => CreateQrCode(plainText.AsSpan(), eccLevel, options);
 
     /// <inheritdoc cref="CreateQrCode(string, ECCLevel, in QRCodeGeneratorOptions)"/>
     /// <param name="textSpan">The text span to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
     /// <param name="options">Encoding, version and quiet zone settings.</param>
     public static QRCodeData CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in QRCodeGeneratorOptions options)
-        => CreateQrCode(textSpan, eccLevel, options.Utf8BOM, options.EciMode, ResolveRequestedVersion(options), options.QuietZoneSize);
+        => CreateQrCode(textSpan, eccLevel, options.Utf8BOM, options.EciMode, ResolveVersion(textSpan, eccLevel, options), options.QuietZoneSize);
 
     /// <inheritdoc cref="CreateQrCode(string, ECCLevel, Span{byte}, bool, EciMode, int, int)"/>
     /// <param name="plainText">The text to encode in the QR code.</param>
@@ -352,7 +352,7 @@ public static class QRCodeGenerator
     /// <param name="destination">The buffer to write the QR code module matrix into.</param>
     /// <param name="options">Encoding, version and quiet zone settings. Size <paramref name="destination"/> with the same options.</param>
     public static int CreateQrCode(string plainText, ECCLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options)
-        => CreateQrCode(plainText.AsSpan(), eccLevel, destination, options.Utf8BOM, options.EciMode, ResolveRequestedVersion(options), options.QuietZoneSize);
+        => CreateQrCode(plainText.AsSpan(), eccLevel, destination, options);
 
     /// <inheritdoc cref="CreateQrCode(ReadOnlySpan{char}, ECCLevel, Span{byte}, bool, EciMode, int, int)"/>
     /// <param name="textSpan">The text span to encode in the QR code.</param>
@@ -360,30 +360,26 @@ public static class QRCodeGenerator
     /// <param name="destination">The buffer to write the QR code module matrix into.</param>
     /// <param name="options">Encoding, version and quiet zone settings. Size <paramref name="destination"/> with the same options.</param>
     public static int CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options)
-        => CreateQrCode(textSpan, eccLevel, destination, options.Utf8BOM, options.EciMode, ResolveRequestedVersion(options), options.QuietZoneSize);
+        => CreateQrCode(textSpan, eccLevel, destination, options.Utf8BOM, options.EciMode, ResolveVersion(textSpan, eccLevel, options), options.QuietZoneSize);
 
     /// <inheritdoc cref="GetRequiredBufferSize(ReadOnlySpan{char}, ECCLevel, bool, EciMode, int)"/>
     /// <param name="text">The text to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level.</param>
     /// <param name="options">Encoding, version and quiet zone settings.</param>
-    /// <exception cref="ArgumentException">Thrown when <see cref="QRCodeGeneratorOptions.Version"/> is set and the content does not fit that version.</exception>
+    /// <exception cref="ArgumentException">Thrown when no version in <see cref="QRCodeGeneratorOptions.Version"/> holds the content.</exception>
     public static QRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, ECCLevel eccLevel, in QRCodeGeneratorOptions options)
     {
-        if (!options.Version.HasValue)
+        if (options.Version.IsAny)
             return GetRequiredBufferSize(text, eccLevel, options.Utf8BOM, options.EciMode, options.QuietZoneSize);
 
-        var requestedVersion = ResolveRequestedVersion(options);
         ValidateQuietZoneSize(options.QuietZoneSize);
 
         var analysisResult = TextAnalyzer.Analyze(text, options.EciMode);
-        if (!TryGetVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8BOM, out var minimumVersion)
-            || minimumVersion > requestedVersion)
-        {
-            throw new ArgumentException(DoesNotFitMessage(requestedVersion, eccLevel, analysisResult), nameof(options));
-        }
+        if (!TryGetVersionInRange(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8BOM, options.Version.Min, options.Version.Max, out var version))
+            throw new ArgumentException(DoesNotFitMessage(options.Version, eccLevel, analysisResult), nameof(options));
 
-        var (totalSize, bufferSize) = CalculateMatrixSize(QRCodeData.SizeFromVersion(requestedVersion), options.QuietZoneSize);
-        return new QRCodeCalculatedSize(bufferSize, totalSize, requestedVersion);
+        var (totalSize, bufferSize) = CalculateMatrixSize(QRCodeData.SizeFromVersion(version), options.QuietZoneSize);
+        return new QRCodeCalculatedSize(bufferSize, totalSize, version);
     }
 
     /// <inheritdoc cref="TryGetRequiredBufferSize(ReadOnlySpan{char}, ECCLevel, out QRCodeCalculatedSize, bool, EciMode, int)"/>
@@ -392,53 +388,51 @@ public static class QRCodeGenerator
     /// <param name="size">Buffer size, matrix size and version on success; <c>default</c> when the content does not fit.</param>
     /// <param name="options">Encoding, version and quiet zone settings.</param>
     /// <remarks>
-    /// When <see cref="QRCodeGeneratorOptions.Version"/> is set, <c>false</c> means the
-    /// content does not fit <em>that</em> version, not merely that it exceeds version 40.
+    /// When <see cref="QRCodeGeneratorOptions.Version"/> is narrower than
+    /// <see cref="QRCodeVersionRange.Any"/>, <c>false</c> means no version <em>in that
+    /// range</em> holds the content, not merely that it exceeds version 40.
     /// </remarks>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, ECCLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options)
     {
-        if (!options.Version.HasValue)
+        if (options.Version.IsAny)
             return TryGetRequiredBufferSize(text, eccLevel, out size, options.Utf8BOM, options.EciMode, options.QuietZoneSize);
 
         size = default;
-        var requestedVersion = ResolveRequestedVersion(options);
         ValidateQuietZoneSize(options.QuietZoneSize);
 
         var analysisResult = TextAnalyzer.Analyze(text, options.EciMode);
-        if (!TryGetVersion(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8BOM, out var minimumVersion)
-            || minimumVersion > requestedVersion)
-        {
+        if (!TryGetVersionInRange(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8BOM, options.Version.Min, options.Version.Max, out var version))
             return false;
-        }
 
-        var (totalSize, bufferSize) = CalculateMatrixSize(QRCodeData.SizeFromVersion(requestedVersion), options.QuietZoneSize);
-        size = new QRCodeCalculatedSize(bufferSize, totalSize, requestedVersion);
+        var (totalSize, bufferSize) = CalculateMatrixSize(QRCodeData.SizeFromVersion(version), options.QuietZoneSize);
+        size = new QRCodeCalculatedSize(bufferSize, totalSize, version);
         return true;
     }
 
-    private static string DoesNotFitMessage(int requestedVersion, ECCLevel eccLevel, in TextAnalysisResult analysis)
-        => $"Content does not fit a version {requestedVersion} QR code at ECC level {eccLevel} " +
+    private static string DoesNotFitMessage(QRCodeVersionRange range, ECCLevel eccLevel, in TextAnalysisResult analysis)
+        => $"Content does not fit {(range.IsExact ? $"a version {range.Min}" : $"any version in {range}")} QR code at ECC level {eccLevel} " +
            $"(mode: {analysis.EncodingMode}, ECI: {analysis.EciMode}, {analysis.DataLength} data units). " +
-           $"Use a higher version, a lower ECC level, or leave the version unset for automatic selection.";
+           $"Widen the version range, lower the ECC level, or leave it at QRCodeVersionRange.Any for automatic selection.";
 
     /// <summary>
-    /// Maps <see cref="QRCodeGeneratorOptions.Version"/> onto the <c>requestedVersion</c>
-    /// convention of the parameter list overloads, where -1 means automatic.
+    /// The version a ranged option set resolves to: the smallest version in the range that
+    /// holds the content, or the parameter list overloads' automatic marker when the range
+    /// is unconstrained, so the default path stays exactly what it was.
     /// </summary>
     /// <remarks>
-    /// <c>null</c> is the only automatic marker in the options type: -1 is rejected there
-    /// rather than being a second spelling of it.
+    /// A constrained range costs one extra text analysis, because the released overload it
+    /// forwards to analyses again. Only calls that actually constrain the version pay it.
     /// </remarks>
-    private static int ResolveRequestedVersion(in QRCodeGeneratorOptions options)
+    private static int ResolveVersion(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in QRCodeGeneratorOptions options)
     {
-        if (!options.Version.HasValue)
+        if (options.Version.IsAny)
             return AutomaticVersion;
 
-        var requestedVersion = options.Version.GetValueOrDefault();
-        if (requestedVersion < 1 || requestedVersion > 40)
-            throw new ArgumentOutOfRangeException(nameof(QRCodeGeneratorOptions.Version), $"Version must be 1-40, or null for automatic selection, but was {requestedVersion}");
+        var analysisResult = TextAnalyzer.Analyze(textSpan, options.EciMode);
+        if (!TryGetVersionInRange(analysisResult.DataLength, analysisResult.EncodingMode, eccLevel, analysisResult.EciMode, options.Utf8BOM, options.Version.Min, options.Version.Max, out var version))
+            throw new ArgumentException(DoesNotFitMessage(options.Version, eccLevel, analysisResult), nameof(options));
 
-        return requestedVersion;
+        return version;
     }
 
     private static void ValidateQuietZoneSize(int quietZoneSize)
@@ -823,6 +817,29 @@ public static class QRCodeGenerator
     /// - Data (variable)
     /// </remarks>
     internal static bool TryGetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM, out int selectedVersion)
+        => TryGetVersionInRange(length, encoding, eccLevel, eciMode, utf8BOM, QRCodeVersionRange.MinVersion, QRCodeVersionRange.MaxVersion, out selectedVersion);
+
+    /// <summary>
+    /// Whether the content fits the given version at this ECC level. Exposed for the
+    /// monotonicity check the version range relies on being able to state.
+    /// </summary>
+    internal static bool FitsVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM, int version)
+        => TryGetVersionInRange(length, encoding, eccLevel, eciMode, utf8BOM, version, version, out _);
+
+    /// <summary>
+    /// <see cref="TryGetVersion"/> restricted to <paramref name="minVersion"/> through
+    /// <paramref name="maxVersion"/>: the smallest version in that window that holds the
+    /// content, or <c>false</c> when none does.
+    /// </summary>
+    /// <remarks>
+    /// Scanning the window rather than comparing against the overall minimum keeps this
+    /// correct without depending on the fit predicate being monotone in the version. It is
+    /// monotone in practice (the capacity growth between adjacent versions dwarfs the
+    /// character count indicator widening at versions 10 and 27), and
+    /// <c>VersionRangeTest.StandardQr_FitsIsMonotoneInVersion</c> keeps that a checked
+    /// fact rather than an assumption, but the search does not need it.
+    /// </remarks>
+    internal static bool TryGetVersionInRange(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM, int minVersion, int maxVersion, out int selectedVersion)
     {
         selectedVersion = 0;
 
@@ -841,7 +858,7 @@ public static class QRCodeGenerator
 
         // Iterate through versions to find the minimum suitable version
         // Character count indicator size changes at version 10 and 27
-        for (var version = 1; version <= 40; version++)
+        for (var version = minVersion; version <= maxVersion; version++)
         {
             var countIndicatorBits = encoding.GetCountIndicatorLength(version);
 

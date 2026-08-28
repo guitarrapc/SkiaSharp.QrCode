@@ -32,10 +32,11 @@ public readonly record struct MicroQRCodeGeneratorOptions
     public static MicroQRCodeGeneratorOptions Default => default;
 
     /// <summary>
-    /// A specific version (M1-M4), or <c>null</c> (the default) to select the smallest
-    /// version that holds the content.
+    /// The versions the generator may choose from. Defaults to
+    /// <see cref="MicroQRVersionRange.Any"/>, which selects the smallest version that holds
+    /// the content; <see cref="MicroQRVersionRange.Exactly"/> pins one.
     /// </summary>
-    public MicroQRVersion? Version { get; init; }
+    public MicroQRVersionRange Version { get; init; }
 
     /// <summary>
     /// Quiet zone width in modules. Defaults to 2, the ISO/IEC 18004 value for Micro QR;

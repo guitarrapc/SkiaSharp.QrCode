@@ -56,14 +56,11 @@ public readonly record struct QRCodeGeneratorOptions
     public bool Utf8BOM { get; init; }
 
     /// <summary>
-    /// A specific version (1-40), or <c>null</c> (the default) to select the smallest
-    /// version that holds the content.
+    /// The versions the generator may choose from. Defaults to
+    /// <see cref="QRCodeVersionRange.Any"/>, which selects the smallest version that holds
+    /// the content; <see cref="QRCodeVersionRange.Exactly"/> pins one.
     /// </summary>
-    /// <remarks>
-    /// Equivalent to the <c>requestedVersion</c> parameter, where <c>null</c> plays the
-    /// role of <c>-1</c>.
-    /// </remarks>
-    public int? Version { get; init; }
+    public QRCodeVersionRange Version { get; init; }
 
     /// <summary>
     /// Quiet zone width in modules. Defaults to 4, the ISO/IEC 18004 value; 0 is valid and
