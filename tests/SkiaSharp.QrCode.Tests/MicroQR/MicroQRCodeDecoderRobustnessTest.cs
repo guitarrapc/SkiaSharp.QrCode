@@ -60,7 +60,7 @@ public class MicroQRCodeDecoderRobustnessTest
 
     private static byte[] CreateMatrix(string text, MicroQREccLevel ecc, out int size)
     {
-        var calculated = MicroQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, quietZoneSize: 0);
+        var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: 0);
         var modules = new byte[calculated.BufferSize];
         MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, quietZoneSize: 0);
         size = calculated.QrSize;
@@ -201,7 +201,7 @@ public class MicroQRCodeDecoderRobustnessTest
         {
             foreach (var quietZone in (int[])[0, 2])
             {
-                var calculated = MicroQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, quietZoneSize: quietZone);
+                var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
                 var modules = new byte[calculated.BufferSize];
                 MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, quietZoneSize: quietZone);
 

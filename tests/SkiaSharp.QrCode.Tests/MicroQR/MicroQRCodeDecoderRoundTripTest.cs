@@ -50,7 +50,7 @@ public class MicroQRCodeDecoderRoundTripTest
     {
         foreach (var quietZone in (int[])[0, 2, 4])
         {
-            var calculated = MicroQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, quietZoneSize: quietZone);
+            var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
             var modules = new byte[calculated.BufferSize];
             MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, quietZoneSize: quietZone);
 
@@ -70,7 +70,7 @@ public class MicroQRCodeDecoderRoundTripTest
         // Quiet zone 0 exercises the in-place fast path, 2 the core-copy branch.
         foreach (var quietZone in (int[])[0, 2])
         {
-            var calculated = MicroQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, quietZoneSize: quietZone);
+            var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
             var modules = new byte[calculated.BufferSize];
             MicroQRCodeGenerator.CreateMicroQRCode(text.AsSpan(), ecc, modules, quietZoneSize: quietZone);
 
@@ -89,7 +89,7 @@ public class MicroQRCodeDecoderRoundTripTest
         // A valid M1 core placed at row 1, column 0 of a 13×13 buffer: the first
         // dark row (1) and the minimum dark column (0) disagree, so this is not a
         // uniform quiet zone and must be rejected rather than misread.
-        var calculated = MicroQRCodeGenerator.GetRequiredBufferSize("12345".AsSpan(), MicroQREccLevel.ErrorDetectionOnly, quietZoneSize: 0);
+        var calculated = Sizing.Required("12345".AsSpan(), MicroQREccLevel.ErrorDetectionOnly, quietZoneSize: 0);
         var core = new byte[calculated.BufferSize];
         MicroQRCodeGenerator.CreateMicroQRCode("12345".AsSpan(), MicroQREccLevel.ErrorDetectionOnly, core, quietZoneSize: 0);
 

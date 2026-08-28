@@ -37,7 +37,7 @@ public class ImageBuilderVersionRangeTest
     {
         // The smallest version that holds the content, plus both count-indicator
         // boundaries and the top of the range.
-        var smallest = QRCodeGenerator.GetRequiredBufferSize(Content.AsSpan(), ECCLevel.M).Version;
+        var smallest = Sizing.Required(Content.AsSpan(), ECCLevel.M).Version;
 
         foreach (var version in new[] { smallest, 10, 27, 40 })
         {

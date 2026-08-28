@@ -224,7 +224,7 @@ public class MicroQRCodeGeneratorUnitTest
     {
         var data = MicroQRCodeGenerator.CreateMicroQRCode(text, ecc, quietZoneSize: quietZone);
 
-        var calculated = MicroQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, quietZoneSize: quietZone);
+        var calculated = Sizing.Required(text.AsSpan(), ecc, quietZoneSize: quietZone);
         await Assert.That(calculated.QrSize).IsEqualTo(data.Size);
 
         var buffer = new byte[calculated.BufferSize];

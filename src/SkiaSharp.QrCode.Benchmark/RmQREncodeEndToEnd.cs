@@ -33,8 +33,8 @@ public class RmQREncodeEndToEnd
         _latin1 = string.Concat(Enumerable.Repeat("Café déjà vu. ", 8));
         _utf8 = string.Concat(Enumerable.Repeat("日本語QRコード", 5));
         _spanDestination = new byte[Math.Max(
-            RmQRCodeGenerator.GetRequiredBufferSize(_byte.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 }).BufferSize,
-            SkiaSharp.QrCode.QRCodeGenerator.GetRequiredBufferSize(_numeric.AsSpan(), ECCLevel.L).BufferSize)];
+            Sizing.Required(_byte.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 }).BufferSize,
+            Sizing.Required(_numeric.AsSpan(), ECCLevel.L).BufferSize)];
     }
 
     // Class API (allocates the result object only)

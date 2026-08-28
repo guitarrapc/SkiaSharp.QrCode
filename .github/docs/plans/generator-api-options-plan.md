@@ -29,7 +29,7 @@ Verified against the tags: the newest release is **1.1.1 (2026-07-19)**, and `sr
 
 - **rMQR can be reshaped by deletion, at zero compatibility cost, until 1.2.0 ships.** No `[Obsolete]` period, no forwarding shims, no removal deferred to a major version. `CreateRmQRCodeWithEci` and its two siblings just go.
 - **This window closes on release.** If 1.2.0 ships first, the same change costs an obsolete cycle and a 2.0.0.
-- **Standard QR and Micro QR have no such window.** Their pre-1.2.0 overloads are frozen and stay, whatever else happens. Only `TryGetRequiredBufferSize` on those two (added in unreleased 1.2.0) is still free to move, and it is not worth moving on its own.
+- **Standard QR and Micro QR have no such window.** Their pre-1.2.0 overloads are frozen and stay, whatever else happens. Only `TryGetRequiredBufferSize` on those two (added in unreleased 1.2.0) is still free to move, and it is not worth moving on its own. **Superseded by Phase 6**: it became worth moving once it was no longer on its own, and it is deleted rather than moved.
 
 **Phases 0 through 5 all gate the 1.2.0 release.** rMQR is the part that is *impossible* to do later at this cost, but shipping only Phase 1 would release a version in which rMQR takes an options struct and the other two symbologies take parameter lists, which is a worse public API than either end state. The whole reshaping goes out together, and 1.2.0 waits for it.
 
@@ -49,7 +49,7 @@ Within that gate, rMQR still goes first, because it is the phase whose cost woul
 
 - **ECC boosting** (raise the ECC level while the version stays the same). It is a behaviour change to shipped output and needs its own oracle verification. The options struct is what makes it cheap to add later; adding it here would confuse an API change with an encoding change.
 - **Mixed-mode segmentation for Standard QR and Micro QR.** Same reasoning, larger. It is the highest-value follow-up and the options struct is a prerequisite for it, not a part of it.
-- **Obsoleting the released Standard QR and Micro QR overloads.** They keep working and stay un-obsoleted through this work; see the decision below.
+- **Obsoleting the released Standard QR and Micro QR overloads.** They keep working and stay un-obsoleted through this work; see the decision below. **Superseded in part by Phase 6**: the two released *sizing* methods are obsoleted; the `Create*` overloads still are not.
 - **Decoder APIs.** They have no option-list problem.
 
 ## Guiding Decisions
@@ -110,6 +110,8 @@ Standard QR and Micro QR keep their released overloads, so their options overloa
 This asymmetry is deliberate and must be stated in the specs; discovering it as a compiler error later is how someone talks themselves into defaulting the legacy parameters instead.
 
 ### The released overloads are kept and not obsoleted in this work
+
+> **Superseded in part by Phase 6 (2026-08-29).** The two released sizing methods, `QRCodeGenerator.GetRequiredBufferSize` and `MicroQRCodeGenerator.GetRequiredBufferSize`, *are* obsoleted, for a reason this section did not anticipate: the objection is not that they take a parameter list but that they throw for a routine outcome. Everything below still holds for the `Create*` overloads, which stay un-obsoleted.
 
 `CreateQrCode(text, ECCLevel.M)` is the headline of the root README and the shortest correct call in the library. It is not a legacy shim, it is the intended entry point, and it stays un-obsoleted. What changes is the **rule**: it and its siblings are frozen at their current parameter lists, and no future option is ever added to them again.
 
@@ -184,6 +186,54 @@ Exit criteria: the rMQR public surface is exactly the 5 methods listed above and
 - Measurement: encode benchmarks for all three symbologies, before and after, allocating and `Span` overloads.
 - Update the [documentation index](../README.md) with this plan.
 
+### Phase 6, sizing becomes Try-first
+
+Phase 5 closed the reshaping; this phase corrects a shape decision inside it. Phases 2 and 3 gave the new options surface a `GetRequiredBufferSize` / `TryGetRequiredBufferSize` pair, mirroring what Standard QR shipped in 1.1.1. That pairing is wrong for this operation, and the window to fix it without cost is the same 1.2.0 window as Phase 1.
+
+**Why the throwing form does not belong on a sizing API.** Three facts, and the first is the one that decides it.
+
+- **"Does not fit" is an ordinary, data-dependent outcome here, not a defect.** The README already says so in its own words: Micro QR M1 holds 5 digits and rMQR holds 5-150 bytes, so overflow is a normal answer to a normal question. An exception is the wrong classification for a routine result before it is anything else.
+- **The cost is not proportionate.** A .NET throw/catch is microseconds; this library's own measured encode is 142-940 ns (Phase 5 table). One exception therefore costs one to two orders of magnitude more than the entire operation it is reporting on. On any path that sizes user-supplied content, that is a denial-of-service shape, not a micro-optimisation.
+- **The BCL precedent that was cited for the pair is the wrong family.** `Parse` / `TryParse` is the precedent for *parsing*. For **sizing or formatting into a caller-supplied buffer**, the modern BCL is `Try`-first and frequently has no throwing twin at all: `Utf8Formatter.TryFormat`, `Utf8Parser.TryParse`, `IUtf8SpanFormattable.TryFormat`, `TryWriteBytes`, and `Base64.EncodeToUtf8` which returns `OperationStatus` rather than throwing. Phase 2 reached for the wrong analogy.
+
+**Deliverables.**
+
+- **Delete, at zero compatibility cost** (all five are unreleased, added in 1.2.0):
+  - `QRCodeGenerator.GetRequiredBufferSize(ReadOnlySpan<char>, ECCLevel, in QRCodeGeneratorOptions)`
+  - `MicroQRCodeGenerator.GetRequiredBufferSize(ReadOnlySpan<char>, MicroQREccLevel, in MicroQRCodeGeneratorOptions)`
+  - `RmQRCodeGenerator.GetRequiredBufferSize(ReadOnlySpan<char>, RmQREccLevel, in RmQRCodeGeneratorOptions)`
+  - `QRCodeGenerator.TryGetRequiredBufferSize(ReadOnlySpan<char>, ECCLevel, out QRCodeCalculatedSize, bool, EciMode, int)`
+  - `MicroQRCodeGenerator.TryGetRequiredBufferSize(ReadOnlySpan<char>, MicroQREccLevel, out MicroQRCodeCalculatedSize, MicroQRVersion?, int)`
+- **Mark `[Obsolete]`, scheduled for removal in 2.0.0**, the two released throwing sizing methods: `QRCodeGenerator.GetRequiredBufferSize(ReadOnlySpan<char>, ECCLevel, bool, EciMode, int)` and `MicroQRCodeGenerator.GetRequiredBufferSize(ReadOnlySpan<char>, MicroQREccLevel, MicroQRVersion?, int)`. The message names the options `Try` overload as the replacement. Not `[Obsolete(error: true)]`: a warning is what a deprecation cycle is made of.
+- **Move the implementation bodies into private cores.** Phase 2 deliberately made the options overloads unpack onto the parameter list ones, and recorded that "when the released overloads are eventually obsoleted, the bodies move then". This is then. The obsolete public method becomes a thin forwarder onto a non-obsolete core, so nothing inside the library calls an obsolete member and no `#pragma` appears in `src/`.
+- **Migrate the in-repo call sites** across tests, benchmarks, tools, samples and the Playground.
+
+**The resulting sizing surface**, which is the exit criterion:
+
+| | Throwing | Non-throwing |
+|---|---|---|
+| `QRCodeGenerator` | `GetRequiredBufferSize(param list)` — `[Obsolete]`, gone in 2.0.0 | `TryGetRequiredBufferSize(…, in QRCodeGeneratorOptions)` |
+| `MicroQRCodeGenerator` | `GetRequiredBufferSize(param list)` — `[Obsolete]`, gone in 2.0.0 | `TryGetRequiredBufferSize(…, in MicroQRCodeGeneratorOptions)` |
+| `RmQRCodeGenerator` | none | `TryGetRequiredBufferSize(…, in RmQRCodeGeneratorOptions)` |
+
+Total public static methods: Standard QR 12 to 10, Micro QR 10 to 8, rMQR 5 to 4.
+
+**Why the parameter list `Try` is deleted rather than kept through the deprecation cycle.** Keeping it would give a 1.2.0 caller a minimal-diff escape from the obsolete `Get` without constructing an options value, which is a genuine migration convenience. It loses to one fact: **shipping it in 1.2.0 freezes it permanently.** Phase 0's rule bumps the validation baseline to 1.2.0 on release, so a parameter list `Try` released now could not be removed in 2.0.0 alongside the `Get` it was introduced to help people leave — it would outlive its own purpose and reach 3.0.0. Adding a permanent member to the family being retired, in order to ease retiring it, is not a trade worth making for a diff that is two tokens wider.
+
+**Why `CreateQrCode` and friends keep throwing, and this is not the first half of a larger change.** Sizing is the pre-check that lets encoding treat "does not fit" as a defect: a caller who has asked `Try` and got `true` cannot then walk into the encoder's capacity throw. `Try`-sizing paired with throwing-encode is the coherent design, not a half-migrated one. Adding `TryCreate*` is explicitly **not** in scope and is not implied by this phase.
+
+**What this costs, recorded before it is paid.**
+
+- `TryGetRequiredBufferSizeTest.RmQR_Agrees_WithThrowingOverload` and `RmQR_WithEci_Agrees_WithThrowingOverload` lose their oracle, because the throwing overload they compare against is deleted. Standard QR and Micro QR keep theirs, since the obsolete released `Get` remains through 2.0.0, so the property itself keeps a home. The rMQR cases are rewritten against the invariant that actually matters and that the pair was a proxy for: **the size and version reported by `Try` are the size and version an encode with the same options actually produces.** That is a stronger statement than agreement between two sizing methods, and it does not depend on a throwing twin existing.
+- The two surviving agreement tests now call an obsolete member on purpose. `#pragma warning disable CS0618` is correct there and only there: pinning that a deprecated member still behaves identically to its replacement is exactly what a deprecation cycle needs tested, and it is the test project, not `src/`.
+
+**Verified while planning, not assumed.**
+
+- **`[Obsolete]` is not a breaking change to package validation.** Probed by attaching `[Obsolete("PROBE")]` to the released `QRCodeGenerator.GetRequiredBufferSize` and packing against the 1.1.1 baseline: `APICompat ran successfully without finding any breaking changes`, with the `RunPackageValidation` target confirmed to have actually executed rather than being skipped by the semaphore. Reverted.
+- **`TreatWarningsAsErrors` is not set anywhere in the build**, so CS0618 at the in-repo call sites will not break the build while they are being migrated. They are migrated regardless; the point is that the migration does not have to be atomic.
+
+Exit criteria: the sizing surface is exactly the table above; full suite green on net8.0 and net10.0; package validation silent against 1.1.1; no `#pragma warning disable CS0618` anywhere under `src/`; docs and specs updated in the same phase rather than deferred, because Phase 5's own lesson was that documentation is code that has not been compiled.
+
 ## Risks
 
 - **Passing options by `in` through the encode path could cost time.** The generators currently take scalars that the JIT keeps in registers through several inlined layers; a struct behind an `in` reference is not automatically free. This is the one performance-relevant risk in the plan and the reason Phase 1 and Phase 2 each carry a benchmark gate rather than deferring measurement to Phase 5. If a regression appears, the likely fix is passing the struct by value (it is small) rather than reverting the shape.
@@ -203,10 +253,12 @@ The three questions this plan opened with are settled. Recorded here so a later 
 
 1. **Phases 0 through 5 gate the 1.2.0 release**, not Phase 1 alone. Shipping a partial reshaping would put two different API shapes in one release.
 2. **Obsoleting the released Standard QR / Micro QR overloads is revisited after Phase 5**, with the intent to move callers onto the options struct. Not decided now, and nothing in Phases 0-5 depends on the answer.
+
+   **Answered, 2026-08-29, in Phase 6, and only in part.** The two released *sizing* methods are obsoleted with removal scheduled for 2.0.0, because Phase 6 concluded a throwing sizing API is the wrong shape rather than merely the older one. The released `CreateQrCode` / `CreateMicroQRCode` parameter lists are **not** obsoleted and the question stays open for them: nothing has been found wrong with their shape, only with their extensibility, and freezing them was already the answer to that.
 3. **ECC boosting and Standard QR mixed-mode segmentation stay out**, and do not become Phases 6 and 7 of this plan. Both change generated output and need oracle verification this plan has none of; the options struct is what makes them cheap afterwards.
 4. **The naming question is settled in favour of `{consuming generator}Options`**, with the reasoning recorded under Guiding Decisions. The related question it raised, whether the options type needs to vary by symbology at all, is answered by the option-set matrix in the same section: it does, and a shared type is not expressible.
 
-No open decisions remain. New ones discovered during implementation are appended to the Progress log entry for the phase that found them.
+One decision remains open, deliberately: whether the released `Create*` parameter lists are ever obsoleted (item 2 above). New ones discovered during implementation are appended to the Progress log entry for the phase that found them.
 
 ## Progress log
 
@@ -419,3 +471,33 @@ The rMQR and Micro QR runs were clean (error bars of ±0.3 to ±3 ns on the smal
 - **Repeating the run is what separates noise from signal, again.** One Standard QR run showed `QR_Numeric_V1_L_Encode (options)` at 1,319 ns against 963 ns for the parameter list, which reads as a 37 % regression on the path callers are pointed at. The repeat put them at 914 ns and 941 ns, with the options row *faster*. This is the third time in this plan that a single run produced a plausible, wrong number; the rule recorded in Phase 3 held.
 - **Documentation is code that has not been compiled.** Every rMQR example in the README used named arguments (`segmentation:`, `fitStrategy:`, `requestedVersion:`) that Phase 1 deleted, so they had been broken for four phases without anything noticing. Nothing in the build or test suite reads the README. Extracting the snippets into a throwaway test found them immediately, and would have found them in Phase 1.
 - **A stale spec is not the worst case; a spec that is wrong about history is.** The migration document's claim about v1.1.1 was not merely out of date, it described a compatibility hazard that never existed, which would have sent a reader looking for a recompile they never needed.
+
+### Phase 6, sizing becomes Try-first, completed 2026-08-29
+
+`TryGetRequiredBufferSize` is now the only sizing method on the current surface of all three generators. Five unreleased overloads were deleted (the options `GetRequiredBufferSize` on each symbology, and the parameter list `TryGetRequiredBufferSize` on Standard QR and Micro QR), and the two released throwing methods are `[Obsolete]` with removal scheduled for 2.0.0. Public static method counts: **Standard QR 12 to 10, Micro QR 10 to 8, rMQR 5 to 4**. Suite green on net8.0 and net10.0, 15,751 passed / 0 failed in Release; package validation silent against the 1.1.1 baseline.
+
+**This phase reversed a decision Phase 2 made, and the reversal came from the maintainer.** Phase 2 gave the options surface a `Get` / `Try` pair by analogy with `Parse` / `TryParse`. That analogy is wrong for this operation, and the argument that settled it is not a matter of taste: an exception costs microseconds while this library's own measured encode is 142-940 ns, so reporting a routine, data-dependent outcome that way costs one to two orders of magnitude more than the work it reports on. The BCL agrees where the operation is actually comparable — `Utf8Formatter.TryFormat`, `Utf8Parser.TryParse`, `IUtf8SpanFormattable.TryFormat` and `Base64.EncodeToUtf8` all size or format into a caller buffer and none has a throwing twin. **Recorded because the plan reached for the nearest-looking BCL precedent instead of the applicable one, and no phase gate would have caught that.**
+
+**Deleting the parameter list `Try` was the decision that was not obvious, and it turned on the release calendar rather than on API taste.** Keeping it would have given callers a minimal-diff escape from the obsolete `Get` without building an options value. But Phase 0's own rule bumps the validation baseline to 1.2.0 on release, so shipping it would freeze it permanently: the member introduced to help people leave `GetRequiredBufferSize` would have outlived the thing it was helping them leave, surviving to 3.0.0 while its subject went in 2.0.0.
+
+**Deleting it also bought back something Phase 2 had to give up.** With the parameter list `Try` gone, `TryGetRequiredBufferSize` has exactly one overload per generator, so its `options` parameter can take a default value without the ambiguity that forced Phase 2's asymmetry. `TryGetRequiredBufferSize(text, ecc, out var size)` is now the shortest correct call on all three symbologies, matching rMQR. The `Create` overloads still cannot do this, because their released parameter lists are still there — so the asymmetry Phase 2 documented now applies to `Create` only, and the specs say so.
+
+**`[Obsolete]` is not a breaking change to package validation, verified rather than assumed.** Probed before designing anything by attaching `[Obsolete("PROBE")]` to the released `QRCodeGenerator.GetRequiredBufferSize` and packing against 1.1.1: `APICompat ran successfully without finding any breaking changes`, with the `RunPackageValidation` target confirmed to have actually run rather than being skipped by the semaphore (the Phase 0 trap). Reverted, then re-confirmed silent on the real change.
+
+**The rMQR agreement tests lost their oracle and were rewritten into something stronger.** `RmQR_Agrees_WithThrowingOverload` compared `Try` against a throwing twin that no longer exists. The replacement, `RmQR_ReportedSize_MatchesTheEncodeItDescribes`, asserts the invariant the pair was only ever a proxy for: `true` means an encode with the same options fills exactly the reported buffer at the reported version, and `false` means that encode throws. It does not depend on a throwing twin existing, and it is a statement about the thing callers actually rely on. Standard QR and Micro QR keep their agreement tests, since the obsolete released `Get` is there to agree with until 2.0.0.
+
+**Suppressions are confined to two places in the test project and none in `src/`.** The released bodies were left untouched and the options overloads stopped forwarding through them, so nothing in the library calls a deprecated member. In tests, `QRCodeGeneratorUnitTest` has a scoped `#pragma warning disable CS0618` around the section that *is* the released overload's regression suite, and `Sizing.ReleasedRequired` wraps the deprecated calls the parity tests need so the suppression does not spread across the suite.
+
+**Lessons learned**
+
+- **The scripted call-site rewrite over-applied twice, in the same way Phase 1 recorded and in a new way.** Rewriting `X.GetRequiredBufferSize(` to a helper was safe; stripping `, quietZoneSize: ` to make the arguments positional was not, because it also hit `Create*` calls, where the stripped argument silently rebound to `utf8BOM`. The compiler caught it (a `bool` parameter cannot take `0`), but only because the neighbouring parameter had a different type. **A mechanical edit that changes an argument from named to positional is not the same class of change as one that renames a method, and must be scoped to the call sites whose signature actually changed.**
+- **A helper that wraps the API under test turns its own tests into tautologies.** `Sizing.Required` calls `TryGetRequiredBufferSize`, so the blanket rewrite turned `RmQR_Fits_ReturnsTrue_AndMatchesThrowingOverload` into an assertion that `Try` equals `Try`. Three tests were silently reduced to nothing and still passed. They now compare against the generated symbol instead. This is the Phase 1 lesson recurring with a new mechanism: **a test that keeps passing through an API change has not been verified to still test anything, and a rewrite that introduces a wrapper is exactly when to check.**
+- **The README samples were compiled again, and again that was the only thing that could have checked them.** Phase 5 found four phases of rot this way and recorded the lesson; the mitigation is still manual, so a throwaway probe file was written, built, and deleted for the second time. Making it a permanent compile-only file is the obvious fix and is not in this phase's scope.
+- **The pre-existing CRLF format debt is larger than Phase 2's four files** — `dotnet format --verify-no-changes` currently fails on 19 files, of which 18 were untouched here. It is invisible in `git diff` because `autocrlf` normalises the index, and it shrinks incidentally whenever a file is edited (every file this phase touched now passes). Still deliberately not fixed here, for the same reason Phase 1 gave: it would bury the reviewable diff.
+
+**Benchmark gate: allocation certifies it, timing this session does not, and the reason is documented rather than waved away.** `QRCodeEncodeEndToEnd`, `MicroQREncodeEndToend` and `RmQREncodeEndToEnd` on net10.0, baseline from a `git worktree` at the Phase 5 commit, measured back to back.
+
+- **Allocation is byte-identical on all 34 rows** across the three symbologies: 120 / 120 / 280 / 3984 / 3808 B on Standard QR, 88 / 96 / 104 B on Micro QR, 112 / 160 / 368 B on rMQR, and 0 B on every span row.
+- **Timing is not quotable, and the control rows are what prove it.** `MicroQREncodeEndToend` contains no code this phase touched at all, yet every row in it moved uniformly slower — +14.1 %, +16.2 %, +12.2 %, +11.8 %, +7.5 %, +2.1 % — and its `StandardQr_Numeric_V1_Encode (Span)` control went 943.1 → 1,067.9 ns. A phase that changed nothing in Micro QR's encode path cannot have made it 14 % slower. The baseline is also far slower than earlier phases measured on the same machine (`QR_Byte_V40_L_Encode` at 112 us against Phase 3's 75.6 us), so the machine, not the code, is what moved. This is the third recurrence of the pattern Phase 3 first recorded.
+
+**Benchmarks are the wrong instrument for this phase anyway, and that was checked rather than assumed.** Every `Sizing.Required` call in the encode benchmarks is inside `[GlobalSetup]`, so **no `[Benchmark]` method executes the sizing code this phase changed**. The `Create*` paths are byte-identical source, the released `Get` bodies were left untouched, and the only runtime differences are a removed `IsAny` short-circuit in Standard QR's options `Try` (which forwarded to `TryGetVersion`, itself a forwarder onto the `TryGetVersionInRange(1, 40)` now called directly) and a Micro QR body moved verbatim from a public method to a private one. The allocation parity above is what the gate actually rests on.

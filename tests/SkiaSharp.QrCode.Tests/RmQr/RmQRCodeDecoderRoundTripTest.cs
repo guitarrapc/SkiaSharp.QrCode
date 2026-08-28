@@ -54,7 +54,7 @@ public class RmQRCodeDecoderRoundTripTest
                 await Assert.That(info.ErrorsCorrected).IsEqualTo(0);
 
                 // Module-matrix overloads (byte per module incl. quiet zone)
-                var size = RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
+                var size = Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
                 var modules = new byte[size.BufferSize];
                 RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = quietZone });
                 await Assert.That(RmQRCodeDecoder.TryDecode(modules, size.Width, size.Height, out var text3, out var info3)).IsTrue();
@@ -164,7 +164,7 @@ public class RmQRCodeDecoderRoundTripTest
     public async Task Decode_CharSpanDestination_IsAllocationFree()
     {
         var content = "0123456789ABCDEF ZERO ALLOC";
-        var calculated = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), RmQREccLevel.H, new RmQRCodeGeneratorOptions { QuietZoneSize = 2 });
+        var calculated = Sizing.Required(content.AsSpan(), RmQREccLevel.H, new RmQRCodeGeneratorOptions { QuietZoneSize = 2 });
         var buffer = new byte[calculated.BufferSize];
         RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.H, buffer, new RmQRCodeGeneratorOptions { QuietZoneSize = 2 });
         var destination = new char[RmQRCodeDecoder.GetMaxDecodedLength(calculated.Version)];

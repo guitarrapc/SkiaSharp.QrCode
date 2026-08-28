@@ -25,7 +25,7 @@ public class SimpleEncode
         // Shared destination for the span-based zero-allocation benchmarks,
         // sized for the largest of the five payloads.
         var maxBufferSize = new[] { _textNumber, _textAlphanumeric, _textUrl, _textUnicode, _textWifi }
-            .Max(text => SkiaSharp.QrCode.QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ECCLevel.L).BufferSize);
+            .Max(text => Sizing.Required(text.AsSpan(), ECCLevel.L).BufferSize);
         _spanDestination = new byte[maxBufferSize];
         _zxingWriter_ascii = new()
         {

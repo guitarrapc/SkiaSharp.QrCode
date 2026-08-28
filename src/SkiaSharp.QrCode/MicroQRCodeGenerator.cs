@@ -67,7 +67,7 @@ public static class MicroQRCodeGenerator
     /// <remarks>
     /// Output format matches <see cref="QRCodeGenerator.CreateQrCode(ReadOnlySpan{char}, ECCLevel, Span{byte}, bool, EciMode, int, int)"/>:
     /// one byte per module (0 = light, 1 = dark), flat row-major, quiet zone included.
-    /// Use <see cref="GetRequiredBufferSize"/> to size the destination.
+    /// Use <see cref="TryGetRequiredBufferSize"/> to size the destination.
     /// </remarks>
     /// <param name="textSpan">The text span to encode.</param>
     /// <param name="eccLevel">Error correction level; must be valid for the (selected) version.</param>
@@ -84,7 +84,7 @@ public static class MicroQRCodeGenerator
         var totalSize = size + quietZoneSize * 2;
         var requiredSize = totalSize * totalSize;
         if (destination.Length < requiredSize)
-            throw new ArgumentException($"Destination buffer too small: {requiredSize} bytes required (version {config.Version}, {totalSize}x{totalSize} modules), got {destination.Length} bytes. Use {nameof(GetRequiredBufferSize)} to calculate the required size.", nameof(destination));
+            throw new ArgumentException($"Destination buffer too small: {requiredSize} bytes required (version {config.Version}, {totalSize}x{totalSize} modules), got {destination.Length} bytes. Use {nameof(TryGetRequiredBufferSize)} to calculate the required size.", nameof(destination));
 
         var target = destination.Slice(0, requiredSize);
         target.Clear();
@@ -118,6 +118,7 @@ public static class MicroQRCodeGenerator
     /// <param name="requestedVersion">Specific version (M1-M4), or null for automatic selection.</param>
     /// <param name="quietZoneSize">Quiet zone width in modules.</param>
     /// <exception cref="ArgumentException">Thrown when the data does not fit or the combination is invalid.</exception>
+    [Obsolete("Content that does not fit is an ordinary outcome, not a defect, and an exception costs orders of magnitude more than the encode it reports on. Use TryGetRequiredBufferSize(text, eccLevel, out size, in MicroQRCodeGeneratorOptions) instead. This overload will be removed in 2.0.0.")]
     public static MicroQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion = null, int quietZoneSize = DefaultQuietZone)
     {
         ValidateQuietZone(quietZoneSize);
@@ -127,16 +128,11 @@ public static class MicroQRCodeGenerator
         return new MicroQRCodeCalculatedSize(totalSize * totalSize, totalSize, config.Version);
     }
 
-    /// <inheritdoc cref="GetRequiredBufferSize"/>
-    /// <summary>
-    /// Non-throwing <see cref="GetRequiredBufferSize"/>: <c>false</c> means the content
-    /// does not fit, which here includes an encoding mode the version / ECC level does
-    /// not offer, since the text is what picks the mode. Argument errors throw exactly
-    /// as that overload raises them (rationale: specs/rmqr-encoder.md).
-    /// </summary>
-    /// <param name="size">Matrix size and version on success; <c>default</c> when the content does not fit.</param>
-    /// <returns><c>true</c> when the content fits.</returns>
-    public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, MicroQRVersion? requestedVersion = null, int quietZoneSize = DefaultQuietZone)
+    // The automatic-selection sizing core. This was public in the unreleased 1.2.0 surface
+    // as TryGetRequiredBufferSize(text, ecc, out size, requestedVersion, quietZoneSize);
+    // the body is kept verbatim and only the public overload was dropped, so the options
+    // overload's automatic path is the same code it always ran.
+    private static bool TryCalculateSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, MicroQRVersion? requestedVersion, int quietZoneSize)
     {
         size = default;
         ValidateQuietZone(quietZoneSize);
@@ -152,9 +148,15 @@ public static class MicroQRCodeGenerator
 
     // ---- options overloads ---------------------------------------------------------
     //
-    // These unpack onto the overloads above, not the other way round, so the released ones
-    // keep their exact exceptions and codegen. `options` has no default value on purpose:
-    // with one, CreateMicroQRCode(text, ecc) would be ambiguous between the two sets.
+    // The Create overloads unpack onto the ones above, not the other way round, so the
+    // released ones keep their exact exceptions and codegen. `options` has no default value
+    // on purpose: with one, CreateMicroQRCode(text, ecc) would be ambiguous between the
+    // two sets.
+    //
+    // Sizing is the exception and is deliberately not paired: only TryGetRequiredBufferSize
+    // is offered here, because "does not fit" is a data-dependent answer rather than a
+    // defect. The obsolete parameter list GetRequiredBufferSize above is the 1.1.1 surface
+    // kept for compatibility until 2.0.0, and nothing in this file forwards to it.
 
     /// <inheritdoc cref="CreateMicroQRCode(string, MicroQREccLevel, MicroQRVersion?, int)"/>
     /// <param name="plainText">The text to encode.</param>
@@ -178,19 +180,27 @@ public static class MicroQRCodeGenerator
     public static int CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, in MicroQRCodeGeneratorOptions options)
         => CreateMicroQRCode(textSpan, eccLevel, destination, ResolveVersion(textSpan, eccLevel, options), options.QuietZoneSize);
 
-    /// <inheritdoc cref="GetRequiredBufferSize(ReadOnlySpan{char}, MicroQREccLevel, MicroQRVersion?, int)"/>
-    /// <param name="text">The text to encode.</param>
-    /// <param name="eccLevel">Error correction level.</param>
-    /// <param name="options">Version and quiet zone settings.</param>
-    public static MicroQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options)
-        => GetRequiredBufferSize(text, eccLevel, ResolveVersion(text, eccLevel, options), options.QuietZoneSize);
-
-    /// <inheritdoc cref="TryGetRequiredBufferSize(ReadOnlySpan{char}, MicroQREccLevel, out MicroQRCodeCalculatedSize, MicroQRVersion?, int)"/>
+    /// <summary>
+    /// Calculates the required buffer size, matrix size and version for encoding the
+    /// specified text as a Micro QR code, reporting content that does not fit as
+    /// <c>false</c> rather than as an exception.
+    /// </summary>
     /// <param name="text">The text to encode.</param>
     /// <param name="eccLevel">Error correction level.</param>
     /// <param name="size">Matrix size and version on success; <c>default</c> when the content does not fit.</param>
     /// <param name="options">Version and quiet zone settings.</param>
-    public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options)
+    /// <returns><c>true</c> when the content fits.</returns>
+    /// <remarks>
+    /// <c>false</c> means the content does not fit, which here includes an encoding mode
+    /// the version or ECC level does not offer, since the text is what picks the mode.
+    /// Argument errors throw (rationale: specs/rmqr-encoder.md), and so does a
+    /// <see cref="MicroQRCodeGeneratorOptions.Version"/> range that offers
+    /// <paramref name="eccLevel"/> on no version at all, which no content could satisfy.
+    /// Micro QR M1 holds 5 digits, so an overflow is an ordinary answer here.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when an argument is out of range.</exception>
+    /// <exception cref="ArgumentException">Thrown when the version range offers the ECC level nowhere.</exception>
+    public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options = default)
         => TryGetRequiredBufferSizeRanged(text, eccLevel, out size, options);
 
     private static void ValidateQuietZone(int quietZoneSize)
@@ -302,7 +312,7 @@ public static class MicroQRCodeGenerator
     private static bool TryGetRequiredBufferSizeRanged(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options)
     {
         if (options.Version.IsAny)
-            return TryGetRequiredBufferSize(text, eccLevel, out size, requestedVersion: null, quietZoneSize: options.QuietZoneSize);
+            return TryCalculateSize(text, eccLevel, out size, requestedVersion: null, quietZoneSize: options.QuietZoneSize);
 
         size = default;
         ValidateQuietZone(options.QuietZoneSize);

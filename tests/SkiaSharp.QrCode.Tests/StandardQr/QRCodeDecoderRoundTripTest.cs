@@ -101,7 +101,7 @@ public class QRCodeDecoderRoundTripTest
     public async Task RoundTrip_SpanMatrix_WithQuietZone()
     {
         var content = "span with quiet zone";
-        var calculated = QRCodeGenerator.GetRequiredBufferSize(content, ECCLevel.M);
+        var calculated = Sizing.Required(content, ECCLevel.M);
         var buffer = new byte[calculated.BufferSize];
         var written = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer);
 
@@ -114,7 +114,7 @@ public class QRCodeDecoderRoundTripTest
     public async Task RoundTrip_SpanMatrix_WithoutQuietZone()
     {
         var content = "span without quiet zone";
-        var calculated = QRCodeGenerator.GetRequiredBufferSize(content, ECCLevel.M, quietZoneSize: 0);
+        var calculated = Sizing.Required(content, ECCLevel.M, quietZoneSize: 0);
         var buffer = new byte[calculated.BufferSize];
         var written = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer, quietZoneSize: 0);
 
@@ -126,7 +126,7 @@ public class QRCodeDecoderRoundTripTest
     public async Task RoundTrip_CharSpanDestination_NoStringAllocation()
     {
         var content = "char span destination";
-        var calculated = QRCodeGenerator.GetRequiredBufferSize(content, ECCLevel.M, quietZoneSize: 0);
+        var calculated = Sizing.Required(content, ECCLevel.M, quietZoneSize: 0);
         var buffer = new byte[calculated.BufferSize];
         QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer, quietZoneSize: 0);
 
@@ -145,7 +145,7 @@ public class QRCodeDecoderRoundTripTest
         // Debug builds heap-allocate stackalloc initializers (see repo notes), so
         // this assertion is Release-only.
         var content = "0123456789";
-        var calculated = QRCodeGenerator.GetRequiredBufferSize(content, ECCLevel.M, quietZoneSize: 0);
+        var calculated = Sizing.Required(content, ECCLevel.M, quietZoneSize: 0);
         var buffer = new byte[calculated.BufferSize];
         QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer, quietZoneSize: 0);
         var destination = new char[QRCodeDecoder.GetMaxDecodedLength(calculated.Version)];

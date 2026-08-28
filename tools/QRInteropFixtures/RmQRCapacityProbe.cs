@@ -50,7 +50,7 @@ public static class RmQRCapacityProbe
             {
                 total++;
                 var text = "R" + (int)version; // 2-3 alphanumeric chars: fits every version × ECC
-                var size = RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules });
+                var size = Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules });
                 var pristine = new byte[size.BufferSize];
                 RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, pristine, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules });
 

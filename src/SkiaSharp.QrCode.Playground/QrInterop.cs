@@ -569,7 +569,9 @@ public static partial class QrInterop
         var quietZone = Math.Clamp(request.QuietZone, 0, 10);
 
         var rmOptions = new RmQRCodeGeneratorOptions { Version = version, FitStrategy = fit, Height = height, QuietZoneSize = quietZone };
-        var calculated = RmQRCodeGenerator.GetRequiredBufferSize(request.Content.AsSpan(), ecc, rmOptions);
+        if (!RmQRCodeGenerator.TryGetRequiredBufferSize(request.Content.AsSpan(), ecc, out var calculated, rmOptions))
+            throw new ArgumentException($"Content does not fit any rMQR symbol under the requested constraints ({request.Content.Length} characters, ECC {ecc}).", nameof(request));
+
         var moduleBuffer = ArrayPool<byte>.Shared.Rent(calculated.BufferSize);
         try
         {

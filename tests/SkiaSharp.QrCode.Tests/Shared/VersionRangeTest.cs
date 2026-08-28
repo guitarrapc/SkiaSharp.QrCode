@@ -285,7 +285,7 @@ public class VersionRangeTest
     {
         // Sweep every version that actually holds the content, so the comparison covers
         // both count-indicator boundaries (10 and 27).
-        var smallest = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc).Version;
+        var smallest = Sizing.Required(text.AsSpan(), ecc).Version;
 
         for (var version = smallest; version <= 40; version++)
         {
@@ -331,37 +331,36 @@ public class VersionRangeTest
         var options = new QRCodeGeneratorOptions { Version = QRCodeVersionRange.AtLeast(15) };
 
         await Assert.That(QRCodeGenerator.CreateQrCode(Digits, ECCLevel.M, options).Version).IsEqualTo(15);
-        await Assert.That(QRCodeGenerator.GetRequiredBufferSize(Digits.AsSpan(), ECCLevel.M, options).Version).IsEqualTo(15);
+        await Assert.That(Sizing.Required(Digits.AsSpan(), ECCLevel.M, options).Version).IsEqualTo(15);
     }
 
     [Test]
     public async Task StandardQr_RangeStraddlingTheFit_PicksTheSmallestFittingMember()
     {
         var content = new string('A', 200);   // alphanumeric, needs a mid-range version
-        var smallest = QRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), ECCLevel.M).Version;
+        var smallest = Sizing.Required(content.AsSpan(), ECCLevel.M).Version;
 
         var straddling = new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Between(smallest - 2, smallest + 2) };
-        await Assert.That(QRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), ECCLevel.M, straddling).Version).IsEqualTo(smallest);
+        await Assert.That(Sizing.Required(content.AsSpan(), ECCLevel.M, straddling).Version).IsEqualTo(smallest);
 
         // only the maximum fits
         var onlyMax = new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Between(smallest - 2, smallest) };
-        await Assert.That(QRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), ECCLevel.M, onlyMax).Version).IsEqualTo(smallest);
+        await Assert.That(Sizing.Required(content.AsSpan(), ECCLevel.M, onlyMax).Version).IsEqualTo(smallest);
 
         // only the minimum fits
         var onlyMin = new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Between(smallest, smallest) };
-        await Assert.That(QRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), ECCLevel.M, onlyMin).Version).IsEqualTo(smallest);
+        await Assert.That(Sizing.Required(content.AsSpan(), ECCLevel.M, onlyMin).Version).IsEqualTo(smallest);
     }
 
     [Test]
     public async Task StandardQr_RangeEntirelyBelowTheFit_DoesNotFit()
     {
         var content = new string('A', 200);
-        var smallest = QRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), ECCLevel.M).Version;
+        var smallest = Sizing.Required(content.AsSpan(), ECCLevel.M).Version;
         var options = new QRCodeGeneratorOptions { Version = QRCodeVersionRange.AtMost(smallest - 1) };
 
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content.AsSpan(), ECCLevel.M, out var size, options)).IsFalse();
         await Assert.That(size).IsEqualTo(default(QRCodeCalculatedSize));
-        await Assert.That(() => QRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), ECCLevel.M, options)).Throws<ArgumentException>();
         await Assert.That(() => QRCodeGenerator.CreateQrCode(content, ECCLevel.M, options)).Throws<ArgumentException>();
     }
 
@@ -415,7 +414,7 @@ public class VersionRangeTest
         var content = new string('A', 200);
         var options = new QRCodeGeneratorOptions { Version = QRCodeVersionRange.AtLeast(20), QuietZoneSize = 3 };
 
-        var size = QRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), ECCLevel.M, options);
+        var size = Sizing.Required(content.AsSpan(), ECCLevel.M, options);
         var buffer = new byte[size.BufferSize];
         var written = QRCodeGenerator.CreateQrCode(content.AsSpan(), ECCLevel.M, buffer, options);
 

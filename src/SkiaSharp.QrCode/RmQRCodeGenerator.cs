@@ -89,7 +89,7 @@ public static class RmQRCodeGenerator
     /// <remarks>
     /// Output format matches the other generators: one byte per module (0 = light,
     /// 1 = dark), flat row-major over the full width, quiet zone included. Use
-    /// <see cref="GetRequiredBufferSize"/> to size the destination.
+    /// <see cref="TryGetRequiredBufferSize"/> to size the destination.
     /// </remarks>
     /// <param name="textSpan">The text span to encode.</param>
     /// <param name="eccLevel">Error correction level (M or H).</param>
@@ -111,7 +111,7 @@ public static class RmQRCodeGenerator
         var totalHeight = coreHeight + quietZoneSize * 2;
         var requiredSize = totalWidth * totalHeight;
         if (destination.Length < requiredSize)
-            throw new ArgumentException($"Destination buffer too small: {requiredSize} bytes required (version {config.Version}, {totalWidth}x{totalHeight} modules), got {destination.Length} bytes. Use {nameof(GetRequiredBufferSize)} to calculate the required size.", nameof(destination));
+            throw new ArgumentException($"Destination buffer too small: {requiredSize} bytes required (version {config.Version}, {totalWidth}x{totalHeight} modules), got {destination.Length} bytes. Use {nameof(TryGetRequiredBufferSize)} to calculate the required size.", nameof(destination));
 
         var target = destination.Slice(0, requiredSize);
         if (quietZoneSize == 0)
@@ -139,37 +139,29 @@ public static class RmQRCodeGenerator
 
     /// <summary>
     /// Calculates the required buffer size, dimensions and version for encoding the
-    /// specified text as an rMQR code.
+    /// specified text as an rMQR code, reporting a content overflow as <c>false</c>
+    /// rather than as an exception.
     /// </summary>
     /// <param name="text">The text to encode.</param>
     /// <param name="eccLevel">Error correction level (M or H).</param>
+    /// <param name="size">Dimensions and version on success; <c>default</c> when the content does not fit.</param>
     /// <param name="options">Version, fit, ECI, quiet zone and segmentation settings.</param>
+    /// <returns><c>true</c> when the content fits.</returns>
     /// <remarks>
+    /// <para>
+    /// <c>false</c> means the content does not fit, and nothing else: argument errors
+    /// throw (rationale: specs/rmqr-encoder.md). rMQR holds 5-150 bytes, so an overflow
+    /// is an ordinary answer here rather than a defect, which is why this is the only
+    /// sizing method on this type.
+    /// </para>
+    /// <para>
     /// Pass the same <paramref name="options"/> you will encode with: segmentation and
     /// ECI can select different versions, so a buffer sized for one can be too small for
     /// the other.
+    /// </para>
     /// </remarks>
-    /// <exception cref="ArgumentException">Thrown when the data does not fit or the options contradict each other.</exception>
-    public static RmQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, in RmQRCodeGeneratorOptions options = default)
-    {
-        var quietZoneSize = options.QuietZoneSize;
-        ValidateQuietZone(quietZoneSize);
-        var version = options.Segmentation != RmQRSegmentation.Single
-            ? PlanOptimalVersion(text, eccLevel, options.EciMode, options.Version, options.FitStrategy, options.Height, options.Segmentation)
-            : PrepareConfiguration(text, eccLevel, options.EciMode, options.Version, options.FitStrategy, options.Height).Version;
-        var totalWidth = RmQRConstants.GetWidth(version) + quietZoneSize * 2;
-        var totalHeight = RmQRConstants.GetHeight(version) + quietZoneSize * 2;
-        return new RmQRCodeCalculatedSize(totalWidth * totalHeight, totalWidth, totalHeight, version);
-    }
-
-    /// <inheritdoc cref="GetRequiredBufferSize(ReadOnlySpan{char}, RmQREccLevel, in RmQRCodeGeneratorOptions)"/>
-    /// <summary>
-    /// Non-throwing <see cref="GetRequiredBufferSize"/>: <c>false</c> means the content
-    /// does not fit, and nothing else. Argument errors throw exactly as that overload
-    /// raises them (rationale: specs/rmqr-encoder.md).
-    /// </summary>
-    /// <param name="size">Dimensions and version on success; <c>default</c> when the content does not fit.</param>
-    /// <returns><c>true</c> when the content fits.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when an argument is out of range.</exception>
+    /// <exception cref="ArgumentException">Thrown when the options contradict each other.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = default)
     {
         size = default;
@@ -352,7 +344,7 @@ public static class RmQRCodeGenerator
         var totalHeight = coreHeight + quietZoneSize * 2;
         var requiredSize = totalWidth * totalHeight;
         if (destination.Length < requiredSize)
-            throw new ArgumentException($"Destination buffer too small: {requiredSize} bytes required (version {config.Version}, {totalWidth}x{totalHeight} modules), got {destination.Length} bytes. Use {nameof(GetRequiredBufferSize)} to calculate the required size.", nameof(destination));
+            throw new ArgumentException($"Destination buffer too small: {requiredSize} bytes required (version {config.Version}, {totalWidth}x{totalHeight} modules), got {destination.Length} bytes. Use {nameof(TryGetRequiredBufferSize)} to calculate the required size.", nameof(destination));
 
         var target = destination.Slice(0, requiredSize);
         if (quietZoneSize == 0)
@@ -368,18 +360,6 @@ public static class RmQRCodeGenerator
         target.Slice(margin + coreHeight * totalWidth - quietZoneSize).Clear();
         WriteCoreModulesPlanned(textSpan, in config, segments, target.Slice(margin + quietZoneSize), totalWidth);
         return requiredSize;
-    }
-
-    /// <summary>
-    /// Version the optimal path lands on, planned exactly as the encode does so
-    /// <see cref="GetRequiredBufferSize"/> can never disagree with it.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static RmQRVersion PlanOptimalVersion(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, RmQRSegmentation segmentation)
-    {
-        ValidateOptimalEntry(textSpan, eciMode, segmentation);
-        Span<RmQRSegment> plan = stackalloc RmQRSegment[RmQRSegmentPlanner.MaxSegments];
-        return PrepareConfigurationOptimal(textSpan, eccLevel, eciMode, requestedVersion, fitStrategy, height, plan, out _).Version;
     }
 
     /// <summary>
