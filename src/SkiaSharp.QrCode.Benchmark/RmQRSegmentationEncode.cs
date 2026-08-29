@@ -88,8 +88,9 @@ public class RmQRSegmentationEncode
         _content = _contents[Shape];
 
         // Sized from the largest-area version rather than from any shape's content: with
-        // the version pinned, TryGetRequiredBufferSize ignores the text, so this is the
-        // maximum every shape can need (3,003 bytes at R17x139 with the quiet zone).
+        // the version pinned, the reported buffer size depends only on that version and the
+        // quiet zone, not on the payload, so this is the maximum every shape can need
+        // (3,003 bytes at R17x139).
         _spanDestination = new byte[Sizing.Required("0".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 }).BufferSize];
     }
 

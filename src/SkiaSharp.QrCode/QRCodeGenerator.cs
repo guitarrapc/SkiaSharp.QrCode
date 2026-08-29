@@ -132,7 +132,7 @@ public static class QRCodeGenerator
     /// </summary>
     /// <param name="plainText">The text to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
-    /// <param name="destination">The buffer to write the QR code module matrix into. Must be at least <see cref="TryGetRequiredBufferSize"/> bytes.</param>
+    /// <param name="destination">The buffer to write the QR code module matrix into. Must be at least <see cref="QRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
     /// <param name="utf8BOM">Include UTF-8 BOM (Byte Order Mark) in encoded data. Ignore if data is not UTF-8.</param>
     /// <param name="eciMode">ECI mode for character encoding.</param>
     /// <param name="requestedVersion">Specific version to use (1-40), or -1 for automatic selection.</param>
@@ -172,7 +172,7 @@ public static class QRCodeGenerator
     /// </remarks>
     /// <param name="textSpan">The text span to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
-    /// <param name="destination">The buffer to write the QR code module matrix into. Must be at least <see cref="TryGetRequiredBufferSize"/> bytes.</param>
+    /// <param name="destination">The buffer to write the QR code module matrix into. Must be at least <see cref="QRCodeCalculatedSize.BufferSize"/> bytes, as reported by <see cref="TryGetRequiredBufferSize"/>.</param>
     /// <param name="utf8BOM">Include UTF-8 BOM (Byte Order Mark) in encoded data. Ignore if data is not UTF-8.</param>
     /// <param name="eciMode">ECI mode for character encoding.</param>
     /// <param name="requestedVersion">Specific version to use (1-40), or -1 for automatic selection.</param>
