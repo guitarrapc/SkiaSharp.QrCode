@@ -61,6 +61,17 @@ public class QrImageBuilderApiParityTest
         " WithVersion(VERSIONRANGE)",
     ];
 
+    /// <summary>
+    /// Options Standard QR and Micro QR share and rMQR does not. Mask pinning: both
+    /// symbologies select among several data mask patterns (eight for Standard QR,
+    /// four for Micro QR, an <c>int?</c> in both builders), while rMQR has a single
+    /// fixed mask (ISO/IEC 23941), so there is nothing to pin.
+    /// </summary>
+    private static readonly string[] standardAndMicroOnlySignatures =
+    [
+        " WithMaskPattern(",
+    ];
+
     [Test]
     public async Task PublicSurface_CorrespondsOneToOne_ModuloDocumentedDifferences()
     {
@@ -74,7 +85,7 @@ public class QrImageBuilderApiParityTest
 
         var failures = new List<string>();
         Compare("MicroQRCodeImageBuilder", micro, standard.Where(s => !s.Contains(" WithEciMode(")));
-        Compare("RmQRCodeImageBuilder", rmqr, standard.Where(s => !orderedVersionOnlySignatures.Any(s.Contains)));
+        Compare("RmQRCodeImageBuilder", rmqr, standard.Where(s => !orderedVersionOnlySignatures.Any(s.Contains) && !standardAndMicroOnlySignatures.Any(s.Contains)));
         if (failures.Count > 0)
             Assert.Fail("Image builder surfaces drifted apart.\n" + string.Join("\n", failures));
 
@@ -112,6 +123,14 @@ public class QrImageBuilderApiParityTest
             await Assert.That(typeof(MicroQRCodeImageBuilder).GetMethods().Any(m => m.Name == name)).IsFalse();
             await Assert.That(typeof(RmQRCodeImageBuilder).GetMethods().Any(m => m.Name == name)).IsFalse();
         }
+    }
+
+    [Test]
+    public async Task MaskPattern_ExistsOnSymbologiesThatSelectAMask()
+    {
+        await Assert.That(typeof(QRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithMaskPattern")).IsTrue();
+        await Assert.That(typeof(MicroQRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithMaskPattern")).IsTrue();
+        await Assert.That(typeof(RmQRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithMaskPattern")).IsFalse();
     }
 
     [Test]

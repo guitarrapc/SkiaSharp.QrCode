@@ -250,6 +250,8 @@ Masking and scoring operate on packed rows rather than byte-per-module loops:
 
 The eight formulas are precomputed as 12-row periodic templates. XOR, shifts, and popcount implement both masking and all four penalty rules without changing the reference result. On AVX2 the versions 1-11 tier scores four candidates per vector (lane = pattern) with per-version tables of pre-masked templates and format-bit overlays; the larger tiers score four rows per vector. Parity tests compare every representation against straightforward textbook formulas.
 
+**Pinned mask.** `QRCodeGeneratorOptions.MaskPattern` (0-7, `null` = automatic) skips the evaluation entirely and applies that one pattern via a scalar per-module loop. Any pattern is a legal symbol — the specification only recommends the best scorer — so pinning exists for byte-exact reproduction of symbols produced elsewhere (the decoder reports the pattern in `QRCodeDecodeInfo.MaskPattern`) and for exercising decoders against all eight patterns. Invalid values are rejected when the option is set, like `Version`. Micro QR offers the same option over its four patterns (`MicroQRCodeGeneratorOptions.MaskPattern`, an unrelated numbering — see the Micro QR spec map); rMQR has a single fixed mask, so it has no such option.
+
 
 ### 9. Write format / version information and expose output
 

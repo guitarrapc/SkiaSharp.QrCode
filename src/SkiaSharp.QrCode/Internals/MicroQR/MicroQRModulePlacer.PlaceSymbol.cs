@@ -68,9 +68,10 @@ internal static partial class MicroQRModulePlacer
     /// </param>
     /// <param name="version">Micro QR version (drives the format information).</param>
     /// <param name="eccLevel">ECC level (drives the format information).</param>
-    public static int PlaceSymbol(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel)
+    /// <param name="forcedMask">Pinned mask pattern (0-3), or -1 for edge-score selection. The fused pipeline is mask-index-driven throughout (templates, format bits), so a pinned pattern rides the same tiers.</param>
+    public static int PlaceSymbol(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
+        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
@@ -78,14 +79,14 @@ internal static partial class MicroQRModulePlacer
 #if NET8_0_OR_GREATER
         if (Avx2.IsSupported && HardwareCapabilities.HasFastPext)
         {
-            return PlaceCoreBmi2(matrix, size, stream, version, eccLevel);
+            return PlaceCoreBmi2(matrix, size, stream, version, eccLevel, forcedMask);
         }
         if (Ssse3.IsSupported || AdvSimd.Arm64.IsSupported)
         {
-            return PlaceCoreVector(matrix, size, stream, version, eccLevel);
+            return PlaceCoreVector(matrix, size, stream, version, eccLevel, forcedMask);
         }
 #endif
-        return PlaceCoreScalar(matrix, size, stream, version, eccLevel);
+        return PlaceCoreScalar(matrix, size, stream, version, eccLevel, forcedMask);
     }
 
     /// <summary>
@@ -93,14 +94,14 @@ internal static partial class MicroQRModulePlacer
     /// at runtime when neither SSSE3 nor NEON is available, exposed as a named
     /// entry point so parity tests exercise it on SIMD-capable machines too.
     /// </summary>
-    internal static int PlaceSymbolScalar(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel)
+    internal static int PlaceSymbolScalar(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
+        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
 
-        return PlaceCoreScalar(matrix, size, stream, version, eccLevel);
+        return PlaceCoreScalar(matrix, size, stream, version, eccLevel, forcedMask);
     }
 
 #if NET8_0_OR_GREATER
@@ -109,14 +110,14 @@ internal static partial class MicroQRModulePlacer
     /// named entry point for parity tests (the public dispatch additionally
     /// requires <see cref="HardwareCapabilities.HasFastPext"/>).
     /// </summary>
-    internal static int PlaceSymbolBmi2(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel)
+    internal static int PlaceSymbolBmi2(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
+        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
 
-        return PlaceCoreBmi2(matrix, size, stream, version, eccLevel);
+        return PlaceCoreBmi2(matrix, size, stream, version, eccLevel, forcedMask);
     }
 
     /// <summary>
@@ -125,14 +126,14 @@ internal static partial class MicroQRModulePlacer
     /// named entry point so it stays covered on machines whose dispatch
     /// prefers the BMI2 kernel.
     /// </summary>
-    internal static int PlaceSymbolSsse3(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel)
+    internal static int PlaceSymbolSsse3(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
+        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
 
-        return PlaceCoreVector(matrix, size, stream, version, eccLevel);
+        return PlaceCoreVector(matrix, size, stream, version, eccLevel, forcedMask);
     }
 
     /// <summary>
@@ -142,24 +143,28 @@ internal static partial class MicroQRModulePlacer
     /// <see cref="WriteExpand16"/>), exposed as a named entry point for parity
     /// tests. Caller must ensure AdvSimd.Arm64 support.
     /// </summary>
-    internal static int PlaceSymbolAdvSimd(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel)
+    internal static int PlaceSymbolAdvSimd(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
+        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
 
-        return PlaceCoreVector(matrix, size, stream, version, eccLevel);
+        return PlaceCoreVector(matrix, size, stream, version, eccLevel, forcedMask);
     }
 #endif
 
-    private static void ValidateArguments(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount)
+    private static void ValidateArguments(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, int forcedMask)
     {
         // The fast paths below index by arithmetic the JIT cannot bounds-prove
         // (flat zigzag indices, 8/16-byte unaligned unpack writes), so the
         // whole traversal domain is validated here instead of per access.
         if (MicroQRConstants.VersionFromSize(size) == 0)
             throw new ArgumentOutOfRangeException(nameof(size), $"size must be a Micro QR size (11/13/15/17), got {size}");
+        // 4-7 would merge into the (symbolNumber << 2) | mask format-table index
+        // and silently write another symbol number's format information.
+        if (forcedMask is < -1 or > 3)
+            throw new ArgumentOutOfRangeException(nameof(forcedMask), $"Mask pattern must be 0-3, or -1 for automatic selection, but was {forcedMask}");
         if (matrix.Length < size * size)
             throw new ArgumentException($"matrix too small: required {size * size}, got {matrix.Length}", nameof(matrix));
         if (dataBitCount < 0 || dataCodewords.Length * 8 < dataBitCount)
@@ -215,7 +220,7 @@ internal static partial class MicroQRModulePlacer
     /// selected mask; the caller-selected unpack pass then materializes the
     /// byte matrix with the mask template XORed in on the fly.
     /// </summary>
-    private static int BuildPackedRows(Span<ulong> rows, int size, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel)
+    private static int BuildPackedRows(Span<ulong> rows, int size, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask)
     {
         FuncPackedRows(size).CopyTo(rows);
 
@@ -265,7 +270,7 @@ internal static partial class MicroQRModulePlacer
         }
         var rowDark = rows[last] & ~1ul;
 
-        var mask = SelectMaskFromEdges(colDark, rowDark, size);
+        var mask = forcedMask >= 0 ? forcedMask : SelectMaskFromEdges(colDark, rowDark, size);
 
         // Format information: row 8 cols 1..8 carry bits 14..7, col 8 rows 7..1
         // carry bits 6..0 (same coordinates as PlaceFormat). These modules lie
@@ -298,11 +303,11 @@ internal static partial class MicroQRModulePlacer
         return _maskTemplates12[mask * 12 + tplRow] & allowed;
     }
 
-    private static int PlaceCoreScalar(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel)
+    private static int PlaceCoreScalar(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask)
     {
         Span<ulong> rows = stackalloc ulong[17];
         rows = rows.Slice(0, size);
-        var mask = BuildPackedRows(rows, size, stream, version, eccLevel);
+        var mask = BuildPackedRows(rows, size, stream, version, eccLevel, forcedMask);
 
         // Unpack with the mask applied on the fly: full 8-byte write steps; a
         // tail of >= 4 bytes becomes one overlapped spread ending at the row
@@ -337,11 +342,11 @@ internal static partial class MicroQRModulePlacer
     }
 
 #if NET8_0_OR_GREATER
-    private static int PlaceCoreVector(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel)
+    private static int PlaceCoreVector(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask)
     {
         Span<ulong> rows = stackalloc ulong[17];
         rows = rows.Slice(0, size);
-        var mask = BuildPackedRows(rows, size, stream, version, eccLevel);
+        var mask = BuildPackedRows(rows, size, stream, version, eccLevel, forcedMask);
 
         // Unpack with the mask applied on the fly, 16 modules per SIMD step
         // (SSSE3 or NEON, see WriteExpand16).
@@ -425,7 +430,7 @@ internal static partial class MicroQRModulePlacer
     /// step. Measured over the SSSE3 pipeline: M4 -29%, M3 -22%, M2 -10%,
     /// M1 -5% (kernel benchmark rounds 8-11).
     /// </summary>
-    private static int PlaceCoreBmi2(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel)
+    private static int PlaceCoreBmi2(Span<byte> matrix, int size, ReadOnlySpan<ulong> stream, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask)
     {
         var w0 = stream[0];
         var w1 = stream[1];
@@ -476,7 +481,7 @@ internal static partial class MicroQRModulePlacer
         }
         var rowDark = rows[last] & ~1ul;
 
-        var mask = SelectMaskFromEdges(colDark, rowDark, size);
+        var mask = forcedMask >= 0 ? forcedMask : SelectMaskFromEdges(colDark, rowDark, size);
 
         var formatBits = _formatBitsTable[(MicroQRConstants.GetSymbolNumber(version, eccLevel) << 2) | mask];
         rows[8] = (rows[8] & ~0x1FEul) | ((ulong)_reverseByte[(formatBits >> 7) & 0xFF] << 1);

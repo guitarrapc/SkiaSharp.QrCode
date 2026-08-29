@@ -22,6 +22,8 @@ public readonly record struct QRCodeGeneratorOptions
     // identical option sets as different.
     private readonly int _quietZoneSizeOffset;
 
+    private readonly int? _maskPattern;
+
     /// <summary>The default configuration, identical to <c>default</c>.</summary>
     public static QRCodeGeneratorOptions Default => default;
 
@@ -51,6 +53,31 @@ public readonly record struct QRCodeGeneratorOptions
     {
         get => DefaultQuietZone + _quietZoneSizeOffset;
         init => _quietZoneSizeOffset = value - DefaultQuietZone;
+    }
+
+    /// <summary>
+    /// Pin one of the eight ISO/IEC 18004 data mask patterns (0-7) instead of the
+    /// automatic penalty-scored selection. <c>null</c> (the default) selects the
+    /// lowest-penalty pattern. Any pattern yields a valid, decodable symbol; the
+    /// automatic choice merely optimizes scan reliability.
+    /// </summary>
+    /// <remarks>
+    /// For reproducing a symbol produced elsewhere byte-for-byte (the pattern another
+    /// encoder chose is reported by <see cref="QRCodeDecodeInfo.MaskPattern"/>), and for
+    /// exercising a decoder against all eight patterns. Like <see cref="Version"/>, an
+    /// invalid value is an argument error and is rejected here rather than when a
+    /// generator reads it.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when the value is not 0-7 or <c>null</c>.</exception>
+    public int? MaskPattern
+    {
+        get => _maskPattern;
+        init
+        {
+            if (value is < 0 or > 7)
+                throw new ArgumentOutOfRangeException(nameof(MaskPattern), $"Mask pattern must be 0-7, or null for automatic selection, but was {value}");
+            _maskPattern = value;
+        }
     }
 
     /// <summary>

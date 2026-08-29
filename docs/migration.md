@@ -96,6 +96,12 @@ var data = QRCodeGenerator.CreateQrCode("https://example.com", ECCLevel.M,
 
 Nothing to migrate: with the option unset, every call produces the exact symbol it produced before.
 
+### mask pattern pinning
+
+`QRCodeGeneratorOptions.MaskPattern` and `MicroQRCodeGeneratorOptions.MaskPattern` (`null` = automatic) pin a specific data mask pattern instead of the automatic selection — one of eight for Standard QR (penalty-scored), one of four for Micro QR (edge-scored); the two numberings are unrelated. Any pattern is a valid symbol; pinning exists to reproduce a symbol produced elsewhere byte-for-byte (`QRCodeDecodeInfo.MaskPattern` / `MicroQRCodeDecodeInfo.MaskPattern` report the pattern a decoder saw) and to exercise scanners against every pattern. The builders expose the same setting as `WithMaskPattern(int?)`. Values outside the symbology's range are rejected when the option is set, like `Version`. rMQR has a single fixed mask, so it has no such option.
+
+Nothing to migrate: with the option unset, every call produces the exact symbol it produced before.
+
 ### image builders
 
 `QRCodeImageBuilder.WithVersion` and the Micro QR equivalent gained an overload taking the range type. `WithVersion(int)` and `WithVersion(MicroQRVersion)` are unchanged, including `WithVersion(-1)` meaning automatic.

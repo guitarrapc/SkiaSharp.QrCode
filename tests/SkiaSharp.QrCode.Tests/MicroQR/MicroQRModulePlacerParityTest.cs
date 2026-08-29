@@ -280,6 +280,103 @@ public class MicroQRModulePlacerParityTest
 #endif
     }
 
+    /// <summary>
+    /// A pinned mask pattern (<see cref="MicroQRCodeGeneratorOptions.MaskPattern"/>)
+    /// rides the same fused pipeline with the edge scoring skipped, so for every
+    /// pattern the output must equal the reference with that pattern applied
+    /// directly. Covers the dispatch tier; the scalar test below covers the
+    /// shared packed-rows path on machines whose dispatch prefers BMI2.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(AllCombinationsAndSeeds))]
+    public async Task PlaceSymbol_ForcedMask_MatchesNaiveReference(MicroQRVersion version, MicroQREccLevel ecc, int seed)
+    {
+        var size = MicroQRConstants.SizeFromVersion(version);
+        var dataCount = MicroQRConstants.GetDataCodewordCount(version, ecc);
+        var eccCount = MicroQRConstants.GetEccCodewordCount(version, ecc);
+        var dataBitCount = MicroQRConstants.GetDataBitCapacity(version, ecc);
+
+        var data = new byte[dataCount];
+        var eccBytes = new byte[eccCount];
+        switch (seed)
+        {
+            case -1:
+                break;
+            case -2:
+                Array.Fill(data, (byte)0xFF);
+                Array.Fill(eccBytes, (byte)0xFF);
+                break;
+            default:
+                new Random(seed).NextBytes(data);
+                new Random(seed + 100).NextBytes(eccBytes);
+                break;
+        }
+
+        for (var mask = 0; mask < 4; mask++)
+        {
+            var expected = new byte[size * size];
+            ReferencePlaceForced(expected, size, data, eccBytes, dataBitCount, version, ecc, mask);
+
+            var actual = new byte[size * size];
+            var actualMask = MicroQRModulePlacer.PlaceSymbol(actual, size, data, eccBytes, dataBitCount, version, ecc, mask);
+
+            await Assert.That(actualMask).IsEqualTo(mask);
+            await Assert.That(actual).IsEquivalentTo(expected);
+        }
+    }
+
+    [Test]
+    [MethodDataSource(nameof(AllCombinationsAndSeeds))]
+    public async Task PlaceSymbolScalar_ForcedMask_MatchesNaiveReference(MicroQRVersion version, MicroQREccLevel ecc, int seed)
+    {
+        var size = MicroQRConstants.SizeFromVersion(version);
+        var dataCount = MicroQRConstants.GetDataCodewordCount(version, ecc);
+        var eccCount = MicroQRConstants.GetEccCodewordCount(version, ecc);
+        var dataBitCount = MicroQRConstants.GetDataBitCapacity(version, ecc);
+
+        var data = new byte[dataCount];
+        var eccBytes = new byte[eccCount];
+        switch (seed)
+        {
+            case -1:
+                break;
+            case -2:
+                Array.Fill(data, (byte)0xFF);
+                Array.Fill(eccBytes, (byte)0xFF);
+                break;
+            default:
+                new Random(seed).NextBytes(data);
+                new Random(seed + 100).NextBytes(eccBytes);
+                break;
+        }
+
+        for (var mask = 0; mask < 4; mask++)
+        {
+            var expected = new byte[size * size];
+            ReferencePlaceForced(expected, size, data, eccBytes, dataBitCount, version, ecc, mask);
+
+            var actual = new byte[size * size];
+            var actualMask = MicroQRModulePlacer.PlaceSymbolScalar(actual, size, data, eccBytes, dataBitCount, version, ecc, mask);
+
+            await Assert.That(actualMask).IsEqualTo(mask);
+            await Assert.That(actual).IsEquivalentTo(expected);
+        }
+    }
+
+    [Test]
+    [Arguments(-2)]
+    [Arguments(4)]
+    [Arguments(int.MaxValue)]
+    public async Task PlaceSymbol_ForcedMaskOutOfRange_Throws(int forcedMask)
+    {
+        // Out-of-range masks must be a deterministic argument error: 4-7 would
+        // otherwise merge into the (symbolNumber << 2) | mask format-table index
+        // and silently write another symbol number's format information.
+        var matrix = new byte[13 * 13];
+        await Assert.That(() => MicroQRModulePlacer.PlaceSymbol(matrix, 13, new byte[5], new byte[5], 40, MicroQRVersion.M2, MicroQREccLevel.L, forcedMask))
+            .Throws<ArgumentOutOfRangeException>();
+    }
+
     [Test]
     public async Task PlaceSymbol_InvalidSize_Throws()
     {
@@ -325,6 +422,14 @@ public class MicroQRModulePlacerParityTest
         var mask = ReferenceSelectAndApplyMask(matrix, size);
         ReferencePlaceFormat(matrix, size, MicroQRConstants.GetFormatBits(version, eccLevel, mask));
         return mask;
+    }
+
+    private static void ReferencePlaceForced(Span<byte> matrix, int size, ReadOnlySpan<byte> data, ReadOnlySpan<byte> ecc, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int mask)
+    {
+        ReferencePlaceFunctionModules(matrix, size);
+        ReferencePlaceDataCodewords(matrix, size, data, ecc, dataBitCount);
+        ReferenceApplyMask(matrix, size, mask);
+        ReferencePlaceFormat(matrix, size, MicroQRConstants.GetFormatBits(version, eccLevel, mask));
     }
 
     private static void ReferencePlaceFunctionModules(Span<byte> matrix, int size)
@@ -429,20 +534,25 @@ public class MicroQRModulePlacerParityTest
             }
         }
 
+        ReferenceApplyMask(matrix, size, bestMask);
+
+        return bestMask;
+    }
+
+    private static void ReferenceApplyMask(Span<byte> matrix, int size, int mask)
+    {
         for (var row = 1; row < size; row++)
         {
             var rowOffset = row * size;
             var colStart = row <= 8 ? 9 : 1;
             for (var col = colStart; col < size; col++)
             {
-                if (ReferenceMaskBit(bestMask, row, col))
+                if (ReferenceMaskBit(mask, row, col))
                 {
                     matrix[rowOffset + col] ^= 1;
                 }
             }
         }
-
-        return bestMask;
     }
 
     private static void ReferencePlaceFormat(Span<byte> matrix, int size, ushort formatBits)
