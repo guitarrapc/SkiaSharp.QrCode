@@ -30,8 +30,14 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 /// - Byte&lt;-&gt;bit edges are native SIMD: packing 0/1 bytes is pcmpeqb+pmovmskb
 ///   (32 modules per step), unpacking the winner's XOR delta is
 ///   broadcast+vpshufb+vpcmpeqb (32 modules per step).
-/// - No abort threshold: measured, raw 4-lane throughput beats the scalar
-///   scorer's early-exit at every size (v1 1.33x, v10 2.03x, v40 1.47x).
+/// - Abort: no per-row threshold (measured, reduction cost eats the win), but
+///   each scorer checkpoints once before the column-rule-3 loop — the partial
+///   score is a lower bound (the remaining terms are non-negative), so a pattern
+///   already above the best total skips that loop without changing the selection
+///   (the lane-per-pattern tier skips only when all four candidates in the
+///   group are above). Evaluation order stays 0..7: mask totals sit too close
+///   together for win-frequency ordering to matter (measured, mask-order
+///   findings log).
 ///
 /// This file only executes under Avx2.IsSupported (x86/x64), so memory order is
 /// always little-endian and the SWAR tail reads skip endianness normalization.
@@ -421,7 +427,7 @@ internal static partial class ModulePlacer
             {
                 rows4[y] = (Vector256.Create(packed[y]) ^ Unsafe.Add(ref pre, preBase + y)) | Unsafe.Add(ref fmt, fmtBase + y);
             }
-            var scores = ScoreLanes64(rows4, nrows4, eq4, size);
+            var scores = ScoreLanes64(rows4, nrows4, eq4, size, g == 0 ? int.MaxValue : bestScore);
             for (var lane = 0; lane < 4; lane++)
             {
                 var s = scores.GetElement(lane);
@@ -472,10 +478,12 @@ internal static partial class ModulePlacer
     /// Lane-per-pattern penalty scorer: <paramref name="rows"/>[y] holds row y of four
     /// candidates; returns their four ISO/IEC 18004 penalty scores. Same rule
     /// derivations as <see cref="CalculateScorePacked"/>; the accumulators are per
-    /// lane, so no horizontal reduction happens until the end.
+    /// lane, so no horizontal reduction happens until the end. When all four lanes'
+    /// partials exceed <paramref name="abortAbove"/> at the checkpoint, every lane
+    /// reports int.MaxValue (pass int.MaxValue to disable, as for the first group).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
-    internal static Vector128<int> ScoreLanes64(Span<Vector256<ulong>> rows, Span<Vector256<ulong>> nrows, Span<Vector256<ulong>> eq, int size)
+    internal static Vector128<int> ScoreLanes64(Span<Vector256<ulong>> rows, Span<Vector256<ulong>> nrows, Span<Vector256<ulong>> eq, int size, int abortAbove)
     {
         var rowMaskV = Vector256.Create(size == 64 ? ulong.MaxValue : (1ul << size) - 1);
         var startMaskV = Vector256.Create((1ul << (size - 10)) - 1);
@@ -533,6 +541,21 @@ internal static partial class ModulePlacer
             accOnes += Pop256(cur);
             accTwos += Pop256(Vector256.AndNot(cur, prev));
             prev = cur;
+        }
+
+        // Checkpoint (second group only): the remaining rule-3-column and balance
+        // terms are non-negative, so the partial is a lower bound of each lane's
+        // total — if every lane already exceeds the best total, skip the loop.
+        if (abortAbove != int.MaxValue)
+        {
+            var partial = accOnes + Vector256.ShiftLeft(accTwos, 1)
+                        + accP2 + Vector256.ShiftLeft(accP2, 1)
+                        + Vector256.ShiftLeft(accP3, 5) + Vector256.ShiftLeft(accP3, 3);
+            var gt = Vector256.GreaterThan(partial.AsInt64(), Vector256.Create((long)abortAbove));
+            if (gt == Vector256<long>.AllBitsSet)
+            {
+                return Vector128.Create(int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue);
+            }
         }
 
         // Column rule 3: 11-row windows.
@@ -594,7 +617,7 @@ internal static partial class ModulePlacer
                 }
                 PokeFormatBitsSoA2(mw0, mw1, size, QRCodeConstants.GetFormatBits(eccLevel, patternIndex));
 
-                var score = CalculateScore128Vec(mw0, mw1, nw0, nw1, eq0, eq1, v50, v51, size);
+                var score = CalculateScore128Vec(mw0, mw1, nw0, nw1, eq0, eq1, v50, v51, size, bestScore);
                 if (score < bestScore)
                 {
                     bestPatternIndex = patternIndex;
@@ -684,13 +707,15 @@ internal static partial class ModulePlacer
         public Vector256<ulong> Pop() => Pop256(A) + Pop256(B);
     }
 
-    /// <summary>Two-word SoA Vector256 penalty scorer (structure mirrors the single-word scorer, lane-per-row layout).</summary>
+    /// <summary>Two-word SoA Vector256 penalty scorer (structure mirrors the single-word scorer, lane-per-row layout).
+    /// Returns int.MaxValue without running the column-rule-3 loop once the partial score
+    /// provably exceeds <paramref name="abortAbove"/> (see the checkpoint note in the file header).</summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static int CalculateScore128Vec(
         Span<ulong> rw0, Span<ulong> rw1,
         Span<ulong> nw0, Span<ulong> nw1,
         Span<ulong> eq0, Span<ulong> eq1,
-        Span<ulong> v50, Span<ulong> v51, int size)
+        Span<ulong> v50, Span<ulong> v51, int size, int abortAbove)
     {
         var rowMaskR = Row192.MaskLow(size);
         var startMaskR = Row192.MaskLow(size - 10);
@@ -831,6 +856,22 @@ internal static partial class ModulePlacer
             score1 += v5.PopCount() + 2 * v5.AndNotWith(prev).PopCount();
         }
 
+        // Checkpoint: the remaining rule-3-column and balance terms are non-negative,
+        // so the partial is a lower bound — a pattern already above the best total
+        // cannot win or tie, and the heaviest loop below is skipped. The first
+        // pattern has no bound yet (abortAbove == int.MaxValue), so skip the
+        // reductions too.
+        if (abortAbove != int.MaxValue)
+        {
+            var partial = score1 + score2 + score3
+                        + (int)Vector256.Sum(accOnes) + 2 * (int)Vector256.Sum(accTwos)
+                        + 3 * (int)Vector256.Sum(accP2) + 40 * (int)Vector256.Sum(accP3);
+            if (partial > abortAbove)
+            {
+                return int.MaxValue;
+            }
+        }
+
         var b0 = 0;
         for (; b0 + 4 <= size - 10; b0 += 4)
         {
@@ -927,7 +968,7 @@ internal static partial class ModulePlacer
                 }
                 PokeFormatBitsSoA3(mw0, mw1, mw2, size, QRCodeConstants.GetFormatBits(eccLevel, patternIndex));
 
-                var score = CalculateScore192Vec(mw0, mw1, mw2, nw0, nw1, nw2, eq0, eq1, eq2, v50, v51, v52, size);
+                var score = CalculateScore192Vec(mw0, mw1, mw2, nw0, nw1, nw2, eq0, eq1, eq2, v50, v51, v52, size, bestScore);
                 if (score < bestScore)
                 {
                     bestPatternIndex = patternIndex;
@@ -1078,13 +1119,15 @@ internal static partial class ModulePlacer
         public Vector256<ulong> Pop() => Pop256(A) + Pop256(B) + Pop256(C);
     }
 
-    /// <summary>Three-word SoA Vector256 penalty scorer (structure mirrors the single-word scorer, lane-per-row layout).</summary>
+    /// <summary>Three-word SoA Vector256 penalty scorer (structure mirrors the single-word scorer, lane-per-row layout).
+    /// Returns int.MaxValue without running the column-rule-3 loop once the partial score
+    /// provably exceeds <paramref name="abortAbove"/> (see the checkpoint note in the file header).</summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     internal static int CalculateScore192Vec(
         Span<ulong> rw0, Span<ulong> rw1, Span<ulong> rw2,
         Span<ulong> nw0, Span<ulong> nw1, Span<ulong> nw2,
         Span<ulong> eq0, Span<ulong> eq1, Span<ulong> eq2,
-        Span<ulong> v50, Span<ulong> v51, Span<ulong> v52, int size)
+        Span<ulong> v50, Span<ulong> v51, Span<ulong> v52, int size, int abortAbove)
     {
         var rowMaskR = Row192.MaskLow(size);
         var startMaskR = Row192.MaskLow(size - 10);
@@ -1232,6 +1275,22 @@ internal static partial class ModulePlacer
             var v5 = new Row192(v50[y], v51[y], v52[y]);
             var prev = new Row192(v50[y - 1], v51[y - 1], v52[y - 1]);
             score1 += v5.PopCount() + 2 * v5.AndNotWith(prev).PopCount();
+        }
+
+        // Checkpoint: the remaining rule-3-column and balance terms are non-negative,
+        // so the partial is a lower bound — a pattern already above the best total
+        // cannot win or tie, and the heaviest loop below is skipped. The first
+        // pattern has no bound yet (abortAbove == int.MaxValue), so skip the
+        // reductions too.
+        if (abortAbove != int.MaxValue)
+        {
+            var partial = score1 + score2 + score3
+                        + (int)Vector256.Sum(accOnes) + 2 * (int)Vector256.Sum(accTwos)
+                        + 3 * (int)Vector256.Sum(accP2) + 40 * (int)Vector256.Sum(accP3);
+            if (partial > abortAbove)
+            {
+                return int.MaxValue;
+            }
         }
 
         var b0 = 0;
