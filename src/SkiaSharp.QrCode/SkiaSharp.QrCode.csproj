@@ -12,6 +12,11 @@
     <EnablePackageValidation>true</EnablePackageValidation>
     <PackageValidationBaselineVersion>1.1.1</PackageValidationBaselineVersion>
 
+    <!-- Trimming/NativeAOT. IsAotCompatible turns on the trim/AOT/single-file analyzers and stamps the
+         package metadata; it is only valid for net7.0+, so the netstandard targets are excluded.
+         The authoritative whole-library check is tests/SkiaSharp.QrCode.AotAnalysis, gated in CI. -->
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net7.0'))">true</IsAotCompatible>
+
     <!-- SBOM -->
     <GenerateSBOM>true</GenerateSBOM>
     <SbomGenerationFetchLicenseInformation>true</SbomGenerationFetchLicenseInformation>
