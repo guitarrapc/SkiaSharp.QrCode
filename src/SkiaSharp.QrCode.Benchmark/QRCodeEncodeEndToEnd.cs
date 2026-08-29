@@ -9,6 +9,7 @@ using System.Text;
 ///   Numeric_V1_L : version 1, numeric mode (digits only)
 ///   Alphanumeric_V1_M : version 1, alphanumeric mode (uppercase / punctuation subset)
 ///   Byte_Url_V6_M : version 6, byte mode (typical URL with lowercase)
+///   Byte_V20_M : version 20-M, byte mode (mid-size, exercises the 2-word SoA mask tier)
 ///   Byte_V40_L : version 40-L, byte mode (largest data blocks)
 ///   Byte_V40_H : version 40-H, byte mode (81 blocks x 30 ecc, max ECC share)
 /// </summary>
@@ -17,6 +18,7 @@ public class QRCodeEncodeEndToEnd
     private string _numeric = default!;
     private string _alphanumeric = default!;
     private string _byteUrl = default!;
+    private string _byteMidM = default!;
     private string _byteLongL = default!;
     private string _byteLongH = default!;
     private byte[] _spanDestination = default!;
@@ -27,6 +29,7 @@ public class QRCodeEncodeEndToEnd
         _numeric = "0123456789"; // version 1-L, numeric mode
         _alphanumeric = "HELLO WORLD 2026"; // version 1-M, alphanumeric mode
         _byteUrl = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md?foo=sample&bar=dummy"; // version 6-M, byte mode
+        _byteMidM = BuildDeterministicText(620); // version 20-M byte mode (max 666)
         _byteLongL = BuildDeterministicText(2900); // version 40-L byte mode (max 2953)
         _byteLongH = BuildDeterministicText(1200); // version 40-H byte mode (max 1273)
         _spanDestination = new byte[Math.Max(
@@ -52,6 +55,12 @@ public class QRCodeEncodeEndToEnd
     public QRCodeData QR_Byte_Url_V6_M_Encode()
     {
         return QRCodeGenerator.CreateQrCode(_byteUrl.AsSpan(), ECCLevel.M);
+    }
+
+    [Benchmark]
+    public QRCodeData QR_Byte_V20_M_Encode()
+    {
+        return QRCodeGenerator.CreateQrCode(_byteMidM.AsSpan(), ECCLevel.M);
     }
 
     [Benchmark]
