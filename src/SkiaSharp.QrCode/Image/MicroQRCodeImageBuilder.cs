@@ -27,6 +27,7 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     private readonly MicroQRCodeData? _data;
     private MicroQREccLevel _eccLevel = MicroQREccLevel.M;
     private MicroQRVersionRange _versionRange;
+    private int? _maskPattern;
 
     public MicroQRCodeImageBuilder(string content) : base(defaultQuietZoneSize: 2)
     {
@@ -361,11 +362,30 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
         return this;
     }
 
+    /// <summary>
+    /// Pin one of the four Micro QR data mask patterns (0-3) instead of the automatic
+    /// edge-score selection; see <see cref="MicroQRCodeGeneratorOptions.MaskPattern"/>.
+    /// </summary>
+    /// <param name="maskPattern">Mask pattern (0-3), or null for automatic selection.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="maskPattern"/> is not 0-3 or null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="MicroQRCodeData"/>.</exception>
+    public MicroQRCodeImageBuilder WithMaskPattern(int? maskPattern)
+    {
+        if (_data is not null)
+            throw new InvalidOperationException("WithMaskPattern cannot be used when MicroQRCodeData is provided directly.");
+        if (maskPattern is < 0 or > 3)
+            throw new ArgumentOutOfRangeException(nameof(maskPattern), $"Mask pattern must be 0-3, or null for automatic selection, but was {maskPattern}");
+
+        _maskPattern = maskPattern;
+        return this;
+    }
+
     // symbology hooks
 
     private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
     {
-        var data = _data ?? MicroQRCodeGenerator.CreateMicroQRCode(_content.AsSpan(), _eccLevel, new MicroQRCodeGeneratorOptions { Version = _versionRange, QuietZoneSize = _quietZoneSize });
+        var data = _data ?? MicroQRCodeGenerator.CreateMicroQRCode(_content.AsSpan(), _eccLevel, new MicroQRCodeGeneratorOptions { Version = _versionRange, QuietZoneSize = _quietZoneSize, MaskPattern = _maskPattern });
         matrixWidth = matrixHeight = data.Size;
         return data;
     }

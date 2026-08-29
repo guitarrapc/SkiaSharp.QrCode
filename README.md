@@ -245,7 +245,7 @@ var rmqr = RmQRCodeGenerator.CreateRmQRCode("content", RmQREccLevel.M, new RmQRC
 | `Version` | `Any` (1-40) | `Any` (M1-M4) | `null` (fit automatically) |
 | `QuietZoneSize` | `4` | `2` | `2` |
 | `BoostEccLevel` | `false` | — | — |
-| `MaskPattern` | `null` (automatic) | — | — |
+| `MaskPattern` | `null` (automatic, 0-7) | `null` (automatic, 0-3) | — |
 | `FitStrategy` | — | — | `MinimizeArea` |
 | `Height` | — | — | `null` (any height) |
 | `Segmentation` | — | — | `Single` |
@@ -291,18 +291,19 @@ The smallest version in the range that holds the content is used; if none does, 
 
 #### Mask pattern pinning
 
-Standard QR normally scores all eight ISO/IEC 18004 data mask patterns and applies the lowest-penalty one. `MaskPattern` pins a specific pattern (0-7) instead; any pattern yields a valid, decodable symbol, the automatic choice merely optimizes scan reliability. Pinning is the way to reproduce a symbol produced elsewhere byte-for-byte — the pattern another encoder chose is reported by `QRCodeDecodeInfo.MaskPattern` — or to exercise a scanner against all eight patterns.
+The generator normally scores the data mask patterns the specification defines (eight for Standard QR, four for Micro QR) and applies the best one. `MaskPattern` pins a specific pattern instead; any pattern yields a valid, decodable symbol, the automatic choice merely optimizes scan reliability. Pinning is the way to reproduce a symbol produced elsewhere byte-for-byte — the pattern another encoder chose is reported by `QRCodeDecodeInfo.MaskPattern` / `MicroQRCodeDecodeInfo.MaskPattern` — or to exercise a scanner against every pattern.
 
 ```csharp
 // Reproduce a symbol: decode reports the mask, encode accepts it back
 QRCodeDecoder.TryDecode(scanned, out var text, out var info);
 var identical = QRCodeGenerator.CreateQrCode(text, info.EccLevel, new QRCodeGeneratorOptions { MaskPattern = info.MaskPattern });
 
-// Builder equivalent
+// Builder equivalent, Micro QR alike
 var png = new QRCodeImageBuilder("content").WithMaskPattern(3).ToByteArray();
+var micro = new MicroQRCodeImageBuilder("12345").WithErrorCorrection(MicroQREccLevel.L).WithMaskPattern(1).ToByteArray();
 ```
 
-`null` (the default) keeps the automatic selection. Values outside 0-7 are rejected when the option is set. Standard QR only: Micro QR has four patterns under a different numbering and rMQR has a single fixed mask.
+`null` (the default) keeps the automatic selection. Values outside the symbology's range (0-7 for Standard QR, 0-3 for Micro QR — the two numberings are unrelated) are rejected when the option is set. rMQR has a single fixed mask (ISO/IEC 23941), so there is nothing to pin.
 
 Because an `int?` converts implicitly, an optional version needs no branch at the call site — that is the job the old `-1` convention did, without the magic number.
 

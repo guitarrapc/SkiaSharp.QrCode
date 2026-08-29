@@ -83,6 +83,7 @@ Reference tests: [MicroQRCodeGeneratorUnitTest.CreateMicroQRCode_M2_MatrixStruct
 |---|---|---|
 | Table 10 | The 4 Micro QR mask conditions (Standard QR patterns 1/4/6/7) | [MicroQRModulePlacer.GetMaskBit](../../../src/SkiaSharp.QrCode/Internals/MicroQR/MicroQRModulePlacer.cs) |
 | Section 7.8.3 | Edge-based mask evaluation (dark counts of right/lower edges, min·16 + max, highest wins), evaluated on the two edges only, no trial matrices | [MicroQRModulePlacer.SelectAndApplyMask](../../../src/SkiaSharp.QrCode/Internals/MicroQR/MicroQRModulePlacer.cs) (reference); the production path scores both edges bit-packed in [MicroQRModulePlacer.PlaceSymbol](../../../src/SkiaSharp.QrCode/Internals/MicroQR/MicroQRModulePlacer.PlaceSymbol.cs) |
+| - | Pinned mask: `MicroQRCodeGeneratorOptions.MaskPattern` (0-3, `null` = automatic) skips the edge evaluation and rides the same fused pipeline (templates and format bits are mask-index-driven). Exists for byte-exact reproduction of symbols produced elsewhere; the spec only recommends the best scorer, so any pattern is a legal symbol | [MicroQRModulePlacer.PlaceSymbol](../../../src/SkiaSharp.QrCode/Internals/MicroQR/MicroQRModulePlacer.PlaceSymbol.cs) (`forcedMask`) |
 
 ## Format Information
 

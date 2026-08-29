@@ -30,6 +30,9 @@ public static class MicroQRCodeGenerator
     private const int MaxCoreSize = 17;
     internal const int DefaultQuietZone = 2; // ISO/IEC 18004: Micro QR requires a 2-module quiet zone
 
+    /// <summary>The internal mask-pattern value meaning "select the highest edge-score pattern".</summary>
+    private const int AutomaticMask = -1;
+
     /// <summary>
     /// Creates a Micro QR code from the provided plain text.
     /// </summary>
@@ -45,6 +48,9 @@ public static class MicroQRCodeGenerator
     /// <inheritdoc cref="CreateMicroQRCode(string, MicroQREccLevel, MicroQRVersion?, int)"/>
     /// <param name="textSpan">The text span to encode.</param>
     public static MicroQRCodeData CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion = null, int quietZoneSize = DefaultQuietZone)
+        => CreateMicroQRCodeCore(textSpan, eccLevel, requestedVersion, quietZoneSize, AutomaticMask);
+
+    private static MicroQRCodeData CreateMicroQRCodeCore(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion, int quietZoneSize, int maskPattern)
     {
         ValidateQuietZone(quietZoneSize);
         var config = PrepareConfiguration(textSpan, eccLevel, requestedVersion);
@@ -53,7 +59,7 @@ public static class MicroQRCodeGenerator
         Span<byte> core = stackalloc byte[MaxCoreSize * MaxCoreSize];
         core = core.Slice(0, size * size);
         core.Clear();
-        WriteCoreModules(textSpan, config, core, size);
+        WriteCoreModules(textSpan, config, core, size, maskPattern);
 
         var result = new MicroQRCodeData(config.Version, quietZoneSize);
         result.SetCoreData(core);
@@ -77,6 +83,9 @@ public static class MicroQRCodeGenerator
     /// <returns>The number of bytes written (always qrSize × qrSize).</returns>
     /// <exception cref="ArgumentException">Thrown when the destination is too small, the data does not fit, or the combination is invalid.</exception>
     public static int CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, MicroQRVersion? requestedVersion = null, int quietZoneSize = DefaultQuietZone)
+        => CreateMicroQRCodeCore(textSpan, eccLevel, destination, requestedVersion, quietZoneSize, AutomaticMask);
+
+    private static int CreateMicroQRCodeCore(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, MicroQRVersion? requestedVersion, int quietZoneSize, int maskPattern)
     {
         ValidateQuietZone(quietZoneSize);
         var config = PrepareConfiguration(textSpan, eccLevel, requestedVersion);
@@ -91,14 +100,14 @@ public static class MicroQRCodeGenerator
 
         if (quietZoneSize == 0)
         {
-            WriteCoreModules(textSpan, config, target, size);
+            WriteCoreModules(textSpan, config, target, size, maskPattern);
         }
         else
         {
             Span<byte> core = stackalloc byte[MaxCoreSize * MaxCoreSize];
             core = core.Slice(0, size * size);
             core.Clear();
-            WriteCoreModules(textSpan, config, core, size);
+            WriteCoreModules(textSpan, config, core, size, maskPattern);
 
             for (var row = 0; row < size; row++)
             {
@@ -171,7 +180,7 @@ public static class MicroQRCodeGenerator
     /// <param name="eccLevel">Error correction level; must be valid for the (selected) version.</param>
     /// <param name="options">Version and quiet zone settings.</param>
     public static MicroQRCodeData CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, in MicroQRCodeGeneratorOptions options)
-        => CreateMicroQRCode(textSpan, eccLevel, ResolveVersion(textSpan, eccLevel, options), options.QuietZoneSize);
+        => CreateMicroQRCodeCore(textSpan, eccLevel, ResolveVersion(textSpan, eccLevel, options), options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
     /// <inheritdoc cref="CreateMicroQRCode(ReadOnlySpan{char}, MicroQREccLevel, Span{byte}, MicroQRVersion?, int)"/>
     /// <param name="textSpan">The text span to encode.</param>
@@ -179,7 +188,7 @@ public static class MicroQRCodeGenerator
     /// <param name="destination">Destination buffer; at least <see cref="MicroQRCodeCalculatedSize.BufferSize"/> bytes.</param>
     /// <param name="options">Version and quiet zone settings. Size <paramref name="destination"/> with the same options.</param>
     public static int CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, Span<byte> destination, in MicroQRCodeGeneratorOptions options)
-        => CreateMicroQRCode(textSpan, eccLevel, destination, ResolveVersion(textSpan, eccLevel, options), options.QuietZoneSize);
+        => CreateMicroQRCodeCore(textSpan, eccLevel, destination, ResolveVersion(textSpan, eccLevel, options), options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
     /// <summary>
     /// Calculates the required buffer size, matrix size and version for encoding the
@@ -459,7 +468,7 @@ public static class MicroQRCodeGenerator
     /// Runs the encode → ECC → placement → masking → format pipeline into a zeroed
     /// byte-per-module core buffer. Allocation-free: all intermediates are stackalloc.
     /// </summary>
-    private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in MicroQRConfiguration config, Span<byte> core, int size)
+    private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in MicroQRConfiguration config, Span<byte> core, int size, int maskPattern)
     {
         var eccCount = MicroQRConstants.GetEccCodewordCount(config.Version, config.EccLevel);
         var dataBitCount = MicroQRConstants.GetDataBitCapacity(config.Version, config.EccLevel);
@@ -472,7 +481,7 @@ public static class MicroQRCodeGenerator
         Span<byte> eccCodewords = stackalloc byte[14]; // max ECC codewords (M4-Q)
         EccBinaryEncoder.CalculateECC(dataCodewords.Slice(0, dataCount), eccCodewords, eccCount);
 
-        MicroQRModulePlacer.PlaceSymbol(core, size, dataCodewords.Slice(0, dataCount), eccCodewords.Slice(0, eccCount), dataBitCount, config.Version, config.EccLevel);
+        MicroQRModulePlacer.PlaceSymbol(core, size, dataCodewords.Slice(0, dataCount), eccCodewords.Slice(0, eccCount), dataBitCount, config.Version, config.EccLevel, maskPattern);
     }
 
     private readonly record struct MicroQRConfiguration(MicroQRVersion Version, MicroQREccLevel EccLevel, EncodingMode Mode);
