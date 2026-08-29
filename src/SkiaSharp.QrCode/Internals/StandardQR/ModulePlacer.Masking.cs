@@ -76,8 +76,12 @@ internal static partial class ModulePlacer
     /// <param name="size">QR code size in modules.</param>
     /// <param name="blockedMask">Blocked-module bitmask (function patterns and format/version areas).</param>
     /// <param name="patternIndex">Mask pattern number (0-7).</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="patternIndex"/> is not 0-7. Without the guard an out-of-range pattern would silently apply no mask (GetMaskBit's default arm) while the caller still writes format information claiming it.</exception>
     public static void ApplyMaskPattern(Span<byte> buffer, int size, ReadOnlySpan<byte> blockedMask, int patternIndex)
     {
+        if ((uint)patternIndex > 7)
+            throw new ArgumentOutOfRangeException(nameof(patternIndex), $"Mask pattern must be 0-7, but was {patternIndex}");
+
         for (var y = 0; y < size; y++)
         {
             for (var x = 0; x < size; x++)

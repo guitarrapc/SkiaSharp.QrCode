@@ -71,7 +71,7 @@ internal static partial class MicroQRModulePlacer
     /// <param name="forcedMask">Pinned mask pattern (0-3), or -1 for edge-score selection. The fused pipeline is mask-index-driven throughout (templates, format bits), so a pinned pattern rides the same tiers.</param>
     public static int PlaceSymbol(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
+        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
@@ -96,7 +96,7 @@ internal static partial class MicroQRModulePlacer
     /// </summary>
     internal static int PlaceSymbolScalar(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
+        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
@@ -112,7 +112,7 @@ internal static partial class MicroQRModulePlacer
     /// </summary>
     internal static int PlaceSymbolBmi2(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
+        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
@@ -128,7 +128,7 @@ internal static partial class MicroQRModulePlacer
     /// </summary>
     internal static int PlaceSymbolSsse3(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
+        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
@@ -145,7 +145,7 @@ internal static partial class MicroQRModulePlacer
     /// </summary>
     internal static int PlaceSymbolAdvSimd(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, MicroQRVersion version, MicroQREccLevel eccLevel, int forcedMask = -1)
     {
-        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount);
+        ValidateArguments(matrix, size, dataCodewords, eccCodewords, dataBitCount, forcedMask);
 
         Span<ulong> stream = stackalloc ulong[3];
         PackStream(stream, dataCodewords, eccCodewords, dataBitCount);
@@ -154,13 +154,17 @@ internal static partial class MicroQRModulePlacer
     }
 #endif
 
-    private static void ValidateArguments(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount)
+    private static void ValidateArguments(Span<byte> matrix, int size, ReadOnlySpan<byte> dataCodewords, ReadOnlySpan<byte> eccCodewords, int dataBitCount, int forcedMask)
     {
         // The fast paths below index by arithmetic the JIT cannot bounds-prove
         // (flat zigzag indices, 8/16-byte unaligned unpack writes), so the
         // whole traversal domain is validated here instead of per access.
         if (MicroQRConstants.VersionFromSize(size) == 0)
             throw new ArgumentOutOfRangeException(nameof(size), $"size must be a Micro QR size (11/13/15/17), got {size}");
+        // 4-7 would merge into the (symbolNumber << 2) | mask format-table index
+        // and silently write another symbol number's format information.
+        if (forcedMask is < -1 or > 3)
+            throw new ArgumentOutOfRangeException(nameof(forcedMask), $"Mask pattern must be 0-3, or -1 for automatic selection, but was {forcedMask}");
         if (matrix.Length < size * size)
             throw new ArgumentException($"matrix too small: required {size * size}, got {matrix.Length}", nameof(matrix));
         if (dataBitCount < 0 || dataCodewords.Length * 8 < dataBitCount)

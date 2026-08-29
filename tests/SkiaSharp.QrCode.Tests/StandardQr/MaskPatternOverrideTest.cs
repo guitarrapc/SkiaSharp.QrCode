@@ -161,6 +161,21 @@ public class MaskPatternOverrideTest
         await Assert.That(() => new QRCodeGeneratorOptions { MaskPattern = maskPattern }).Throws<ArgumentOutOfRangeException>();
     }
 
+    [Test]
+    [Arguments(-1)]
+    [Arguments(8)]
+    [Arguments(int.MaxValue)]
+    public async Task ApplyMaskPattern_OutOfRange_Throws(int patternIndex)
+    {
+        // Internal seam guard: without it, an out-of-range pattern silently
+        // applies no mask (GetMaskBit's default arm) while the caller still
+        // writes format information claiming that pattern.
+        var layout = SkiaSharp.QrCode.Internals.StandardQr.ModulePlacer.GetLayout(1);
+        var buffer = new byte[21 * 21];
+        await Assert.That(() => SkiaSharp.QrCode.Internals.StandardQr.ModulePlacer.ApplyMaskPattern(buffer, 21, layout.BlockedMask, patternIndex))
+            .Throws<ArgumentOutOfRangeException>();
+    }
+
     // ---- image builder ---------------------------------------------------------------
 
     [Test]

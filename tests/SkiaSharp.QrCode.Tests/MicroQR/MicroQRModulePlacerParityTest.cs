@@ -364,6 +364,20 @@ public class MicroQRModulePlacerParityTest
     }
 
     [Test]
+    [Arguments(-2)]
+    [Arguments(4)]
+    [Arguments(int.MaxValue)]
+    public async Task PlaceSymbol_ForcedMaskOutOfRange_Throws(int forcedMask)
+    {
+        // Out-of-range masks must be a deterministic argument error: 4-7 would
+        // otherwise merge into the (symbolNumber << 2) | mask format-table index
+        // and silently write another symbol number's format information.
+        var matrix = new byte[13 * 13];
+        await Assert.That(() => MicroQRModulePlacer.PlaceSymbol(matrix, 13, new byte[5], new byte[5], 40, MicroQRVersion.M2, MicroQREccLevel.L, forcedMask))
+            .Throws<ArgumentOutOfRangeException>();
+    }
+
+    [Test]
     public async Task PlaceSymbol_InvalidSize_Throws()
     {
         var matrix = new byte[17 * 17];
