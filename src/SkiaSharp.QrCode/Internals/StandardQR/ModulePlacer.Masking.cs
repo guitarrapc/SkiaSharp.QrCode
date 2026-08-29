@@ -66,6 +66,48 @@ internal static partial class ModulePlacer
             : MaskCode192(buffer, size, version, blockedMask, eccLevel);
     }
 
+    /// <summary>
+    /// Applies one specific mask pattern to the data area, for a caller-pinned
+    /// pattern (<see cref="QRCodeGeneratorOptions.MaskPattern"/>). No scoring:
+    /// the whole 8-pattern evaluation is skipped, so a plain per-module loop is
+    /// already far cheaper than the selection path it replaces.
+    /// </summary>
+    /// <param name="buffer">QR matrix with data placed and no mask applied; masked in place.</param>
+    /// <param name="size">QR code size in modules.</param>
+    /// <param name="blockedMask">Blocked-module bitmask (function patterns and format/version areas).</param>
+    /// <param name="patternIndex">Mask pattern number (0-7).</param>
+    public static void ApplyMaskPattern(Span<byte> buffer, int size, ReadOnlySpan<byte> blockedMask, int patternIndex)
+    {
+        for (var y = 0; y < size; y++)
+        {
+            for (var x = 0; x < size; x++)
+            {
+                var index = y * size + x;
+                if ((blockedMask[index >> 3] & (1 << (index & 7))) != 0)
+                    continue;
+                if (GetMaskBit(patternIndex, y, x))
+                    buffer[index] ^= 1;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Mask predicates (ISO/IEC 18004 7.8.2), row = y, col = x. Must agree with
+    /// the packed mask templates below and with QRMatrixDecoder.GetMaskBit.
+    /// </summary>
+    private static bool GetMaskBit(int pattern, int row, int col) => pattern switch
+    {
+        0 => ((row + col) & 1) == 0,
+        1 => (row & 1) == 0,
+        2 => col % 3 == 0,
+        3 => (row + col) % 3 == 0,
+        4 => ((row / 2 + col / 3) & 1) == 0,
+        5 => (row * col) % 2 + (row * col) % 3 == 0,
+        6 => ((row * col % 2 + row * col % 3) & 1) == 0,
+        7 => (((row + col) % 2 + row * col % 3) & 1) == 0,
+        _ => false,
+    };
+
     // ---------------------------------
     // Single-word path (versions 1-11)
     // ---------------------------------

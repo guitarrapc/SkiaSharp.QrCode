@@ -244,6 +244,8 @@ var rmqr = RmQRCodeGenerator.CreateRmQRCode("content", RmQREccLevel.M, new RmQRC
 | `Utf8BOM` | `false` | — | — |
 | `Version` | `Any` (1-40) | `Any` (M1-M4) | `null` (fit automatically) |
 | `QuietZoneSize` | `4` | `2` | `2` |
+| `BoostEccLevel` | `false` | — | — |
+| `MaskPattern` | `null` (automatic) | — | — |
 | `FitStrategy` | — | — | `MinimizeArea` |
 | `Height` | — | — | `null` (any height) |
 | `Segmentation` | — | — | `Single` |
@@ -286,6 +288,21 @@ new QRCodeGeneratorOptions { }                                           // auto
 ```
 
 The smallest version in the range that holds the content is used; if none does, `TryGetRequiredBufferSize` returns `false` and the `Create` overloads throw. Bounds are inclusive, and are validated when the range is built, so an impossible range is rejected before a generator sees it.
+
+#### Mask pattern pinning
+
+Standard QR normally scores all eight ISO/IEC 18004 data mask patterns and applies the lowest-penalty one. `MaskPattern` pins a specific pattern (0-7) instead; any pattern yields a valid, decodable symbol, the automatic choice merely optimizes scan reliability. Pinning is the way to reproduce a symbol produced elsewhere byte-for-byte — the pattern another encoder chose is reported by `QRCodeDecodeInfo.MaskPattern` — or to exercise a scanner against all eight patterns.
+
+```csharp
+// Reproduce a symbol: decode reports the mask, encode accepts it back
+QRCodeDecoder.TryDecode(scanned, out var text, out var info);
+var identical = QRCodeGenerator.CreateQrCode(text, info.EccLevel, new QRCodeGeneratorOptions { MaskPattern = info.MaskPattern });
+
+// Builder equivalent
+var png = new QRCodeImageBuilder("content").WithMaskPattern(3).ToByteArray();
+```
+
+`null` (the default) keeps the automatic selection. Values outside 0-7 are rejected when the option is set. Standard QR only: Micro QR has four patterns under a different numbering and rMQR has a single fixed mask.
 
 Because an `int?` converts implicitly, an optional version needs no branch at the call site — that is the job the old `-1` convention did, without the magic number.
 

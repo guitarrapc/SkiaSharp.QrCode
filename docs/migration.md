@@ -96,6 +96,12 @@ var data = QRCodeGenerator.CreateQrCode("https://example.com", ECCLevel.M,
 
 Nothing to migrate: with the option unset, every call produces the exact symbol it produced before.
 
+### mask pattern pinning
+
+`QRCodeGeneratorOptions.MaskPattern` (Standard QR only, `null` = automatic) pins one of the eight ISO/IEC 18004 data mask patterns instead of the penalty-scored selection. Any pattern is a valid symbol; pinning exists to reproduce a symbol produced elsewhere byte-for-byte (`QRCodeDecodeInfo.MaskPattern` reports the pattern a decoder saw) and to exercise scanners against all eight patterns. `QRCodeImageBuilder` exposes the same setting as `WithMaskPattern(int?)`. Values outside 0-7 are rejected when the option is set, like `Version`.
+
+Nothing to migrate: with the option unset, every call produces the exact symbol it produced before.
+
 ### image builders
 
 `QRCodeImageBuilder.WithVersion` and the Micro QR equivalent gained an overload taking the range type. `WithVersion(int)` and `WithVersion(MicroQRVersion)` are unchanged, including `WithVersion(-1)` meaning automatic.

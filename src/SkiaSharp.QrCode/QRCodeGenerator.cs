@@ -41,6 +41,9 @@ public static class QRCodeGenerator
     /// <summary>The `requestedVersion` value meaning "pick the smallest version that fits".</summary>
     private const int AutomaticVersion = -1;
 
+    /// <summary>The internal mask-pattern value meaning "select the lowest-penalty pattern".</summary>
+    private const int AutomaticMask = -1;
+
     /// <summary>
     /// Creates a QR code from the provided plain text.
     /// </summary>
@@ -67,6 +70,9 @@ public static class QRCodeGenerator
     /// <param name="quietZoneSize">Size of the quiet zone (white border) in modules.</param>
     /// <returns>QRCodeData containing the generated QR code matrix.</returns>
     public static QRCodeData CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
+        => CreateQrCodeCore(textSpan, eccLevel, utf8BOM, eciMode, requestedVersion, quietZoneSize, AutomaticMask);
+
+    private static QRCodeData CreateQrCodeCore(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, bool utf8BOM, EciMode eciMode, int requestedVersion, int quietZoneSize, int maskPattern)
     {
         // QR code generation process:
         // ------------------------------------------------
@@ -114,7 +120,7 @@ public static class QRCodeGenerator
             // No clear: the placement template covers every core module.
             var workBuffer = rentedWorkBuffer.AsSpan(0, dataLength);
 
-            WriteCoreModules(textSpan, config, workBuffer, coreSize);
+            WriteCoreModules(textSpan, config, workBuffer, coreSize, maskPattern);
 
             result.SetCoreData(workBuffer);
 
@@ -180,6 +186,9 @@ public static class QRCodeGenerator
     /// <returns>The number of bytes written to <paramref name="destination"/> (always qrSize × qrSize).</returns>
     /// <exception cref="ArgumentException">Thrown when <paramref name="destination"/> is smaller than the required buffer size.</exception>
     public static int CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, Span<byte> destination, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int requestedVersion = -1, int quietZoneSize = 4)
+        => CreateQrCodeCore(textSpan, eccLevel, destination, utf8BOM, eciMode, requestedVersion, quietZoneSize, AutomaticMask);
+
+    private static int CreateQrCodeCore(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, Span<byte> destination, bool utf8BOM, EciMode eciMode, int requestedVersion, int quietZoneSize, int maskPattern)
     {
         if (requestedVersion != -1 && (requestedVersion < 1 || requestedVersion > 40))
             throw new ArgumentOutOfRangeException(nameof(requestedVersion), $"Version must be 1-40 or -1(auto), but was {requestedVersion}");
@@ -200,7 +209,7 @@ public static class QRCodeGenerator
 
         if (quietZoneSize == 0)
         {
-            WriteCoreModules(textSpan, config, target, coreSize);
+            WriteCoreModules(textSpan, config, target, coreSize, maskPattern);
         }
         else
         {
@@ -214,7 +223,7 @@ public static class QRCodeGenerator
                 rentedWorkBuffer = ArrayPool<byte>.Shared.Rent(dataLength);
                 var workBuffer = rentedWorkBuffer.AsSpan(0, dataLength);
 
-                WriteCoreModules(textSpan, config, workBuffer, coreSize);
+                WriteCoreModules(textSpan, config, workBuffer, coreSize, maskPattern);
 
                 for (var row = 0; row < coreSize; row++)
                 {
@@ -240,7 +249,8 @@ public static class QRCodeGenerator
     /// <param name="config">Prepared QR configuration.</param>
     /// <param name="coreBuffer">Output buffer of coreSize × coreSize bytes (every module is written; no zeroing required).</param>
     /// <param name="coreSize">Module count per side without quiet zone.</param>
-    private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in QRConfiguration config, Span<byte> coreBuffer, int coreSize)
+    /// <param name="maskPattern">Pinned mask pattern (0-7), or <see cref="AutomaticMask"/> for penalty-scored selection.</param>
+    private static void WriteCoreModules(ReadOnlySpan<char> textSpan, in QRConfiguration config, Span<byte> coreBuffer, int coreSize, int maskPattern)
     {
         // Calculate buffer sizes
         var dataCapacity = CalculateMaxBitStringLength(config.Version, config.EccLevel, config.Encoding);
@@ -264,7 +274,7 @@ public static class QRCodeGenerator
         InterleaveCodewords(encodedData, eccBuffer, config.EccInfo, config.Version, interleavedBuffer);
 
         // QR matrix in core buffer
-        WriteQRMatrix(coreBuffer, coreSize, config.Version, interleavedBuffer, config.EccLevel);
+        WriteQRMatrix(coreBuffer, coreSize, config.Version, interleavedBuffer, config.EccLevel, maskPattern);
     }
 
     /// <summary>
@@ -323,7 +333,7 @@ public static class QRCodeGenerator
     public static QRCodeData CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in QRCodeGeneratorOptions options)
     {
         var (version, resolvedEcc) = ResolveVersionAndEcc(textSpan, eccLevel, options);
-        return CreateQrCode(textSpan, resolvedEcc, options.Utf8BOM, options.EciMode, version, options.QuietZoneSize);
+        return CreateQrCodeCore(textSpan, resolvedEcc, options.Utf8BOM, options.EciMode, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
     }
 
     /// <inheritdoc cref="CreateQrCode(string, ECCLevel, Span{byte}, bool, EciMode, int, int)"/>
@@ -342,7 +352,7 @@ public static class QRCodeGenerator
     public static int CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options)
     {
         var (version, resolvedEcc) = ResolveVersionAndEcc(textSpan, eccLevel, options);
-        return CreateQrCode(textSpan, resolvedEcc, destination, options.Utf8BOM, options.EciMode, version, options.QuietZoneSize);
+        return CreateQrCodeCore(textSpan, resolvedEcc, destination, options.Utf8BOM, options.EciMode, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
     }
 
     /// <summary>
@@ -564,9 +574,10 @@ public static class QRCodeGenerator
     /// <param name="version">The QR code version (1-40) to generate.</param>
     /// <param name="interleavedData">The encoded and interleaved data bytes to be placed in the QR code.</param>
     /// <param name="eccLevel">The error correction level to use for the QR code.</param>
+    /// <param name="maskPattern">Pinned mask pattern (0-7), or <see cref="AutomaticMask"/> for penalty-scored selection.</param>
     /// <returns>A <see cref="QRCodeData"/> object containing the generated QR code matrix.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void WriteQRMatrix(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> interleavedData, ECCLevel eccLevel)
+    private static void WriteQRMatrix(Span<byte> buffer, int size, int version, ReadOnlySpan<byte> interleavedData, ECCLevel eccLevel, int maskPattern)
     {
         // Function patterns, the blocked-module bitmask and the zigzag order all come
         // from the version's cached placement tables (ModulePlacer.PlacementLayout):
@@ -580,7 +591,16 @@ public static class QRCodeGenerator
         ModulePlacer.PlaceDataWords(buffer, layout, interleavedData);
 
         // Apply mask and format
-        var maskVersion = ModulePlacer.MaskCode(buffer, size, version, layout.BlockedMask, eccLevel);
+        int maskVersion;
+        if (maskPattern != AutomaticMask)
+        {
+            ModulePlacer.ApplyMaskPattern(buffer, size, layout.BlockedMask, maskPattern);
+            maskVersion = maskPattern;
+        }
+        else
+        {
+            maskVersion = ModulePlacer.MaskCode(buffer, size, version, layout.BlockedMask, eccLevel);
+        }
         var formatBit = QRCodeConstants.GetFormatBits(eccLevel, maskVersion);
         ModulePlacer.PlaceFormat(buffer, size, formatBit);
 

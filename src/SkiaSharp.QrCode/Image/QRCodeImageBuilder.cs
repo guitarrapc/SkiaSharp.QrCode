@@ -37,6 +37,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     private bool _boostEccLevel;
     private EciMode _eciMode = EciMode.Default;
     private QRCodeVersionRange _versionRange;
+    private int? _maskPattern;
 
     // rendering (Standard QR-only options; Micro QR has a single finder pattern
     // and no ECC headroom for overlays)
@@ -398,6 +399,25 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     }
 
     /// <summary>
+    /// Pin one of the eight data mask patterns (0-7) instead of the automatic
+    /// penalty-scored selection; see <see cref="QRCodeGeneratorOptions.MaskPattern"/>.
+    /// </summary>
+    /// <param name="maskPattern">Mask pattern (0-7), or null for automatic selection.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="maskPattern"/> is not 0-7 or null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="QRCodeData"/>.</exception>
+    public QRCodeImageBuilder WithMaskPattern(int? maskPattern)
+    {
+        if (_qrCodeData is not null)
+            throw new InvalidOperationException("WithMaskPattern cannot be used when QRCodeData is provided directly.");
+        if (maskPattern is < 0 or > 7)
+            throw new ArgumentOutOfRangeException(nameof(maskPattern), $"Mask pattern must be 0-7, or null for automatic selection, but was {maskPattern}");
+
+        _maskPattern = maskPattern;
+        return this;
+    }
+
+    /// <summary>
     /// Configure an icon to overlay on the center of the QR code.
     /// </summary>
     /// <param name="iconData">Icon configuration. If null, no icon is displayed.</param>
@@ -429,6 +449,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
             Version = _versionRange,
             QuietZoneSize = _quietZoneSize,
             BoostEccLevel = _boostEccLevel,
+            MaskPattern = _maskPattern,
         });
         matrixWidth = matrixHeight = qrCodeData.Size;
         return qrCodeData;

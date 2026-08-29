@@ -21,12 +21,17 @@ public class QrImageBuilderApiParityTest
     /// related reasons: Micro QR ties the legal ECC levels to the version (M1 has
     /// none, M4 alone offers Q), and rMQR's two levels leave a single M→H step that
     /// has not been asked for; both can join later without changing the contract.
+    /// Mask pinning is Standard QR-only because only Standard QR selects among all
+    /// eight ISO/IEC 18004 patterns: Micro QR has four patterns under a different
+    /// numbering and rMQR has a single fixed mask, so an int? 0-7 contract does not
+    /// transfer; Micro QR can join later with its own type if asked for.
     /// </summary>
     private static readonly string[] standardOnlyMembers =
     [
         "WithIcon",
         "WithFinderPatternShape",
         "WithErrorCorrectionBoost",
+        "WithMaskPattern",
     ];
 
     /// <summary>
