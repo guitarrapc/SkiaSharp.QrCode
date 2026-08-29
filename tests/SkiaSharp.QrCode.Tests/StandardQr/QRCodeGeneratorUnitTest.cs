@@ -404,6 +404,10 @@ public class QRCodeGeneratorUnitTest
         }
     }
 
+    // The parameter list GetRequiredBufferSize is [Obsolete] and scheduled for removal in
+    // 2.0.0 (plans/generator-api-options-plan.md, Phase 6). These tests are the regression
+    // net for it until then, so calling the deprecated member here is the point.
+#pragma warning disable CS0618 // GetRequiredBufferSize (parameter list)
     // GetRequiredBufferSize Test
 
     [Test]
@@ -414,7 +418,7 @@ public class QRCodeGeneratorUnitTest
         var quietZoneSize = 4;
 
         // Calculate expected size
-        var (expectedBufferSize, expectedQrSize, expectedVersion) = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), eccLevel, quietZoneSize: quietZoneSize);
+        var (expectedBufferSize, expectedQrSize, expectedVersion) = GetRequiredBufferSize(text.AsSpan(), eccLevel, quietZoneSize: quietZoneSize);
 
         // Generate actual QR code
         var qrCode = QRCodeGenerator.CreateQrCode(text.AsSpan(), eccLevel, quietZoneSize: quietZoneSize);
@@ -433,7 +437,7 @@ public class QRCodeGeneratorUnitTest
     public async Task GetRequiredBufferSize_ReturnsCorrectSize(string text, ECCLevel eccLevel, int quietZoneSize, int expectedBufferSize, int expectedQrSize, int expectedVersion)
     {
         // Act
-        var (bufferSize, qrSize, version) = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), eccLevel, quietZoneSize: quietZoneSize);
+        var (bufferSize, qrSize, version) = GetRequiredBufferSize(text.AsSpan(), eccLevel, quietZoneSize: quietZoneSize);
 
         // Assert
         await Assert.That(bufferSize).IsEqualTo(expectedBufferSize);
@@ -457,7 +461,7 @@ public class QRCodeGeneratorUnitTest
     public async Task GetRequiredBufferSize_WithEciAndBOM_ReturnsCorrectSize(string text, ECCLevel eccLevel, bool utf8BOM, EciMode eciMode, int quietZoneSize, int expectedBufferSize, int expectedQrSize, int expectedVersion)
     {
         // Act
-        var (bufferSize, qrSize, version) = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), eccLevel, utf8BOM: utf8BOM, eciMode: eciMode, quietZoneSize: quietZoneSize);
+        var (bufferSize, qrSize, version) = GetRequiredBufferSize(text.AsSpan(), eccLevel, utf8BOM: utf8BOM, eciMode: eciMode, quietZoneSize: quietZoneSize);
 
         // Assert
         await Assert.That(bufferSize).IsEqualTo(expectedBufferSize);
@@ -479,7 +483,7 @@ public class QRCodeGeneratorUnitTest
         var text = new string('a', textLength); // ASCII = 1 byte each
 
         // Act
-        var (_, _, version) = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), eccLevel, utf8BOM: utf8BOM, eciMode: eciMode);
+        var (_, _, version) = GetRequiredBufferSize(text.AsSpan(), eccLevel, utf8BOM: utf8BOM, eciMode: eciMode);
 
         // Assert
         await Assert.That(version).IsEqualTo(expectedVersion);
@@ -492,9 +496,9 @@ public class QRCodeGeneratorUnitTest
     public async Task GetRequiredBufferSize_DifferentEciModes_MayProduceDifferentVersions(string text, EciMode eciMode1, EciMode eciMode2)
     {
         // Act
-        var (bufferSize1, qrSize1, version1) = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ECCLevel.M, eciMode: eciMode1);
+        var (bufferSize1, qrSize1, version1) = GetRequiredBufferSize(text.AsSpan(), ECCLevel.M, eciMode: eciMode1);
 
-        var (bufferSize2, qrSize2, version2) = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ECCLevel.M, eciMode: eciMode2);
+        var (bufferSize2, qrSize2, version2) = GetRequiredBufferSize(text.AsSpan(), ECCLevel.M, eciMode: eciMode2);
 
         // Assert - Different ECI modes may produce different buffer sizes due to ECI header overhead
         // For short text like "HELLO", all should fit in Version 1, but buffer sizes differ based on final QR size
@@ -760,6 +764,7 @@ public class QRCodeGeneratorUnitTest
         await Assert.That(ex.ParamName).IsEqualTo("quietZoneSize");
     }
 
+#pragma warning restore CS0618 // GetRequiredBufferSize (parameter list)
     // Helpers
 
     /// <summary>

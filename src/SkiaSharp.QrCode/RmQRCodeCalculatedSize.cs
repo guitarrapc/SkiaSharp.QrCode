@@ -1,7 +1,7 @@
 namespace SkiaSharp.QrCode;
 
 /// <summary>
-/// Result of <see cref="RmQRCodeGenerator.GetRequiredBufferSize"/>: the byte count of
+/// Result of <see cref="RmQRCodeGenerator.TryGetRequiredBufferSize"/>: the byte count of
 /// the byte-per-module matrix, its dimensions (quiet zone included) and the version
 /// that will be used.
 /// </summary>

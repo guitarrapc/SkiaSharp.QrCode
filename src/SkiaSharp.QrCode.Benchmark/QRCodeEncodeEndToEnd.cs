@@ -30,8 +30,8 @@ public class QRCodeEncodeEndToEnd
         _byteLongL = BuildDeterministicText(2900); // version 40-L byte mode (max 2953)
         _byteLongH = BuildDeterministicText(1200); // version 40-H byte mode (max 1273)
         _spanDestination = new byte[Math.Max(
-            QRCodeGenerator.GetRequiredBufferSize(_byteLongL.AsSpan(), ECCLevel.L).BufferSize,
-            MicroQRCodeGenerator.GetRequiredBufferSize(_numeric.AsSpan(), MicroQREccLevel.L).BufferSize)];
+            Sizing.Required(_byteLongL.AsSpan(), ECCLevel.L).BufferSize,
+            Sizing.Required(_numeric.AsSpan(), MicroQREccLevel.L).BufferSize)];
     }
 
     // Class API (allocates the result object only)

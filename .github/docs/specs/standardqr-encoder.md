@@ -43,7 +43,7 @@ The encoder exposes two output models.
 - flat row-major order;
 - quiet zone included.
 
-`GetRequiredBufferSize` returns the required matrix side, byte count, and automatically selected version. `TryGetRequiredBufferSize` answers the same question without throwing when the content exceeds the Version 40 capacity; argument errors (a negative or overflowing quiet zone) still throw, so `false` means "does not fit" and nothing else. The rationale for that split, and why it is a `Try` rather than a dedicated exception type, is recorded once in [rmqr-encoder.md](rmqr-encoder.md) — Standard QR follows the same rule so the three symbologies present one surface. The encoder overwrites every byte of the written region (the core comes from a per-version template copy; only a non-zero quiet zone is cleared), accepts a dirty pooled destination, and leaves any tail beyond the returned byte count untouched. After JIT and pool warm-up, the span path is allocation-free in Release builds.
+`TryGetRequiredBufferSize` returns the required matrix side, byte count, and selected version, and returns `false` when the content exceeds the capacity of every version in range; argument errors (a negative or overflowing quiet zone) still throw, so `false` means "does not fit" and nothing else. It is the only sizing method on the current surface: the released `GetRequiredBufferSize` is `[Obsolete]` and goes in 2.0.0. The rationale for that split, and why it is a `Try` rather than a dedicated exception type, is recorded once in [rmqr-encoder.md](rmqr-encoder.md) — Standard QR follows the same rule so the three symbologies present one surface. The encoder overwrites every byte of the written region (the core comes from a per-version template copy; only a non-zero quiet zone is cleared), accepts a dirty pooled destination, and leaves any tail beyond the returned byte count untouched. After JIT and pool warm-up, the span path is allocation-free in Release builds.
 
 ### Supported
 
@@ -82,7 +82,7 @@ All generation overloads reject:
 - requested versions outside `1..40` (except `-1`, meaning automatic);
 - negative quiet-zone sizes.
 
-`GetRequiredBufferSize` and the span-output overload additionally reject quiet zones whose resulting side or squared byte count exceeds `int.MaxValue`. The span overload also rejects caller-provided buffers smaller than the calculated matrix. These paths compute dimensions with `long` arithmetic before narrowing to `int`, preventing overflow in `coreSize + 2 * quietZoneSize` and `totalSize * totalSize`.
+`TryGetRequiredBufferSize` and the span-output overload additionally reject quiet zones whose resulting side or squared byte count exceeds `int.MaxValue`. The span overload also rejects caller-provided buffers smaller than the calculated matrix. These paths compute dimensions with `long` arithmetic before narrowing to `int`, preventing overflow in `coreSize + 2 * quietZoneSize` and `totalSize * totalSize`.
 
 ### 2. Analyze text and choose mode / ECI
 
@@ -139,8 +139,8 @@ When `requestedVersion` is supplied, automatic selection is bypassed. It is inte
 
 Two behaviours differ from the `requestedVersion` parameter, and both are confined to the options overloads:
 
-- **A range narrower than 1-40 is checked for fit.** `Exactly(n)` reports content that does not fit version *n* as an `ArgumentException` (or `false` from `TryGetRequiredBufferSize`), where the parameter hands the version straight to the encoder and fails deep inside with `ArgumentOutOfRangeException (Parameter 'length')` from a span slice. The parameter's behaviour is unchanged; only the new surface checks.
-- **Sizing honours the version.** `GetRequiredBufferSize` has no `requestedVersion` parameter, so an ignored `Version` would have been a silent trap. The options overloads report the version the range resolves to, matching what Micro QR and rMQR already do.
+- **A range narrower than 1-40 is checked for fit.** `Exactly(n)` reports content that does not fit version *n* as `false` from `TryGetRequiredBufferSize` (or an `ArgumentException` from `CreateQrCode`), where the parameter hands the version straight to the encoder and fails deep inside with `ArgumentOutOfRangeException (Parameter 'length')` from a span slice. The parameter's behaviour is unchanged; only the new surface checks.
+- **Sizing honours the version.** The released `GetRequiredBufferSize` has no `requestedVersion` parameter, so an ignored `Version` would have been a silent trap. `TryGetRequiredBufferSize` reports the version the range resolves to, matching what Micro QR and rMQR already do.
 
 `QRCodeVersionRange.Any` short-circuits to the same automatic path the parameter list overloads take, so the default costs nothing extra; only a constrained range pays for the additional text analysis its resolution needs.
 

@@ -261,8 +261,8 @@ public class RmQRSegmentationTest
     {
         const string content = "37~yhakdP$%F$SMQINKKTSHJ";
 
-        var singleSize = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), RmQREccLevel.H);
-        var optimalSize = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), RmQREccLevel.H, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        var singleSize = Sizing.Required(content.AsSpan(), RmQREccLevel.H);
+        var optimalSize = Sizing.Required(content.AsSpan(), RmQREccLevel.H, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
         await Assert.That(optimalSize.BufferSize).IsGreaterThan(singleSize.BufferSize);
 
         var undersized = new byte[singleSize.BufferSize];
@@ -530,10 +530,10 @@ public class RmQRSegmentationTest
     }
 
     [Test]
-    public async Task Optimal_TooLongForEverySingleMode_AgreesWithGetRequiredBufferSize()
+    public async Task Optimal_TooLongForEverySingleMode_AgreesWithTryGetRequiredBufferSize()
     {
         var content = new string('a', 100) + new string('7', 100);
-        var size = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+        var size = Sizing.Required(content.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
         var data = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
 
         await Assert.That(size.Version).IsEqualTo(data.Version);
@@ -648,7 +648,7 @@ public class RmQRSegmentationTest
     {
         foreach (var quietZone in new[] { 0, 2, 5 })
         {
-            var size = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = RmQRSegmentation.Optimal });
+            var size = Sizing.Required(content.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = RmQRSegmentation.Optimal });
             var buffer = new byte[size.BufferSize];
             var written = RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { QuietZoneSize = quietZone, Segmentation = RmQRSegmentation.Optimal });
 
@@ -671,7 +671,7 @@ public class RmQRSegmentationTest
     [MethodDataSource(nameof(Corpus))]
     public async Task Optimal_EciSpanOverload_MatchesTheEciDataOverload(string content)
     {
-        var size = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), RmQREccLevel.H, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
+        var size = Sizing.Required(content.AsSpan(), RmQREccLevel.H, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
         var buffer = new byte[size.BufferSize];
         RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.H, buffer, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = RmQRSegmentation.Optimal });
 
@@ -702,12 +702,12 @@ public class RmQRSegmentationTest
         await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.GetRequiredBufferSize("123".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("123".AsSpan(), RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
 
         await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.GetRequiredBufferSize("123".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("123".AsSpan(), RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = invalid })).Throws<ArgumentOutOfRangeException>();
     }
 
     /// <summary>The ECI validation the ECI entry points share must fire under Optimal too.</summary>
@@ -720,7 +720,7 @@ public class RmQRSegmentationTest
         await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = unsupported, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = unsupported, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, buffer, new RmQRCodeGeneratorOptions { EciMode = unsupported, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => RmQRCodeGenerator.GetRequiredBufferSize("123".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { EciMode = unsupported, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => RmQRCodeGenerator.TryGetRequiredBufferSize("123".AsSpan(), RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { EciMode = unsupported, Segmentation = RmQRSegmentation.Optimal })).Throws<ArgumentOutOfRangeException>();
     }
 
 #if !DEBUG

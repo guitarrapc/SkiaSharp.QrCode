@@ -1,7 +1,7 @@
 namespace SkiaSharp.QrCode;
 
 /// <summary>
-/// Result of <see cref="MicroQRCodeGenerator.GetRequiredBufferSize"/>: buffer size,
+/// Result of <see cref="MicroQRCodeGenerator.TryGetRequiredBufferSize"/>: buffer size,
 /// matrix side length and selected version for a pending Micro QR encode.
 /// </summary>
 public readonly struct MicroQRCodeCalculatedSize

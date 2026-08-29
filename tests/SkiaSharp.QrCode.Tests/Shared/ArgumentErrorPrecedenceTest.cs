@@ -27,7 +27,6 @@ public class ArgumentErrorPrecedenceTest
         await AssertQuietZone(() => QRCodeGenerator.CreateQrCode(TooLongForVersion1.AsSpan(), ECCLevel.M, options));
         await AssertQuietZone(() => QRCodeGenerator.CreateQrCode(TooLongForVersion1, ECCLevel.M, new byte[10_000], options));
         await AssertQuietZone(() => QRCodeGenerator.CreateQrCode(TooLongForVersion1.AsSpan(), ECCLevel.M, new byte[10_000], options));
-        await AssertQuietZone(() => QRCodeGenerator.GetRequiredBufferSize(TooLongForVersion1.AsSpan(), ECCLevel.M, options));
         await AssertQuietZone(() => QRCodeGenerator.TryGetRequiredBufferSize(TooLongForVersion1.AsSpan(), ECCLevel.M, out _, options));
     }
 
@@ -41,7 +40,6 @@ public class ArgumentErrorPrecedenceTest
         await AssertQuietZone(() => MicroQRCodeGenerator.CreateMicroQRCode(ByteContent, MicroQREccLevel.L, options));
         await AssertQuietZone(() => MicroQRCodeGenerator.CreateMicroQRCode(ByteContent.AsSpan(), MicroQREccLevel.L, options));
         await AssertQuietZone(() => MicroQRCodeGenerator.CreateMicroQRCode(ByteContent.AsSpan(), MicroQREccLevel.L, new byte[10_000], options));
-        await AssertQuietZone(() => MicroQRCodeGenerator.GetRequiredBufferSize(ByteContent.AsSpan(), MicroQREccLevel.L, options));
         await AssertQuietZone(() => MicroQRCodeGenerator.TryGetRequiredBufferSize(ByteContent.AsSpan(), MicroQREccLevel.L, out _, options));
     }
 
@@ -54,7 +52,6 @@ public class ArgumentErrorPrecedenceTest
         await AssertQuietZone(() => RmQRCodeGenerator.CreateRmQRCode(tooLong, RmQREccLevel.M, options));
         await AssertQuietZone(() => RmQRCodeGenerator.CreateRmQRCode(tooLong.AsSpan(), RmQREccLevel.M, options));
         await AssertQuietZone(() => RmQRCodeGenerator.CreateRmQRCode(tooLong.AsSpan(), RmQREccLevel.M, new byte[10_000], options));
-        await AssertQuietZone(() => RmQRCodeGenerator.GetRequiredBufferSize(tooLong.AsSpan(), RmQREccLevel.M, options));
         await AssertQuietZone(() => RmQRCodeGenerator.TryGetRequiredBufferSize(tooLong.AsSpan(), RmQREccLevel.M, out _, options));
     }
 

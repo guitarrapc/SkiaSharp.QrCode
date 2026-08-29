@@ -28,7 +28,7 @@ public class SegmentDecoderStatusOrderTest
     [Arguments("Hello!", 6)]
     public async Task ShortBuffer_OnAValidSymbol_ReportsDestinationTooSmall(string content, int expectedLength)
     {
-        var size = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
+        var size = Sizing.Required(content.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
         var modules = new byte[size.BufferSize];
         RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), RmQREccLevel.M, modules, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
 

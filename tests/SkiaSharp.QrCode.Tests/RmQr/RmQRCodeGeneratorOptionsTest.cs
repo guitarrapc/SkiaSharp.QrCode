@@ -123,7 +123,7 @@ public class RmQRCodeGeneratorOptionsTest
     {
         // The end-to-end proof of the sentinel: if "unset" meant 0, this symbol would be
         // 43x7 instead of 47x11, and every existing rMQR expectation would shift.
-        var size = RmQRCodeGenerator.GetRequiredBufferSize("1".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
+        var size = Sizing.Required("1".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
 
         await Assert.That(size.Width).IsEqualTo(R7x43CoreWidth + SpecQuietZone * 2);
         await Assert.That(size.Height).IsEqualTo(R7x43CoreHeight + SpecQuietZone * 2);
@@ -132,7 +132,7 @@ public class RmQRCodeGeneratorOptionsTest
     [Test]
     public async Task Generator_ExplicitZeroQuietZone_DropsTheMargin()
     {
-        var size = RmQRCodeGenerator.GetRequiredBufferSize("1".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43, QuietZoneSize = 0 });
+        var size = Sizing.Required("1".AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43, QuietZoneSize = 0 });
 
         await Assert.That(size.Width).IsEqualTo(R7x43CoreWidth);
         await Assert.That(size.Height).IsEqualTo(R7x43CoreHeight);

@@ -30,7 +30,7 @@ public class MicroQRDecodeEndToEnd
         (_byteModules, _byteSize) = BuildMicro("bytes m4 mode", MicroQREccLevel.M);             // M4-M
         _chars = new char[MicroQRCodeDecoder.GetMaxDecodedLength(MicroQRVersion.M4)];
 
-        var calculated = SkiaSharp.QrCode.QRCodeGenerator.GetRequiredBufferSize("0123456789", ECCLevel.L, quietZoneSize: 0);
+        var calculated = Sizing.Required("0123456789", ECCLevel.L, 0);
         _standardModules = new byte[calculated.BufferSize];
         SkiaSharp.QrCode.QRCodeGenerator.CreateQrCode("0123456789", ECCLevel.L, _standardModules, quietZoneSize: 0);
         _standardSize = calculated.QrSize;
@@ -94,7 +94,7 @@ public class MicroQRDecodeEndToEnd
 
     private static (byte[] modules, int size) BuildMicro(string content, MicroQREccLevel eccLevel)
     {
-        var calculated = MicroQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), eccLevel, quietZoneSize: 0);
+        var calculated = Sizing.Required(content.AsSpan(), eccLevel, 0);
         var buffer = new byte[calculated.BufferSize];
         MicroQRCodeGenerator.CreateMicroQRCode(content.AsSpan(), eccLevel, buffer, quietZoneSize: 0);
         return (buffer, calculated.QrSize);

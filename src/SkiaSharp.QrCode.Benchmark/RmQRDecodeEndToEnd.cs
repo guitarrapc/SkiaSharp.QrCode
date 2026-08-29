@@ -40,7 +40,7 @@ public class RmQRDecodeEndToEnd
         _numericDamagedModules = Damage(_numericModules, _numericSize, RmQRVersion.R7x43, flips: 2, seed: 17);
         _byteDamagedModules = Damage(_byteModules, _byteSize, RmQRVersion.R17x139, flips: 6, seed: 23);
 
-        var calculated = SkiaSharp.QrCode.QRCodeGenerator.GetRequiredBufferSize("012345678901", ECCLevel.L, quietZoneSize: 0);
+        var calculated = Sizing.Required("012345678901", ECCLevel.L, 0);
         _standardModules = new byte[calculated.BufferSize];
         SkiaSharp.QrCode.QRCodeGenerator.CreateQrCode("012345678901", ECCLevel.L, _standardModules, quietZoneSize: 0);
         _standardSize = calculated.QrSize;
@@ -174,7 +174,7 @@ public class RmQRDecodeEndToEnd
 
     private static (byte[] modules, (int Width, int Height) size) Build(string content, RmQREccLevel eccLevel, RmQRVersion version)
     {
-        var calculated = RmQRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), eccLevel, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
+        var calculated = Sizing.Required(content.AsSpan(), eccLevel, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
         var buffer = new byte[calculated.BufferSize];
         RmQRCodeGenerator.CreateRmQRCode(content.AsSpan(), eccLevel, buffer, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = 0 });
         return (buffer, (calculated.Width, calculated.Height));

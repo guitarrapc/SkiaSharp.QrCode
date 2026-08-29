@@ -25,8 +25,8 @@ public class MicroQREncodeEndToend
         // Sized for the largest consumer: the Standard QR v1 reference benchmark
         // (29x29 with quiet zone) exceeds every Micro QR buffer size.
         _spanDestination = new byte[Math.Max(
-            MicroQRCodeGenerator.GetRequiredBufferSize(_byte.AsSpan(), MicroQREccLevel.M).BufferSize,
-            SkiaSharp.QrCode.QRCodeGenerator.GetRequiredBufferSize(_numeric.AsSpan(), ECCLevel.L).BufferSize)];
+            Sizing.Required(_byte.AsSpan(), MicroQREccLevel.M).BufferSize,
+            Sizing.Required(_numeric.AsSpan(), ECCLevel.L).BufferSize)];
     }
 
     // Class API (allocates the result object only)

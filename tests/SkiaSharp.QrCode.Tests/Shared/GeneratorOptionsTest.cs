@@ -16,7 +16,7 @@ namespace SkiaSharp.QrCode.Tests;
 /// </para>
 /// <para>
 /// The one place the options overloads do <em>more</em> than the released ones is
-/// Standard QR sizing. <c>GetRequiredBufferSize</c> has never had a version parameter,
+/// Standard QR sizing. The released <c>GetRequiredBufferSize</c> has never had a version parameter,
 /// so an ignored <c>Version</c> would have been a silent trap; the options overloads
 /// honour it and report a version that cannot hold the content the same way Micro QR
 /// and rMQR already do.
@@ -142,7 +142,7 @@ public class GeneratorOptionsTest
             QuietZoneSize = quietZone,
         };
 
-        var size = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, options);
+        var size = Sizing.Required(text.AsSpan(), ecc, options);
         var fromReleased = new byte[size.BufferSize];
         var fromOptions = new byte[size.BufferSize];
         var fromOptionsString = new byte[size.BufferSize];
@@ -168,8 +168,8 @@ public class GeneratorOptionsTest
 
         var options = new QRCodeGeneratorOptions { Utf8BOM = utf8BOM, EciMode = eci, QuietZoneSize = quietZone };
 
-        var released = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, utf8BOM, eci, quietZone);
-        var viaOptions = QRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, options);
+        var released = Sizing.ReleasedRequired(text.AsSpan(), ecc, utf8BOM, eci, quietZone);
+        var viaOptions = Sizing.Required(text.AsSpan(), ecc, options);
 
         await Assert.That(viaOptions).IsEqualTo(released);
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(text.AsSpan(), ecc, out var tryOptions, options)).IsTrue();
@@ -211,8 +211,8 @@ public class GeneratorOptionsTest
     {
         var options = new MicroQRCodeGeneratorOptions { Version = requestedVersion is null ? MicroQRVersionRange.Any : MicroQRVersionRange.Exactly(requestedVersion.Value), QuietZoneSize = quietZone };
 
-        var released = MicroQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, requestedVersion, quietZone);
-        var viaOptions = MicroQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, options);
+        var released = Sizing.ReleasedRequired(text.AsSpan(), ecc, requestedVersion, quietZone);
+        var viaOptions = Sizing.Required(text.AsSpan(), ecc, options);
         await Assert.That(viaOptions).IsEqualTo(released);
 
         await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(text.AsSpan(), ecc, out var tryOptions, options)).IsTrue();
@@ -232,8 +232,8 @@ public class GeneratorOptionsTest
     [Test]
     public async Task StandardQrSizing_ExplicitVersion_ReportsThatVersion()
     {
-        var automatic = QRCodeGenerator.GetRequiredBufferSize(Digits.AsSpan(), ECCLevel.M, QRCodeGeneratorOptions.Default);
-        var pinned = QRCodeGenerator.GetRequiredBufferSize(Digits.AsSpan(), ECCLevel.M, new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Exactly(15) });
+        var automatic = Sizing.Required(Digits.AsSpan(), ECCLevel.M, QRCodeGeneratorOptions.Default);
+        var pinned = Sizing.Required(Digits.AsSpan(), ECCLevel.M, new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Exactly(15) });
 
         await Assert.That(automatic.Version).IsEqualTo(1);
         await Assert.That(pinned.Version).IsEqualTo(15);
@@ -252,7 +252,6 @@ public class GeneratorOptionsTest
 
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content.AsSpan(), ECCLevel.M, out var size, new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Exactly(1) })).IsFalse();
         await Assert.That(size).IsEqualTo(default(QRCodeCalculatedSize));
-        await Assert.That(() => QRCodeGenerator.GetRequiredBufferSize(content.AsSpan(), ECCLevel.M, new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Exactly(1) })).Throws<ArgumentException>();
 
         // the same content at a version that does hold it is a fit
         await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content.AsSpan(), ECCLevel.M, out var ok, new QRCodeGeneratorOptions { Version = QRCodeVersionRange.Exactly(10) })).IsTrue();
@@ -300,11 +299,10 @@ public class GeneratorOptionsTest
     {
         var standard = new QRCodeGeneratorOptions { QuietZoneSize = -1 };
         await Assert.That(() => QRCodeGenerator.CreateQrCode(Digits, ECCLevel.M, standard)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => QRCodeGenerator.GetRequiredBufferSize(Digits.AsSpan(), ECCLevel.M, standard)).Throws<ArgumentOutOfRangeException>();
         await Assert.That(() => QRCodeGenerator.TryGetRequiredBufferSize(Digits.AsSpan(), ECCLevel.M, out _, standard)).Throws<ArgumentOutOfRangeException>();
 
         var micro = new MicroQRCodeGeneratorOptions { QuietZoneSize = -1 };
         await Assert.That(() => MicroQRCodeGenerator.CreateMicroQRCode(Digits, MicroQREccLevel.L, micro)).Throws<ArgumentOutOfRangeException>();
-        await Assert.That(() => MicroQRCodeGenerator.GetRequiredBufferSize(Digits.AsSpan(), MicroQREccLevel.L, micro)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => MicroQRCodeGenerator.TryGetRequiredBufferSize(Digits.AsSpan(), MicroQREccLevel.L, out _, micro)).Throws<ArgumentOutOfRangeException>();
     }
 }

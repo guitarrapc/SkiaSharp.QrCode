@@ -36,8 +36,8 @@ public static class RmQRSpotCheck
                     if (eciMode == EciMode.Iso8859_1) eci3Total++;
                     if (eciMode == EciMode.Utf8) eci26Total++;
                     var calculated = eciMode == EciMode.Default
-                        ? RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules })
-                        : RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version, QuietZoneSize = QuietZoneModules });
+                        ? Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules })
+                        : Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version, QuietZoneSize = QuietZoneModules });
                     var modules = new byte[calculated.BufferSize];
                     if (eciMode == EciMode.Default)
                         RmQRCodeGenerator.CreateRmQRCode(text.AsSpan(), ecc, modules, new RmQRCodeGeneratorOptions { Version = version, QuietZoneSize = QuietZoneModules });
@@ -114,7 +114,7 @@ public static class RmQRSpotCheck
     {
         try
         {
-            RmQRCodeGenerator.GetRequiredBufferSize(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version });
+            Sizing.Required(text.AsSpan(), ecc, new RmQRCodeGeneratorOptions { EciMode = eciMode, Version = version });
             return true;
         }
         // Every caller supplies a valid version from the constants table. On this
