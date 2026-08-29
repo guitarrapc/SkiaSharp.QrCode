@@ -84,6 +84,18 @@ Two things behave differently from the `requestedVersion` parameter, and only th
 
 `-1` means automatic only in `QRCodeImageBuilder.WithVersion(int)`, which is unchanged. It is **not** accepted by the range type: use `null`, or leave `Version` unset. A `-1` that reached a range would otherwise silently produce an automatically sized symbol where a pinned one was asked for.
 
+### ecc boost
+
+`QRCodeGeneratorOptions.BoostEccLevel` (Standard QR only, off by default) treats the requested ECC level as a minimum: the version is chosen for it as before, then the level is raised as far as that version's spare capacity allows. The symbol size never changes, and sizing is unaffected — only the emitted format information (and possibly the mask) differs. `QRCodeImageBuilder` exposes the same switch as `WithErrorCorrectionBoost()`, which pairs well with `WithIcon`.
+
+```csharp
+// Requests M as the floor; the symbol may come out as Q or H at the same size.
+var data = QRCodeGenerator.CreateQrCode("https://example.com", ECCLevel.M,
+    new QRCodeGeneratorOptions { BoostEccLevel = true });
+```
+
+Nothing to migrate: with the option unset, every call produces the exact symbol it produced before.
+
 ### image builders
 
 `QRCodeImageBuilder.WithVersion` and the Micro QR equivalent gained an overload taking the range type. `WithVersion(int)` and `WithVersion(MicroQRVersion)` are unchanged, including `WithVersion(-1)` meaning automatic.

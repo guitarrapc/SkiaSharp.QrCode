@@ -134,6 +134,8 @@ const contentEl = document.getElementById('content');
 const presetSelect = document.getElementById('preset-select');
 const symbologySelect = document.getElementById('symbology-select');
 const eccSelect = document.getElementById('ecc-select');
+const eccBoostRow = document.getElementById('ecc-boost-row');
+const eccBoostCheck = document.getElementById('ecc-boost-check');
 const versionSelect = document.getElementById('version-select');
 const rmqrFitRow = document.getElementById('rmqr-fit-row');
 const rmqrFitSelect = document.getElementById('rmqr-fit-select');
@@ -378,6 +380,7 @@ function collectState() {
     content: contentEl.value,
     symbology: symbologySelect.value,
     ecc: eccSelect.value,
+    eccBoost: eccBoostCheck.checked,
     size: Number(sizeRange.value),
     quietZone: Number(quietRange.value),
     version: Number(versionSelect.value),
@@ -414,6 +417,7 @@ function applyStateToControls(state) {
     populateEccSelect();
     populateVersionSelect();
     if (state.ecc) eccSelect.value = state.ecc;
+    if (typeof state.eccBoost === 'boolean') eccBoostCheck.checked = state.eccBoost;
     if (state.fitStrategy === 'area' || state.fitStrategy === 'height' || state.fitStrategy === 'width') rmqrFitSelect.value = state.fitStrategy;
     if (Number.isFinite(state.height) && [0, 7, 9, 11, 13, 15, 17].includes(state.height)) rmqrHeightSelect.value = String(state.height);
     if (Number.isFinite(state.size)) sizeRange.value = String(clamp(state.size, 128, 1024));
@@ -485,7 +489,9 @@ function syncDerivedControls() {
   logoBorderOut.textContent = logoBorderRange.value;
   cornerRow.hidden = moduleShapeSelect.value !== 'rounded';
   // Micro QR has a single finder pattern and no ECC headroom for overlays —
-  // the finder shape and logo options do not apply.
+  // the finder shape and logo options do not apply. ECC boost is Standard QR
+  // only for the same reasons the library scopes it there.
+  eccBoostRow.hidden = isMicroSymbology() || isRmqrSymbology();
   finderRow.hidden = isMicroSymbology() || isRmqrSymbology();
   logoPanel.hidden = isMicroSymbology() || isRmqrSymbology();
   // rMQR fit options apply only to automatic version selection.
@@ -727,7 +733,10 @@ function runVerifyDecode(pngBytes, expectedText) {
   }
   if (result.ok && result.text === expectedText) {
     const corrected = result.errorsCorrected > 0 ? ` · ${result.errorsCorrected} codewords corrected` : '';
-    decodeVerifyEl.textContent = `✓ Decodes back to the input (self-check${corrected} · ${result.totalMs} ms)`;
+    // The decoded ECC is shown rather than the requested one: with "Boost ECC"
+    // enabled the two can differ, and this line is where the boost is observable.
+    const ecc = result.ecc ? ` · ECC ${result.ecc}` : '';
+    decodeVerifyEl.textContent = `✓ Decodes back to the input (self-check${ecc}${corrected} · ${result.totalMs} ms)`;
   } else if (result.ok) {
     decodeVerifyEl.textContent = '⚠ Self-check decoded different text, please test-scan this code.';
   } else {
@@ -804,7 +813,7 @@ function markCustomPreset() {
 }
 
 for (const el of [
-  contentEl, eccSelect, versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
+  contentEl, eccSelect, eccBoostCheck, versionSelect, rmqrFitSelect, rmqrHeightSelect, sizeRange, quietRange,
   moduleShapeSelect, moduleSizeRange, cornerRange, finderSelect,
   fgColor, bgColor, bgTransparent,
   gradientToggle, gradientDirection,

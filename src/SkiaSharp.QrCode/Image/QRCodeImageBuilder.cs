@@ -34,6 +34,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     private readonly string? _content;
     private readonly QRCodeData? _qrCodeData;
     private ECCLevel _eccLevel = ECCLevel.M;
+    private bool _boostEccLevel;
     private EciMode _eciMode = EciMode.Default;
     private QRCodeVersionRange _versionRange;
 
@@ -332,6 +333,25 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     }
 
     /// <summary>
+    /// Raise the error correction level above the one configured with
+    /// <see cref="WithErrorCorrection(ECCLevel)"/> when the chosen version's capacity
+    /// allows it, without changing the version or the symbol size. Recommended together
+    /// with <see cref="WithIcon(IconData?)"/>: the spare capacity absorbs the modules
+    /// the icon covers.
+    /// </summary>
+    /// <param name="boostEccLevel">Whether to boost; see <see cref="QRCodeGeneratorOptions.BoostEccLevel"/>.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="QRCodeData"/>.</exception>
+    public QRCodeImageBuilder WithErrorCorrectionBoost(bool boostEccLevel = true)
+    {
+        if (_qrCodeData is not null)
+            throw new InvalidOperationException("WithErrorCorrectionBoost cannot be used when QRCodeData is provided directly.");
+
+        _boostEccLevel = boostEccLevel;
+        return this;
+    }
+
+    /// <summary>
     /// Configure the ECI (Extended Channel Interpretation) mode for character encoding.
     /// </summary>
     /// <param name="eciMode">The ECI mode to use.</param>
@@ -408,6 +428,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
             EciMode = _eciMode,
             Version = _versionRange,
             QuietZoneSize = _quietZoneSize,
+            BoostEccLevel = _boostEccLevel,
         });
         matrixWidth = matrixHeight = qrCodeData.Size;
         return qrCodeData;
