@@ -33,9 +33,11 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 /// - Abort: no per-row threshold (measured, reduction cost eats the win), but
 ///   each scorer checkpoints once before the column-rule-3 loop — the partial
 ///   score is a lower bound (the remaining terms are non-negative), so a pattern
-///   already above the best total skips that loop without changing the selection.
-///   Evaluation order stays 0..7: mask totals sit too close together for
-///   win-frequency ordering to matter (measured, mask-order findings log).
+///   already above the best total skips that loop without changing the selection
+///   (the lane-per-pattern tier skips only when all four candidates in the
+///   group are above). Evaluation order stays 0..7: mask totals sit too close
+///   together for win-frequency ordering to matter (measured, mask-order
+///   findings log).
 ///
 /// This file only executes under Avx2.IsSupported (x86/x64), so memory order is
 /// always little-endian and the SWAR tail reads skip endianness normalization.
@@ -856,7 +858,10 @@ internal static partial class ModulePlacer
 
         // Checkpoint: the remaining rule-3-column and balance terms are non-negative,
         // so the partial is a lower bound — a pattern already above the best total
-        // cannot win or tie, and the heaviest loop below is skipped.
+        // cannot win or tie, and the heaviest loop below is skipped. The first
+        // pattern has no bound yet (abortAbove == int.MaxValue), so skip the
+        // reductions too.
+        if (abortAbove != int.MaxValue)
         {
             var partial = score1 + score2 + score3
                         + (int)Vector256.Sum(accOnes) + 2 * (int)Vector256.Sum(accTwos)
@@ -1274,7 +1279,10 @@ internal static partial class ModulePlacer
 
         // Checkpoint: the remaining rule-3-column and balance terms are non-negative,
         // so the partial is a lower bound — a pattern already above the best total
-        // cannot win or tie, and the heaviest loop below is skipped.
+        // cannot win or tie, and the heaviest loop below is skipped. The first
+        // pattern has no bound yet (abortAbove == int.MaxValue), so skip the
+        // reductions too.
+        if (abortAbove != int.MaxValue)
         {
             var partial = score1 + score2 + score3
                         + (int)Vector256.Sum(accOnes) + 2 * (int)Vector256.Sum(accTwos)
