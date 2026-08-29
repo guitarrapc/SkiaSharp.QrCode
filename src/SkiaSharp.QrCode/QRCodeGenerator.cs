@@ -276,9 +276,9 @@ public static class QRCodeGenerator
     /// <param name="eciMode">ECI mode for character encoding.</param>
     /// <param name="quietZoneSize">Size of the quiet zone (white border) in modules.</param>
     /// <returns>A <see cref="QRCodeCalculatedSize"/> structure containing buffer size, QR size, and version information.</returns>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="quietZoneSize"/> is negative.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="quietZoneSize"/> is negative, or large enough that the resulting matrix would exceed <see cref="int.MaxValue"/> bytes.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="eccLevel"/> is not a defined value.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the content exceeds the Version 40 capacity at this ECC level.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the content exceeds the Version 40 capacity at this ECC level. Note that Micro QR reports the same condition as <see cref="ArgumentException"/>; the two released overloads disagree and are frozen that way.</exception>
     [Obsolete("Content that does not fit is an ordinary outcome, not a defect, and an exception costs orders of magnitude more than the encode it reports on. Use TryGetRequiredBufferSize(text, eccLevel, out size, in QRCodeGeneratorOptions) instead. This overload will be removed in 2.0.0.")]
     public static QRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, ECCLevel eccLevel, bool utf8BOM = false, EciMode eciMode = EciMode.Default, int quietZoneSize = 4)
     {
@@ -356,7 +356,7 @@ public static class QRCodeGenerator
     /// <see cref="QRCodeVersionRange.Any"/>, that means no version <em>in that range</em>
     /// holds the content, not merely that it exceeds version 40.
     /// </remarks>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="QRCodeGeneratorOptions.QuietZoneSize"/> is negative.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="QRCodeGeneratorOptions.QuietZoneSize"/> is negative, or large enough that the resulting matrix would exceed <see cref="int.MaxValue"/> bytes.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="eccLevel"/> is not a defined value. Content that does not fit is <em>not</em> an exception here; it is <c>false</c>.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, ECCLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = default)
     {

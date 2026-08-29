@@ -117,7 +117,8 @@ public static class MicroQRCodeGenerator
     /// <param name="eccLevel">Error correction level.</param>
     /// <param name="requestedVersion">Specific version (M1-M4), or null for automatic selection.</param>
     /// <param name="quietZoneSize">Quiet zone width in modules.</param>
-    /// <exception cref="ArgumentException">Thrown when the data does not fit or the combination is invalid.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="quietZoneSize"/> is outside 0-10000, or <paramref name="eccLevel"/> or <paramref name="requestedVersion"/> is not a defined value.</exception>
+    /// <exception cref="ArgumentException">Thrown when the content does not fit, or when <paramref name="requestedVersion"/> and <paramref name="eccLevel"/> cannot be combined (M1 offers ErrorDetectionOnly only).</exception>
     [Obsolete("Content that does not fit is an ordinary outcome, not a defect, and an exception costs orders of magnitude more than the encode it reports on. Use TryGetRequiredBufferSize(text, eccLevel, out size, in MicroQRCodeGeneratorOptions) instead. This overload will be removed in 2.0.0.")]
     public static MicroQRCodeCalculatedSize GetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion = null, int quietZoneSize = DefaultQuietZone)
     {
@@ -198,8 +199,8 @@ public static class MicroQRCodeGenerator
     /// <paramref name="eccLevel"/> on no version at all, which no content could satisfy.
     /// Micro QR M1 holds 5 digits, so an overflow is an ordinary answer here.
     /// </remarks>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when an argument is out of range.</exception>
-    /// <exception cref="ArgumentException">Thrown when the version range offers the ECC level nowhere.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="MicroQRCodeGeneratorOptions.QuietZoneSize"/> is outside 0-10000, or <paramref name="eccLevel"/> or the version range bound is not a defined value.</exception>
+    /// <exception cref="ArgumentException">Thrown when the version range and <paramref name="eccLevel"/> cannot be combined at all (M1 offers ErrorDetectionOnly only). Content that does not fit is <em>not</em> an exception here; it is <c>false</c>.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, MicroQREccLevel eccLevel, out MicroQRCodeCalculatedSize size, in MicroQRCodeGeneratorOptions options = default)
         => TryGetRequiredBufferSizeRanged(text, eccLevel, out size, options);
 

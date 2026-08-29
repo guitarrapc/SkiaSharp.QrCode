@@ -160,8 +160,8 @@ public static class RmQRCodeGenerator
     /// the other.
     /// </para>
     /// </remarks>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when an argument is out of range.</exception>
-    /// <exception cref="ArgumentException">Thrown when the options contradict each other.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="RmQRCodeGeneratorOptions.QuietZoneSize"/> is out of range, or when <paramref name="eccLevel"/>, <see cref="RmQRCodeGeneratorOptions.Version"/>, <see cref="RmQRCodeGeneratorOptions.FitStrategy"/> or <see cref="RmQRCodeGeneratorOptions.Segmentation"/> is not a defined value.</exception>
+    /// <exception cref="ArgumentException">Thrown when <see cref="RmQRCodeGeneratorOptions.Version"/> and <see cref="RmQRCodeGeneratorOptions.Height"/> disagree, or when <see cref="EciMode.Iso8859_1"/> is declared over content that is not Latin-1. Content that does not fit is <em>not</em> an exception here; it is <c>false</c>.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, RmQREccLevel eccLevel, out RmQRCodeCalculatedSize size, in RmQRCodeGeneratorOptions options = default)
     {
         size = default;
