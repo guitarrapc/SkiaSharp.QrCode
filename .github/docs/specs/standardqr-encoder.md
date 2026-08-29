@@ -55,7 +55,8 @@ The encoder exposes two output models.
 | Data modes | Numeric, Alphanumeric, Byte |
 | ECI | Default/no header, ISO-8859-1 (assignment 3), UTF-8 (assignment 26) |
 | UTF-8 BOM | Optional in UTF-8 Byte mode |
-| Version selection | Automatic minimum-fit or caller-requested version |
+| Version selection | Automatic minimum-fit, caller-requested version, or a version range (options overloads) |
+| ECC boost | Optional (options overloads): the requested level becomes the minimum and is raised as far as the chosen version's capacity allows, never changing the version |
 | Quiet zone | Configurable non-negative size; span sizing/output rejects dimensions that cannot fit an `int`-sized matrix |
 | Output | Bit-packed `QRCodeData` or byte-per-module `Span<byte>` |
 
@@ -145,6 +146,17 @@ Two behaviours differ from the `requestedVersion` parameter, and both are confin
 `QRCodeVersionRange.Any` short-circuits to the same automatic path the parameter list overloads take, so the default costs nothing extra; only a constrained range pays for the additional text analysis its resolution needs.
 
 **The scan does not assume the fit predicate is monotone in the version**, even though it is. It could plausibly not be: the character-count indicator widens at versions 10 and 27, so a larger version costs more header bits. Scanning `[Min, Max]` is correct either way, and `VersionRangeTest.StandardQr_FitsIsMonotoneInVersion` sweeps 3 modes × 4 ECC levels × 3 ECI modes × 58 lengths × 40 versions to keep the monotonicity a checked fact rather than an assumption the code rests on.
+
+#### ECC boost (options overloads)
+
+`QRCodeGeneratorOptions.BoostEccLevel` reinterprets the requested ECC level as a minimum: the version is chosen for that level exactly as above, then the level is raised while the next one still fits the chosen version. Because the version is fixed before the boost starts, boosting **never grows the symbol** — it converts padding the symbol would carry anyway into error-correction capacity. The main audience is symbols with an icon overlay, where the spare capacity absorbs the covered modules.
+
+- **Off by default.** A raised level rewrites the format information and can change the winning mask, so a default of on would silently change every existing symbol; existing tests, golden pixels and playground permalinks all assume a requested level is the emitted level.
+- **Sizing ignores the flag.** The buffer size depends only on the version and the quiet zone, and the boost cannot change the version, so `TryGetRequiredBufferSize` reports the same answer either way. This is documented on the API rather than left implicit.
+- **The error contract is unchanged.** Content that fits no version in the range fails with the same exception, message included, as the boost-free path — the unconstrained overflow stays `InvalidOperationException` (the released contract), a constrained range stays `ArgumentException`. Turning boost on must not reclassify an error.
+- **Standard QR only.** Micro QR ties its legal levels to the version (M1 has none, only M4 offers Q), so a boost there would interact with version selection instead of following it; rMQR has a single M→H step. Either can adopt the same contract later.
+
+`EccBoostTest` pins the headroom classes (boost to H, stop at an intermediate level, no headroom, already at H), the version invariance, the sizing indifference and the error parity.
 
 ### 4. Build the data codewords
 

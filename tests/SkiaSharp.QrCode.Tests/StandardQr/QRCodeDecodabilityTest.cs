@@ -214,6 +214,23 @@ public class QRCodeDecodabilityTest
         AssertQrCodeIsDecodable(content, eccLevel, EciMode.Utf8, utf8BOM: true);
     }
 
+    [Test]
+    public async Task CreateQrCode_WithEccBoost_IsDecodableByZXing_AtTheBoostedLevel()
+    {
+        // "HELLO" at L auto-selects version 1; boost raises the level to H (v1-H
+        // alphanumeric capacity 10 >= 5). The boosted format information must be
+        // readable by an independent decoder, which also reports the level it saw.
+        var qr = QRCodeGenerator.CreateQrCode("HELLO", ECCLevel.L, new QRCodeGeneratorOptions { BoostEccLevel = true });
+
+        using var bitmap = QrCodeToSKBitmap(qr);
+        var result = _reader.Decode(bitmap);
+
+        await Assert.That(result).IsNotNull();
+        await Assert.That(result!.Text).IsEqualTo("HELLO");
+        await Assert.That(result.ResultMetadata.ContainsKey(ZXing.ResultMetadataType.ERROR_CORRECTION_LEVEL)).IsTrue();
+        await Assert.That(result.ResultMetadata[ZXing.ResultMetadataType.ERROR_CORRECTION_LEVEL].ToString()).IsEqualTo("H");
+    }
+
     // helpers
 
     /// <summary>

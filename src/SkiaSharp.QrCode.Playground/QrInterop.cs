@@ -108,11 +108,7 @@ public static partial class QrInterop
             }
             else
             {
-                var data = QRCodeGenerator.CreateQrCode(
-                    request.Content.AsSpan(),
-                    ParseEcc(request.Ecc),
-                    requestedVersion: request.Version,
-                    quietZoneSize: Math.Clamp(request.QuietZone, 0, 10));
+                var data = CreateStandardData(request);
                 CreateBuilder(request, data, customLogo).SaveToSvg(stream);
             }
             return stream.ToArray();
@@ -249,11 +245,7 @@ public static partial class QrInterop
             return microBytes;
         }
 
-        var data = QRCodeGenerator.CreateQrCode(
-            request.Content.AsSpan(),
-            ParseEcc(request.Ecc),
-            requestedVersion: request.Version,
-            quietZoneSize: Math.Clamp(request.QuietZone, 0, 10));
+        var data = CreateStandardData(request);
 
         var bytes = CreateBuilder(request, data, customLogo).ToByteArray();
         stopwatch.Stop();
@@ -269,6 +261,16 @@ public static partial class QrInterop
 
     private static bool IsRmQR(QrRequest request)
         => string.Equals(request.Symbology, "rmqr", StringComparison.OrdinalIgnoreCase);
+
+    private static QRCodeData CreateStandardData(QrRequest request)
+    {
+        return QRCodeGenerator.CreateQrCode(request.Content.AsSpan(), ParseEcc(request.Ecc), new QRCodeGeneratorOptions
+        {
+            Version = request.Version == -1 ? QRCodeVersionRange.Any : QRCodeVersionRange.Exactly(request.Version),
+            QuietZoneSize = Math.Clamp(request.QuietZone, 0, 10),
+            BoostEccLevel = request.EccBoost,
+        });
+    }
 
     private static RmQRCodeData CreateRmData(QrRequest request)
     {
@@ -799,6 +801,8 @@ public sealed record QrRequest
     public int Height { get; init; }
     /// <summary>Error correction level: L, M, Q or H (Micro QR: EDO, L, M or Q; rMQR: M or H).</summary>
     public string Ecc { get; init; } = "M";
+    /// <summary>Standard QR only: raise the ECC level above <see cref="Ecc"/> when the chosen version's spare capacity allows, without changing the version.</summary>
+    public bool EccBoost { get; init; }
     /// <summary>Output image size in pixels (square for Standard / Micro QR; the image width for rMQR, height from the symbol aspect ratio).</summary>
     public int Size { get; init; } = 512;
     /// <summary>Quiet zone in modules (0-10).</summary>

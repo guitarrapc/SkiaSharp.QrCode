@@ -52,4 +52,18 @@ public readonly record struct QRCodeGeneratorOptions
         get => DefaultQuietZone + _quietZoneSizeOffset;
         init => _quietZoneSizeOffset = value - DefaultQuietZone;
     }
+
+    /// <summary>
+    /// Raise the error correction level above the requested one when the chosen
+    /// version's capacity allows it, without changing the version. The requested level
+    /// becomes the minimum; the version is still chosen for it, so boosting never
+    /// produces a larger symbol, only spends padding that would otherwise be wasted.
+    /// Recommended when an icon or custom module shape overlays the symbol.
+    /// </summary>
+    /// <remarks>
+    /// Off by default: a raised level rewrites the format information and can change
+    /// the chosen mask, so a default of on would silently change every existing symbol.
+    /// Sizing is unaffected either way, the buffer size depends only on the version.
+    /// </remarks>
+    public bool BoostEccLevel { get; init; }
 }

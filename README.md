@@ -139,6 +139,22 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
     .ToByteArray();
 ```
 
+Boost Error Correction if possible. The version (symbol size) is chosen for the level you request; when that version has spare capacity, `WithErrorCorrectionBoost` raises the level as far as the capacity allows - without changing the symbol size. Recommended whenever robustness matters more than an exact ECC level, and especially with icons.
+
+```csharp
+using SkiaSharp.QrCode;
+using SkiaSharp.QrCode.Image;
+
+// Requests M as the minimum; the symbol may come out as Q or H at the same size.
+var qrCode = new QRCodeImageBuilder("https://example.com")
+    .WithErrorCorrection(ECCLevel.M)
+    .WithErrorCorrectionBoost()
+    .ToByteArray();
+
+// Generator API equivalent
+var qrData = QRCodeGenerator.CreateQrCode("https://example.com", ECCLevel.M, new QRCodeGeneratorOptions { BoostEccLevel = true });
+```
+
 Save Directly to Stream
 
 ```csharp
@@ -534,6 +550,14 @@ var icon = IconData.FromImage(logo, iconSizePercent: 15);
 var qrCodeWithIcon = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
     .WithErrorCorrection(ECCLevel.H) // Required for icons
+    .WithIcon(icon);
+
+// Or let the symbol absorb the icon with whatever capacity it has to spare:
+// requests M as the floor and raises the level to fill the chosen version.
+var qrCodeBoosted = new QRCodeImageBuilder("https://example.com")
+    .WithSize(800, 800)
+    .WithErrorCorrection(ECCLevel.M)
+    .WithErrorCorrectionBoost()
     .WithIcon(icon);
 ```
 

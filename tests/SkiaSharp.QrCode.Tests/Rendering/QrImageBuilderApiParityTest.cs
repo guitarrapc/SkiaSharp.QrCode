@@ -17,12 +17,16 @@ public class QrImageBuilderApiParityTest
 {
     /// <summary>
     /// Standard QR-only fluent options: Micro QR and rMQR have a single finder
-    /// pattern and no ECC headroom for overlays.
+    /// pattern and no ECC headroom for overlays. ECC boost is Standard QR-only for
+    /// related reasons: Micro QR ties the legal ECC levels to the version (M1 has
+    /// none, M4 alone offers Q), and rMQR's two levels leave a single M→H step that
+    /// has not been asked for; both can join later without changing the contract.
     /// </summary>
     private static readonly string[] standardOnlyMembers =
     [
         "WithIcon",
         "WithFinderPatternShape",
+        "WithErrorCorrectionBoost",
     ];
 
     /// <summary>
