@@ -5,7 +5,7 @@ namespace SkiaSharp.QrCode.Tests;
 /// <summary>
 /// <see cref="QRCodeVersionRange"/> and <see cref="MicroQRVersionRange"/>, the version
 /// constraint that replaced the single requested version in the options structs
-/// (plans/generator-api-options-plan.md, Phase 3).
+/// (specs/qrcode-symbologies.md, Public API direction).
 /// </summary>
 /// <remarks>
 /// <para>

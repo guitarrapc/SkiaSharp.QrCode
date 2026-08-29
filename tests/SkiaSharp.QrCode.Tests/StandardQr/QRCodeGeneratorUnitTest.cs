@@ -405,7 +405,7 @@ public class QRCodeGeneratorUnitTest
     }
 
     // The parameter list GetRequiredBufferSize is [Obsolete] and scheduled for removal in
-    // 2.0.0 (plans/generator-api-options-plan.md, Phase 6). These tests are the regression
+    // 2.0.0 (specs/qrcode-symbologies.md, Public API direction). These tests are the regression
     // net for it until then, so calling the deprecated member here is the point.
 #pragma warning disable CS0618 // GetRequiredBufferSize (parameter list)
     // GetRequiredBufferSize Test

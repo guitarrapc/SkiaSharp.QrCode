@@ -3,7 +3,7 @@ namespace SkiaSharp.QrCode.Tests;
 /// <summary>
 /// <see cref="QRCodeGeneratorOptions"/> and <see cref="MicroQRCodeGeneratorOptions"/>,
 /// the options overloads added alongside the released parameter lists
-/// (plans/generator-api-options-plan.md, Phase 2).
+/// (specs/qrcode-symbologies.md, Public API direction).
 /// </summary>
 /// <remarks>
 /// <para>

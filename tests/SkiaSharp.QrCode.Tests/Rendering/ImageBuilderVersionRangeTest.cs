@@ -5,7 +5,7 @@ namespace SkiaSharp.QrCode.Tests;
 /// <summary>
 /// The range-taking <c>WithVersion</c> overload on the Standard QR and Micro QR image
 /// builders, and the existing version-taking overload keeping its meaning as the pinned case
-/// (plans/generator-api-options-plan.md, Phase 4).
+/// (specs/qrcode-symbologies.md, Public API direction).
 /// </summary>
 /// <remarks>
 /// The builders now assemble an options value instead of passing positional arguments, so

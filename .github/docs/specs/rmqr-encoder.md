@@ -23,7 +23,7 @@ Text
   -> RmQRCodeData or byte-per-module matrix
 ```
 
-### Public entry points (reshaped 2026-08-28, see [generator-api-options-plan.md](../plans/generator-api-options-plan.md))
+### Public entry points (reshaped 2026-08-28, see [qrcode-symbologies.md](qrcode-symbologies.md#public-api-direction))
 
 Names and overload sets mirror the shipped `MicroQR*` family member for member (reviewed against `MicroQRCodeGenerator`, `MicroQRCodeDecoder`, `MicroQRCodeImageBuilder`, `MicroQRCodeData`, the renderer overloads and `QrImageBuilderApiParityTest`); the only additions are the rectangular geometry and the fit options. Names below are the contract the implementation phases code against; a deviation is a spec change first.
 
@@ -71,7 +71,7 @@ public readonly struct RmQRCodeCalculatedSize { int BufferSize; int Width; int H
 
 **What.** `TryGetRequiredBufferSize` is the *only* way to ask how big a symbol will be. It returns `false` when the content does not fit, and `false` means that and nothing else: argument errors throw, with the same type, message and precedence the `Create` overloads use.
 
-**Why there is no throwing twin.** There was one, and it was deleted before release (plans/generator-api-options-plan.md, Phase 6). Pairing `Get` with `Try` copies the `Parse` / `TryParse` shape, which is the precedent for *parsing*, not for sizing a caller-supplied buffer. Where the BCL sizes or formats into a caller buffer it is `Try`-first and usually has no throwing twin at all: `Utf8Formatter.TryFormat`, `Utf8Parser.TryParse`, `IUtf8SpanFormattable.TryFormat`, `Base64.EncodeToUtf8` (which returns `OperationStatus`). Offering both would also make the shorter, worse-behaved name the one a hurried caller reaches for. Standard QR and Micro QR keep an `[Obsolete]` throwing overload only because 1.1.1 released one; rMQR never did.
+**Why there is no throwing twin.** There was one, and it was deleted before release (2026-08-29). Pairing `Get` with `Try` copies the `Parse` / `TryParse` shape, which is the precedent for *parsing*, not for sizing a caller-supplied buffer. Where the BCL sizes or formats into a caller buffer it is `Try`-first and usually has no throwing twin at all: `Utf8Formatter.TryFormat`, `Utf8Parser.TryParse`, `IUtf8SpanFormattable.TryFormat`, `Base64.EncodeToUtf8` (which returns `OperationStatus`). Offering both would also make the shorter, worse-behaved name the one a hurried caller reaches for. Standard QR and Micro QR keep an `[Obsolete]` throwing overload only because 1.1.1 released one; rMQR never did.
 
 **Why a `Try` and not a dedicated exception type.** rMQR holds 5 to 150 Byte-mode characters, so for user-supplied content overflow is an ordinary branch rather than a defect, and .NET exceptions cost one to two orders of magnitude more than the encode itself. A dedicated exception type would only narrow the `catch`; it would not remove the throw, and the two are alternatives rather than complements. The decoder already treats its failure path as a first-class outcome (`TryDecode`), so this is the encoder side of the same rule.
 

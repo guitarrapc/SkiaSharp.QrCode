@@ -2,7 +2,7 @@ namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
 /// <see cref="RmQRCodeGeneratorOptions"/>, the options struct that replaced the rMQR
-/// generator's parameter lists (plans/generator-api-options-plan.md, Phase 1).
+/// generator's parameter lists (specs/qrcode-symbologies.md, Public API direction).
 /// </summary>
 /// <remarks>
 /// <para>

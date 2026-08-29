@@ -6,7 +6,7 @@ namespace SkiaSharp.QrCode.Tests;
 /// </summary>
 /// <remarks>
 /// The generators answer "how big is this" only as a <c>Try</c>
-/// (plans/generator-api-options-plan.md, Phase 6), because for a caller handling
+/// (specs/qrcode-symbologies.md, Public API direction), because for a caller handling
 /// arbitrary content "it does not fit" is an ordinary answer. A test that has chosen its
 /// own content knows it fits, and would rather crash than branch — so the throw lives
 /// here, once, where it is obviously a test assertion and not a library contract.

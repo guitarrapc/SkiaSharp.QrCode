@@ -28,11 +28,6 @@ Design records and spec-to-code maps for shipped behavior, organized symbology-f
 
 ## Plans (`plans/`)
 
-Forward-looking strategy; durable decisions graduate into `specs/` after implementation.
+Forward-looking strategy; durable decisions graduate into `specs/` after implementation, and the plan is then deleted rather than kept as a parallel history.
 
-| Document | Covers |
-|---|---|
-| [skiasharp-qrcode-microqr-rmqr-implementation-plan.md](plans/skiasharp-qrcode-microqr-rmqr-implementation-plan.md) | Micro QR / rMQR implementation order (Phase 0-8) |
-| [skiasharp-qrcode-microqr-rmqr-test-strategy.md](plans/skiasharp-qrcode-microqr-rmqr-test-strategy.md) | Micro QR / rMQR test strategy (oracles, fixtures, CI design) |
-| [kanji-mode-decode-plan.md](plans/kanji-mode-decode-plan.md) | Kanji mode decode support across all three symbologies (JIS X 0208 mapping decision, oracle findings, Phase 1-5) |
-| [generator-api-options-plan.md](plans/generator-api-options-plan.md) | Generator API reshaping into per-symbology options structs, rMQR `*WithEci` deletion, version ranges (Phase 0-5) |
+**There are no open plans.** The Micro QR / rMQR implementation and test-strategy plans, the Kanji mode decode plan and the generator API options plan all completed and were folded into the specs above. What survived them lives in: the API and options rules, the Kanji mapping decision and the scope table in [qrcode-symbologies.md](specs/qrcode-symbologies.md); the oracle landscape, test-layer reasoning and fixture lessons in [qrcode-test-fixtures.md](specs/qrcode-test-fixtures.md); and the per-symbology encoder and decoder records.

@@ -131,7 +131,8 @@ public class TryGetRequiredBufferSizeTest
     }
 
     /// <summary>
-    /// rMQR has no throwing sizing overload to agree with (Phase 6 deleted it), so the
+    /// rMQR has no throwing sizing overload to agree with, since the sizing surface became
+    /// Try-only before 1.2.0 shipped, so the
     /// agreement asserted here is the one that was always the point: the size and version
     /// reported for a set of options are the size and version an encode with those same
     /// options produces, and the result decodes back to the input.

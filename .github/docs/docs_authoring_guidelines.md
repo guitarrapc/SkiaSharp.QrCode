@@ -9,7 +9,7 @@ Rules for documents under `.github/docs/`. These exist so that documents split a
 | `README.md` | The documentation index, the single enumeration of all documents |
 | `DESIGN.md` | Design principles (English + Japanese) |
 | `specs/` | Design records and spec-to-code maps for shipped behavior |
-| `plans/` | Forward-looking strategy and implementation plans; durable decisions graduate into `specs/` after implementation |
+| `plans/` | Forward-looking strategy and implementation plans; durable decisions graduate into `specs/` after implementation, and the plan file is then **deleted**, so a completed plan never survives as a second, drifting copy of the record |
 
 ## Linking policy
 

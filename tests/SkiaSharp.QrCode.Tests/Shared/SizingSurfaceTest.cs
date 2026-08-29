@@ -3,9 +3,9 @@ using System.Reflection;
 namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
-/// The shape of the sizing surface, as decided in plans/generator-api-options-plan.md
-/// Phase 6: asking "does this fit, and how big is it" is a <c>Try</c> operation, because
-/// "it does not fit" is an ordinary data-dependent answer rather than a defect.
+/// The shape of the sizing surface, as decided in specs/qrcode-symbologies.md: asking
+/// "does this fit, and how big is it" is a <c>Try</c> operation, because "it does not
+/// fit" is an ordinary data-dependent answer rather than a defect.
 /// </summary>
 /// <remarks>
 /// This is a shape test, not a behaviour test. It exists because the deleted throwing
