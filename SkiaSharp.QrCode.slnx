@@ -17,6 +17,7 @@
     <Project Path="src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/SkiaSharp.QrCode.AotAnalysis/SkiaSharp.QrCode.AotAnalysis.csproj" />
     <Project Path="tests/SkiaSharp.QrCode.Tests/SkiaSharp.QrCode.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">

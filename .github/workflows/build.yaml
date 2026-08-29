@@ -51,7 +51,7 @@ jobs:
       # baseline package on NuGet and does not depend on the host OS. SBOM generation is off
       # because this pack exists to validate the API, not to produce a shippable package.
       - name: Validate package API compatibility
-        if: matrix.rid == 'linux-x64'
+        if: ${{ matrix.rid == 'linux-x64' }}
         run: dotnet pack -c Release --no-build -o ./artifacts -p:GenerateSBOM=false
       - name: Test
         # skip output with multiple modules may stuck test
@@ -114,6 +114,27 @@ jobs:
           chmod +x ConsoleAppNativeAOT${{ matrix.ext }}
           ./ConsoleAppNativeAOT${{ matrix.ext }}
 
+  # NativeAOT compatibility gate: publish tests/SkiaSharp.QrCode.AotAnalysis, which roots the
+  # whole library (TrimmerRootAssembly) so ILC analyzes every member, and fails on any trim/AOT
+  # warning (TreatWarningsAsErrors in that csproj). One runner is enough: IL-level analysis does
+  # not depend on the host OS; the `run` job already exercises real AOT publish+run per RID.
+  aot-analysis:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: guitarrapc/actions/.github/actions/setup-dotnet@9122a18b0dea07585a242b9eb6ed7886f8587c49 # v1.0.1
+        with:
+          dotnet-version: 10.0.x
+      - name: Publish AOT analysis gate
+        run: dotnet publish tests/SkiaSharp.QrCode.AotAnalysis/SkiaSharp.QrCode.AotAnalysis.csproj -c Release -r linux-x64 -o publish/aot-analysis/
+      - name: Run AOT analysis binary
+        run: ./publish/aot-analysis/SkiaSharp.QrCode.AotAnalysis
+
   # Playground native relink (SkiaSharp + Emscripten) only happens on publish, so the
   # matrix `dotnet build` above stays managed-only. Verify the publish path on one leg.
   # AOT is disabled here for speed; the Deploy Playground workflow publishes with full AOT.
@@ -137,7 +158,7 @@ jobs:
         run: dotnet publish src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj -c Release -p:RunAOTCompilation=false -p:PlaygroundSoftFingerprint=true -o publish/playground/
 
   build-complete:
-    needs: [build, run, build-playground]
+    needs: [build, run, aot-analysis, build-playground]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

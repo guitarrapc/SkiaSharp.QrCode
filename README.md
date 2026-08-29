@@ -400,7 +400,7 @@ If you don't need advanced font operations:
 
 ### NativeAOT Support
 
-SkiaSharp.QrCode fully supports .NET NativeAOT. You need to include platform-specific native assets:
+SkiaSharp.QrCode fully supports .NET NativeAOT. The library is marked `IsAotCompatible`, and CI publishes a NativeAOT gate project that roots the whole library and fails on any trim/AOT analysis warning, so this claim is toolchain-verified on every change. You need to include platform-specific native assets:
 
 ```xml
 <PropertyGroup>
@@ -495,7 +495,7 @@ Yes, SkiaSharp.QrCode works in Blazor WebAssembly & Pure WebAssembly.
 
 ### What about NativeAOT and trimming?
 
-Yes, fully supported. See the [Platform-Specific Considerations](#platform-specific-considerations) section for details on required native assets.
+Yes, fully supported and verified in CI: the library sets `IsAotCompatible`, and every change publishes a NativeAOT analysis gate ([tests/SkiaSharp.QrCode.AotAnalysis](tests/SkiaSharp.QrCode.AotAnalysis)) that treats trim/AOT warnings as errors. See the [Platform-Specific Considerations](#platform-specific-considerations) section for details on required native assets.
 
 ### Are ISO-8859-2 and other encodings supported?
 
