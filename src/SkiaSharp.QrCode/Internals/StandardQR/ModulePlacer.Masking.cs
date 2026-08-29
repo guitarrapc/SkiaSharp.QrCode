@@ -87,7 +87,7 @@ internal static partial class ModulePlacer
             for (var x = 0; x < size; x++)
             {
                 var index = y * size + x;
-                if ((blockedMask[index >> 3] & (1 << (index & 7))) != 0)
+                if (IsModuleBlocked(blockedMask, index))
                     continue;
                 if (GetMaskBit(patternIndex, y, x))
                     buffer[index] ^= 1;
