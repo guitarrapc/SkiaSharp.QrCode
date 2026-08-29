@@ -156,6 +156,64 @@ public class RmQrFixtureTest
     }
 
     /// <summary>
+    /// The libzint fixtures decode with zero corrections (the qrtool lineage carries a
+    /// documented one-codeword tail defect, so it has no clean baseline to control).
+    /// </summary>
+    public static IEnumerable<string> LibzintFixtureIds()
+        => FixtureIds().Where(static id => id.StartsWith("zint-libzint/", StringComparison.Ordinal));
+
+    /// <summary>
+    /// Negative control for the <c>ErrorsCorrected</c> ceiling above: flipping a single
+    /// data module in a clean libzint fixture must decode with exactly one corrected
+    /// codeword. If the counter were dead (always 0), this test fails, proving the
+    /// zero-corrections baseline is not vacuous. The flipped module is the first data
+    /// module in placement order (the first bit of interleaved codeword 0), found by
+    /// the same zigzag walk the placer uses, over the naive function-module map.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(LibzintFixtureIds))]
+    public async Task Decode_MatrixFixtureWithOneFlippedDataModule_ReportsOneCorrectedCodeword(string fixtureId)
+    {
+        var fixture = FixtureLoader.Load("RmQr", fixtureId);
+        var manifest = fixture.Manifest;
+        var (modules, width, height) = FixtureLoader.ReadRectangularMatrix(fixture.MatrixPath);
+
+        var (row, col) = FirstDataModule(height, width);
+        modules[row * width + col] ^= 1;
+
+        var success = RmQRCodeDecoder.TryDecode(modules, width, height, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because(fixtureId);
+        await Assert.That(text).IsEqualTo(manifest.PayloadText);
+        await Assert.That(info.ErrorsCorrected).IsEqualTo(1).Because(fixtureId);
+    }
+
+    /// <summary>
+    /// First data module in placement order: the module carrying the first bit of
+    /// interleaved codeword 0. Mirrors RmQRModulePlacer's zigzag (column pairs from
+    /// the right, alternating up/down, function modules skipped).
+    /// </summary>
+    private static (int Row, int Col) FirstDataModule(int height, int width)
+    {
+        var function = RmQRNaiveReference.FunctionModuleMap(height, width);
+        var upward = true;
+        for (var col = width - 2; col >= 1; col -= 2)
+        {
+            for (var step = 0; step < height; step++)
+            {
+                var row = upward ? height - 1 - step : step;
+                foreach (var c in new[] { col, col - 1 })
+                {
+                    if (!function[row * width + c])
+                        return (row, c);
+                }
+            }
+            upward = !upward;
+        }
+        throw new InvalidOperationException("no data module found");
+    }
+
+    /// <summary>
     /// Decodes every committed external PNG through the public image path (detection +
     /// sampling + matrix decode). Same expectations as the matrix path.
     /// </summary>

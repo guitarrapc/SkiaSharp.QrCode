@@ -49,6 +49,38 @@ public class MicroQRFixtureTest
         }
     }
 
+    /// <summary>
+    /// Fixtures whose ECC level can correct at least one codeword: everything except
+    /// M1, which is error detection only (t = 0) and rejects any data damage.
+    /// </summary>
+    public static IEnumerable<string> CorrectableFixtureIds()
+        => FixtureIds().Where(static id => FixtureLoader.Load("MicroQR", id).Manifest.Version != 1);
+
+    /// <summary>
+    /// Negative control for the <c>ErrorsCorrected == 0</c> assertion above: flipping a
+    /// single data module in the same fixture must decode with exactly one corrected
+    /// codeword. If the counter were dead (always 0), this test fails, proving the
+    /// clean-fixture assertion is not vacuous. The bottom-right corner module carries
+    /// the first bit of codeword 0 in every Micro QR version (codeword placement
+    /// starts there), so it is a data module regardless of version.
+    /// </summary>
+    [Test]
+    [MethodDataSource(nameof(CorrectableFixtureIds))]
+    public async Task Decode_MatrixFixtureWithOneFlippedDataModule_ReportsOneCorrectedCodeword(string fixtureId)
+    {
+        var fixture = FixtureLoader.Load("MicroQR", fixtureId);
+        var manifest = fixture.Manifest;
+        var (modules, size) = FixtureLoader.ReadMatrix(fixture.MatrixPath);
+
+        modules[(size - 1) * size + (size - 1)] ^= 1;
+
+        var success = MicroQRCodeDecoder.TryDecode(modules, size, out var text, out var info);
+
+        await Assert.That(success).IsTrue().Because(fixtureId);
+        await Assert.That(text).IsEqualTo(manifest.PayloadText);
+        await Assert.That(info.ErrorsCorrected).IsEqualTo(1).Because(fixtureId);
+    }
+
     [Test]
     [MethodDataSource(nameof(FixtureIds))]
     public async Task Decode_PngFixture_PayloadAndMetadataMatch(string fixtureId)
