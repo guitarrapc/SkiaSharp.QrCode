@@ -1137,5 +1137,56 @@ Console.WriteLine("""
 }
 Console.WriteLine();
 
+Console.WriteLine("""
+    Pattern 30: Renderer-Neutral Geometry (GetModuleRectangles)
+      - Best for: Rendering without SkiaSharp (hand-rolled SVG, System.Drawing, WPF, PDF, any draw-call API)
+      - API: QRCodeData.GetModuleRectangles() / TryGetModuleRectangles() / GetModuleRectanglesMaxCount()
+      - Dark modules come back as merged rectangles in module coordinates (same space as data[row, col])
+    """);
+{
+    var data = QRCodeGenerator.CreateQrCode(content, ECCLevel.M);
+
+    // Merged rectangles vs one-rect-per-module: merging roughly halves the element count.
+    var rects = data.GetModuleRectangles();
+    var darkCount = 0;
+    for (var row = 0; row < data.Size; row++)
+        for (var col = 0; col < data.Size; col++)
+            if (data[row, col])
+                darkCount++;
+    Console.WriteLine($"  ✓ {darkCount} dark modules merged into {rects.Length} rectangles ({(double)darkCount / rects.Length:F2}x fewer elements)");
+
+    // Hand-rolled SVG with no SkiaSharp involved: viewBox in module units (1 unit = 1 module,
+    // quiet zone included), so the consumer scales by CSS/attributes instead of a baked pixel size.
+    var path = Path.Combine(outputDir, "pattern30_geometry_svg.svg");
+    var sb = new System.Text.StringBuilder();
+    sb.Append($"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {data.Size} {data.Size}\" shape-rendering=\"crispEdges\">");
+    sb.Append("<rect width=\"100%\" height=\"100%\" fill=\"#fff\"/><path fill=\"#000\" d=\"");
+    foreach (var r in rects)
+    {
+        // InvariantCulture: some locales format negative numbers with a non-ASCII minus sign.
+        sb.Append(System.Globalization.CultureInfo.InvariantCulture, $"M{r.X},{r.Y}h{r.Width}v{r.Height}h{-r.Width}z");
+    }
+    sb.Append("\"/></svg>");
+    File.WriteAllText(path, sb.ToString());
+    Console.WriteLine($"  ✓ Saved to: {path} (no SkiaSharp in this pipeline)");
+
+    // Allocation-free variant: size a pooled buffer with the O(1) upper bound.
+    var buffer = System.Buffers.ArrayPool<ModuleRect>.Shared.Rent(data.GetModuleRectanglesMaxCount());
+    try
+    {
+        data.TryGetModuleRectangles(buffer, out var written);
+        Console.WriteLine($"  ✓ TryGetModuleRectangles with pooled buffer: {written} rectangles (max bound {data.GetModuleRectanglesMaxCount()})");
+    }
+    finally
+    {
+        System.Buffers.ArrayPool<ModuleRect>.Shared.Return(buffer);
+    }
+
+    // Micro QR and rMQR expose the same members; rMQR is rectangular (Width/Height instead of Size).
+    var rm = RmQRCodeGenerator.CreateRmQRCode(rmqrContent, RmQREccLevel.M);
+    Console.WriteLine($"  ✓ rMQR {rm.Version}: {rm.GetModuleRectangles().Length} rectangles in a {rm.Width}x{rm.Height} module grid");
+}
+Console.WriteLine();
+
 Console.WriteLine("=== All patterns completed! ===");
 Console.WriteLine($"Output directory: {Path.GetFullPath(outputDir)}");

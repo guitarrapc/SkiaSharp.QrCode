@@ -456,6 +456,53 @@ public class QRCodeData
     }
 
     /// <summary>
+    /// Gets an upper bound on the number of rectangles <see cref="GetModuleRectangles"/>
+    /// can return, suitable for sizing a pooled buffer for
+    /// <see cref="TryGetModuleRectangles"/>. O(1), no matrix scan.
+    /// </summary>
+    public int GetModuleRectanglesMaxCount() => Internals.ModuleRunScanner.GetMaxRunCount(_baseSize, _baseSize);
+
+    /// <summary>
+    /// Gets the dark modules as merged rectangles in module coordinates, for rendering
+    /// with any graphics API without SkiaSharp (SVG path data, draw calls, vector output).
+    /// </summary>
+    /// <returns>Rectangles that are disjoint and cover exactly the dark modules.</returns>
+    /// <remarks>
+    /// <para>
+    /// Coordinates use the same space as the indexer (<c>this[row, col]</c>): one unit is
+    /// one module, origin at the top-left including the quiet zone, <see cref="ModuleRect.X"/>
+    /// is the column and <see cref="ModuleRect.Y"/> is the row. Consumers scale by the pixel
+    /// size of one module; <see cref="Size"/> gives the total extent in modules.
+    /// </para>
+    /// <para>
+    /// Three properties are contractual: rectangles never overlap, cover only dark modules,
+    /// and cover every dark module. The decomposition shape and ordering are unspecified and
+    /// may change between versions (currently maximal horizontal runs in row-major order,
+    /// the same merge the built-in renderer draws).
+    /// </para>
+    /// </remarks>
+    public ModuleRect[] GetModuleRectangles()
+    {
+        var view = new Internals.StandardQrMatrixView(this);
+        var result = new ModuleRect[Internals.ModuleRunScanner.Count(in view)];
+        Internals.ModuleRunScanner.TryScan(in view, result, out _);
+        return result;
+    }
+
+    /// <summary>
+    /// Writes the dark modules as merged rectangles into a caller-provided buffer.
+    /// Same contract as <see cref="GetModuleRectangles"/> without allocations.
+    /// </summary>
+    /// <param name="destination">Buffer to receive the rectangles. Size it with <see cref="GetModuleRectanglesMaxCount"/>.</param>
+    /// <param name="written">The number of rectangles written, or 0 when the buffer is too small.</param>
+    /// <returns>True on success; false only when <paramref name="destination"/> cannot hold every rectangle.</returns>
+    public bool TryGetModuleRectangles(Span<ModuleRect> destination, out int written)
+    {
+        var view = new Internals.StandardQrMatrixView(this);
+        return Internals.ModuleRunScanner.TryScan(in view, destination, out written);
+    }
+
+    /// <summary>
     /// Gets the core data size (without quiet zone).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
