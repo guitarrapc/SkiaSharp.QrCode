@@ -484,9 +484,7 @@ public class QRCodeData
     public ModuleRect[] GetModuleRectangles()
     {
         var view = new Internals.StandardQrMatrixView(this);
-        var result = new ModuleRect[Internals.ModuleRunScanner.Count(in view)];
-        Internals.ModuleRunScanner.TryScan(in view, result, out _);
-        return result;
+        return Internals.ModuleRunScanner.ScanToArray(in view);
     }
 
     /// <summary>

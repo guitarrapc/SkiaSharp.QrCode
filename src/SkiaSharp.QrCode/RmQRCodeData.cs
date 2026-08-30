@@ -209,9 +209,7 @@ public class RmQRCodeData
     public ModuleRect[] GetModuleRectangles()
     {
         var view = new RmQRMatrixView(this);
-        var result = new ModuleRect[ModuleRunScanner.Count(in view)];
-        ModuleRunScanner.TryScan(in view, result, out _);
-        return result;
+        return ModuleRunScanner.ScanToArray(in view);
     }
 
     /// <summary>

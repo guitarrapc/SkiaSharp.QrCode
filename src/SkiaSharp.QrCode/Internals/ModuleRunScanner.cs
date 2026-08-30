@@ -32,6 +32,22 @@ internal static class ModuleRunScanner
     }
 
     /// <summary>
+    /// Allocates an exact-size array of the merged runs, the shared implementation of
+    /// the <c>GetModuleRectangles()</c> overloads. Counting and scanning use the same
+    /// enumerator over the same matrix, so the guard is unreachable by construction;
+    /// it exists to turn any future divergence between the two passes into a loud
+    /// failure instead of a silently truncated or zero-padded result.
+    /// </summary>
+    public static ModuleRect[] ScanToArray<TView>(in TView view)
+        where TView : struct, IModuleMatrixView
+    {
+        var result = new ModuleRect[Count(in view)];
+        if (!TryScan(in view, result, out var written) || written != result.Length)
+            throw new InvalidOperationException("Module run scan diverged from its counting pass; this is a bug in ModuleRunScanner.");
+        return result;
+    }
+
+    /// <summary>
     /// Writes the merged runs as quiet-zone-inclusive <see cref="ModuleRect"/> values.
     /// Returns false (with <paramref name="written"/> reset to 0) only when the
     /// destination cannot hold every run.
