@@ -48,6 +48,7 @@ public class SizingExceptionContractTest
         yield return ("QR Try / quiet zone negative", () => QRCodeGenerator.TryGetRequiredBufferSize("1".AsSpan(), ECCLevel.L, out _, new QRCodeGeneratorOptions { QuietZoneSize = -1 }), typeof(ArgumentOutOfRangeException));
         yield return ("QR Try / quiet zone squares past int.MaxValue", () => QRCodeGenerator.TryGetRequiredBufferSize("1".AsSpan(), ECCLevel.L, out _, new QRCodeGeneratorOptions { QuietZoneSize = 40000 }), typeof(ArgumentOutOfRangeException));
         yield return ("QR Try / ECC undefined", () => QRCodeGenerator.TryGetRequiredBufferSize("1".AsSpan(), (ECCLevel)9, out _), typeof(ArgumentException));
+        yield return ("QR Try / segmentation undefined", () => QRCodeGenerator.TryGetRequiredBufferSize("1".AsSpan(), ECCLevel.L, out _, new QRCodeGeneratorOptions { Segmentation = (QRCodeSegmentation)7 }), typeof(ArgumentOutOfRangeException));
 
         yield return ("Micro Try / content too long", () => MicroQRCodeGenerator.TryGetRequiredBufferSize(TooLong.AsSpan(), MicroQREccLevel.L, out _), null);
         yield return ("Micro Try / quiet zone negative", () => MicroQRCodeGenerator.TryGetRequiredBufferSize("1".AsSpan(), MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { QuietZoneSize = -1 }), typeof(ArgumentOutOfRangeException));

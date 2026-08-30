@@ -1,3 +1,4 @@
+using SkiaSharp;
 using SkiaSharp.QrCode.Image;
 
 namespace SkiaSharp.QrCode.Tests;
@@ -38,6 +39,15 @@ public class QRCodeSegmentationTest
         "日本語1234567890",
         "éèê1234567890",
         "😀😁1234567890",
+        // 64 / 65 / 73 / 74 characters: both sides of the plan buffer's
+        // stack-to-pool boundary (64) and the DP parents boundary (73).
+        "ABCD" + "123456789012345678901234567890123456789012345678901234567890",
+        "ABCDE" + "123456789012345678901234567890123456789012345678901234567890",
+        "abcdefgh" + "12345678901234567890123456789012345678901234567890123456789012345",
+        "abcdefghi" + "12345678901234567890123456789012345678901234567890123456789012345",
+        // three-run content: a digit island between Byte runs, so the optimal plan
+        // switches modes twice (Byte / Numeric / Byte)
+        "abcdefghijkl123456789012mnopqrstuvwx",
     ];
 
     [Test]
@@ -118,6 +128,70 @@ public class QRCodeSegmentationTest
 
         await Assert.That(QRCodeDecoder.TryDecode(data, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    [Test]
+    public async Task Optimal_WithBoost_RaisesTheLevelWhenThePlannedStreamHasHeadroom()
+    {
+        // Plan: Byte(1) + Numeric(40) = 20 + 148 = 168 bits. Version 2-M holds 224,
+        // version 2-Q holds 176 (>= 168), version 2-H holds 128 (< 168), so the
+        // boost must land exactly on Q without changing the version.
+        var content = "x" + new string('1', 40);
+        var plain = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal });
+        var boosted = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal, BoostEccLevel = true });
+
+        await Assert.That(plain.Version).IsEqualTo(2);
+        await Assert.That(boosted.Version).IsEqualTo(2);
+
+        await Assert.That(QRCodeDecoder.TryDecode(boosted, out var decoded, out var info)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+        await Assert.That(info.EccLevel).IsEqualTo(ECCLevel.Q);
+    }
+
+    [Test]
+    public async Task Optimal_EmptyContent_MatchesSingle()
+    {
+        var single = QRCodeGenerator.CreateQrCode("", ECCLevel.M, QRCodeGeneratorOptions.Default);
+        var optimal = QRCodeGenerator.CreateQrCode("", ECCLevel.M, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal });
+
+        await Assert.That(optimal.Version).IsEqualTo(single.Version);
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+    }
+
+    [Test]
+    [Arguments("HELLO WORLD 1234567890123456789012345678901234567890")]
+    [Arguments("Order 12345 item 6789 ref 0000111122223333")]
+    public async Task Optimal_ExplicitUtf8Eci_RoundTripsAndNeverGrows(string content)
+    {
+        // An explicitly requested UTF-8 charset forces the 12-bit ECI prefix into
+        // the planned cost; the split must still round-trip and never grow.
+        var options = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8, Segmentation = QRCodeSegmentation.Optimal };
+        var single = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Utf8 });
+        var optimal = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, options);
+
+        await Assert.That(optimal.Version).IsLessThanOrEqualTo(single.Version);
+        await Assert.That(QRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, ECCLevel.M, out var size, options)).IsTrue();
+        await Assert.That(size.Version).IsEqualTo(optimal.Version);
+    }
+
+    [Test]
+    [Arguments("Café 1234567890123456789012345678901234567890")]
+    [Arguments("éèê12345678901234567890")]
+    public async Task Optimal_ExplicitIso88591Eci_RoundTripsAndNeverGrows(string content)
+    {
+        var options = new QRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1, Segmentation = QRCodeSegmentation.Optimal };
+        var single = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { EciMode = EciMode.Iso8859_1 });
+        var optimal = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, options);
+
+        await Assert.That(optimal.Version).IsLessThanOrEqualTo(single.Version);
+        await Assert.That(QRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, ECCLevel.M, out var size, options)).IsTrue();
+        await Assert.That(size.Version).IsEqualTo(optimal.Version);
     }
 
     [Test]
@@ -205,12 +279,66 @@ public class QRCodeSegmentationTest
     }
 
     [Test]
-    public async Task Optimal_InvalidSegmentationValue_Throws()
+    public async Task Optimal_InvalidSegmentationValue_Throws_OnEveryEntryPoint()
     {
         var options = new QRCodeGeneratorOptions { Segmentation = (QRCodeSegmentation)5 };
-        Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeGenerator.CreateQrCode("HELLO", ECCLevel.M, options));
-        Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeGenerator.TryGetRequiredBufferSize("HELLO", ECCLevel.M, out _, options));
-        await Assert.That(true).IsTrue();
+        var buffer = new byte[1024];
+
+        // ParamName matches the rMQR generator and the builder, so the three surfaces
+        // report the same argument for the same mistake.
+        var fromCreate = Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeGenerator.CreateQrCode("HELLO", ECCLevel.M, options));
+        var fromCreateSpan = Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeGenerator.CreateQrCode("HELLO".AsSpan(), ECCLevel.M, buffer, options));
+        var fromSizing = Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeGenerator.TryGetRequiredBufferSize("HELLO", ECCLevel.M, out _, options));
+
+        await Assert.That(fromCreate.ParamName).IsEqualTo("segmentation");
+        await Assert.That(fromCreateSpan.ParamName).IsEqualTo("segmentation");
+        await Assert.That(fromSizing.ParamName).IsEqualTo("segmentation");
+    }
+
+    [Test]
+    public async Task Optimal_NegativeQuietZone_WinsOverInvalidSegmentation_OnEveryEntryPoint()
+    {
+        // The quiet zone is validated before the segmentation value on every surface,
+        // matching TryGetRequiredBufferSize and the rMQR generator, so a caller moving
+        // between entry points debugs the same error first.
+        var options = new QRCodeGeneratorOptions { Segmentation = (QRCodeSegmentation)3, QuietZoneSize = -1 };
+        var buffer = new byte[1024];
+
+        var fromCreate = Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeGenerator.CreateQrCode("HELLO", ECCLevel.M, options));
+        var fromCreateSpan = Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeGenerator.CreateQrCode("HELLO".AsSpan(), ECCLevel.M, buffer, options));
+        var fromSizing = Assert.Throws<ArgumentOutOfRangeException>(() => QRCodeGenerator.TryGetRequiredBufferSize("HELLO", ECCLevel.M, out _, options));
+
+        await Assert.That(fromCreate.ParamName).IsEqualTo("quietZoneSize");
+        await Assert.That(fromCreateSpan.ParamName).IsEqualTo("quietZoneSize");
+        await Assert.That(fromSizing.ParamName).IsEqualTo("quietZoneSize");
+    }
+
+    [Test]
+    public async Task Optimal_Utf8BomOverNonByteContent_StillSplits()
+    {
+        // The BOM is written only into UTF-8 Byte-mode streams. Content whose single
+        // mode is Alphanumeric never carries one, even with Utf8BOM requested over an
+        // explicit UTF-8 charset, so suppressing the split there would forgo a smaller
+        // symbol for nothing.
+        var content = "ABCDEFGHIJ" + new string('1', 50);
+        var options = new QRCodeGeneratorOptions { EciMode = EciMode.Utf8, Utf8BOM = true, Segmentation = QRCodeSegmentation.Optimal };
+        var single = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, options with { Segmentation = QRCodeSegmentation.Single });
+        var withoutBom = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, options with { Utf8BOM = false });
+        var withBom = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, options);
+
+        // The split must actually happen (self-verifying against a capacity-table
+        // change that could otherwise make this test vacuous), and the BOM flag must
+        // not disturb it.
+        await Assert.That(withBom.Version).IsLessThan(single.Version);
+        await Assert.That(withBom.Version).IsEqualTo(withoutBom.Version);
+        await Assert.That(withBom.GetRawData()).IsEquivalentTo(withoutBom.GetRawData());
+
+        await Assert.That(QRCodeDecoder.TryDecode(withBom, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+
+        // Sizing must agree with the encode under the same options.
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, ECCLevel.M, out var size, options)).IsTrue();
+        await Assert.That(size.Version).IsEqualTo(withBom.Version);
     }
 
     [Test]
@@ -224,8 +352,40 @@ public class QRCodeSegmentationTest
         var written = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer, options);
         await Assert.That(written).IsEqualTo(size.BufferSize);
 
+        AssertSameModules(QRCodeGenerator.CreateQrCode(content, ECCLevel.M, options), buffer, size.QrSize);
+
         await Assert.That(QRCodeDecoder.TryDecode(buffer.AsSpan(0, written), size.QrSize, out var decoded, out var info)).IsTrue().Because($"status={info.Status}");
         await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    [Test]
+    [MethodDataSource(nameof(Corpus))]
+    public async Task Optimal_SpanDestination_WithQuietZone_MatchesTheAllocatingOverload(string content)
+    {
+        // The quiet-zone branch of the span path (clear + centered row copies) must
+        // agree with the allocating overload module for module, quiet zone included.
+        var options = new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal, QuietZoneSize = 4 };
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, ECCLevel.M, out var size, options)).IsTrue();
+
+        var buffer = new byte[size.BufferSize];
+        var written = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, buffer, options);
+        await Assert.That(written).IsEqualTo(size.BufferSize);
+
+        AssertSameModules(QRCodeGenerator.CreateQrCode(content, ECCLevel.M, options), buffer, size.QrSize);
+    }
+
+    private static void AssertSameModules(QRCodeData expected, ReadOnlySpan<byte> actual, int size)
+    {
+        if (expected.Size != size)
+            throw new InvalidOperationException($"matrix size mismatch: {expected.Size} vs {size}");
+        for (var row = 0; row < size; row++)
+        {
+            for (var col = 0; col < size; col++)
+            {
+                if (expected[row, col] != (actual[row * size + col] != 0))
+                    throw new InvalidOperationException($"module mismatch at ({row}, {col})");
+            }
+        }
     }
 
     [Test]
@@ -235,7 +395,10 @@ public class QRCodeSegmentationTest
         var png = new QRCodeImageBuilder(content)
             .WithSegmentation(QRCodeSegmentation.Optimal)
             .ToByteArray();
-        await Assert.That(png.Length).IsGreaterThan(0);
+
+        using var bitmap = SKBitmap.Decode(png);
+        await Assert.That(QRCodeDecoder.TryDecode(bitmap, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
     }
 
     [Test]

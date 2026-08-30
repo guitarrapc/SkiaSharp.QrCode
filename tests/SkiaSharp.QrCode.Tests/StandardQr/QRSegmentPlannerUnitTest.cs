@@ -72,6 +72,14 @@ public class QRSegmentPlannerUnitTest
         ("é1234567", EciMode.Utf8),
         ("あ123456", EciMode.Utf8),
         ("😀12345", EciMode.Utf8),
+        ("12😀34", EciMode.Utf8),
+        // Unpaired surrogate halves: the cost model must mirror Encoding.UTF8's
+        // replacement fallback (3 bytes per lone half) in every position.
+        ("\uD83D12345", EciMode.Utf8),
+        ("\uDE0012345", EciMode.Utf8),
+        ("12\uD83DAB", EciMode.Utf8),
+        ("1234\uD83D", EciMode.Utf8),
+        ("\uDE00\uD83Dab", EciMode.Utf8),
     ];
 
     [Test]
@@ -151,6 +159,26 @@ public class QRSegmentPlannerUnitTest
             }
             await Assert.That(expectedStart).IsEqualTo(content.Length);
         }
+    }
+
+    [Test]
+    public async Task TryBuildPlan_DigitIslandBetweenByteRuns_ProducesThreeRuns()
+    {
+        // Byte(12) + Numeric(12) + Byte(12): the island saves 12 x (8 - 10/3) = 56
+        // bits against the two extra headers (14 + 12 = 26 at versions 1-9), so the
+        // optimal plan must switch modes twice. Pins the multi-switch stream shape,
+        // which no round-trip test can distinguish from a 2-run plan.
+        var content = "abcdefghijkl123456789012mnopqrstuvwx";
+        var segments = new QRSegment[content.Length];
+        await Assert.That(QRSegmentPlanner.TryBuildPlan(content, EciMode.Default, version: 3, ECCLevel.L, segments, out var count)).IsTrue();
+
+        await Assert.That(count).IsEqualTo(3);
+        await Assert.That(segments[0].Mode).IsEqualTo(EncodingMode.Byte);
+        await Assert.That((int)segments[0].Length).IsEqualTo(12);
+        await Assert.That(segments[1].Mode).IsEqualTo(EncodingMode.Numeric);
+        await Assert.That((int)segments[1].Length).IsEqualTo(12);
+        await Assert.That(segments[2].Mode).IsEqualTo(EncodingMode.Byte);
+        await Assert.That((int)segments[2].Length).IsEqualTo(12);
     }
 
     /// <summary>

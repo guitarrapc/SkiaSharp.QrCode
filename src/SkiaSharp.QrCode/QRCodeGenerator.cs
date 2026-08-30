@@ -322,14 +322,14 @@ public static class QRCodeGenerator
     /// <inheritdoc cref="CreateQrCode(string, ECCLevel, bool, EciMode, int, int)"/>
     /// <param name="plainText">The text to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
-    /// <param name="options">Encoding, version and quiet zone settings. Pass <see cref="QRCodeGeneratorOptions.Default"/> for the defaults.</param>
+    /// <param name="options">Encoding, version, quiet zone and segmentation settings. Pass <see cref="QRCodeGeneratorOptions.Default"/> for the defaults.</param>
     public static QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, in QRCodeGeneratorOptions options)
         => CreateQrCode(plainText.AsSpan(), eccLevel, options);
 
     /// <inheritdoc cref="CreateQrCode(string, ECCLevel, in QRCodeGeneratorOptions)"/>
     /// <param name="textSpan">The text span to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
-    /// <param name="options">Encoding, version and quiet zone settings.</param>
+    /// <param name="options">Encoding, version, quiet zone and segmentation settings.</param>
     public static QRCodeData CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in QRCodeGeneratorOptions options)
     {
         // One compare on the default path; validation of the value itself lives in the
@@ -345,7 +345,7 @@ public static class QRCodeGenerator
     /// <param name="plainText">The text to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
     /// <param name="destination">The buffer to write the QR code module matrix into.</param>
-    /// <param name="options">Encoding, version and quiet zone settings. Size <paramref name="destination"/> with the same options.</param>
+    /// <param name="options">Encoding, version, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     public static int CreateQrCode(string plainText, ECCLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options)
         => CreateQrCode(plainText.AsSpan(), eccLevel, destination, options);
 
@@ -353,7 +353,7 @@ public static class QRCodeGenerator
     /// <param name="textSpan">The text span to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
     /// <param name="destination">The buffer to write the QR code module matrix into.</param>
-    /// <param name="options">Encoding, version and quiet zone settings. Size <paramref name="destination"/> with the same options.</param>
+    /// <param name="options">Encoding, version, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
     public static int CreateQrCode(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options)
     {
         if (options.Segmentation != QRCodeSegmentation.Single)
@@ -371,9 +371,10 @@ public static class QRCodeGenerator
     /// <param name="text">The text to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level.</param>
     /// <param name="size">Buffer size, matrix size and version on success; <c>default</c> when the content does not fit.</param>
-    /// <param name="options">Encoding, version and quiet zone settings.</param>
+    /// <param name="options">Encoding, version, quiet zone and segmentation settings.</param>
     /// <returns><c>true</c> when the content fits.</returns>
     /// <remarks>
+    /// <para>
     /// <c>false</c> means the content does not fit, and nothing else: argument errors
     /// throw (rationale: specs/rmqr-encoder.md). When
     /// <see cref="QRCodeGeneratorOptions.Version"/> is narrower than
@@ -381,22 +382,30 @@ public static class QRCodeGenerator
     /// holds the content, not merely that it exceeds version 40.
     /// <see cref="QRCodeGeneratorOptions.BoostEccLevel"/> has no effect here: the boost
     /// never changes the version, and the buffer size depends only on the version.
+    /// </para>
+    /// <para>
+    /// Pass the same <paramref name="options"/> you will encode with:
+    /// <see cref="QRCodeGeneratorOptions.Segmentation"/> and
+    /// <see cref="QRCodeGeneratorOptions.EciMode"/> can select different versions, so a
+    /// buffer sized for one can be too small for the other.
+    /// </para>
     /// </remarks>
-    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="QRCodeGeneratorOptions.QuietZoneSize"/> is negative, or large enough that the resulting matrix would exceed <see cref="int.MaxValue"/> bytes.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="QRCodeGeneratorOptions.QuietZoneSize"/> is negative, or large enough that the resulting matrix would exceed <see cref="int.MaxValue"/> bytes, or when <see cref="QRCodeGeneratorOptions.Segmentation"/> is not a defined value.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="eccLevel"/> is not a defined value. Content that does not fit is <em>not</em> an exception here; it is <c>false</c>.</exception>
     public static bool TryGetRequiredBufferSize(ReadOnlySpan<char> text, ECCLevel eccLevel, out QRCodeCalculatedSize size, in QRCodeGeneratorOptions options = default)
     {
         size = default;
         ValidateQuietZoneSize(options.QuietZoneSize);
         if (options.Segmentation != QRCodeSegmentation.Single)
-            ValidateOptimalEntry(in options);
+            ValidateOptimalEntry(options.Segmentation);
 
         var analysisResult = TextAnalyzer.Analyze(text, options.EciMode);
         int version;
-        if (options.Segmentation != QRCodeSegmentation.Single && !(options.Utf8BOM && analysisResult.EciMode == EciMode.Utf8))
+        if (options.Segmentation != QRCodeSegmentation.Single && !(options.Utf8BOM && analysisResult.EciMode == EciMode.Utf8 && analysisResult.EncodingMode == EncodingMode.Byte))
         {
-            // Mirrors PlanOptimal, single-mode fallback included, so the version
-            // reported here is the version an encode with the same options would use.
+            // Mirrors the encode path (SelectOptimalVersion + BuildPlanOrFallback),
+            // single-mode fallback included, so the version reported here is the
+            // version an encode with the same options would use.
             if (!TryPlanOptimalVersion(text, eccLevel, in analysisResult, in options, out version))
                 return false;
         }
@@ -962,26 +971,38 @@ public static class QRCodeGenerator
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static QRCodeData CreateOptimal(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in QRCodeGeneratorOptions options)
     {
-        ValidateOptimalEntry(in options);
+        // Negative quiet zone first, then segmentation: the same precedence as
+        // TryGetRequiredBufferSize and the rMQR generator, so every surface reports
+        // the same error first for the same broken options. (An oversized quiet zone
+        // is caught later by CalculateMatrixSize, as on every Standard QR path.)
         ValidateQuietZoneSize(options.QuietZoneSize);
+        ValidateOptimalEntry(options.Segmentation);
 
         var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode);
 
-        // The BOM is a stream-level prefix: a split would relocate it into the middle
-        // of the decoded text, so that combination emits the single-mode stream.
-        if (options.Utf8BOM && analysis.EciMode == EciMode.Utf8)
+        // The BOM is a stream-level prefix written only into UTF-8 Byte-mode streams:
+        // a split would relocate it into the middle of the decoded text, so that
+        // combination emits the single-mode stream. Content whose single mode is
+        // Numeric or Alphanumeric never carries a BOM, so it still splits.
+        if (options.Utf8BOM && analysis.EciMode == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte)
         {
             var (bomVersion, bomEcc) = ResolveVersionAndEcc(textSpan, eccLevel, options);
             return CreateQrCodeCore(textSpan, bomEcc, options.Utf8BOM, options.EciMode, bomVersion, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
 
+        var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, out var useSegments);
+        if (!useSegments)
+            return CreateQrCodeCore(textSpan, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel), options.Utf8BOM, options.EciMode, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
+
+        // The plan buffer is acquired only once a split is known to pay: content no
+        // split can help (all-Numeric included) never rents it.
         QRSegment[]? rentedPlan = null;
         Span<QRSegment> plan = textSpan.Length <= QRSegmentPlanner.MaxStackSegments
             ? stackalloc QRSegment[QRSegmentPlanner.MaxStackSegments]
             : (rentedPlan = ArrayPool<QRSegment>.Shared.Rent(textSpan.Length));
         try
         {
-            var (version, resolvedEcc, segmentCount) = PlanOptimal(textSpan, eccLevel, in analysis, in options, plan);
+            var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, plan, ref version, out var segmentCount);
             if (segmentCount == 0)
                 return CreateQrCodeCore(textSpan, resolvedEcc, options.Utf8BOM, options.EciMode, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
@@ -1014,16 +1035,20 @@ public static class QRCodeGenerator
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static int CreateOptimalTo(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options)
     {
-        ValidateOptimalEntry(in options);
         ValidateQuietZoneSize(options.QuietZoneSize);
+        ValidateOptimalEntry(options.Segmentation);
 
         var analysis = TextAnalyzer.Analyze(textSpan, options.EciMode);
 
-        if (options.Utf8BOM && analysis.EciMode == EciMode.Utf8)
+        if (options.Utf8BOM && analysis.EciMode == EciMode.Utf8 && analysis.EncodingMode == EncodingMode.Byte)
         {
             var (bomVersion, bomEcc) = ResolveVersionAndEcc(textSpan, eccLevel, options);
             return CreateQrCodeCore(textSpan, bomEcc, destination, options.Utf8BOM, options.EciMode, bomVersion, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
         }
+
+        var version = SelectOptimalVersion(textSpan, eccLevel, in analysis, in options, out var useSegments);
+        if (!useSegments)
+            return CreateQrCodeCore(textSpan, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel), destination, options.Utf8BOM, options.EciMode, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
         QRSegment[]? rentedPlan = null;
         Span<QRSegment> plan = textSpan.Length <= QRSegmentPlanner.MaxStackSegments
@@ -1031,7 +1056,7 @@ public static class QRCodeGenerator
             : (rentedPlan = ArrayPool<QRSegment>.Shared.Rent(textSpan.Length));
         try
         {
-            var (version, resolvedEcc, segmentCount) = PlanOptimal(textSpan, eccLevel, in analysis, in options, plan);
+            var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, plan, ref version, out var segmentCount);
             if (segmentCount == 0)
                 return CreateQrCodeCore(textSpan, resolvedEcc, destination, options.Utf8BOM, options.EciMode, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
@@ -1086,27 +1111,47 @@ public static class QRCodeGenerator
 
     /// <summary>
     /// Everything the mixed-mode entry points must reject, gathered off the default
-    /// path so <see cref="QRCodeSegmentation.Single"/> pays only one compare.
+    /// path so <see cref="QRCodeSegmentation.Single"/> pays only one compare. The
+    /// parameter name matches the rMQR generator and the builder, so the three
+    /// surfaces report the same argument for the same mistake.
     /// </summary>
-    private static void ValidateOptimalEntry(in QRCodeGeneratorOptions options)
+    private static void ValidateOptimalEntry(QRCodeSegmentation segmentation)
     {
-        if (options.Segmentation != QRCodeSegmentation.Optimal)
-            throw new ArgumentOutOfRangeException(nameof(options), $"Invalid segmentation: {options.Segmentation}");
+        if (segmentation != QRCodeSegmentation.Optimal)
+            throw new ArgumentOutOfRangeException(nameof(segmentation), $"Invalid segmentation: {segmentation}");
     }
 
     /// <summary>
-    /// Fits a version under mixed-mode segmentation, writes the plan, and resolves
-    /// the ECC boost. A zero segment count means the single-mode stream is what gets
-    /// emitted, which is the case whenever mixing would not shrink the symbol.
-    /// Throws the canonical "does not fit" errors when nothing fits.
+    /// Fits a version under mixed-mode segmentation. Throws the canonical "does not
+    /// fit" errors when nothing fits. When <paramref name="useSegments"/> is false
+    /// the caller emits the single-mode stream without ever acquiring a plan buffer.
     /// </summary>
-    private static (int Version, ECCLevel EccLevel, int SegmentCount) PlanOptimal(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Span<QRSegment> plan)
+    private static int SelectOptimalVersion(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, out bool useSegments)
     {
-        if (!QRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version.Min, options.Version.Max, out var version, out var useSegments))
+        if (!QRSegmentPlanner.TrySelectVersion(textSpan, in analysis, eccLevel, options.Version.Min, options.Version.Max, out var version, out useSegments))
             ThrowDoesNotFit(in analysis, eccLevel, in options);
+        return version;
+    }
 
-        var segmentCount = 0;
-        if (useSegments && !QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount))
+    /// <summary>
+    /// The single-mode ECC boost of <see cref="ResolveVersionAndEcc"/>: the version
+    /// stays, the level rises while the single-mode stream still fits it.
+    /// </summary>
+    private static ECCLevel ResolveSingleLevel(in TextAnalysisResult analysis, ECCLevel eccLevel, int version, bool boost)
+    {
+        while (boost && eccLevel < ECCLevel.H && FitsVersion(analysis.DataLength, analysis.EncodingMode, eccLevel + 1, analysis.EciMode, false, version))
+            eccLevel += 1;
+        return eccLevel;
+    }
+
+    /// <summary>
+    /// Builds the plan for the selected version and resolves the ECC boost. A zero
+    /// segment count means the single-mode stream is what gets emitted. Throws the
+    /// canonical "does not fit" errors when the fallback does not fit either.
+    /// </summary>
+    private static ECCLevel BuildPlanOrFallback(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Span<QRSegment> plan, ref int version, out int segmentCount)
+    {
+        if (!QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount))
         {
             // The plan that justified this version could not be rebuilt (it needed
             // more runs than the buffer holds, or the exact re-cost disagreed with the
@@ -1116,6 +1161,7 @@ public static class QRCodeGenerator
             segmentCount = 0;
             if (!TryGetVersionInRange(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, false, options.Version.Min, options.Version.Max, out version))
                 ThrowDoesNotFit(in analysis, eccLevel, in options);
+            return ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel);
         }
 
         // Boost keeps the single-path contract: the version stays, the level rises
@@ -1123,26 +1169,19 @@ public static class QRCodeGenerator
         // depends only on the version — so only the capacity side of the compare moves.
         if (options.BoostEccLevel)
         {
-            if (segmentCount == 0)
-            {
-                while (eccLevel < ECCLevel.H && FitsVersion(analysis.DataLength, analysis.EncodingMode, eccLevel + 1, analysis.EciMode, false, version))
-                    eccLevel += 1;
-            }
-            else
-            {
-                var streamBits = QRSegmentPlanner.MeasurePlan(version, plan.Slice(0, segmentCount)) + analysis.EciMode.GetStandardQrHeaderBits();
-                while (eccLevel < ECCLevel.H && streamBits <= QRCodeConstants.GetEccInfo(version, eccLevel + 1).TotalDataCodewords * 8)
-                    eccLevel += 1;
-            }
+            var streamBits = QRSegmentPlanner.MeasurePlan(version, plan.Slice(0, segmentCount)) + analysis.EciMode.GetStandardQrHeaderBits();
+            while (eccLevel < ECCLevel.H && streamBits <= QRCodeConstants.GetEccInfo(version, eccLevel + 1).TotalDataCodewords * 8)
+                eccLevel += 1;
         }
 
-        return (version, eccLevel, segmentCount);
+        return eccLevel;
     }
 
     /// <summary>
-    /// <see cref="PlanOptimal"/> without the plan, the boost and the throw: the
-    /// version an Optimal encode would use, for buffer sizing. The two must agree,
-    /// fallback included, or a buffer sized here can be too small for the encode.
+    /// <see cref="SelectOptimalVersion"/> and <see cref="BuildPlanOrFallback"/>
+    /// without the boost and the throw: the version an Optimal encode would use, for
+    /// buffer sizing. The two must agree, fallback included, or a buffer sized here
+    /// can be too small for the encode.
     /// </summary>
     private static bool TryPlanOptimalVersion(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, out int version)
     {
