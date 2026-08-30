@@ -216,6 +216,19 @@ var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, quietZoneSize: 
 var isDark = qrData[row, col];
 ```
 
+For vector output or draw-call based graphics APIs, `GetModuleRectangles` returns the dark modules as merged rectangles in module coordinates (same coordinate space as the indexer, quiet zone included). The rectangles are disjoint and cover exactly the dark modules, and merging typically halves the element count compared to one rectangle per module. Scale by your pixel-per-module factor, or emit them directly into an SVG path with a module-unit `viewBox`:
+
+```csharp
+var sb = new StringBuilder();
+sb.Append($"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {qrData.Size} {qrData.Size}\" shape-rendering=\"crispEdges\">");
+sb.Append("<rect width=\"100%\" height=\"100%\" fill=\"#fff\"/><path fill=\"#000\" d=\"");
+foreach (var r in qrData.GetModuleRectangles())
+    sb.Append(CultureInfo.InvariantCulture, $"M{r.X},{r.Y}h{r.Width}v{r.Height}h{-r.Width}z");
+sb.Append("\"/></svg>");
+```
+
+`MicroQRCodeData` and `RmQRCodeData` expose the same members (use `Width`/`Height` instead of `Size` for rMQR). For allocation-free use, size a pooled buffer with `GetModuleRectanglesMaxCount()` and call `TryGetModuleRectangles(Span<ModuleRect>, out int)`.
+
 ### Generator options
 
 Beyond the short calls above, every generator entry point has an overload taking an options struct. This is where new options are added, so it is the form to reach for when you need more than the defaults.

@@ -460,38 +460,20 @@ public static class QRCodeRenderer
     private static void DrawModuleRuns<TView>(SKCanvas canvas, TView data, SKRect area, SKPaint paint, bool skipFinderPatterns)
         where TView : struct, IModuleMatrixView
     {
-        var coreWidth = data.CoreWidth;
-        var coreHeight = data.CoreHeight;
         var cellWidth = area.Width / data.Width;
         var cellHeight = area.Height / data.Height;
-        var quietZone = (data.Width - coreWidth) / 2;
+        var quietZone = (data.Width - data.CoreWidth) / 2;
 
-        // The quiet zone is always light, so only the core area is scanned.
-        for (var coreRow = 0; coreRow < coreHeight; coreRow++)
+        // The quiet zone is always light, so only the core area is scanned. Run
+        // detection is shared with the public GetModuleRectangles surface, so what
+        // this path draws is exactly the geometry that API reports.
+        var runs = new ModuleRunEnumerator<TView>(data, skipFinderPatterns);
+        while (runs.MoveNext())
         {
-            var top = area.Top + (coreRow + quietZone) * cellHeight;
-            var bottom = top + cellHeight;
-            var coreCol = 0;
-            while (coreCol < coreWidth)
-            {
-                if (!data.GetCoreModule(coreRow, coreCol) || (skipFinderPatterns && data.IsFinderPattern(coreRow, coreCol)))
-                {
-                    coreCol++;
-                    continue;
-                }
-
-                var runStart = coreCol;
-                do
-                {
-                    coreCol++;
-                } while (coreCol < coreWidth
-                    && data.GetCoreModule(coreRow, coreCol)
-                    && !(skipFinderPatterns && data.IsFinderPattern(coreRow, coreCol)));
-
-                var left = area.Left + (runStart + quietZone) * cellWidth;
-                var right = area.Left + (coreCol + quietZone) * cellWidth;
-                canvas.DrawRect(new SKRect(left, top, right, bottom), paint);
-            }
+            var top = area.Top + (runs.RunRow + quietZone) * cellHeight;
+            var left = area.Left + (runs.RunStart + quietZone) * cellWidth;
+            var right = area.Left + (runs.RunStart + runs.RunLength + quietZone) * cellWidth;
+            canvas.DrawRect(new SKRect(left, top, right, top + cellHeight), paint);
         }
     }
 

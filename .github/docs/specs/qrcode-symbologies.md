@@ -35,6 +35,7 @@ Internals are split into shared primitives and per-symbology pipelines.
 | `SegmentDecoders` | Segment payload bit groups (numeric 10/7/4, alphanumeric 11/6, byte 8·count), the byte-charset heuristics (UTF-8 validation, BOM, Latin-1 widening) and the ECI designator reader (lifted from `QRBinaryDecoder` when rMQR became its second consumer, Phase 6) are identical across symbologies; the mode/count indicator framing that differs stays in each symbology's bitstream decoder (lifted out of `QRBinaryDecoder` in Phase 3 when the second consumer appeared) |
 | `LuminanceConverter`, `PerspectiveTransform` | Image preprocessing and geometry are symbology-independent |
 | `Point`, `Rectangle` | Plain geometry types |
+| `ModuleRunScanner`, `ModuleRunEnumerator<TView>` | Merging dark modules into horizontal runs depends only on the `IModuleMatrixView` shape, not the symbology. One implementation serves both the renderer's merged-run drawing path and the public `GetModuleRectangles` surface on all three data types, so the geometry the public API reports is by construction the geometry the renderer draws |
 
 **Per-symbology pipelines** (`Internals.StandardQr`, later `Internals.MicroQR`, `Internals.RmQr`), knowledge specific to one symbol format:
 
