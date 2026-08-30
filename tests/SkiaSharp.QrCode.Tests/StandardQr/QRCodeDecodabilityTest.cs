@@ -215,6 +215,24 @@ public class QRCodeDecodabilityTest
     }
 
     [Test]
+    [Arguments("https://example.com/item?id=123456789012345678901234567890")]
+    [Arguments("Order 12345 item 6789 ref 0000111122223333")]
+    [Arguments("日本語1234567890123456789012345678901234567890")]
+    [Arguments("Café 12345678901234567890")]
+    public async Task CreateQrCode_OptimalSegmentation_IsDecodableByZXing(string content)
+    {
+        // Mixed-mode streams (several mode segments in one symbol) must be readable
+        // by an independent decoder, not only by this library's own.
+        var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal });
+
+        using var bitmap = QrCodeToSKBitmap(qr);
+        var result = _reader.Decode(bitmap);
+
+        await Assert.That(result).IsNotNull();
+        await Assert.That(result!.Text).IsEqualTo(content);
+    }
+
+    [Test]
     public async Task CreateQrCode_WithEccBoost_IsDecodableByZXing_AtTheBoostedLevel()
     {
         // "HELLO" at L auto-selects version 1; boost raises the level to H (v1-H

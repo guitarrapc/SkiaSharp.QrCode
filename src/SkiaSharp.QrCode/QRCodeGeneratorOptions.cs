@@ -93,4 +93,14 @@ public readonly record struct QRCodeGeneratorOptions
     /// Sizing is unaffected either way, the buffer size depends only on the version.
     /// </remarks>
     public bool BoostEccLevel { get; init; }
+
+    /// <summary>
+    /// How the content is split into encoding-mode segments
+    /// (see <see cref="QRCodeSegmentation"/>). Defaults to
+    /// <see cref="QRCodeSegmentation.Single"/>. <see cref="QRCodeSegmentation.Optimal"/>
+    /// never selects a larger version, and emits the identical bit stream when a
+    /// split would not shrink the symbol. Size a destination buffer with the same
+    /// value you encode with.
+    /// </summary>
+    public QRCodeSegmentation Segmentation { get; init; }
 }

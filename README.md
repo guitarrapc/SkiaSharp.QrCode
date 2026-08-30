@@ -261,7 +261,7 @@ var rmqr = RmQRCodeGenerator.CreateRmQRCode("content", RmQREccLevel.M, new RmQRC
 | `MaskPattern` | `null` (automatic, 0-7) | `null` (automatic, 0-3) | — |
 | `FitStrategy` | — | — | `MinimizeArea` |
 | `Height` | — | — | `null` (any height) |
-| `Segmentation` | — | — | `Single` |
+| `Segmentation` | `Single` | — | `Single` |
 
 The quiet zone defaults differ because the specifications do: ISO/IEC 18004 requires 4 modules for Standard QR and 2 for Micro QR, ISO/IEC 23941 requires 2 for rMQR. `0` is a valid setting for all three.
 
@@ -319,6 +319,46 @@ var micro = new MicroQRCodeImageBuilder("12345").WithErrorCorrection(MicroQREccL
 `null` (the default) keeps the automatic selection. Values outside the symbology's range (0-7 for Standard QR, 0-3 for Micro QR — the two numberings are unrelated) are rejected when the option is set. rMQR has a single fixed mask (ISO/IEC 23941), so there is nothing to pin.
 
 Because an `int?` converts implicitly, an optional version needs no branch at the call site — that is the job the old `-1` convention did, without the magic number.
+
+#### Mixed-mode segmentation (smaller symbols for mixed content)
+
+By default the whole content is encoded in one mode, so a URL prefix pushes an otherwise numeric payload into Byte mode and every digit costs 8 bits instead of 3⅓. `QRCodeSegmentation.Optimal` instead splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits. That does two things: it often drops the symbol by a version or more, and it encodes content that no single mode fits at any version. It never selects a larger version than the default, and it emits the default bit stream unchanged whenever splitting would not shrink the symbol — same options, same content, same symbol, unless it gets smaller.
+
+```csharp
+const string content = "https://example.com/item?id=123456789012345678901234567890";
+
+var single = QRCodeGenerator.CreateQrCode(content, ECCLevel.M);
+Console.WriteLine(single.Version);  // 4 - one Byte segment
+
+var optimal = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal });
+Console.WriteLine(optimal.Version); // 3 - Byte + Numeric
+
+// 5,500 characters overflow Byte mode at every version (40-L holds 2,953), but fit once split
+var mixed = new string('x', 1000) + new string('1', 4500);
+QRCodeGenerator.CreateQrCode(mixed, ECCLevel.L);                                   // throws: too long
+QRCodeGenerator.CreateQrCode(mixed, ECCLevel.L, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal }); // version 40
+
+// Also available on the image builder
+var pngBytes = new QRCodeImageBuilder(content)
+    .WithSegmentation(QRCodeSegmentation.Optimal)
+    .ToByteArray();
+```
+
+It is opt-in because planning searches candidate versions; changing the default would also silently move the emitted bit stream for existing callers. The search is cheap by construction — count indicator widths only change at versions 10 and 27, so the optimal bit cost is computed at most three times however many versions are scanned — all-numeric content skips planning entirely (one Numeric run is provably optimal), and a cheap single-pass bound rules out content no split can shrink before any planning runs, so such content costs roughly nothing extra. Planning stays allocation-free for typical content and rents pooled buffers for long content; content longer than 7,089 characters, which no version holds in any mode, is rejected without planning.
+
+Notes that carry over from the general options: size destination buffers with the same `Segmentation` you encode with (`TryGetRequiredBufferSize` honors it, and the two can select different versions), and `Utf8BOM` disables the split — the BOM is a stream-level prefix, and a split would relocate it into the middle of the decoded text — so that combination emits the single-mode stream. rMQR has the same option as `RmQRSegmentation` (see its section below); Micro QR capacities are too small for a split to ever pay for its extra headers.
+
+As with rMQR, the cost is driven by **how much the split helps**: planning runs only where a smaller version is reachable, and where it runs and wins, the Optimal arm also encodes a smaller symbol, so you pay in proportion to what you gain (allocations are zero on both arms):
+
+| Content | Single | Optimal | |
+|---|--:|--:|---|
+| 120 digits | 1.66 µs | 1.53 µs | one mode is provably optimal; planning never starts |
+| 120 alphanumeric | 2.00 µs | 2.00 µs | no smaller version is reachable; ruled out without planning |
+| 120 characters alternating `a7` | 2.25 µs | 3.84 µs | planned, and the split loses |
+| URL + 30-digit ID (58 chars) | 1.58 µs | 3.90 µs | planned, and the split wins a version |
+| 60 letters + 60 digits | 2.40 µs | 6.83 µs | planned, and the split wins a version |
+
+Reproduce with `dotnet run -c Release -- --filter "*QRCodeSegmentationEncode*"` in `src/SkiaSharp.QrCode.Benchmark`.
 
 rMQR has no version range: its 32 versions are not ordered by size (R7x43, R9x43 and R7x59 have no min/max relation), so it constrains fit with `FitStrategy` and `Height` instead.
 

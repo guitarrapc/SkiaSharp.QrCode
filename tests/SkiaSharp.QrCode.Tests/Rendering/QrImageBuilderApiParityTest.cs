@@ -34,15 +34,23 @@ public class QrImageBuilderApiParityTest
     /// specs/rmqr-encoder.md), so the rMQR builder alone exposes the fit strategy and
     /// the fixed-height constraint; and the symbol is rectangular, so the width-only
     /// sizing rule (height from the aspect ratio) is a builder option of its own.
-    /// Mixed-mode segmentation is rMQR-only for the same reason: rMQR capacities are
-    /// small enough that splitting the content moves the symbol a version or more.
     /// </summary>
     private static readonly string[] rmqrOnlyMembers =
     [
         "WithFitStrategy",
         "WithHeight",
         "WithWidth",
-        "WithSegmentation",
+    ];
+
+    /// <summary>
+    /// Options Standard QR and rMQR share and Micro QR does not. Mixed-mode
+    /// segmentation needs more than one segment header to pay for itself, and Micro
+    /// QR capacities (M1-M4) are too small for a split to ever win; it can join
+    /// later without changing the contract.
+    /// </summary>
+    private static readonly string[] standardAndRmqrOnlySignatures =
+    [
+        " WithSegmentation(",
     ];
 
     /// <summary>
@@ -84,7 +92,7 @@ public class QrImageBuilderApiParityTest
             .ToHashSet();
 
         var failures = new List<string>();
-        Compare("MicroQRCodeImageBuilder", micro, standard.Where(s => !s.Contains(" WithEciMode(")));
+        Compare("MicroQRCodeImageBuilder", micro, standard.Where(s => !s.Contains(" WithEciMode(") && !standardAndRmqrOnlySignatures.Any(s.Contains)));
         Compare("RmQRCodeImageBuilder", rmqr, standard.Where(s => !orderedVersionOnlySignatures.Any(s.Contains) && !standardAndMicroOnlySignatures.Any(s.Contains)));
         if (failures.Count > 0)
             Assert.Fail("Image builder surfaces drifted apart.\n" + string.Join("\n", failures));
@@ -155,6 +163,14 @@ public class QrImageBuilderApiParityTest
     }
 
     [Test]
+    public async Task Segmentation_ExistsOnSymbologiesWhereASplitCanWin()
+    {
+        await Assert.That(typeof(QRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithSegmentation")).IsTrue();
+        await Assert.That(typeof(RmQRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithSegmentation")).IsTrue();
+        await Assert.That(typeof(MicroQRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithSegmentation")).IsFalse();
+    }
+
+    [Test]
     public async Task RmqrOnlyMembers_ExistOnRmqr_AndNotOnOthers()
     {
         foreach (var name in rmqrOnlyMembers)
@@ -209,6 +225,8 @@ public class QrImageBuilderApiParityTest
             return "SYMBOL_DATA";
         if (type == typeof(ECCLevel) || type == typeof(MicroQREccLevel) || type == typeof(RmQREccLevel))
             return "ECC";
+        if (type == typeof(QRCodeSegmentation) || type == typeof(RmQRSegmentation))
+            return "SEGMENTATION";
         if (type == typeof(QRCodeImageBuilder) || type == typeof(MicroQRCodeImageBuilder) || type == typeof(RmQRCodeImageBuilder))
             return "SELF";
         return type.FullName ?? type.Name;
