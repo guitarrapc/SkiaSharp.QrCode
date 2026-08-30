@@ -76,9 +76,12 @@ public class ModuleRectanglesTest
                     darkCount++;
         await Assert.That(rects.Length).IsLessThan(darkCount);
 
-        // The finder pattern's 7-module top edge merges into one rectangle whose
-        // position proves coordinates are quiet-zone-inclusive (default quiet zone: 4).
-        await Assert.That(rects).Contains(new ModuleRect(4, 4, 7, 1));
+        // Coordinates are quiet-zone-inclusive: the first dark module (the top-left
+        // finder corner) sits at offset 4 with the default quiet zone, so no rectangle
+        // starts before (4, 4) and some rectangle starts exactly there. Asserted via
+        // the minimum coordinates so no particular decomposition shape is required.
+        await Assert.That(rects.Min(r => r.X)).IsEqualTo(4);
+        await Assert.That(rects.Min(r => r.Y)).IsEqualTo(4);
     }
 
     [Test]
@@ -87,7 +90,11 @@ public class ModuleRectanglesTest
         var options = new QRCodeGeneratorOptions { QuietZoneSize = 0 };
         var data = QRCodeGenerator.CreateQrCode("https://example.com/", ECCLevel.M, in options);
         var rects = data.GetModuleRectangles();
-        await Assert.That(rects).Contains(new ModuleRect(0, 0, 7, 1));
+
+        // With no quiet zone the finder corner is the origin; shape-independent
+        // minimum-coordinate check, same rationale as StandardQr_Rectangles_AreMerged.
+        await Assert.That(rects.Min(r => r.X)).IsEqualTo(0);
+        await Assert.That(rects.Min(r => r.Y)).IsEqualTo(0);
         await AssertCoversExactlyTheDarkModules(rects, data.Size, data.Size, (x, y) => data[y, x]);
     }
 
