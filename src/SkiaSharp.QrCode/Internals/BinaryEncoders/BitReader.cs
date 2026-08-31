@@ -28,7 +28,7 @@ internal ref struct BitReader
     }
 
     /// <summary>
-    /// Read a single bit from the buffer, advancing the position by one.
+    /// Reads a single bit from the buffer, advancing the position by one.
     /// </summary>
     /// <returns><c>true</c> when the bit is set.</returns>
     /// <exception cref="InvalidOperationException">Thrown when there are no bits left to read.</exception>

@@ -498,8 +498,8 @@ public static class QRCodeGenerator
     /// </summary>
     /// <param name="textSpan">The text to encode.</param>
     /// <param name="eccLevel">How much damage the symbol can survive.</param>
-    /// <param name="utf8BOM">Whether a UTF-8 byte order mark precedes the content. It takes capacity away from the text.</param>
-    /// <param name="eciMode">The character encoding to declare, or Default to pick one from the text.</param>
+    /// <param name="utf8BOM">Whether a UTF-8 byte order mark precedes the content. It costs three bytes of capacity, and only in Byte mode with UTF-8 ECI.</param>
+    /// <param name="eciMode">The character encoding to declare, or <see cref="EciMode.Default"/> to choose one from the text.</param>
     /// <param name="requestedVersion">The symbol size to use (1 to 40), or -1 to pick the smallest size the text fits in.</param>
     /// <returns>The version, encoding mode, ECI mode and error correction layout to encode with.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -836,8 +836,8 @@ public static class QRCodeGenerator
     /// <param name="length">Data length (in characters or bytes).</param>
     /// <param name="encoding">Encoding mode being used.</param>
     /// <param name="eccLevel">Error correction level.</param>
-    /// <param name="eciMode">The character encoding declared in the symbol. Its header takes capacity away from the text.</param>
-    /// <param name="utf8BOM">Whether a UTF-8 byte order mark precedes the content. It also takes capacity away from the text.</param>
+    /// <param name="eciMode">The character encoding declared in the symbol. Anything other than Default adds a 12-bit header, leaving less room for the text.</param>
+    /// <param name="utf8BOM">Whether a UTF-8 byte order mark precedes the content. It costs three bytes of capacity, and only in Byte mode with UTF-8 ECI.</param>
     /// <returns>Version number (1-40).</returns>
     private static int GetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM)
     {

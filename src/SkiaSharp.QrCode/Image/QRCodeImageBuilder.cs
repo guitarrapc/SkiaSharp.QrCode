@@ -47,7 +47,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
 
     /// <summary>
     /// Starts a builder that will encode <paramref name="content"/> when you ask for an image.
-    /// Error correction, version and the rest keep their defaults until you set them.
+    /// Error correction, version and every other option keep their defaults until you set them.
     /// </summary>
     /// <param name="content">The text or URL to encode.</param>
     /// <exception cref="ArgumentException">Thrown when <paramref name="content"/> is empty or only whitespace.</exception>
@@ -60,8 +60,11 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     }
 
     /// <summary>
-    /// Starts a builder that draws a QR code you have already generated. Nothing is
-    /// re-encoded, so the encoding options have no effect here; only the appearance does.
+    /// Starts a builder that draws a QR code you have already generated. The symbol is used
+    /// exactly as given, so only the appearance options apply. Most encoding options throw
+    /// <see cref="InvalidOperationException"/> on a builder created this way;
+    /// <see cref="WithErrorCorrection"/> and <see cref="WithEciMode"/> are accepted and then
+    /// ignored, because they shipped that way in 1.1.1.
     /// </summary>
     /// <param name="qrCodeData">The QR code to draw.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="qrCodeData"/> is null.</exception>

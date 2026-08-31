@@ -50,7 +50,7 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
 
     /// <summary>
     /// Starts a builder that will encode <paramref name="content"/> when you ask for an image.
-    /// Error correction, symbol shape and the rest keep their defaults until you set them.
+    /// Error correction, version and fit keep their defaults until you set them.
     /// </summary>
     /// <param name="content">The text to encode.</param>
     /// <exception cref="ArgumentException">Thrown when <paramref name="content"/> is empty or only whitespace.</exception>
@@ -63,8 +63,9 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
     }
 
     /// <summary>
-    /// Starts a builder that draws an rMQR code you have already generated. Nothing is
-    /// re-encoded, so the encoding options have no effect here; only the appearance does.
+    /// Starts a builder that draws an rMQR code you have already generated. The symbol is
+    /// used exactly as given, so only the appearance options apply. Every encoding option
+    /// throws <see cref="InvalidOperationException"/> on a builder created this way.
     /// </summary>
     /// <param name="rmQrCodeData">The rMQR code to draw.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="rmQrCodeData"/> is null.</exception>

@@ -26,9 +26,9 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// <see cref="PlaceData"/>). The function-module predicate
 /// (<see cref="IsFunctionModule"/>) and the mask (<see cref="GetMaskBit"/>) are the
 /// single source of truth the matrix decoder reuses, so both sides always agree.</item>
-/// <item><see cref="PlaceSymbol(Span{byte}, RmQRVersion, RmQREccLevel, ReadOnlySpan{byte})"/> —
-/// the fast path (benchmark-driven, 16-27x over the
-/// reference). Everything derived from the version alone is built once and cached
+/// <item><see cref="PlaceSymbol(Span{byte}, RmQRVersion, RmQREccLevel, ReadOnlySpan{byte})"/>
+/// is the fast path (benchmark-driven, 16-27x over the reference). Everything derived
+/// from the version alone is built once and cached
 /// (<see cref="Layout"/>); placement is then a template copy, one vector pass that
 /// expands the message bits and XORs the masks, and a store pass. The store pass is
 /// documented on <see cref="ScatterPairs"/>, its ARM64 tier in

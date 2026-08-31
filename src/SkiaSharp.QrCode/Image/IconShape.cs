@@ -46,7 +46,7 @@ public sealed class ImageIconShape : IconShape
     /// <summary>
     /// Creates an icon from an image.
     /// </summary>
-    /// <param name="image">The image to draw. It is scaled to fit the icon area, and the caller keeps ownership of it.</param>
+    /// <param name="image">The image to draw. It is stretched to fill the icon area, so its aspect ratio is not preserved. The caller keeps ownership of it.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is null.</exception>
     public ImageIconShape(SKBitmap image)
     {
