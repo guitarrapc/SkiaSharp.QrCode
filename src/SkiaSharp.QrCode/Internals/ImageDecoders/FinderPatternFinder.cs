@@ -107,6 +107,10 @@ internal static class FinderPatternFinder
     /// in four is most of the rMQR image path: end to end the span decode of the widest
     /// symbol is 2.7x a strideless build's (see the plan's benchmark tables).
     /// </remarks>
+    /// <param name="luminance">Greyscale image, one byte per pixel, row by row.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="threshold">Greyscale value at or below which a pixel counts as dark.</param>
     /// <param name="candidates">Receives merged candidates; <see cref="MaxFinderCandidates"/> entries suffice.</param>
     /// <returns>The number of candidates written.</returns>
     internal static int FindCandidates(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates)
@@ -118,6 +122,10 @@ internal static class FinderPatternFinder
     /// produced nothing that decoded, which is what keeps the detection envelope from ever
     /// being narrower than a full sweep's.
     /// </summary>
+    /// <param name="luminance">Greyscale image, one byte per pixel, row by row.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="threshold">Greyscale value at or below which a pixel counts as dark.</param>
     /// <param name="candidates">Receives merged candidates; <see cref="MaxFinderCandidates"/> entries suffice.</param>
     /// <returns>The number of candidates written.</returns>
     internal static int FindCandidatesFullSweep(ReadOnlySpan<byte> luminance, int width, int height, byte threshold, Span<FinderPattern> candidates)

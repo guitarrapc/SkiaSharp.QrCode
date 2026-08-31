@@ -252,6 +252,13 @@ internal static class QRImageDecoder
     /// cuts the rotated rings diagonally). Instead it is measured along the actual
     /// finder-to-finder lines, which is rotation-invariant.
     /// </remarks>
+    /// <param name="luminance">Greyscale image, one byte per pixel, row by row.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="threshold">Greyscale value at or below which a pixel counts as dark.</param>
+    /// <param name="topLeft">The finder pattern at the top-left corner of the symbol.</param>
+    /// <param name="topRight">The finder pattern at the top-right corner of the symbol.</param>
+    /// <param name="bottomLeft">The finder pattern at the bottom-left corner of the symbol.</param>
     /// <param name="dimension">Nearest valid dimension to the estimate.</param>
     /// <param name="secondaryDimension">
     /// Second-nearest valid dimension when the estimate is also within one version

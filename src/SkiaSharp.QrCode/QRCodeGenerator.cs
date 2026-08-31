@@ -496,12 +496,12 @@ public static class QRCodeGenerator
     /// <summary>
     /// Prepares QR configuration by determining encoding, ECI mode, and version.
     /// </summary>
-    /// <param name="textSpan"></param>
-    /// <param name="eccLevel"></param>
-    /// <param name="utf8Bom"></param>
-    /// <param name="eciMode"></param>
-    /// <param name="requestedVersion"></param>
-    /// <returns></returns>
+    /// <param name="textSpan">The text to encode.</param>
+    /// <param name="eccLevel">How much damage the symbol can survive.</param>
+    /// <param name="utf8BOM">Whether a UTF-8 byte order mark precedes the content. It takes capacity away from the text.</param>
+    /// <param name="eciMode">The character encoding to declare, or Default to pick one from the text.</param>
+    /// <param name="requestedVersion">The symbol size to use (1 to 40), or -1 to pick the smallest size the text fits in.</param>
+    /// <returns>The version, encoding mode, ECI mode and error correction layout to encode with.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static QRConfiguration PrepareConfiguration(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, bool utf8BOM, EciMode eciMode, int requestedVersion)
     {
@@ -836,6 +836,8 @@ public static class QRCodeGenerator
     /// <param name="length">Data length (in characters or bytes).</param>
     /// <param name="encoding">Encoding mode being used.</param>
     /// <param name="eccLevel">Error correction level.</param>
+    /// <param name="eciMode">The character encoding declared in the symbol. Its header takes capacity away from the text.</param>
+    /// <param name="utf8BOM">Whether a UTF-8 byte order mark precedes the content. It also takes capacity away from the text.</param>
     /// <returns>Version number (1-40).</returns>
     private static int GetVersion(int length, EncodingMode encoding, ECCLevel eccLevel, EciMode eciMode, bool utf8BOM)
     {
@@ -1275,5 +1277,6 @@ public static class QRCodeGenerator
     /// <param name="EciMode">ECI mode specifying character encoding.</param>
     /// <param name="Utf8BOM">Indicates if UTF-8 BOM is included in the encoded data.</param>
     /// <param name="EccInfo">Error correction information for the selected version and ECC level.</param>
+    /// <param name="DataLength">How much content there is to encode, counted in the units the encoding mode uses.</param>
     private readonly record struct QRConfiguration(int Version, ECCLevel EccLevel, EncodingMode Encoding, EciMode EciMode, bool Utf8BOM, in ECCInfo EccInfo, int DataLength);
 }

@@ -165,7 +165,13 @@ internal static class SegmentDecoders
     /// Decodes a byte segment payload of <paramref name="count"/> bytes, resolving
     /// the effective charset (UTF-8 heuristic / BOM handling / ISO-8859-1 widening).
     /// </summary>
+    /// <param name="reader">Reader positioned at the first byte of the segment. It is advanced past them.</param>
+    /// <param name="totalBits">Length of the whole bitstream in bits, so a segment that runs off the end is rejected.</param>
+    /// <param name="count">Number of bytes in this segment.</param>
+    /// <param name="charset">The charset declared for the segment, or Unspecified to work it out from the bytes.</param>
     /// <param name="byteBuffer">Scratch buffer for the segment bytes; must hold at least <paramref name="count"/> bytes.</param>
+    /// <param name="destination">Receives the decoded text.</param>
+    /// <param name="charsWritten">How many characters <paramref name="destination"/> already holds. This call advances it.</param>
     public static QRCodeDecodeStatus DecodeBytePayload(ref BitReader reader, int totalBits, int count, ByteSegmentCharset charset, byte[] byteBuffer, Span<char> destination, ref int charsWritten)
     {
         if (totalBits - reader.BitPosition < count * 8)

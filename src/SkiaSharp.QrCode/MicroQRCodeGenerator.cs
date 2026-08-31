@@ -47,7 +47,10 @@ public static class MicroQRCodeGenerator
         => CreateMicroQRCode(plainText.AsSpan(), eccLevel, requestedVersion, quietZoneSize);
 
     /// <inheritdoc cref="CreateMicroQRCode(string, MicroQREccLevel, MicroQRVersion?, int)"/>
-    /// <param name="textSpan">The text span to encode.</param>
+    /// <param name="textSpan">The text to encode.</param>
+    /// <param name="eccLevel">How much damage the symbol can survive. M1 offers error detection only, and Q is available on M4 only.</param>
+    /// <param name="requestedVersion">The symbol size to use (M1 to M4), or null to pick the smallest size the text fits in.</param>
+    /// <param name="quietZoneSize">Width of the blank margin around the symbol, in modules. Scanners expect 2.</param>
     public static MicroQRCodeData CreateMicroQRCode(ReadOnlySpan<char> textSpan, MicroQREccLevel eccLevel, MicroQRVersion? requestedVersion = null, int quietZoneSize = DefaultQuietZone)
         => CreateMicroQRCodeCore(textSpan, eccLevel, requestedVersion, quietZoneSize, AutomaticMask);
 

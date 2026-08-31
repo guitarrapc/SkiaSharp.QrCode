@@ -16,6 +16,7 @@ internal static partial class ModulePlacer
     /// Fills modules in zigzag pattern from bottom-right to top-left.
     /// </summary>
     /// <param name="buffer">QR code data structure to populate.</param>
+    /// <param name="size">Side length of the matrix in modules, quiet zone excluded.</param>
     /// <param name="interleavedData">Interleaved data and ECC bytes.</param>
     /// <param name="blockedMask">blocked mask bytes.</param>
     /// <remarks>
@@ -339,6 +340,7 @@ internal static partial class ModulePlacer
     /// Two identical 15-bit sequences for redundancy.
     /// </summary>
     /// <param name="buffer">QR code matrix buffer.</param>
+    /// <param name="size">Side length of the matrix in modules, quiet zone excluded.</param>
     /// <param name="formatBits">15-bit format information (LSB first).</param>
     /// <remarks>
     /// Places two identical copies for redundancy (ISO/IEC 18004 Section 7.9):
