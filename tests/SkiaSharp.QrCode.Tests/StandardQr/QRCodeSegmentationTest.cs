@@ -494,11 +494,10 @@ public class QRCodeSegmentationTest
     [Test]
     public async Task Builder_WithSegmentation_RejectsInvalidValueAndPrebuiltData()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new QRCodeImageBuilder("HELLO").WithSegmentation((QRCodeSegmentation)5));
+        await Assert.That(() => new QRCodeImageBuilder("HELLO").WithSegmentation((QRCodeSegmentation)5)).Throws<ArgumentOutOfRangeException>();
 
         var data = QRCodeGenerator.CreateQrCode("HELLO", ECCLevel.M, QRCodeGeneratorOptions.Default);
-        Assert.Throws<InvalidOperationException>(() => new QRCodeImageBuilder(data).WithSegmentation(QRCodeSegmentation.Optimal));
-        await Assert.That(true).IsTrue();
+        await Assert.That(() => new QRCodeImageBuilder(data).WithSegmentation(QRCodeSegmentation.Optimal)).Throws<InvalidOperationException>();
     }
 
     [Test]
