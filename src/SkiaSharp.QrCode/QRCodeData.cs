@@ -239,7 +239,7 @@ public class QRCodeData
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This constructor deserializes QR code data that was previously serialized using <see cref="GetRawData"/>.
+    /// This constructor deserializes QR code data that was previously serialized using <see cref="GetRawData()"/>.
     /// The raw data contains only the core QR code modules (excluding quiet zone).
     /// </para>
     /// <para>
@@ -249,7 +249,7 @@ public class QRCodeData
     /// The quiet zone (white border) can be added during deserialization by specifying the <paramref name="quietZoneSize"/> parameter.
     /// </para>
     /// </remarks>
-    /// <param name="rawData">The serialized QR code data. This data should be obtained from <see cref="GetRawData"/>.</param>
+    /// <param name="rawData">The serialized QR code data. This data should be obtained from <see cref="GetRawData()"/>.</param>
     /// <param name="quietZoneSize">
     /// The size of the quiet zone (white border) to add around the QR code matrix, in modules.
     /// This value is independent of the serialized data and can be different from the original quiet zone size used during serialization.
@@ -266,7 +266,7 @@ public class QRCodeData
     /// </summary>
     /// <remarks>
     /// <para>
-    /// This constructor deserializes QR code data that was previously serialized using <see cref="GetRawData"/>.
+    /// This constructor deserializes QR code data that was previously serialized using <see cref="GetRawData()"/>.
     /// The raw data contains only the core QR code modules (excluding quiet zone).
     /// </para>
     /// <para>
@@ -281,7 +281,7 @@ public class QRCodeData
     /// without allocating a new byte array.
     /// </para>
     /// </remarks>
-    /// <param name="rawDataSpan">The serialized QR code data span. This data should be obtained from <see cref="GetRawData"/>.</param>
+    /// <param name="rawDataSpan">The serialized QR code data span. This data should be obtained from <see cref="GetRawData()"/>.</param>
     /// <param name="quietZoneSize">
     /// The size of the quiet zone (white border) to add around the QR code matrix, in modules.
     /// This value is independent of the serialized data and can be different from the original quiet zone size used during serialization.
