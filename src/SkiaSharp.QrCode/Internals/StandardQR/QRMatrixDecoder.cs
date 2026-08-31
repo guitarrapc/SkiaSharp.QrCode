@@ -165,7 +165,8 @@ internal static class QRMatrixDecoder
 
     /// <summary>
     /// Reads data/ECC codeword bits from the matrix in placement order (inverse of
-    /// <see cref="ModulePlacer.PlaceDataWords"/>), unmasking each module on the fly.
+    /// <see cref="ModulePlacer.PlaceDataWords(Span{byte}, int, ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>),
+    /// unmasking each module on the fly.
     /// Remainder bits beyond the output capacity are ignored.
     /// </summary>
     private static void ExtractCodewords(ReadOnlySpan<byte> modules, int size, ReadOnlySpan<byte> blockedMask, int maskPattern, Span<byte> output)

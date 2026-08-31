@@ -75,8 +75,9 @@ internal static class TextAnalyzer
     /// <summary>
     /// AVX2 optimized analysis (process 16 chars at once)
     /// </summary>
-    /// <param name="text"></param>
-    /// <returns></returns>
+    /// <param name="text">The text to inspect.</param>
+    /// <param name="requestedEciMode">The character encoding the caller asked for, or Default to choose one from the text.</param>
+    /// <returns>The narrowest encoding mode the text fits, its length in that mode's units, and the ECI mode to declare.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static TextAnalysisResult AnalyzeAvx2(ReadOnlySpan<char> text, EciMode requestedEciMode)
     {
@@ -238,8 +239,9 @@ internal static class TextAnalyzer
     /// <summary>
     /// SSE2 optimized analysis (process 8 chars at once)
     /// </summary>
-    /// <param name="text"></param>
-    /// <returns></returns>
+    /// <param name="text">The text to inspect.</param>
+    /// <param name="requestedEciMode">The character encoding the caller asked for, or Default to choose one from the text.</param>
+    /// <returns>The narrowest encoding mode the text fits, its length in that mode's units, and the ECI mode to declare.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static TextAnalysisResult AnalyzeSse2(ReadOnlySpan<char> text, EciMode requestedEciMode)
     {
@@ -406,8 +408,9 @@ internal static class TextAnalyzer
     /// ASCII/ISO detection keeps 16-bit precision via one UMAXV of the raw block,
     /// whose max answers both the &gt;127 and &gt;255 thresholds at once.
     /// </summary>
-    /// <param name="text"></param>
-    /// <returns></returns>
+    /// <param name="text">The text to inspect.</param>
+    /// <param name="requestedEciMode">The character encoding the caller asked for, or Default to choose one from the text.</param>
+    /// <returns>The narrowest encoding mode the text fits, its length in that mode's units, and the ECI mode to declare.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static TextAnalysisResult AnalyzeAdvSimd(ReadOnlySpan<char> text, EciMode requestedEciMode)
     {
@@ -596,8 +599,9 @@ internal static class TextAnalyzer
     /// <summary>
     /// Scalar fallback analysis (process 1 char at once)
     /// </summary>
-    /// <param name="text"></param>
-    /// <returns></returns>
+    /// <param name="text">The text to inspect.</param>
+    /// <param name="requestedEciMode">The character encoding the caller asked for, or Default to choose one from the text.</param>
+    /// <returns>The narrowest encoding mode the text fits, its length in that mode's units, and the ECI mode to declare.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static TextAnalysisResult AnalyzeScalar(ReadOnlySpan<char> text, EciMode requestedEciMode)
     {

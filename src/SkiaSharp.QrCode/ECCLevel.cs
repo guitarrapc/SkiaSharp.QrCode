@@ -1,5 +1,10 @@
 namespace SkiaSharp.QrCode;
 
+/// <summary>
+/// The error correction level: how much of a symbol can be damaged, dirty or covered
+/// while the code still scans. Higher levels leave less room for content, so the same
+/// text may need a larger symbol.
+/// </summary>
 public enum ECCLevel
 {
     /// <summary>

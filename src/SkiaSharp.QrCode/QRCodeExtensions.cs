@@ -2,6 +2,16 @@ using SkiaSharp.QrCode.Image;
 
 namespace SkiaSharp.QrCode;
 
+/// <summary>
+/// Extension methods that render a QR, Micro QR or rMQR symbol onto an
+/// <see cref="SKCanvas"/> you already have, instead of producing an image file.
+/// </summary>
+/// <remarks>
+/// Each method clears the whole canvas before drawing, so anything already on it is
+/// lost. To place a symbol inside a larger drawing, wrap the call in
+/// <see cref="SKCanvas.Save"/> and <see cref="SKCanvas.ClipRect(SKRect, SKClipOperation, bool)"/>,
+/// or call <see cref="QRCodeRenderer"/> directly, which draws only the symbol.
+/// </remarks>
 public static class QRCodeExtensions
 {
     /// <summary>

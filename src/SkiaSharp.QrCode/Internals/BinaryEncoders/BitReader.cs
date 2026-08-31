@@ -28,10 +28,10 @@ internal ref struct BitReader
     }
 
     /// <summary>
-    /// Read a single bit from the buffer
+    /// Reads a single bit from the buffer, advancing the position by one.
     /// </summary>
-    /// <param name="value"></param>
-    /// <param name="bitCount"></param>
+    /// <returns><c>true</c> when the bit is set.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when there are no bits left to read.</exception>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool Read()
     {

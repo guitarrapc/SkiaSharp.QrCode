@@ -22,7 +22,8 @@ internal static class RmQRVersionSelector
     /// Priced in <see cref="long"/>: Byte mode costs <c>8 × dataLength</c>, which wraps
     /// <see cref="int"/> for a span past ~268M units and would read as a fit. Widening
     /// keeps the mode switch on every path, which a length fast-path in
-    /// <see cref="Fits"/> would skip for exactly the lengths that need it most.
+    /// <see cref="Fits(RmQRVersion, RmQREccLevel, EncodingMode, int)"/> would skip for
+    /// exactly the lengths that need it most.
     /// </remarks>
     public static long GetRequiredBits(RmQRVersion version, EncodingMode mode, int dataLength)
     {
@@ -65,7 +66,8 @@ internal static class RmQRVersionSelector
 
     /// <summary>
     /// Largest data length (digits / characters / bytes) that fits a version × ECC × mode,
-    /// the inverse of <see cref="GetRequiredBits"/> against the data bit capacity.
+    /// the inverse of <see cref="GetRequiredBits(RmQRVersion, EncodingMode, int)"/> against
+    /// the data bit capacity.
     /// </summary>
     public static int GetMaxDataLength(RmQRVersion version, RmQREccLevel eccLevel, EncodingMode mode)
     {

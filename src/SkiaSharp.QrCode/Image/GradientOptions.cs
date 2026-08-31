@@ -15,6 +15,10 @@ namespace SkiaSharp.QrCode.Image;
 /// </remarks>
 public record class GradientOptions
 {
+    /// <summary>
+    /// A ready-made gradient: dark orange to firebrick, running from the top-left corner
+    /// to the bottom-right. Use it when you want a gradient without choosing colors.
+    /// </summary>
     public static readonly GradientOptions Default = new([SKColors.DarkOrange, SKColors.Firebrick], GradientDirection.TopLeftToBottomRight);
 
     /// <summary>

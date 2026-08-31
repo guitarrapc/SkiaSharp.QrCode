@@ -1,5 +1,15 @@
 namespace SkiaSharp.QrCode.Image;
 
+/// <summary>
+/// The logo or image drawn at the center of a QR code, and its size.
+/// </summary>
+/// <remarks>
+/// The icon covers modules, so the symbol relies on error correction to stay readable.
+/// Use the highest error correction level (<see cref="ECCLevel.H"/>) and keep the icon
+/// small. When the size is given in modules, rendering throws if the icon and its border
+/// span more than <see cref="MaxCoreOccupancyPercent"/> percent of the core width; sizes
+/// given as a percentage of the image are not checked against the symbol at all.
+/// </remarks>
 public class IconData
 {
     /// <summary>
