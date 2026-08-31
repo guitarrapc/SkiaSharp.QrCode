@@ -134,6 +134,16 @@ jobs:
           dotnet-version: 10.0
       - name: Install wasm-tools workload
         run: dotnet workload install wasm-tools
+      # Public API listing for the Pages site. Written into the Playground wwwroot so the
+      # publish below copies it to /api/, which is also where it lands when the Playground
+      # is run locally. This publishes the surface, it never judges it: breaking changes are
+      # caught by package validation in build-dotnet, so nothing here can fail a release
+      # except the generator itself breaking.
+      # --source-links only here: SourceLink pins the commit that was built, and this job builds
+      # at the tag, so every link resolves. A local build would pin whatever HEAD happens to be,
+      # which may never have been pushed, so the committed copy of the page carries no links.
+      - name: Generate public API page
+        run: dotnet run tools/public_api.cs -- --html --source-links -o src/SkiaSharp.QrCode.Playground/wwwroot/api/index.html
       # Version for the in-page badge (AssemblyInformationalVersion) comes from Directory.Build.props.
       # No -r browser-wasm: the WebAssembly SDK defaults to it, and passing it as a global
       # property would force the multi-targeted library reference to need wasm-tools-net8.
