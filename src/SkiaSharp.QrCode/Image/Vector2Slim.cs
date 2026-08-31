@@ -19,8 +19,17 @@ public readonly record struct Vector2Slim
     /// </summary>
     public int Y { get; }
 
+    /// <summary>
+    /// Creates a vector with both components set to the same value.
+    /// </summary>
+    /// <param name="value">The value used for both X and Y.</param>
     public Vector2Slim(int value) : this(value, value) { }
 
+    /// <summary>
+    /// Creates a vector from its two components.
+    /// </summary>
+    /// <param name="x">The X component.</param>
+    /// <param name="y">The Y component.</param>
     public Vector2Slim(int x, int y) => (X, Y) = (x, y);
 
     /// <summary>

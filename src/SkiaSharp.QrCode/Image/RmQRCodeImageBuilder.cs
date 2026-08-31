@@ -48,6 +48,12 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
     private RmQRSegmentation _segmentation = RmQRSegmentation.Single;
     private int? _widthOnly;
 
+    /// <summary>
+    /// Starts a builder that will encode <paramref name="content"/> when you ask for an image.
+    /// Error correction, symbol shape and the rest keep their defaults until you set them.
+    /// </summary>
+    /// <param name="content">The text to encode.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="content"/> is empty or only whitespace.</exception>
     public RmQRCodeImageBuilder(string content) : base(defaultQuietZoneSize: RmQRConstants.QuietZoneModules)
     {
         if (string.IsNullOrWhiteSpace(content))
@@ -56,6 +62,12 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
         _content = content;
     }
 
+    /// <summary>
+    /// Starts a builder that draws an rMQR code you have already generated. Nothing is
+    /// re-encoded, so the encoding options have no effect here; only the appearance does.
+    /// </summary>
+    /// <param name="rmQrCodeData">The rMQR code to draw.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="rmQrCodeData"/> is null.</exception>
     public RmQRCodeImageBuilder(RmQRCodeData rmQrCodeData) : base(defaultQuietZoneSize: RmQRConstants.QuietZoneModules)
     {
         if (rmQrCodeData is null)

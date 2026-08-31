@@ -30,6 +30,12 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     private int? _maskPattern;
     private MicroQRSegmentation _segmentation = MicroQRSegmentation.Single;
 
+    /// <summary>
+    /// Starts a builder that will encode <paramref name="content"/> when you ask for an image.
+    /// Error correction, version and the rest keep their defaults until you set them.
+    /// </summary>
+    /// <param name="content">The text to encode. Micro QR holds very little, so keep it short.</param>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="content"/> is empty or only whitespace.</exception>
     public MicroQRCodeImageBuilder(string content) : base(defaultQuietZoneSize: 2)
     {
         if (string.IsNullOrWhiteSpace(content))
@@ -38,6 +44,12 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
         _content = content;
     }
 
+    /// <summary>
+    /// Starts a builder that draws a Micro QR code you have already generated. Nothing is
+    /// re-encoded, so the encoding options have no effect here; only the appearance does.
+    /// </summary>
+    /// <param name="microQrCodeData">The Micro QR code to draw.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="microQrCodeData"/> is null.</exception>
     public MicroQRCodeImageBuilder(MicroQRCodeData microQrCodeData) : base(defaultQuietZoneSize: 2)
     {
         if (microQrCodeData is null)

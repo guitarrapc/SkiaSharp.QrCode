@@ -43,6 +43,11 @@ public sealed class ImageIconShape : IconShape
 {
     private readonly SKBitmap _image;
 
+    /// <summary>
+    /// Creates an icon from an image.
+    /// </summary>
+    /// <param name="image">The image to draw. It is scaled to fit the icon area, and the caller keeps ownership of it.</param>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="image"/> is null.</exception>
     public ImageIconShape(SKBitmap image)
     {
         _image = image ?? throw new ArgumentNullException(nameof(image));

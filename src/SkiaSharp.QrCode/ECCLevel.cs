@@ -1,5 +1,9 @@
 namespace SkiaSharp.QrCode;
 
+/// <summary>
+/// How much of a QR code can be damaged, dirty or covered and still scan.
+/// Higher levels leave less room for content, so the same text may need a larger symbol.
+/// </summary>
 public enum ECCLevel
 {
     /// <summary>

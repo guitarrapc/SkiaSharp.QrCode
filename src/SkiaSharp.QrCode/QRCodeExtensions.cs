@@ -2,6 +2,10 @@ using SkiaSharp.QrCode.Image;
 
 namespace SkiaSharp.QrCode;
 
+/// <summary>
+/// Draws a QR code straight onto an <see cref="SKCanvas"/> you already have,
+/// for when you are compositing it into a larger drawing rather than saving an image.
+/// </summary>
 public static class QRCodeExtensions
 {
     /// <summary>

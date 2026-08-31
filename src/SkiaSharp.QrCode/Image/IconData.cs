@@ -1,5 +1,13 @@
 namespace SkiaSharp.QrCode.Image;
 
+/// <summary>
+/// A logo or image to place in the middle of a QR code, and how big to draw it.
+/// </summary>
+/// <remarks>
+/// The icon covers modules, so the code relies on error correction to stay readable.
+/// Use <see cref="ECCLevel.H"/> and keep the icon small; the builder rejects an icon
+/// that would cover more than <see cref="MaxCoreOccupancyPercent"/> of the symbol.
+/// </remarks>
 public class IconData
 {
     /// <summary>
