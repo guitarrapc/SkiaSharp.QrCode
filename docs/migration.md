@@ -4,6 +4,7 @@
 - **v1.2.0 adds generator options structs and version ranges.** Purely additive for Standard QR and Micro QR: every existing overload keeps its signature, exceptions and output. See [generator options](#generator-options) below.
 - **v1.2.0 introduces rMQR**, whose generator takes `RmQRCodeGeneratorOptions` rather than a parameter list. New in this release, so there is nothing to migrate from. See [rMQR](#rmqr) below.
 - **v1.2.0 makes buffer sizing `Try`-only.** `TryGetRequiredBufferSize` is on all three generators; `GetRequiredBufferSize` is `[Obsolete]` on Standard QR and Micro QR and will be removed in 2.0.0. A warning, not a break. See [sizing is Try-only](#sizing-is-try-only) below.
+- **v1.2.0 deprecates the `Compression` enum.** No API has ever accepted or returned it: the serialization feature it named was removed before 1.0.0 and the enum was left behind. `[Obsolete]` now, removed in 2.0.0. Compress the bytes from `GetRawData()` yourself, as shown under [removed features](#-removed-features).
 - **After v1.1.0, the image builders share a common base class.** Source compatible; recompile if you referenced the binary. See [image builder base class](#image-builder-base-class) below.
 - **v1.0.0 removes the obsolete `QrCode` class.** If you still use `QrCode`, see [from before v1.0.0 to v1.0.0](#from-before-v100-to-v100) below.
 - v0.11.0 introduces further improvements to Icon handling. See the IconData section below.
@@ -373,7 +374,7 @@ If you were using these features, you'll need to adjust your code accordingly.
 
 - `forceUtf8`: SkiaSharp.QrCode now automatically selects UTF-8 when needed.
 - ISO-8859-2 and Kanji: not supported for ENCODING; UTF-8 is recommended for most use cases. Kanji segments produced by other encoders are read since v1.2.0, see [Kanji mode decoding](#kanji-mode-decoding).
-- Compression: Removed to simplify the API and improve performance. Please handle compression externally if needed.
+- Compression: Removed to simplify the API and improve performance. Please handle compression externally if needed. The `Compression` enum itself outlived the feature and shipped unused through 1.1.1; it is `[Obsolete]` as of 1.2.0 and will be removed in 2.0.0.
 
 Here's an example of how to handle compression externally using [NativeCompressions](https://github.com/Cysharp/NativeCompressions):
 
