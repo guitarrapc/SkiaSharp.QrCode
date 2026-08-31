@@ -29,6 +29,58 @@
     <SbomGenerationManifestInfo>SPDX:2.2</SbomGenerationManifestInfo>
   </PropertyGroup>
 
+  <!--
+    The compiler documents every member that carries a doc comment, internal ones included:
+    more than half of this assembly's entries describe types under Internals, and no consumer
+    can call any of them. Strip those entries while the file is still in obj, before it is
+    copied to the output directory, so the package ships only what a caller can use and the
+    internal design notes stay out of the distributed artifact.
+  -->
+  <UsingTask TaskName="StripInternalXmlDocs" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <DocumentationFilePath ParameterType="System.String" Required="true" />
+      <NamespacePrefix ParameterType="System.String" Required="true" />
+      <Removed ParameterType="System.Int32" Output="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System" />
+      <Using Namespace="System.Linq" />
+      <Using Namespace="System.Xml.Linq" />
+      <Code Type="Fragment" Language="cs"><![CDATA[
+        // Documentation IDs are "X:Full.Name", where X is T, M, P, F or E.
+        var document = XDocument.Load(DocumentationFilePath);
+        var internals = document.Descendants("member")
+            .Where(member =>
+            {
+                var name = (string)member.Attribute("name");
+                return name != null
+                    && name.Length > 2
+                    && name[1] == ':'
+                    && name.Substring(2).StartsWith(NamespacePrefix, StringComparison.Ordinal);
+            })
+            .ToList();
+
+        Removed = internals.Count;
+
+        // Only rewrite when there is something to remove, so a rebuild that changed nothing
+        // leaves the file, and its timestamp, alone.
+        if (Removed > 0)
+        {
+            foreach (var member in internals) member.Remove();
+            document.Save(DocumentationFilePath);
+        }
+      ]]></Code>
+    </Task>
+  </UsingTask>
+
+  <Target Name="StripInternalDocumentation" BeforeTargets="CopyFilesToOutputDirectory"
+          Condition="'$(GenerateDocumentationFile)' == 'true' And Exists('$(DocumentationFile)')">
+    <StripInternalXmlDocs DocumentationFilePath="$(DocumentationFile)" NamespacePrefix="$(RootNamespace).Internals.">
+      <Output TaskParameter="Removed" PropertyName="_RemovedInternalDocMembers" />
+    </StripInternalXmlDocs>
+    <Message Importance="normal" Text="$(MSBuildProjectName) ($(TargetFramework)): removed $(_RemovedInternalDocMembers) internal member(s) from the XML documentation." />
+  </Target>
+
   <ItemGroup>
     <InternalsVisibleTo Include="SkiaSharp.QrCode.Tests, PublicKey=00240000048000009400000006020000002400005253413100040000010001007de4a83ad446c6d7c9e85de8a1c654096808b127b9cfc0db4931e3062bffea0daa74fa7c584ee37c9d0dee5c86f42e3b88be303692712c9198ab19665680d2bca6d91f48a3c76980c8d0a90248c3b535a935612525b79b9bbc152e7e297a004bd17e2b24767fadde2a5174f9a50e297e724637f498777d14a62223f4db932dbc" />
   </ItemGroup>
