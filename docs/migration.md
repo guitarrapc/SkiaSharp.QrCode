@@ -5,6 +5,7 @@
 - **v1.2.0 introduces rMQR**, whose generator takes `RmQRCodeGeneratorOptions` rather than a parameter list. New in this release, so there is nothing to migrate from. See [rMQR](#rmqr) below.
 - **v1.2.0 makes buffer sizing `Try`-only.** `TryGetRequiredBufferSize` is on all three generators; `GetRequiredBufferSize` is `[Obsolete]` on Standard QR and Micro QR and will be removed in 2.0.0. A warning, not a break. See [sizing is Try-only](#sizing-is-try-only) below.
 - **v1.2.0 deprecates the `Compression` enum.** No API has ever accepted or returned it: the serialization feature it named was removed before 1.0.0 and the enum was left behind. `[Obsolete]` now, removed in 2.0.0. Compress the bytes from `GetRawData()` yourself, as shown under [removed features](#-removed-features).
+- **v1.2.0 removes the `EciModeExtensions` class from the public API.** It was public through 1.1.1 with every member internal, so nothing could be called on it and nothing can break. It is internal now rather than deprecated.
 - **After v1.1.0, the image builders share a common base class.** Source compatible; recompile if you referenced the binary. See [image builder base class](#image-builder-base-class) below.
 - **v1.0.0 removes the obsolete `QrCode` class.** If you still use `QrCode`, see [from before v1.0.0 to v1.0.0](#from-before-v100-to-v100) below.
 - v0.11.0 introduces further improvements to Icon handling. See the IconData section below.

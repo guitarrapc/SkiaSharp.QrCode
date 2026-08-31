@@ -133,7 +133,7 @@ public enum EciMode
 /// <summary>
 /// Extension methods for EciMode enum.
 /// </summary>
-public static class EciModeExtensions
+internal static class EciModeExtensions
 {
     // ECI Header Structure (ISO/IEC 18004):
     // ┌─────────────────┬────────────────────────┐
