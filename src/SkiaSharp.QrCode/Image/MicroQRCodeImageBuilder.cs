@@ -28,6 +28,7 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
     private MicroQREccLevel _eccLevel = MicroQREccLevel.M;
     private MicroQRVersionRange _versionRange;
     private int? _maskPattern;
+    private MicroQRSegmentation _segmentation = MicroQRSegmentation.Single;
 
     public MicroQRCodeImageBuilder(string content) : base(defaultQuietZoneSize: 2)
     {
@@ -381,11 +382,32 @@ public class MicroQRCodeImageBuilder : QRCodeImageBuilderBase<MicroQRCodeImageBu
         return this;
     }
 
+    /// <summary>
+    /// Split the content into mixed-mode segments when that lowers the version
+    /// (see <see cref="MicroQRSegmentation"/>). Defaults to
+    /// <see cref="MicroQRSegmentation.Single"/>. Never selects a larger version, and
+    /// produces the identical symbol when a split would not shrink it.
+    /// </summary>
+    /// <param name="segmentation">Segmentation strategy.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="segmentation"/> is not a defined value.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="MicroQRCodeData"/>.</exception>
+    public MicroQRCodeImageBuilder WithSegmentation(MicroQRSegmentation segmentation)
+    {
+        if (_data is not null)
+            throw new InvalidOperationException("WithSegmentation cannot be used when MicroQRCodeData is provided directly.");
+        if (segmentation is not (MicroQRSegmentation.Single or MicroQRSegmentation.Optimal))
+            throw new ArgumentOutOfRangeException(nameof(segmentation), $"Invalid segmentation: {segmentation}");
+
+        _segmentation = segmentation;
+        return this;
+    }
+
     // symbology hooks
 
     private protected override object ResolveSymbol(out int matrixWidth, out int matrixHeight)
     {
-        var data = _data ?? MicroQRCodeGenerator.CreateMicroQRCode(_content.AsSpan(), _eccLevel, new MicroQRCodeGeneratorOptions { Version = _versionRange, QuietZoneSize = _quietZoneSize, MaskPattern = _maskPattern });
+        var data = _data ?? MicroQRCodeGenerator.CreateMicroQRCode(_content.AsSpan(), _eccLevel, new MicroQRCodeGeneratorOptions { Version = _versionRange, QuietZoneSize = _quietZoneSize, MaskPattern = _maskPattern, Segmentation = _segmentation });
         matrixWidth = matrixHeight = data.Size;
         return data;
     }

@@ -35,7 +35,10 @@ public readonly record struct QRCodeGeneratorOptions
 
     /// <summary>
     /// Include a UTF-8 byte order mark. Ignored unless the content is written as UTF-8
-    /// in Byte mode.
+    /// in Byte mode. When a BOM would be written,
+    /// <see cref="QRCodeSegmentation.Optimal"/> emits the single-mode stream instead
+    /// of a split (the BOM is a stream-level prefix, and a split would relocate it
+    /// into the middle of the decoded text).
     /// </summary>
     public bool Utf8BOM { get; init; }
 
@@ -93,4 +96,15 @@ public readonly record struct QRCodeGeneratorOptions
     /// Sizing is unaffected either way, the buffer size depends only on the version.
     /// </remarks>
     public bool BoostEccLevel { get; init; }
+
+    /// <summary>
+    /// How the content is split into encoding-mode segments
+    /// (see <see cref="QRCodeSegmentation"/>). Defaults to
+    /// <see cref="QRCodeSegmentation.Single"/>. <see cref="QRCodeSegmentation.Optimal"/>
+    /// never selects a larger version, emits the identical bit stream when a split
+    /// would not shrink the symbol, and defers to the single-mode stream when
+    /// <see cref="Utf8BOM"/> would actually write a byte order mark. Size a
+    /// destination buffer with the same value you encode with.
+    /// </summary>
+    public QRCodeSegmentation Segmentation { get; init; }
 }

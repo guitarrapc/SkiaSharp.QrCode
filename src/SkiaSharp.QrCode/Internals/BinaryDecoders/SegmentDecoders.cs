@@ -210,6 +210,18 @@ internal static class SegmentDecoders
         return DecodeUtf8(byteBuffer, bytes.Length == count ? 0 : 3, bytes.Length, destination, ref charsWritten);
     }
 
+    /// <summary>
+    /// Whether the charset resolution above would read a byte segment as UTF-8 when
+    /// no charset is declared: the validity heuristic, or a leading BOM (which is
+    /// consumed). The mixed-mode planners ask this to refuse plans whose Latin-1
+    /// runs would be misread once a split isolates them from their disambiguating
+    /// neighbours; it must mirror <see cref="DecodeBytePayload"/> exactly, which is
+    /// why it lives here rather than beside a planner.
+    /// </summary>
+    public static bool ResolvesToUtf8WhenUnspecified(ReadOnlySpan<byte> bytes)
+        => IsValidUtf8(bytes)
+            || (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF);
+
     private static QRCodeDecodeStatus DecodeUtf8(byte[] byteBuffer, int offset, int byteCount, Span<char> destination, ref int charsWritten)
     {
         if (byteCount == 0)

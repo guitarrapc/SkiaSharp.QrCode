@@ -18,7 +18,9 @@ public enum RmQRSegmentation
     /// The mixed-mode split with the fewest total bits. Never selects a symbol with
     /// more core modules than <see cref="Single"/>, emits the <see cref="Single"/> bit
     /// stream verbatim when a split would not shrink it, and additionally encodes
-    /// content that overflows every version in a single mode.
+    /// content that overflows every version in a single mode — unless the minimal-bit
+    /// plan would be misread on decode (a relocated byte order mark), in which case it
+    /// reports "does not fit" rather than emitting a stream that decodes differently.
     /// </summary>
     /// <remarks>
     /// Opt-in because it searches candidate versions; the search itself allocates

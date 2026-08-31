@@ -592,6 +592,80 @@ public class RmQRSegmentationTest
     // -----------------------------------------------------------------
 
     [Test]
+    public async Task Optimal_LeadingBom_DecodesLikeSingle()
+    {
+        // A content-leading U+FEFF is stream-initial under Single too, so both arms
+        // drop it on decode; the run-at-offset-0 exemption keeps the split allowed
+        // and the two must decode identically (not necessarily to the input). The
+        // area assertion is strict: the split genuinely wins here, so losing the
+        // exemption (which silently falls back to the identical single-mode
+        // symbol) fails this test instead of passing it vacuously.
+        var content = "\uFEFF" + new string('1', 30) + "a";
+        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M);
+        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+
+        await Assert.That(Area(optimal)).IsLessThan(Area(single));
+        await Assert.That(RmQRCodeDecoder.TryDecode(single, out var singleDecoded)).IsTrue();
+        await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var optimalDecoded)).IsTrue();
+        await Assert.That(optimalDecoded).IsEqualTo(singleDecoded);
+    }
+
+    [Test]
+    public async Task Optimal_OverflowWhereEveryCheckedPlanIsMisread_ThrowsLikeSingle()
+    {
+        // 303 UTF-8 bytes fit no single mode, and the minimal-bit plan puts the
+        // trailing U+FEFF at a Byte-run start; the documented outcome is "does not
+        // fit" rather than a symbol that decodes with the character dropped.
+        var content = new string('1', 300) + "\uFEFF";
+        var options = new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal };
+
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(content, RmQREccLevel.M, out _, options)).IsFalse();
+        await Assert.That(() => RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, options)).Throws<ArgumentException>();
+
+        // The sibling without the BOM is rescued, proving the refusal is BOM-driven.
+        await Assert.That(RmQRCodeGenerator.TryGetRequiredBufferSize(new string('1', 300) + "a", RmQREccLevel.M, out _, options)).IsTrue();
+    }
+
+    [Test]
+    public async Task Optimal_NegativeQuietZone_WinsOverInvalidSegmentation_OnEveryEntryPoint()
+    {
+        // Same precedence and parameter names as the Standard QR and Micro QR
+        // generators, so every surface reports the same error first.
+        var options = new RmQRCodeGeneratorOptions { Segmentation = (RmQRSegmentation)7, QuietZoneSize = -1 };
+        var buffer = new byte[4096];
+
+        var fromCreate = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, options));
+        var fromCreateSpan = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRCodeGenerator.CreateRmQRCode("123".AsSpan(), RmQREccLevel.M, buffer, options));
+        var fromSizing = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRCodeGenerator.TryGetRequiredBufferSize("123", RmQREccLevel.M, out _, options));
+
+        await Assert.That(fromCreate.ParamName).IsEqualTo("quietZoneSize");
+        await Assert.That(fromCreateSpan.ParamName).IsEqualTo("quietZoneSize");
+        await Assert.That(fromSizing.ParamName).IsEqualTo("quietZoneSize");
+
+        var segmentationOnly = new RmQRCodeGeneratorOptions { Segmentation = (RmQRSegmentation)7 };
+        var fromSegmentation = Assert.Throws<ArgumentOutOfRangeException>(() => RmQRCodeGenerator.CreateRmQRCode("123", RmQREccLevel.M, segmentationOnly));
+        await Assert.That(fromSegmentation.ParamName).IsEqualTo("segmentation");
+    }
+
+    [Test]
+    public async Task Optimal_MidContentBom_EmitsTheSingleModeStream()
+    {
+        // The byte-segment decoder consumes a leading EF BB BF of every non-Latin-1
+        // segment as a BOM, even behind an explicit UTF-8 ECI; a split that relocates
+        // a mid-content U+FEFF to a run start would silently drop it, so the planner
+        // must fall back to the single-mode stream, where it survives.
+        var content = new string('1', 30) + "\uFEFF" + "a";
+        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M);
+        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+
+        await Assert.That(optimal.Version).IsEqualTo(single.Version);
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+
+        await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    [Test]
     [Arguments("日本語1234567890")]
     [Arguments("😀😁1234567890")]
     [Arguments("é😀A1")]
