@@ -30,17 +30,25 @@ works on hosts without import-map rewriting (GitHub Pages, plain static servers)
 ## Public API page (`/api/`)
 
 The **API** link in the header opens a filterable listing of every public type, with the doc
-comments for each, generated from the built assembly by `tools/public_api.cs`. It is written
-into `wwwroot/api/index.html`, so one command covers both cases: the page is served when you
-run the Playground locally, and `dotnet publish` copies it into the Pages site.
+comments for each, generated from the built assembly by `tools/public_api.cs`.
+
+`wwwroot/api/index.html` **is committed**, so it is simply there: F5 in Visual Studio, `dotnet
+run`, and `dotnet publish` all serve it with no extra step, on a fresh clone included. Regenerate
+it after changing the public API:
 
 ```bash
 dotnet run tools/public_api.cs -- --html -o src/SkiaSharp.QrCode.Playground/wwwroot/api/index.html
 ```
 
-Run it **before** publishing; the release workflow does the same. The file is generated, so it is
-gitignored, and the API link 404s until you have run the command once. Drop `--html -o ...` for the
-plain-text listing on stdout, which is the form to diff.
+The release workflow runs the same command before publishing, so the Pages site is always current
+even if the committed copy has drifted. Drop `--html -o ...` for the plain-text listing on stdout.
+
+Committing a generated file is deliberate. Generating it during the build was tried and does not
+work: `wwwroot` is globbed when the project is evaluated, so a file written by a target is invisible
+to the static web asset pipeline, and the target that would write it runs in more than one project
+instance, which starts two generators at once over the same output. The listing is sorted and
+stable, so the committed file also gives every PR a readable diff of the public surface, without a
+CI gate that fails on intentional changes.
 
 The doc text is read from the XML documentation file the library ships, so the page shows exactly
 what a consumer sees in IntelliSense. `<summary>` is always visible; `<remarks>` folds behind a

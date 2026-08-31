@@ -410,6 +410,3 @@ tools/QRInteropFixtures/external/
 # Approval-test mismatch dumps (written next to goldens on failure)
 *.actual.png
 *.actual.pixels
-
-# Generated public API page (tools/public_api.cs --html); regenerated on demand and on release
-src/SkiaSharp.QrCode.Playground/wwwroot/api/
