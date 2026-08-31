@@ -27,6 +27,30 @@ dotnet serve -d publish/playground/wwwroot   # or: python -m http.server -d publ
 `-p:PlaygroundSoftFingerprint=true` emits both fingerprinted and plain filenames so the page
 works on hosts without import-map rewriting (GitHub Pages, plain static servers).
 
+## Public API page (`/api/`)
+
+The **API** link in the header opens a filterable listing of every public type, with the doc
+comments for each, generated from the built assembly by `tools/public_api.cs`. It is written
+into `wwwroot/api/index.html`, so one command covers both cases: the page is served when you
+run the Playground locally, and `dotnet publish` copies it into the Pages site.
+
+```bash
+dotnet run tools/public_api.cs -- --html -o src/SkiaSharp.QrCode.Playground/wwwroot/api/index.html
+```
+
+Run it **before** publishing; the release workflow does the same. The file is generated, so it is
+gitignored, and the API link 404s until you have run the command once. Drop `--html -o ...` for the
+plain-text listing on stdout, which is the form to diff.
+
+The doc text comes from an XML documentation file the tool builds for itself, because the library
+does not set `GenerateDocumentationFile`. That also means **the NuGet package ships no XML docs**,
+so consumers get no IntelliSense: worth fixing separately, along with the ~116 doc-completeness
+warnings (`CS1591`, `CS1573`, `CS0419`, `CS1572`) that turning it on reveals.
+
+Nothing validates the listing and no build fails when the surface changes. Breaking changes are
+caught by package validation against the released baseline, which is the only surface check worth
+failing a build over.
+
 Publish to a **clean output directory** (delete it between publishes). Re-publishing into the
 same `-o` directory leaves the previous build's fingerprinted files behind; the
 `_CopyDotnetJsFallback` target detects this and fails with an explicit "publish to a clean
