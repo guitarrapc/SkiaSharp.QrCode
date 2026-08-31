@@ -4,6 +4,7 @@
 - **v1.2.0 adds generator options structs and version ranges.** Purely additive for Standard QR and Micro QR: every existing overload keeps its signature, exceptions and output. See [generator options](#generator-options) below.
 - **v1.2.0 introduces rMQR**, whose generator takes `RmQRCodeGeneratorOptions` rather than a parameter list. New in this release, so there is nothing to migrate from. See [rMQR](#rmqr) below.
 - **v1.2.0 makes buffer sizing `Try`-only.** `TryGetRequiredBufferSize` is on all three generators; `GetRequiredBufferSize` is `[Obsolete]` on Standard QR and Micro QR and will be removed in 2.0.0. A warning, not a break. See [sizing is Try-only](#sizing-is-try-only) below.
+- **v1.2.0 deprecates the `Compression` enum.** No API has ever accepted or returned it: the serialization feature it named was removed before 1.0.0 and the enum was left behind. `[Obsolete]` now, removed in 2.0.0. Compress the bytes from `GetRawData()` yourself, as shown under [removed features](#-removed-features).
 - **After v1.1.0, the image builders share a common base class.** Source compatible; recompile if you referenced the binary. See [image builder base class](#image-builder-base-class) below.
 - **v1.0.0 removes the obsolete `QrCode` class.** If you still use `QrCode`, see [from before v1.0.0 to v1.0.0](#from-before-v100-to-v100) below.
 - v0.11.0 introduces further improvements to Icon handling. See the IconData section below.
@@ -38,7 +39,7 @@ if (!MicroQRCodeGenerator.TryGetRequiredBufferSize(userInput, MicroQREccLevel.L,
 - **`false` means the content does not fit, and nothing else.** For Micro QR that includes content whose encoding mode the requested version or ECC level does not offer, since the text is what picks the mode.
 - **Invalid arguments still throw**: an undefined ECC level, a `Version` and `Height` that disagree, a Micro QR version and ECC level that cannot be combined, a negative quiet zone, or `EciMode.Iso8859_1` declared over content that is not Latin-1. This mirrors the BCL's own configurable `Try` overloads (`int.TryParse` with a malformed `NumberStyles`, `Dictionary.TryGetValue` with a null key) and keeps a caller from reporting a configuration mistake as "content too long".
 - **`true` does not promise the following `Create` call cannot throw** — only that no length-related error can. Pass the returned `Version` back through the options struct to skip the fit; a destination buffer that is too small still throws.
-- **Pass rMQR's `Segmentation` the same value you will encode with**: the two modes can select different versions, so a buffer sized under one can be too small for the other.
+- **Pass `Segmentation` the same value you will encode with** (all three symbologies): the two modes can select different versions, so a buffer sized under one can be too small for the other.
 - **The `options` parameter is optional on all three `TryGetRequiredBufferSize` overloads**, so `TryGetRequiredBufferSize(text, ecc, out var size)` is the shortest correct call. This is possible only because there is exactly one sizing overload per generator; the `Create` overloads still require an explicit options value on Standard QR and Micro QR, where the released parameter lists would otherwise make the call ambiguous.
 
 ## generator options
@@ -128,15 +129,20 @@ There is no version *range* for rMQR. Its 32 versions are not totally ordered (R
 
 ### mixed-mode segmentation
 
-Set `Segmentation = RmQRSegmentation.Optimal` to let the generator split mixed content into Numeric / Alphanumeric / Byte runs. It never selects a symbol with more core modules than `Single`, it emits the `Single` bit stream verbatim whenever splitting would not shrink it, and it additionally encodes content that overflows every version in a single mode.
+Set `Segmentation = RmQRSegmentation.Optimal` (rMQR), `QRCodeSegmentation.Optimal` (Standard QR) or `MicroQRSegmentation.Optimal` (Micro QR) to let the generator split mixed content into Numeric / Alphanumeric / Byte runs. It never selects a symbol with more core modules (Standard / Micro QR: a larger version) than `Single`, it emits the `Single` bit stream verbatim whenever splitting would not shrink it, and it additionally encodes content that overflows every version in a single mode — unless the minimal-bit plan would be misread on decode (a relocated byte order mark, or on Micro QR a Latin-1 run its charset heuristic would read as UTF-8), in which case it reports "does not fit" instead of corrupting; only that one plan is considered, so a costlier safe split is not searched for. On Micro QR the plan also respects each version's mode set (M1 is Numeric-only, M2 has no Byte mode).
 
-Two things to know before opting in: the quiet zone adds a fixed 4 modules to each dimension, so a symbol with fewer core modules can still render onto a *larger* grid with a different aspect ratio; and `TryGetRequiredBufferSize` must be passed the same `Segmentation` as the encode, or the destination buffer can be too small.
+Two things to know before opting in: on rMQR the quiet zone adds a fixed 4 modules to each dimension, so a symbol with fewer core modules can still render onto a *larger* grid with a different aspect ratio; and on all three symbologies `TryGetRequiredBufferSize` must be passed the same `Segmentation` as the encode, or the destination buffer can be too small.
 
 ```csharp
 var optimal = RmQRCodeGenerator.CreateRmQRCode(
     "https://example.com/p/1234567890123456",
     RmQREccLevel.M,
     new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });   // R15x43 instead of R11x77
+
+var standard = QRCodeGenerator.CreateQrCode(
+    "https://example.com/item?id=123456789012345678901234567890",
+    ECCLevel.M,
+    new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal });   // version 3 instead of 4
 ```
 
 ## image builder base class
@@ -368,7 +374,7 @@ If you were using these features, you'll need to adjust your code accordingly.
 
 - `forceUtf8`: SkiaSharp.QrCode now automatically selects UTF-8 when needed.
 - ISO-8859-2 and Kanji: not supported for ENCODING; UTF-8 is recommended for most use cases. Kanji segments produced by other encoders are read since v1.2.0, see [Kanji mode decoding](#kanji-mode-decoding).
-- Compression: Removed to simplify the API and improve performance. Please handle compression externally if needed.
+- Compression: Removed to simplify the API and improve performance. Please handle compression externally if needed. The `Compression` enum itself outlived the feature and shipped unused through 1.1.1; it is `[Obsolete]` as of 1.2.0 and will be removed in 2.0.0.
 
 Here's an example of how to handle compression externally using [NativeCompressions](https://github.com/Cysharp/NativeCompressions):
 

@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Text;
 
 using SkiaSharp.QrCode.Internals.BinaryEncoders;
@@ -130,6 +131,111 @@ internal ref struct QRBinaryEncoder
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(encoding), "Invalid encoding mode");
+        }
+    }
+
+    /// <summary>
+    /// Writes a planned mixed-mode data stream (<see cref="QRCodeSegmentation.Optimal"/>):
+    /// one optional ECI prefix, then per run a mode indicator, count indicator and
+    /// payload. Same bit grammar as the single-segment path, repeated per planned run
+    /// (a Standard QR decoder carries the declared charset across the runs that follow
+    /// the ECI header). Never writes a UTF-8 BOM: the BOM is a stream-level prefix,
+    /// and the planner falls back to the single-mode stream when one is requested.
+    /// </summary>
+    /// <param name="text">Content the plan indexes into.</param>
+    /// <param name="segments">Planned runs, in order, covering the whole content.</param>
+    /// <param name="version">Target version (decides the count indicator widths).</param>
+    /// <param name="eci">Effective charset: Default / ISO-8859-1 narrow, UTF-8 transcode.</param>
+    public void WriteSegments(ReadOnlySpan<char> text, ReadOnlySpan<ModeSegment> segments, int version, EciMode eci)
+    {
+        if (segments.Length == 0)
+            throw new ArgumentException("A segmented QR stream needs at least one segment.", nameof(segments));
+        if (eci is not (EciMode.Default or EciMode.Iso8859_1 or EciMode.Utf8))
+            throw new ArgumentOutOfRangeException(nameof(eci), $"Unsupported charset {eci} for segmented encoding.");
+
+        if (eci != EciMode.Default)
+        {
+            _writer.Write((int)EncodingMode.ECI, 4);
+            _writer.Write((int)eci, 8);
+        }
+
+        var expectedStart = 0;
+        foreach (var segment in segments)
+        {
+            if (segment.Start != expectedStart || segment.Length == 0 || segment.Start + segment.Length > text.Length)
+                throw new ArgumentException("Segment plan must cover the content in order with non-empty runs.", nameof(segments));
+            expectedStart = segment.Start + segment.Length;
+
+            var chars = text.Slice(segment.Start, segment.Length);
+            var mode = segment.Mode;
+            var countBits = mode.GetCountIndicatorLength(version);
+
+            // The count indicator width always covers the largest unit count a version
+            // can hold, and a run holds no more than that, so this cannot bind; assert
+            // it anyway because overflowing it would corrupt the mode indicator above.
+            Debug.Assert(segment.UnitCount < (1 << countBits), "run length must fit the character count indicator");
+
+            // The bit budget the caller cleared comes from UnitCount, but the payload
+            // below is written from the run's characters. A plan whose two disagree
+            // would clear the budget and then overrun, so this is a runtime check, not
+            // an assert. Byte mode under UTF-8 is the exception: its unit count is only
+            // knowable after transcoding, so WriteUtf8Segment verifies it there instead.
+            if ((mode != EncodingMode.Byte || eci != EciMode.Utf8) && segment.UnitCount != segment.Length)
+                throw new ArgumentException($"Segment plan gives a {segment.Length}-character run a unit count of {segment.UnitCount}; they must agree outside UTF-8 Byte mode.", nameof(segments));
+
+            _writer.Write((int)mode, 4);
+            _writer.Write(segment.UnitCount, countBits);
+            switch (mode)
+            {
+                case EncodingMode.Numeric:
+                    WriteNumericData(chars);
+                    break;
+                case EncodingMode.Alphanumeric:
+                    WriteAlphanumericData(chars);
+                    break;
+                default:
+                    if (eci == EciMode.Utf8)
+                        WriteUtf8Segment(chars, segment.UnitCount);
+                    else
+                        WriteLatin1Data(chars);
+                    break;
+            }
+        }
+
+        if (expectedStart != text.Length)
+            throw new ArgumentException("Segment plan must cover the content in order with non-empty runs.", nameof(segments));
+    }
+
+    /// <summary>
+    /// Transcodes one Byte-mode run and writes it. <paramref name="expectedBytes"/>
+    /// is what the plan budgeted; a mismatch means the plan and the transcoder
+    /// disagree, which would silently produce an unreadable symbol.
+    /// </summary>
+    private void WriteUtf8Segment(ReadOnlySpan<char> chars, int expectedBytes)
+    {
+        var maxByteCount = chars.Length * 4;
+        if (maxByteCount <= StackAllocThreshold)
+        {
+            Span<byte> buffer = stackalloc byte[maxByteCount];
+            var length = GetUtf8Data(chars, utf8BOM: false, buffer);
+            if (length != expectedBytes)
+                throw new ArgumentException($"Segment plan budgeted {expectedBytes} UTF-8 bytes but the run encodes to {length}.");
+            WriteByteData(buffer.Slice(0, length));
+        }
+        else
+        {
+            var buffer = ArrayPool<byte>.Shared.Rent(maxByteCount);
+            try
+            {
+                var length = GetUtf8Data(chars, utf8BOM: false, buffer);
+                if (length != expectedBytes)
+                    throw new ArgumentException($"Segment plan budgeted {expectedBytes} UTF-8 bytes but the run encodes to {length}.");
+                WriteByteData(buffer.AsSpan(0, length));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
         }
     }
 

@@ -57,6 +57,7 @@ The encoder exposes two output models.
 | UTF-8 BOM | Optional in UTF-8 Byte mode |
 | Version selection | Automatic minimum-fit, caller-requested version, or a version range (options overloads) |
 | ECC boost | Optional (options overloads): the requested level becomes the minimum and is raised as far as the chosen version's capacity allows, never changing the version |
+| Segmentation | One segment in one mode by default; opt-in mixed-mode segmentation (`QRCodeSegmentation.Optimal`) splits the content into the minimal-bit Numeric / Alphanumeric / Byte runs |
 | Quiet zone | Configurable non-negative size; span sizing/output rejects dimensions that cannot fit an `int`-sized matrix |
 | Output | Bit-packed `QRCodeData` or byte-per-module `Span<byte>` |
 
@@ -67,10 +68,9 @@ The encoder exposes two output models.
 - Structured Append
 - Arbitrary ECI assignment numbers
 - Arbitrary binary payload input
-- Multi-segment optimization within one payload
 - Micro QR and rMQR
 
-The current encoder analyzes the complete input once and emits one data segment. For example, mixed text such as a long numeric prefix followed by lowercase text is encoded entirely in Byte mode instead of being split into Numeric and Byte segments. The output remains valid, but can require a larger version than a globally optimized multi-segment encoder.
+By default the encoder analyzes the complete input once and emits one data segment; `QRCodeSegmentation.Optimal` (options overloads) opts into the globally minimal mixed-mode split instead (see [Mixed-mode segmentation](#mixed-mode-segmentation-options-overloads)).
 
 ---
 
@@ -157,6 +157,32 @@ Two behaviours differ from the `requestedVersion` parameter, and both are confin
 - **Standard QR only.** Micro QR ties its legal levels to the version (M1 has none, only M4 offers Q), so a boost there would interact with version selection instead of following it; rMQR has a single M→H step. Either can adopt the same contract later.
 
 `EccBoostTest` pins the headroom classes (boost to H, stop at an intermediate level, no headroom, already at H), the version invariance, the sizing indifference and the error parity.
+
+#### Mixed-mode segmentation (options overloads)
+
+**What.** `QRCodeSegmentation.Optimal` splits the content into the Numeric / Alphanumeric / Byte runs whose total bit cost is minimal for a candidate version, and fits the version against that cost instead of the single-mode cost. `QRCodeSegmentation.Single` (the default) keeps one run in one mode.
+
+**Why.** Mixed payloads pay the whole-content mode for every character under a single segment: a URL prefix followed by a long numeric identifier is all Byte, so the digits cost 8 bits each instead of 3⅓. Splitting the digits off routinely drops the symbol a version or more (`https://example.com/item?id=` + 30 digits: version 4-M as one Byte run, version 3-M split).
+
+**Why opt-in, and why the ceiling.** Changing the default would move the emitted bit stream, and therefore the rendered symbol, for existing callers. When the content fits in a single mode, that fit caps the scan from above: only strictly smaller versions are tried, so a plan is emitted only when it lowers the version, and the single-mode stream is emitted byte for byte in every other case. The end-to-end tests assert both properties for every corpus entry.
+
+**Why the scan needs almost no bounding machinery.** The character-count indicator widths are constant within the three version bands (1–9 / 10–26 / 27–40), so the optimal cost is itself constant within a band: the scan computes it at most once per band — three O(n) cost runs in the worst case, no reconstruction table — and compares it against each candidate capacity. rMQR needed a trivial bound, a floor and a re-priced ceiling because its 32 versions carry 13 distinct width triples across a strategy-ordered ranking; a totally ordered version set with banded widths makes the floor and the ceiling unnecessary, which is a lesson worth keeping next to the rMQR one rather than porting the bounds by reflex. The trivial bound alone did carry over — one O(n) pass pricing each character at the cheapest rate any mode could give it — because without it, content no split can shrink still paid for a band cost run: measured on 120 single-mode characters, the Optimal arm went from 1.8x the Single encode to roughly parity, while the winning shapes were untouched. Its blind spot is the same as rMQR's: finely alternating content clears the bound and pays for planning that then gains nothing, because seeing that switching modes every character never pays *is* the dynamic program.
+
+**When no single mode fits.** The ceiling does not exist, so the scan runs to the window's end. This is the one place `Optimal` accepts input `Single` rejects: 1,000 lowercase letters followed by 4,500 digits is 5,500 Byte-mode characters, far over the 2,953 version 40-L holds, but well inside its 23,648 bits once the digits split off. Only when a mixed plan fails as well does the path throw, with the single-mode path's exact exception type per constraint shape, so turning segmentation on cannot reclassify an error.
+
+**Content that cannot benefit.** All-Numeric content skips planning: splitting a Numeric run never lowers its payload and every extra run adds a header, so one run is provably the optimum.
+
+**How the optimum is exact.** A run does not cost a constant per character (Numeric packs 3 digits into 10 bits, Alphanumeric 2 characters into 11), so the dynamic program carries the packing-group remainder in its state rather than rounding a per-character average. The state layout and transitions are in `ModeSegmenter`, shared with the rMQR and Micro QR planners — the symbologies differ only in header widths, taken as parameters, so one implementation keeps the cost models (the UTF-8 surrogate rules included) from drifting apart. Micro QR additionally passes per-version mode availability (M1 is Numeric-only, M2 has no Byte mode), which disables the missing transitions. `QRSegmentPlannerUnitTest` holds the program to an independent exhaustive mode-assignment optimum on short content across the bands and charsets, and the rMQR suite holds the same code to its own independent oracle across all 32 versions.
+
+**Bounds.** Content longer than the largest character count any version holds in any mode (7,089, Numeric at 40-L, an exact fit) is rejected before any cost run; the margin is 4 bits, and the derivation sits with the constant in `QRSegmentPlanner` so a capacity-table change re-derives rather than nudges it. The plan buffer is stack-allocated for content up to 64 characters and pooled at text length above that — a plan cannot hold more runs than the content has characters, so the pooled path can never fail for space. The reconstructed plan is re-costed from the byte counts the encoder will actually emit and rejected on disagreement, because the bit-stream writers store without per-flush bounds checks.
+
+**Composition with the other options.** The BOM is a stream-level prefix, and a split would relocate it into the middle of the decoded text, so `Utf8BOM` falls back to the single-mode stream exactly when a BOM would actually be written — a UTF-8 Byte-mode stream. Content whose single mode is Numeric or Alphanumeric never carries a BOM (even under an explicitly requested UTF-8 charset) and still splits; the first cut of the gate suppressed those too, and code review caught it costing a full version for nothing. A version range narrows the scan window; a pinned version that only a mixed plan fits succeeds where `Single` throws. ECC boost runs after the plan is fixed and compares the exact planned stream bits against the higher level's capacity, keeping the version-invariance contract. A pinned mask applies at the matrix stage, orthogonally. Argument validation keeps the quiet-zone-first precedence of the other surfaces, and an undefined segmentation value reports the same `segmentation` parameter name on the generators and the builder.
+
+**Plans the byte-segment decoder would misread are rejected.** The shared byte-segment decoder consumes a leading EF BB BF of every segment without an explicit ISO-8859-1 declaration — even behind an explicit UTF-8 ECI — so a split that relocates a mid-content U+FEFF to a Byte-run start would decode with the character silently dropped, where the single-mode stream keeps it interior and intact. All three planners reject such plans (`ModeSegmenter.HasBomRelocatedToARunStart`) and fall back to the single-mode stream; a run at offset 0 is exempt because the single-mode stream starts with the same bytes and loses it identically. Micro QR, which has no ECI to pin a charset, additionally rejects plans containing a non-ASCII Latin-1 Byte run whose narrowed bytes the decoder's unspecified-charset resolution would read as UTF-8 (`SegmentDecoders.ResolvesToUtf8WhenUnspecified`, kept beside the resolution it mirrors): isolating such a run from its disambiguating invalid neighbours would decode it as different text. Lesson: a mixed-mode plan is only as good as the decode it produces — cost optimality had to be constrained by the decoder's per-segment charset heuristics, which adversarial review caught by reproduction, not inspection. The consequence is accepted deliberately, with a known limitation: only the minimal-bit plan is checked, so content whose optimum is misread-prone reports "does not fit" when no single mode holds it, even though a slightly costlier safe split can exist (adversarial review demonstrated one: 3,000 digits + U+FEFF + 10 letters has a safe fitting plan the fallback never searches). Teaching the dynamic program itself to avoid opening a Byte run on a mid-content U+FEFF would make the cheapest safe plan the optimum and remove the gap; it is deferred until the input class matters, because it changes the DP's transition structure and every optimality oracle with it.
+
+**ECI.** One prefix ahead of the first run: a decoder carries the declared charset across the runs that follow, so a plan needs no repetition. Its 12 bits are part of the cost the version scan compares.
+
+**Kanji.** Still not encoded, so a Japanese payload mixes Byte (UTF-8) with Numeric runs rather than reaching for 13-bit Kanji. The decoder reads Kanji segments other encoders produce.
 
 ### 4. Build the data codewords
 
@@ -284,7 +310,7 @@ The encoder produces a module matrix, not an image. Color, pixels-per-module, sh
 
 ## Decisions
 
-- **Single segment per input.** It keeps the API and implementation auditable and makes mode selection a single pass. The trade-off is non-minimal symbols for mixed-mode payloads.
+- **Single segment per input, by default.** It keeps the default path auditable and makes mode selection a single pass; the trade-off, non-minimal symbols for mixed-mode payloads, is answered by the opt-in `QRCodeSegmentation.Optimal`, which never changes the emitted stream unless it lowers the version.
 - **No Kanji mode when encoding.** Unicode input is represented as UTF-8 Byte mode with ECI 26, at the cost of lower capacity for Japanese text. This originally also avoided shipping a Shift_JIS table; that argument lapsed when Kanji DECODING shipped and the assembly gained the 16 KB JIS X 0208 table, so the remaining reasons are output stability and not adding an encoding dependency.
 - **ASCII omits ECI by default.** This minimizes overhead and maximizes compatibility. Latin-1 and wider Unicode receive explicit ECI declarations under automatic selection.
 - **BOM is explicit and UTF-8-only.** `utf8BOM` affects the stream only when the selected data mode is Byte and the effective ECI is UTF-8.
@@ -302,6 +328,8 @@ The encoder produces a module matrix, not an image. Color, pixels-per-module, sh
 - **The UTF-8 BOM belongs in the Byte character count.** Treating it as out-of-band metadata creates symbols that some readers reject because the declared count is three bytes short.
 - **ECI overhead can change the version and the mask.** Twelve header bits can cross a version boundary; even when they do not, they shift every following bit, which changes ECC, interleaving, placed data, and often the selected mask.
 - **Exact-capacity inputs need no full terminator.** Padding must add `min(remaining, 4)` terminator bits rather than assuming four bits are always available.
+- **A branch test whose fixture cannot reach the branch asserts nothing.** The first ECC-boost-under-segmentation test used content whose planned stream (350 bits) could never fit the next level's capacity (272), so its `>= requested level` assertion held with the boost never firing; adversarial review caught it by computing the headroom. Boost and threshold tests must pin the exact resulting level on a fixture whose arithmetic is worked out in the test comment.
+- **Sub-microsecond benchmark tables need a noise disclaimer.** Rows where an arm doing strictly more work measures "faster" (Optimal beating Single on all-numeric content that never plans) are code-layout and run-to-run jitter; single-iteration BenchmarkDotNet jobs on this class of benchmark swing ±30%, so ratios are only trusted from MediumRun jobs and deltas within a few percent are not signal.
 
 ### Matrix construction
 

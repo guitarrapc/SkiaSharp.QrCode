@@ -38,6 +38,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     private EciMode _eciMode = EciMode.Default;
     private QRCodeVersionRange _versionRange;
     private int? _maskPattern;
+    private QRCodeSegmentation _segmentation = QRCodeSegmentation.Single;
 
     // rendering (Standard QR-only options; Micro QR has a single finder pattern
     // and no ECC headroom for overlays)
@@ -418,6 +419,27 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
     }
 
     /// <summary>
+    /// Split the content into mixed-mode segments when that lowers the version
+    /// (see <see cref="QRCodeSegmentation"/>). Defaults to
+    /// <see cref="QRCodeSegmentation.Single"/>. Never selects a larger version, and
+    /// produces the identical symbol when a split would not shrink it.
+    /// </summary>
+    /// <param name="segmentation">Segmentation strategy.</param>
+    /// <returns>This builder instance for method chaining.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="segmentation"/> is not a defined value.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the builder was given a pre-built <see cref="QRCodeData"/>.</exception>
+    public QRCodeImageBuilder WithSegmentation(QRCodeSegmentation segmentation)
+    {
+        if (_qrCodeData is not null)
+            throw new InvalidOperationException("WithSegmentation cannot be used when QRCodeData is provided directly.");
+        if (segmentation is not (QRCodeSegmentation.Single or QRCodeSegmentation.Optimal))
+            throw new ArgumentOutOfRangeException(nameof(segmentation), $"Invalid segmentation: {segmentation}");
+
+        _segmentation = segmentation;
+        return this;
+    }
+
+    /// <summary>
     /// Configure an icon to overlay on the center of the QR code.
     /// </summary>
     /// <param name="iconData">Icon configuration. If null, no icon is displayed.</param>
@@ -450,6 +472,7 @@ public class QRCodeImageBuilder : QRCodeImageBuilderBase<QRCodeImageBuilder>
             QuietZoneSize = _quietZoneSize,
             BoostEccLevel = _boostEccLevel,
             MaskPattern = _maskPattern,
+            Segmentation = _segmentation,
         });
         matrixWidth = matrixHeight = qrCodeData.Size;
         return qrCodeData;

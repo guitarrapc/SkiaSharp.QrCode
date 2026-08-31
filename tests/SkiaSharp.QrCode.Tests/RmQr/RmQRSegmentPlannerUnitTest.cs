@@ -133,7 +133,7 @@ public class RmQRSegmentPlannerUnitTest
 
     internal static PlannedSegment[] BuildPlan(string text, EciMode charset, RmQRVersion version, RmQREccLevel ecc)
     {
-        Span<RmQRSegment> buffer = stackalloc RmQRSegment[RmQRSegmentPlanner.MaxSegments];
+        Span<ModeSegment> buffer = stackalloc ModeSegment[RmQRSegmentPlanner.MaxSegments];
         if (!RmQRSegmentPlanner.TryBuildPlan(text.AsSpan(), charset, version, ecc, buffer, out var count))
             return [];
 

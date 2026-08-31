@@ -206,7 +206,7 @@ public static class RmQRCodeGenerator
         if (!useSegments)
             return true;
 
-        Span<RmQRSegment> plan = stackalloc RmQRSegment[RmQRSegmentPlanner.MaxSegments];
+        Span<ModeSegment> plan = stackalloc ModeSegment[RmQRSegmentPlanner.MaxSegments];
         if (RmQRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out _))
             return true;
 
@@ -302,14 +302,14 @@ public static class RmQRCodeGenerator
     //
     // Kept in its own non-inlined methods so the single-mode entry points above keep
     // their frame and codegen. The plan buffer lives here rather than in the planner
-    // because a plan is a caller-lent Span<RmQRSegment> that never escapes.
+    // because a plan is a caller-lent Span<ModeSegment> that never escapes.
     // ---------------------------------------------------------------
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static RmQRCodeData CreateOptimal(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, int quietZoneSize, RmQRSegmentation segmentation)
     {
         ValidateOptimalEntry(textSpan, eciMode, segmentation);
-        Span<RmQRSegment> plan = stackalloc RmQRSegment[RmQRSegmentPlanner.MaxSegments];
+        Span<ModeSegment> plan = stackalloc ModeSegment[RmQRSegmentPlanner.MaxSegments];
         var config = PrepareConfigurationOptimal(textSpan, eccLevel, eciMode, requestedVersion, fitStrategy, height, plan, out var segmentCount);
         var segments = plan.Slice(0, segmentCount);
 
@@ -334,7 +334,7 @@ public static class RmQRCodeGenerator
     private static int CreateOptimalTo(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, Span<byte> destination, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, int quietZoneSize, RmQRSegmentation segmentation)
     {
         ValidateOptimalEntry(textSpan, eciMode, segmentation);
-        Span<RmQRSegment> plan = stackalloc RmQRSegment[RmQRSegmentPlanner.MaxSegments];
+        Span<ModeSegment> plan = stackalloc ModeSegment[RmQRSegmentPlanner.MaxSegments];
         var config = PrepareConfigurationOptimal(textSpan, eccLevel, eciMode, requestedVersion, fitStrategy, height, plan, out var segmentCount);
         var segments = plan.Slice(0, segmentCount);
 
@@ -368,7 +368,7 @@ public static class RmQRCodeGenerator
     /// stream is what gets emitted, which is the case whenever mixing would not
     /// shrink the symbol.
     /// </summary>
-    private static RmQRConfiguration PrepareConfigurationOptimal(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Span<RmQRSegment> plan, out int segmentCount)
+    private static RmQRConfiguration PrepareConfigurationOptimal(ReadOnlySpan<char> textSpan, RmQREccLevel eccLevel, EciMode eciMode, RmQRVersion? requestedVersion, RmQRFitStrategy fitStrategy, RmQRHeight? height, Span<ModeSegment> plan, out int segmentCount)
     {
         var analysis = TextAnalyzer.Analyze(textSpan, eciMode);
         var version = RmQRSegmentPlanner.SelectVersion(textSpan, in analysis, eccLevel, requestedVersion, fitStrategy, height, out var useSegments);
@@ -376,11 +376,14 @@ public static class RmQRCodeGenerator
 
         if (useSegments && !RmQRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount))
         {
-            // The plan that justified this version could not be rebuilt (it needed
-            // more runs than the buffer holds, or the exact re-cost disagreed with the
-            // dynamic program). Fall back to the single-mode fit, which throws the
-            // ordinary "content is too long" error when there is no such fit — the
-            // honest outcome, because with the plan gone nothing else can be emitted.
+            // The plan for this version could not be built: it needed more runs
+            // than the buffer holds, the decoder would misread it, the exact
+            // re-cost disagreed with the dynamic program, or — for a requested
+            // version, which the scan accepts unpriced — the content is unplannable
+            // or the stream simply does not fit it. Fall back to the single-mode
+            // fit, which throws the ordinary "content is too long" error when there
+            // is no such fit — the honest outcome, because with the plan gone
+            // nothing else can be emitted.
             segmentCount = 0;
             version = RmQRSegmentPlanner.SelectSingle(in analysis, eccLevel, requestedVersion, fitStrategy, height);
         }
@@ -388,7 +391,7 @@ public static class RmQRCodeGenerator
         return new RmQRConfiguration(version, eccLevel, analysis);
     }
 
-    private static void WriteCoreModulesPlanned(ReadOnlySpan<char> textSpan, in RmQRConfiguration config, ReadOnlySpan<RmQRSegment> segments, Span<byte> core, int stride)
+    private static void WriteCoreModulesPlanned(ReadOnlySpan<char> textSpan, in RmQRConfiguration config, ReadOnlySpan<ModeSegment> segments, Span<byte> core, int stride)
     {
         if (segments.Length == 0)
         {

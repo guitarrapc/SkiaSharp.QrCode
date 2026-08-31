@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Diagnostics;
-using System.Text;
 
 namespace SkiaSharp.QrCode.Internals.RmQr;
 
@@ -10,12 +9,14 @@ namespace SkiaSharp.QrCode.Internals.RmQr;
 /// minimal for a given version, and the version fit that follows from it.
 /// </summary>
 /// <remarks>
-/// A run's cost is not a per-character constant (Numeric packs 3 digits into 10 bits,
-/// Alphanumeric 2 characters into 11), so the dynamic program carries the group
-/// remainder in its state rather than rounding an average. When the content fits in a
-/// single mode that fit caps the search, so a plan is produced only when it lowers the
-/// core module count; otherwise the single-mode stream is emitted unchanged. Design
-/// rationale, bounds and measurements: specs/rmqr-encoder.md, "Mixed-mode segmentation".
+/// The cost model and reconstruction are <see cref="ModeSegmenter"/>, shared
+/// with the Standard QR and Micro QR planners; what lives here is rMQR's version scan. Unlike
+/// Standard QR's banded widths, the 32 rMQR versions carry 13 distinct count
+/// indicator width triples across a strategy-ordered ranking, so the scan bounds
+/// each candidate before pricing it. When the content fits in a single mode that fit
+/// caps the search, so a plan is produced only when it lowers the core module count;
+/// otherwise the single-mode stream is emitted unchanged. Design rationale, bounds
+/// and measurements: specs/rmqr-encoder.md, "Mixed-mode segmentation".
 /// </remarks>
 internal static class RmQRSegmentPlanner
 {
@@ -38,23 +39,6 @@ internal static class RmQRSegmentPlanner
     /// </remarks>
     private const int MaxPlannableChars = 361;
 
-    // Dynamic programming states. Numeric and Alphanumeric carry the number of
-    // characters already accumulated into the current packing group.
-    private const int StateNumeric0 = 0;
-    private const int StateNumeric1 = 1;
-    private const int StateNumeric2 = 2;
-    private const int StateAlnum0 = 3;
-    private const int StateAlnum1 = 4;
-    private const int StateByte = 5;
-    private const int StateStart = 6;
-    private const int StateCount = 7;
-
-    /// <summary>Cost of an unreachable state; small enough that adding a transition cost cannot overflow.</summary>
-    private const int Unreachable = int.MaxValue / 4;
-
-    /// <summary>Parent bytes that fit the stack budget (73 characters); longer content rents.</summary>
-    private const int MaxStackParents = 512;
-
     /// <summary>
     /// Count indicator triples memoised during a version scan. The 32 versions share 13
     /// distinct triples, but the bounds narrow the band so far that measured sweeps
@@ -74,15 +58,6 @@ internal static class RmQRSegmentPlanner
 
     /// <summary>Narrowest count indicator of any mode at any version; the minimum of the three widths pinned by RmQRSegmentPlannerUnitTest.</summary>
     private const int MinCountBitsAny = 3;
-
-    // Cheapest bits a single character can cost in any mode, in sixths so the numeric
-    // and alphanumeric packing rates stay exact: 10 bits per 3 digits, 11 per 2
-    // alphanumerics, 8 per byte. A partial group only ever costs more per character
-    // (one digit is 4 bits against a rate of 3 1/3), so summing these rates can never
-    // exceed what a real plan pays.
-    private const int SixthsPerDigit = 20;
-    private const int SixthsPerAlnum = 33;
-    private const int SixthsPerByte = 48;
 
     /// <summary>rMQR ECI prefix: 3-bit mode indicator 111 plus a one-byte assignment designator.</summary>
     private const int EciHeaderBits = RmQRConstants.ModeIndicatorLength + 8;
@@ -219,11 +194,12 @@ internal static class RmQRSegmentPlanner
     /// <summary>
     /// Builds the minimal-cost plan for <paramref name="version"/> into
     /// <paramref name="segments"/>. Returns false when the content is unplannable,
-    /// the plan needs more runs than the caller lent room for, or the exact re-costed
-    /// stream would not fit; the caller answers all three by falling back to the
+    /// the plan needs more runs than the caller lent room for, the plan would be
+    /// misread on decode (a relocated byte order mark), or the exact re-costed
+    /// stream would not fit; the caller answers all four by falling back to the
     /// single-mode stream.
     /// </summary>
-    public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, Span<RmQRSegment> segments, out int segmentCount)
+    public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, RmQRVersion version, RmQREccLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)
     {
         segmentCount = 0;
         if (text.Length is 0 or > MaxPlannableChars)
@@ -233,18 +209,17 @@ internal static class RmQRSegmentPlanner
         var cciAlnum = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric);
         var cciByte = RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte);
 
-        var parentLength = text.Length * StateCount;
+        var parentLength = text.Length * ModeSegmenter.StateCount;
         byte[]? rented = null;
-        Span<byte> parents = parentLength <= MaxStackParents
-            ? stackalloc byte[MaxStackParents]
+        Span<byte> parents = parentLength <= ModeSegmenter.MaxStackParents
+            ? stackalloc byte[ModeSegmenter.MaxStackParents]
             : (rented = ArrayPool<byte>.Shared.Rent(parentLength));
         int plannedBits;
         try
         {
             var window = parents.Slice(0, parentLength);
-            plannedBits = ComputeCosts(text, charset, cciNumeric, cciAlnum, cciByte, window, out var finalState);
-            Debug.Assert(plannedBits < Unreachable, "Byte mode encodes every character, so a plan is always reachable");
-            if (!Reconstruct(text, window, finalState, segments, out segmentCount))
+            plannedBits = ModeSegmenter.ComputeCosts(text, charset, RmQRConstants.ModeIndicatorLength, cciNumeric, cciAlnum, cciByte, window, out var finalState);
+            if (!ModeSegmenter.Reconstruct(text, window, finalState, segments, out segmentCount))
             {
                 segmentCount = 0;
                 return false;
@@ -256,7 +231,17 @@ internal static class RmQRSegmentPlanner
                 ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
 
-        FillUnitCounts(text, charset, segments.Slice(0, segmentCount));
+        // A plan the shared byte-segment decoder would misread is worse than no
+        // plan: a split that relocates a mid-content U+FEFF to a run start loses it
+        // to the decoder's BOM consumption (which fires even behind an explicit
+        // UTF-8 ECI). The single-mode fallback keeps it.
+        if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount)))
+        {
+            segmentCount = 0;
+            return false;
+        }
+
+        ModeSegmenter.FillUnitCounts(text, charset, segments.Slice(0, segmentCount));
 
         // Re-cost the reconstructed plan from the byte counts the encoder will
         // actually emit. Disagreeing with the dynamic programming cost model is a bug
@@ -287,7 +272,7 @@ internal static class RmQRSegmentPlanner
         => Select(analysis.EncodingMode, analysis.DataLength, analysis.EciMode, eccLevel, requestedVersion, fitStrategy, height);
 
     /// <summary>Exact bit cost of a plan: per run, mode indicator + count indicator + payload.</summary>
-    public static int MeasurePlan(RmQRVersion version, ReadOnlySpan<RmQRSegment> segments)
+    public static int MeasurePlan(RmQRVersion version, ReadOnlySpan<ModeSegment> segments)
     {
         var total = 0;
         foreach (var segment in segments)
@@ -299,42 +284,12 @@ internal static class RmQRSegmentPlanner
     }
 
     /// <summary>Payload bits of <paramref name="unitCount"/> units in <paramref name="mode"/> (ISO/IEC 23941 7.4).</summary>
-    public static int PayloadBits(EncodingMode mode, int unitCount) => mode switch
-    {
-        EncodingMode.Numeric => unitCount / 3 * 10 + (unitCount % 3) switch { 2 => 7, 1 => 4, _ => 0 },
-        EncodingMode.Alphanumeric => unitCount / 2 * 11 + unitCount % 2 * 6,
-        EncodingMode.Byte => unitCount * 8,
-        _ => throw new ArgumentOutOfRangeException(nameof(mode), $"Encoding mode {mode} is not supported by rMQR."),
-    };
+    public static int PayloadBits(EncodingMode mode, int unitCount)
+        => ModeSegmenter.PayloadBits(mode, unitCount);
 
     /// <summary>Encoded byte count of a Byte-mode run, i.e. the value its count indicator carries.</summary>
-    /// <remarks>
-    /// Deliberately asks <see cref="Encoding.UTF8"/> rather than reusing the planner's
-    /// own per-character model: comparing the two is what would catch an error in that
-    /// model, so they have to stay independent computations.
-    /// </remarks>
     public static int ByteUnitCount(ReadOnlySpan<char> text, EciMode charset)
-    {
-        if (charset != EciMode.Utf8)
-            return text.Length;
-#if NETSTANDARD2_1_OR_GREATER || NET5_0_OR_GREATER
-        return Encoding.UTF8.GetByteCount(text);
-#else
-        // netstandard2.0 has no span overload, and the pointer overload would mean
-        // enabling unsafe across the library, which this project has declined. Rent
-        // rather than ToString(), so planning stays allocation-free on every target.
-        var rented = ArrayPool<char>.Shared.Rent(Math.Max(text.Length, 1));
-        try
-        {
-            text.CopyTo(rented);
-            return Encoding.UTF8.GetByteCount(rented, 0, text.Length);
-        }
-        finally
-        {
-            ArrayPool<char>.Shared.Return(rented, clearArray: false);
-        }
-#endif
-    }
+        => ModeSegmenter.ByteUnitCount(text, charset);
 
     /// <summary>
     /// Named entry point for <c>RmQRSegmentPlannerUnitTest</c>: the minimal payload
@@ -342,7 +297,7 @@ internal static class RmQRSegmentPlanner
     /// the version scan compares against a data capacity.
     /// </summary>
     public static int MinimumPayloadBits(ReadOnlySpan<char> text, EciMode charset, int cciNumeric, int cciAlnum, int cciByte)
-        => ComputeCosts(text, charset, cciNumeric, cciAlnum, cciByte, default, out _);
+        => ModeSegmenter.ComputeCosts(text, charset, RmQRConstants.ModeIndicatorLength, cciNumeric, cciAlnum, cciByte, default, out _);
 
     /// <summary>
     /// Named entry point for <c>RmQRSegmentPlannerUnitTest</c>: the upper bound the
@@ -381,7 +336,7 @@ internal static class RmQRSegmentPlanner
 
         if (cost < 0)
         {
-            cost = ComputeCosts(text, charset, cciNumeric, cciAlnum, cciByte, default, out _);
+            cost = ModeSegmenter.ComputeCosts(text, charset, RmQRConstants.ModeIndicatorLength, cciNumeric, cciAlnum, cciByte, default, out _);
             if (memoCount < memoKeys.Length)
             {
                 memoKeys[memoCount] = key;
@@ -408,22 +363,7 @@ internal static class RmQRSegmentPlanner
     /// a split is worth searching, tight where it is not.
     /// </remarks>
     public static int TrivialLowerBoundBits(ReadOnlySpan<char> text, EciMode charset)
-    {
-        var sixths = 0;
-        for (var i = 0; i < text.Length; i++)
-        {
-            var c = text[i];
-            if (CharacterSets.IsNumeric(c))
-                sixths += SixthsPerDigit;
-            else if (CharacterSets.IsAlphanumeric(c))
-                sixths += SixthsPerAlnum;
-            else
-                sixths += SixthsPerByte * ByteCost(text, i, charset);
-        }
-
-        // Round up to whole bits, then add the cheapest header a stream can carry.
-        return (sixths + 5) / 6 + RmQRConstants.ModeIndicatorLength + MinCountBitsAny;
-    }
+        => (ModeSegmenter.CheapestSixths(text, charset) + 5) / 6 + RmQRConstants.ModeIndicatorLength + MinCountBitsAny;
 
     /// <summary>
     /// The floor cost run: minimal payload bits at the narrowest count indicator
@@ -433,16 +373,16 @@ internal static class RmQRSegmentPlanner
     /// </summary>
     private static int ComputeFloor(ReadOnlySpan<char> text, EciMode charset, out int runsNumeric, out int runsAlnum, out int runsByte)
     {
-        var parentLength = text.Length * StateCount;
+        var parentLength = text.Length * ModeSegmenter.StateCount;
         byte[]? rented = null;
-        Span<byte> parents = parentLength <= MaxStackParents
-            ? stackalloc byte[MaxStackParents]
+        Span<byte> parents = parentLength <= ModeSegmenter.MaxStackParents
+            ? stackalloc byte[ModeSegmenter.MaxStackParents]
             : (rented = ArrayPool<byte>.Shared.Rent(parentLength));
         try
         {
             var window = parents.Slice(0, parentLength);
-            var cost = ComputeCosts(text, charset, MinCountBitsNumeric, MinCountBitsAlnum, MinCountBitsByte, window, out var finalState);
-            CountRuns(window, finalState, text.Length, out runsNumeric, out runsAlnum, out runsByte);
+            var cost = ModeSegmenter.ComputeCosts(text, charset, RmQRConstants.ModeIndicatorLength, MinCountBitsNumeric, MinCountBitsAlnum, MinCountBitsByte, window, out var finalState);
+            ModeSegmenter.CountRuns(window, finalState, text.Length, out runsNumeric, out runsAlnum, out runsByte);
             return cost;
         }
         finally
@@ -462,213 +402,6 @@ internal static class RmQRSegmentPlanner
             + runsNumeric * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Numeric) - MinCountBitsNumeric)
             + runsAlnum * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Alphanumeric) - MinCountBitsAlnum)
             + runsByte * (RmQRConstants.GetCountIndicatorLength(version, EncodingMode.Byte) - MinCountBitsByte);
-
-    /// <summary>Counts the runs of each mode on the minimal-cost path, without materialising it.</summary>
-    private static void CountRuns(ReadOnlySpan<byte> parents, int finalState, int length, out int runsNumeric, out int runsAlnum, out int runsByte)
-    {
-        runsNumeric = 0;
-        runsAlnum = 0;
-        runsByte = 0;
-
-        var state = finalState;
-        for (var i = length - 1; i >= 0; i--)
-        {
-            var parent = parents[i * StateCount + state];
-            if (parent == StateStart || ModeIndexOf(parent) != ModeIndexOf(state))
-            {
-                switch (ModeIndexOf(state))
-                {
-                    case 0: runsNumeric++; break;
-                    case 1: runsAlnum++; break;
-                    default: runsByte++; break;
-                }
-            }
-            state = parent;
-        }
-    }
-
-    // ---------------------------------------------------------------
-    // Dynamic program
-    // ---------------------------------------------------------------
-
-    /// <summary>
-    /// Minimal payload bits (excluding any ECI prefix) for the content at the given
-    /// count indicator widths. When <paramref name="parents"/> is non-empty it
-    /// receives one predecessor state per (character, state) pair for reconstruction.
-    /// </summary>
-    private static int ComputeCosts(ReadOnlySpan<char> text, EciMode charset, int cciNumeric, int cciAlnum, int cciByte, Span<byte> parents, out int finalState)
-    {
-        Debug.Assert(parents.IsEmpty || parents.Length == text.Length * StateCount);
-
-        Span<int> prev = stackalloc int[StateCount];
-        Span<int> cur = stackalloc int[StateCount];
-        for (var s = 0; s < StateCount; s++)
-            prev[s] = Unreachable;
-        prev[StateStart] = 0;
-
-        var track = !parents.IsEmpty;
-        var openNumeric = RmQRConstants.ModeIndicatorLength + cciNumeric;
-        var openAlnum = RmQRConstants.ModeIndicatorLength + cciAlnum;
-        var openByte = RmQRConstants.ModeIndicatorLength + cciByte;
-
-        for (var i = 0; i < text.Length; i++)
-        {
-            for (var s = 0; s < StateCount; s++)
-                cur[s] = Unreachable;
-
-            var c = text[i];
-            var isNumeric = CharacterSets.IsNumeric(c);
-            var isAlnum = CharacterSets.IsAlphanumeric(c);
-            var byteBits = 8 * ByteCost(text, i, charset);
-            var parentBase = i * StateCount;
-
-            for (var from = 0; from < StateCount; from++)
-            {
-                var basis = prev[from];
-                if (basis >= Unreachable)
-                    continue;
-
-                if (isNumeric)
-                {
-                    int target, cost;
-                    if (from <= StateNumeric2)
-                    {
-                        // Continue the run: the first digit of a group costs 4 bits, the next two 3 each.
-                        cost = basis + (from == StateNumeric0 ? 4 : 3);
-                        target = from == StateNumeric2 ? StateNumeric0 : from + 1;
-                    }
-                    else
-                    {
-                        cost = basis + openNumeric + 4;
-                        target = StateNumeric1;
-                    }
-                    Relax(cur, parents, parentBase, target, cost, from, track);
-                }
-
-                if (isAlnum)
-                {
-                    int target, cost;
-                    if (from is StateAlnum0 or StateAlnum1)
-                    {
-                        // 11 bits per pair: 6 for the first character of a pair, 5 for the second.
-                        cost = basis + (from == StateAlnum0 ? 6 : 5);
-                        target = from == StateAlnum0 ? StateAlnum1 : StateAlnum0;
-                    }
-                    else
-                    {
-                        cost = basis + openAlnum + 6;
-                        target = StateAlnum1;
-                    }
-                    Relax(cur, parents, parentBase, target, cost, from, track);
-                }
-
-                {
-                    // Byte mode encodes every character, so this transition always exists.
-                    var cost = from == StateByte ? basis + byteBits : basis + openByte + byteBits;
-                    Relax(cur, parents, parentBase, StateByte, cost, from, track);
-                }
-            }
-
-            cur.CopyTo(prev);
-        }
-
-        var best = Unreachable;
-        finalState = StateByte;
-        for (var s = 0; s <= StateByte; s++)
-        {
-            if (prev[s] < best)
-            {
-                best = prev[s];
-                finalState = s;
-            }
-        }
-        return best;
-    }
-
-    private static void Relax(Span<int> cur, Span<byte> parents, int parentBase, int target, int cost, int from, bool track)
-    {
-        if (cost >= cur[target])
-            return;
-        cur[target] = cost;
-        if (track)
-            parents[parentBase + target] = (byte)from;
-    }
-
-    /// <summary>
-    /// Walks the predecessor table back into runs, oldest first. Returns false when
-    /// the plan needs more runs than the caller lent room for.
-    /// </summary>
-    private static bool Reconstruct(ReadOnlySpan<char> text, ReadOnlySpan<byte> parents, int finalState, Span<RmQRSegment> segments, out int segmentCount)
-    {
-        segmentCount = 0;
-        var state = finalState;
-        var end = text.Length;
-        var count = 0;
-
-        for (var i = text.Length - 1; i >= 0; i--)
-        {
-            var parent = parents[i * StateCount + state];
-            if (parent == StateStart || ModeIndexOf(parent) != ModeIndexOf(state))
-            {
-                if (count >= segments.Length)
-                    return false;
-                segments[count++] = new RmQRSegment(ModeIndexOf(state), i, end - i, 0);
-                end = i;
-            }
-            state = parent;
-        }
-
-        Debug.Assert(state == StateStart, "the walk must terminate at the virtual start state");
-        segments.Slice(0, count).Reverse();
-        segmentCount = count;
-        return true;
-    }
-
-    /// <summary>Fills each run with the value its count indicator carries.</summary>
-    private static void FillUnitCounts(ReadOnlySpan<char> text, EciMode charset, Span<RmQRSegment> segments)
-    {
-        for (var i = 0; i < segments.Length; i++)
-        {
-            var segment = segments[i];
-            var units = segment.ModeIndex == 2
-                ? ByteUnitCount(text.Slice(segment.Start, segment.Length), charset)
-                : segment.Length;
-            segments[i] = new RmQRSegment(segment.ModeIndex, segment.Start, segment.Length, units);
-        }
-    }
-
-    /// <summary>Dense mode index of a state, or -1 for the virtual start state.</summary>
-    private static int ModeIndexOf(int state) => state switch
-    {
-        <= StateNumeric2 => 0,
-        StateAlnum0 or StateAlnum1 => 1,
-        StateByte => 2,
-        _ => -1,
-    };
-
-    /// <summary>
-    /// Encoded byte length of one character in Byte mode. Latin-1 charsets are one
-    /// byte per character; UTF-8 mirrors what <see cref="Encoding.UTF8"/> emits,
-    /// including its greedy surrogate pairing (a paired high surrogate carries all
-    /// four bytes and its low surrogate none, an unpaired surrogate costs the three
-    /// bytes of the replacement character).
-    /// </summary>
-    private static int ByteCost(ReadOnlySpan<char> text, int index, EciMode charset)
-    {
-        if (charset != EciMode.Utf8)
-            return 1;
-
-        var c = text[index];
-        if (c < 0x80)
-            return 1;
-        if (c < 0x800)
-            return 2;
-        if (char.IsHighSurrogate(c))
-            return index + 1 < text.Length && char.IsLowSurrogate(text[index + 1]) ? 4 : 3;
-        if (char.IsLowSurrogate(c))
-            return index > 0 && char.IsHighSurrogate(text[index - 1]) ? 0 : 3;
-        return 3;
-    }
 
     // ---------------------------------------------------------------
     // Selector adapters (the two Select overloads stay apart, as the selector keeps them)

@@ -34,16 +34,17 @@ public class QrImageBuilderApiParityTest
     /// specs/rmqr-encoder.md), so the rMQR builder alone exposes the fit strategy and
     /// the fixed-height constraint; and the symbol is rectangular, so the width-only
     /// sizing rule (height from the aspect ratio) is a builder option of its own.
-    /// Mixed-mode segmentation is rMQR-only for the same reason: rMQR capacities are
-    /// small enough that splitting the content moves the symbol a version or more.
     /// </summary>
     private static readonly string[] rmqrOnlyMembers =
     [
         "WithFitStrategy",
         "WithHeight",
         "WithWidth",
-        "WithSegmentation",
     ];
+
+    // WithSegmentation is shared by all three builders (each with its own
+    // segmentation enum, canonicalized to SEGMENTATION below), so no per-symbology
+    // exclusion list is needed for it any more.
 
     /// <summary>
     /// Options the two symbologies with a totally ordered version set have and rMQR does
@@ -155,6 +156,14 @@ public class QrImageBuilderApiParityTest
     }
 
     [Test]
+    public async Task Segmentation_ExistsOnEveryBuilder()
+    {
+        await Assert.That(typeof(QRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithSegmentation")).IsTrue();
+        await Assert.That(typeof(MicroQRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithSegmentation")).IsTrue();
+        await Assert.That(typeof(RmQRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithSegmentation")).IsTrue();
+    }
+
+    [Test]
     public async Task RmqrOnlyMembers_ExistOnRmqr_AndNotOnOthers()
     {
         foreach (var name in rmqrOnlyMembers)
@@ -209,6 +218,8 @@ public class QrImageBuilderApiParityTest
             return "SYMBOL_DATA";
         if (type == typeof(ECCLevel) || type == typeof(MicroQREccLevel) || type == typeof(RmQREccLevel))
             return "ECC";
+        if (type == typeof(QRCodeSegmentation) || type == typeof(MicroQRSegmentation) || type == typeof(RmQRSegmentation))
+            return "SEGMENTATION";
         if (type == typeof(QRCodeImageBuilder) || type == typeof(MicroQRCodeImageBuilder) || type == typeof(RmQRCodeImageBuilder))
             return "SELF";
         return type.FullName ?? type.Name;
