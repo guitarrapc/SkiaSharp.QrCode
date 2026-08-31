@@ -1,3 +1,5 @@
+using SkiaSharp;
+
 namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
@@ -219,11 +221,207 @@ public class MicroQRSegmentationTest
             .WithErrorCorrection(MicroQREccLevel.L)
             .WithSegmentation(MicroQRSegmentation.Optimal)
             .ToByteArray();
-        await Assert.That(png.Length).IsGreaterThan(0);
+
+        using var bitmap = SKBitmap.Decode(png);
+        await Assert.That(MicroQRCodeDecoder.TryDecode(bitmap, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
 
         Assert.Throws<ArgumentOutOfRangeException>(() => new Image.MicroQRCodeImageBuilder("12345").WithSegmentation((MicroQRSegmentation)5));
         var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
         Assert.Throws<InvalidOperationException>(() => new Image.MicroQRCodeImageBuilder(data).WithSegmentation(MicroQRSegmentation.Optimal));
+    }
+
+    [Test]
+    [Arguments(MicroQREccLevel.M)]
+    [Arguments(MicroQREccLevel.Q)]
+    public async Task Optimal_HigherEccLevels_NeverLargerAndAlwaysRoundTrip(MicroQREccLevel eccLevel)
+    {
+        // ECC M narrows every capacity and Q exists only on M4, so the
+        // IsValidCombination skip and the smaller windows get real coverage.
+        var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
+        foreach (var content in Corpus())
+        {
+            var singleFits = MicroQRCodeGenerator.TryGetRequiredBufferSize(content, eccLevel, out var singleSize);
+            var optimalFits = MicroQRCodeGenerator.TryGetRequiredBufferSize(content, eccLevel, out var optimalSize, options);
+
+            // Optimal accepts at least what Single accepts, and never a larger version.
+            if (singleFits)
+            {
+                await Assert.That(optimalFits).IsTrue().Because($"content=\"{content}\", ecc={eccLevel}");
+                await Assert.That((int)optimalSize.Version).IsLessThanOrEqualTo((int)singleSize.Version);
+            }
+            if (!optimalFits)
+                continue;
+
+            var data = MicroQRCodeGenerator.CreateMicroQRCode(content, eccLevel, options);
+            await Assert.That(data.Version).IsEqualTo(optimalSize.Version);
+            await Assert.That(MicroQRCodeDecoder.TryDecode(data, out var decoded)).IsTrue().Because($"content=\"{content}\", ecc={eccLevel}");
+            await Assert.That(decoded).IsEqualTo(content);
+        }
+    }
+
+    [Test]
+    public async Task Optimal_EccM_RescuesContentNoSingleModeFits()
+    {
+        // 19 alphanumeric characters cost 113 bits, over M4-M's 112; split into
+        // Alnum(2) + Numeric(17) they cost 85 and fit M4-M.
+        var content = "AB12345678901234567";
+        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.M, out _)).IsFalse();
+
+        var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
+        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.M, options);
+        await Assert.That(data.Version).IsEqualTo(MicroQRVersion.M4);
+        await Assert.That(MicroQRCodeDecoder.TryDecode(data, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    [Test]
+    public async Task Optimal_EmptyContent_MatchesSingle()
+    {
+        var single = MicroQRCodeGenerator.CreateMicroQRCode("", MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.CreateMicroQRCode("", MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+
+        await Assert.That(optimal.Version).IsEqualTo(single.Version);
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+    }
+
+    [Test]
+    public async Task Optimal_ErrorDetectionOnly_BehavesLikeSingle()
+    {
+        var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
+
+        // Non-numeric content cannot reach M1, the only ErrorDetectionOnly version:
+        // an ordinary "does not fit" on both paths.
+        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize("A1234567", MicroQREccLevel.ErrorDetectionOnly, out _, options)).IsFalse();
+        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.CreateMicroQRCode("A1234567", MicroQREccLevel.ErrorDetectionOnly, options));
+
+        // Numeric content takes the shortcut and must be byte-identical to Single.
+        var single = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.ErrorDetectionOnly, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.ErrorDetectionOnly, options);
+        await Assert.That(optimal.Version).IsEqualTo(MicroQRVersion.M1);
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+    }
+
+    [Test]
+    public async Task Optimal_VersionRangeBelowTheGain_EmitsTheSingleModeSymbol()
+    {
+        // The M2 win of "A" + 7 digits is excluded by a range starting at M3, so
+        // the single-mode stream (M3) is emitted unchanged.
+        var content = "A1234567";
+        var range = MicroQRVersionRange.Between(MicroQRVersion.M3, MicroQRVersion.M4);
+        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = range });
+        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Version = range, Segmentation = MicroQRSegmentation.Optimal });
+
+        await Assert.That(optimal.Version).IsEqualTo(single.Version);
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+    }
+
+    [Test]
+    public async Task Optimal_VersionRange_RescuesWhereNoSingleModeInRangeFits()
+    {
+        // 19 alphanumeric characters need M4 in a single mode, outside the range;
+        // the mixed plan fits M3 inside it.
+        var content = "AB12345678901234567";
+        var range = MicroQRVersionRange.Between(MicroQRVersion.M2, MicroQRVersion.M3);
+        var options = new MicroQRCodeGeneratorOptions { Version = range, Segmentation = MicroQRSegmentation.Optimal };
+
+        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Version = range })).IsFalse();
+
+        var data = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, options);
+        await Assert.That(data.Version).IsEqualTo(MicroQRVersion.M3);
+        await Assert.That(MicroQRCodeDecoder.TryDecode(data, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    [Test]
+    public async Task Optimal_ContentBeyondEveryPlan_FailsLikeSingle()
+    {
+        // 41 characters exceed even the all-Numeric maximum (35), so no plan exists;
+        // both surfaces report it the single-mode way.
+        var content = "a" + new string('1', 40);
+        var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
+
+        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out _, options)).IsFalse();
+        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, options));
+    }
+
+    [Test]
+    public async Task Optimal_Latin1RunThatLooksLikeUtf8_EmitsTheSingleModeStream()
+    {
+        // "Ã©" narrows to C3 A9, which alone is valid UTF-8 for "é". Micro QR has no
+        // ECI, so the decoder resolves each byte run's charset heuristically; a split
+        // that isolates C3 A9 from the disambiguating trailing E9 would be misread.
+        // The planner must refuse such a plan and emit the single-mode stream, which
+        // round-trips (the whole payload is invalid UTF-8 thanks to the lone E9).
+        var content = "Ã©123456789012é";
+        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+
+        await Assert.That(optimal.Version).IsEqualTo(single.Version);
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+
+        await Assert.That(MicroQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    [Test]
+    public async Task Optimal_Latin1RunWithInvalidUtf8Bytes_StillSplits()
+    {
+        // The guard must not over-reject: "é" narrows to E9, invalid as UTF-8 in any
+        // run, so every byte run still decodes as Latin-1 and the split stays safe.
+        var content = "é123456789012é";
+        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+
+        await Assert.That((int)optimal.Version).IsLessThan((int)single.Version);
+        await Assert.That(MicroQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    [Test]
+    public async Task Optimal_Latin1LookalikeOnlyAMixedPlanFits_RefusesRatherThanCorrupts()
+    {
+        // 19 Latin-1 bytes overflow every single Byte-mode capacity, and the only
+        // mixed plan isolates the UTF-8-lookalike "Ã©" run. Refusing is the honest
+        // outcome: an encode that decodes to different content is worse than none.
+        var content = "Ã©" + new string('1', 16) + "é";
+        var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
+
+        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out _, options)).IsFalse();
+        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, options));
+    }
+
+    [Test]
+    public async Task Optimal_MidContentBom_EmitsTheSingleModeStream()
+    {
+        // A split would relocate the mid-content U+FEFF to a byte-run start, where
+        // the decoder consumes it as a BOM; the single-mode stream keeps it interior
+        // and intact, so the planner must fall back.
+        var content = "123456\uFEFFa";
+        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+
+        await Assert.That(optimal.Version).IsEqualTo(single.Version);
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+
+        await Assert.That(MicroQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    [Test]
+    public async Task Optimal_LeadingBom_DecodesLikeSingle()
+    {
+        // A content-leading U+FEFF is stream-initial under Single too, so both arms
+        // drop it on decode; the run-at-offset-0 exemption keeps the split allowed
+        // and the two must decode identically (not necessarily to the input).
+        var content = "\uFEFF123456a";
+        var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
+        var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
+
+        await Assert.That((int)optimal.Version).IsLessThanOrEqualTo((int)single.Version);
+        await Assert.That(MicroQRCodeDecoder.TryDecode(single, out var singleDecoded)).IsTrue();
+        await Assert.That(MicroQRCodeDecoder.TryDecode(optimal, out var optimalDecoded)).IsTrue();
+        await Assert.That(optimalDecoded).IsEqualTo(singleDecoded);
     }
 
     [Test]

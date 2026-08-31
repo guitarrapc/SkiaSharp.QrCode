@@ -212,6 +212,25 @@ internal static class ModeSegmenter
         }
     }
 
+    /// <summary>
+    /// Whether the plan relocates a mid-content U+FEFF to the start of a Byte run.
+    /// The shared byte-segment decoder consumes a leading BOM of every segment
+    /// without an explicit ISO-8859-1 declaration, so such a plan would decode with
+    /// the character silently dropped — where the single-mode stream, which keeps it
+    /// interior, round-trips. Planners reject these plans and fall back to Single.
+    /// (A run at offset 0 is exempt: there the single-mode stream starts with the
+    /// same bytes and behaves identically.)
+    /// </summary>
+    public static bool HasBomRelocatedToARunStart(ReadOnlySpan<char> text, ReadOnlySpan<ModeSegment> segments)
+    {
+        foreach (var segment in segments)
+        {
+            if (segment.ModeIndex == 2 && segment.Start > 0 && text[segment.Start] == '\uFEFF')
+                return true;
+        }
+        return false;
+    }
+
     /// <summary>Fills each run with the value its count indicator carries.</summary>
     public static void FillUnitCounts(ReadOnlySpan<char> text, EciMode charset, Span<ModeSegment> segments)
     {

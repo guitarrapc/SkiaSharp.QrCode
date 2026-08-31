@@ -322,7 +322,7 @@ Because an `int?` converts implicitly, an optional version needs no branch at th
 
 #### Mixed-mode segmentation (smaller symbols for mixed content)
 
-By default the whole content is encoded in one mode, so a URL prefix pushes an otherwise numeric payload into Byte mode and every digit costs 8 bits instead of 3⅓. `QRCodeSegmentation.Optimal` instead splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits. That does two things: it often drops the symbol by a version or more, and it encodes content that no single mode fits at any version. It never selects a larger version than the default, and it emits the default bit stream unchanged whenever splitting would not shrink the symbol — same options, same content, same symbol, unless it gets smaller.
+By default the whole content is encoded in one mode, so a URL prefix pushes an otherwise numeric payload into Byte mode and every digit costs 8 bits instead of 3⅓. `QRCodeSegmentation.Optimal` instead splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits. That does two things: it often drops the symbol by a version or more, and it encodes content that no single mode fits at any version (unless the only fitting plans would be misread on decode — a relocated byte order mark — which report "does not fit" instead of corrupting). It never selects a larger version than the default, and it emits the default bit stream unchanged whenever splitting would not shrink the symbol — same options, same content, same symbol, unless it gets smaller.
 
 ```csharp
 const string content = "https://example.com/item?id=123456789012345678901234567890";
@@ -352,6 +352,8 @@ Notes that carry over from the general options: size destination buffers with th
 var micro = MicroQRCodeGenerator.CreateMicroQRCode("AB12345678901234567", MicroQREccLevel.L,
     new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal }); // M3 instead of M4
 ```
+
+Reproduce the Micro QR cost/benefit numbers with `dotnet run -c Release -- --filter "*MicroQRSegmentationEncode*"` in `src/SkiaSharp.QrCode.Benchmark`.
 
 As with rMQR, the cost is driven by **how much the split helps**: planning runs only where a smaller version is reachable, and where it runs and wins, the Optimal arm also encodes a smaller symbol, so you pay in proportion to what you gain (allocations are zero on both arms):
 
@@ -1020,7 +1022,7 @@ Console.WriteLine(flat.Version); // R7x43
 
 #### Mixed-mode segmentation (smaller symbols for mixed content)
 
-By default the whole content is encoded in one mode, so a single lowercase letter pushes an otherwise numeric payload into Byte mode. `RmQRSegmentation.Optimal` instead splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits. That does two things: it often drops the symbol by a version or more, and it encodes content that no single mode fits at any version. It never selects a symbol with more core modules than the default, and it emits the default bit stream unchanged whenever splitting would not shrink it.
+By default the whole content is encoded in one mode, so a single lowercase letter pushes an otherwise numeric payload into Byte mode. `RmQRSegmentation.Optimal` instead splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits. That does two things: it often drops the symbol by a version or more, and it encodes content that no single mode fits at any version (unless the only fitting plans would be misread on decode — a relocated byte order mark — which report "does not fit" instead of corrupting). It never selects a symbol with more core modules than the default, and it emits the default bit stream unchanged whenever splitting would not shrink it.
 
 > **Core modules, not the rendered grid.** `RmQRFitStrategy` ranks by core modules while the quiet zone adds a fixed 4 modules to each dimension, so minimizing `height × width` does not minimize `(height + 4) × (width + 4)`. A flatter, wider symbol can therefore have fewer core modules but a *larger* rendered grid — 24 characters at ECC H go from R15x59 (885 core, 63×19 rendered) to R11x77 (847 core, 81×15 rendered). So a rendered image can get wider, and `TryGetRequiredBufferSize` must be passed the same `Segmentation` as the encode or the destination buffer can be too small.
 

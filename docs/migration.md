@@ -128,9 +128,9 @@ There is no version *range* for rMQR. Its 32 versions are not totally ordered (R
 
 ### mixed-mode segmentation
 
-Set `Segmentation = RmQRSegmentation.Optimal` (rMQR), `QRCodeSegmentation.Optimal` (Standard QR) or `MicroQRSegmentation.Optimal` (Micro QR) to let the generator split mixed content into Numeric / Alphanumeric / Byte runs. It never selects a symbol with more core modules (Standard / Micro QR: a larger version) than `Single`, it emits the `Single` bit stream verbatim whenever splitting would not shrink it, and it additionally encodes content that overflows every version in a single mode. On Micro QR the plan respects each version's mode set (M1 is Numeric-only, M2 has no Byte mode).
+Set `Segmentation = RmQRSegmentation.Optimal` (rMQR), `QRCodeSegmentation.Optimal` (Standard QR) or `MicroQRSegmentation.Optimal` (Micro QR) to let the generator split mixed content into Numeric / Alphanumeric / Byte runs. It never selects a symbol with more core modules (Standard / Micro QR: a larger version) than `Single`, it emits the `Single` bit stream verbatim whenever splitting would not shrink it, and it additionally encodes content that overflows every version in a single mode — unless the only fitting plans would be misread on decode (a relocated byte order mark, or on Micro QR a Latin-1 run its charset heuristic would read as UTF-8), which report "does not fit" instead of corrupting. On Micro QR the plan also respects each version's mode set (M1 is Numeric-only, M2 has no Byte mode).
 
-Two things to know before opting in: on rMQR the quiet zone adds a fixed 4 modules to each dimension, so a symbol with fewer core modules can still render onto a *larger* grid with a different aspect ratio; and on both symbologies `TryGetRequiredBufferSize` must be passed the same `Segmentation` as the encode, or the destination buffer can be too small.
+Two things to know before opting in: on rMQR the quiet zone adds a fixed 4 modules to each dimension, so a symbol with fewer core modules can still render onto a *larger* grid with a different aspect ratio; and on all three symbologies `TryGetRequiredBufferSize` must be passed the same `Segmentation` as the encode, or the destination buffer can be too small.
 
 ```csharp
 var optimal = RmQRCodeGenerator.CreateRmQRCode(

@@ -149,6 +149,40 @@ public class QRCodeSegmentationTest
     }
 
     [Test]
+    public async Task Optimal_MidContentBom_EmitsTheSingleModeStream()
+    {
+        // The byte-segment decoder consumes a leading EF BB BF of every non-Latin-1
+        // segment as a BOM; a split that relocates a mid-content U+FEFF to a run
+        // start would silently drop it, so the planner must fall back to the
+        // single-mode stream, where it sits interior and survives.
+        var content = new string('1', 40) + "\uFEFF" + "a";
+        var single = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, QRCodeGeneratorOptions.Default);
+        var optimal = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal });
+
+        await Assert.That(optimal.Version).IsEqualTo(single.Version);
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+
+        await Assert.That(QRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    [Test]
+    public async Task Optimal_LeadingBom_DecodesLikeSingle()
+    {
+        // A content-leading U+FEFF is stream-initial under Single too, so both arms
+        // drop it on decode; the run-at-offset-0 exemption keeps the split allowed
+        // and the two must decode identically (not necessarily to the input).
+        var content = "\uFEFF" + new string('1', 40) + "a";
+        var single = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, QRCodeGeneratorOptions.Default);
+        var optimal = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal });
+
+        await Assert.That(optimal.Version).IsLessThanOrEqualTo(single.Version);
+        await Assert.That(QRCodeDecoder.TryDecode(single, out var singleDecoded)).IsTrue();
+        await Assert.That(QRCodeDecoder.TryDecode(optimal, out var optimalDecoded)).IsTrue();
+        await Assert.That(optimalDecoded).IsEqualTo(singleDecoded);
+    }
+
+    [Test]
     public async Task Optimal_EmptyContent_MatchesSingle()
     {
         var single = QRCodeGenerator.CreateQrCode("", ECCLevel.M, QRCodeGeneratorOptions.Default);

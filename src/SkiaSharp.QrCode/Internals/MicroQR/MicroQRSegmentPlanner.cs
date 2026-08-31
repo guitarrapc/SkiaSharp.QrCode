@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using SkiaSharp.QrCode.Internals.BinaryDecoders;
 
 namespace SkiaSharp.QrCode.Internals.MicroQR;
 
@@ -131,6 +132,20 @@ internal static class MicroQRSegmentPlanner
             return false;
         }
 
+        // A plan the byte-segment decoder would misread is worse than no plan.
+        // Micro QR has no ECI, so the decoder resolves each Byte run's charset
+        // heuristically; two shapes lose to that once a split isolates them, and
+        // both fall back to the single-mode stream:
+        //  - a relocated mid-content U+FEFF at a run start is consumed as a BOM;
+        //  - a Latin-1 run whose narrowed bytes read as UTF-8 (the disambiguating
+        //    invalid bytes now live in another run) decodes as different text.
+        if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount))
+            || (charset == EciMode.Iso8859_1 && HasLatin1RunTheHeuristicReadsAsUtf8(text, segments.Slice(0, segmentCount))))
+        {
+            segmentCount = 0;
+            return false;
+        }
+
         ModeSegmenter.FillUnitCounts(text, charset, segments.Slice(0, segmentCount));
 
         // Re-cost the reconstructed plan from the byte counts the encoder will
@@ -168,6 +183,33 @@ internal static class MicroQRSegmentPlanner
     /// </summary>
     public static int MinimumPayloadBits(ReadOnlySpan<char> text, EciMode charset, MicroQRVersion version)
         => PlanCost(text, charset, version, default, out _);
+
+    /// <summary>
+    /// Whether any Byte run's narrowed Latin-1 bytes would be read as UTF-8 by the
+    /// decoder's unspecified-charset resolution (Micro QR has no ECI to pin it).
+    /// Pure-ASCII runs are exempt: they decode identically either way.
+    /// </summary>
+    private static bool HasLatin1RunTheHeuristicReadsAsUtf8(ReadOnlySpan<char> text, ReadOnlySpan<ModeSegment> segments)
+    {
+        Span<byte> bytes = stackalloc byte[MaxPlannableChars];
+        foreach (var segment in segments)
+        {
+            if (segment.ModeIndex != 2)
+                continue;
+
+            var chars = text.Slice(segment.Start, segment.Length);
+            var nonAscii = false;
+            for (var i = 0; i < chars.Length; i++)
+            {
+                bytes[i] = (byte)chars[i]; // Latin-1 narrows one byte per char (validated upstream)
+                nonAscii |= chars[i] > 0x7F;
+            }
+
+            if (nonAscii && SegmentDecoders.ResolvesToUtf8WhenUnspecified(bytes.Slice(0, chars.Length)))
+                return true;
+        }
+        return false;
+    }
 
     /// <summary>The shared dynamic program at this version's widths and mode set.</summary>
     private static int PlanCost(ReadOnlySpan<char> text, EciMode charset, MicroQRVersion version, Span<byte> parents, out int finalState)

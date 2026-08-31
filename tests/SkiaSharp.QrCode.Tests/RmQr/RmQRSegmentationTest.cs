@@ -592,6 +592,24 @@ public class RmQRSegmentationTest
     // -----------------------------------------------------------------
 
     [Test]
+    public async Task Optimal_MidContentBom_EmitsTheSingleModeStream()
+    {
+        // The byte-segment decoder consumes a leading EF BB BF of every non-Latin-1
+        // segment as a BOM, even behind an explicit UTF-8 ECI; a split that relocates
+        // a mid-content U+FEFF to a run start would silently drop it, so the planner
+        // must fall back to the single-mode stream, where it survives.
+        var content = new string('1', 30) + "\uFEFF" + "a";
+        var single = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M);
+        var optimal = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Segmentation = RmQRSegmentation.Optimal });
+
+        await Assert.That(optimal.Version).IsEqualTo(single.Version);
+        await Assert.That(optimal.GetRawData()).IsEquivalentTo(single.GetRawData());
+
+        await Assert.That(RmQRCodeDecoder.TryDecode(optimal, out var decoded)).IsTrue();
+        await Assert.That(decoded).IsEqualTo(content);
+    }
+
+    [Test]
     [Arguments("日本語1234567890")]
     [Arguments("😀😁1234567890")]
     [Arguments("é😀A1")]

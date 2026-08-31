@@ -60,7 +60,7 @@ public class MicroQRSegmentPlannerUnitTest
             if (expected < 0)
             {
                 // No assignment covers the content at this version's mode set.
-                await Assert.That(actual >= 1 << 28).IsTrue().Because($"content=\"{content}\", version={version} should be unreachable");
+                await Assert.That(actual >= ModeSegmenter.Unreachable).IsTrue().Because($"content=\"{content}\", version={version} should be unreachable");
                 continue;
             }
 
@@ -90,11 +90,11 @@ public class MicroQRSegmentPlannerUnitTest
     [MethodDataSource(nameof(BruteForceCorpus))]
     public async Task TryBuildPlan_CostsExactlyWhatTheDynamicProgramComputed(string content, EciMode charset)
     {
-        foreach (var version in new[] { MicroQRVersion.M3, MicroQRVersion.M4 })
+        foreach (var version in new[] { MicroQRVersion.M2, MicroQRVersion.M3, MicroQRVersion.M4 })
         {
             var segments = new ModeSegment[content.Length];
             if (!MicroQRSegmentPlanner.TryBuildPlan(content, charset, version, MicroQREccLevel.L, segments, out var count))
-                continue; // the plan legitimately does not fit this version
+                continue; // the plan legitimately does not fit this version (or its mode set)
 
             var planned = MicroQRSegmentPlanner.MeasurePlan(version, segments.AsSpan(0, count));
             var optimum = MicroQRSegmentPlanner.MinimumPayloadBits(content, charset, version);

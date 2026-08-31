@@ -19,7 +19,9 @@ public enum QRCodeSegmentation
     /// The mixed-mode split with the fewest total bits. Never selects a larger
     /// version than <see cref="Single"/>, emits the <see cref="Single"/> bit stream
     /// verbatim when a split would not shrink the symbol, and additionally encodes
-    /// content that overflows every version in a single mode.
+    /// content that overflows every version in a single mode — unless the only
+    /// fitting plans would be misread on decode (a relocated byte order mark), which
+    /// report "does not fit" instead.
     /// </summary>
     /// <remarks>
     /// Opt-in because it searches candidate versions; the search itself allocates

@@ -19,13 +19,16 @@ public enum MicroQRSegmentation
     /// The mixed-mode split with the fewest total bits. Never selects a larger
     /// version than <see cref="Single"/>, emits the <see cref="Single"/> bit stream
     /// verbatim when a split would not shrink the symbol, and additionally encodes
-    /// content that overflows every version in a single mode.
+    /// content that overflows every version in a single mode — unless the only
+    /// fitting plans would be misread on decode (a relocated byte order mark, or a
+    /// Latin-1 run the charset heuristic would read as UTF-8), which report "does
+    /// not fit" instead.
     /// </summary>
     /// <remarks>
     /// Opt-in because it prices candidate versions; the search allocates nothing
     /// (Micro QR content never exceeds 35 characters). The plan respects each
-    /// version's mode set: M1 is Numeric-only and M2 has no Byte mode, so a plan
-    /// with runs a version cannot carry never selects that version. Size buffers
+    /// version's mode set — M1 is Numeric-only and M2 has no Byte mode — so a
+    /// version is never selected for a plan whose runs it cannot carry. Size buffers
     /// with the same segmentation you encode with, the two can select different
     /// versions.
     /// </remarks>

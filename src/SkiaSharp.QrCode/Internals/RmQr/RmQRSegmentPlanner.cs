@@ -230,6 +230,16 @@ internal static class RmQRSegmentPlanner
                 ArrayPool<byte>.Shared.Return(rented, clearArray: false);
         }
 
+        // A plan the shared byte-segment decoder would misread is worse than no
+        // plan: a split that relocates a mid-content U+FEFF to a run start loses it
+        // to the decoder's BOM consumption (which fires even behind an explicit
+        // UTF-8 ECI). The single-mode fallback keeps it.
+        if (ModeSegmenter.HasBomRelocatedToARunStart(text, segments.Slice(0, segmentCount)))
+        {
+            segmentCount = 0;
+            return false;
+        }
+
         ModeSegmenter.FillUnitCounts(text, charset, segments.Slice(0, segmentCount));
 
         // Re-cost the reconstructed plan from the byte counts the encoder will
