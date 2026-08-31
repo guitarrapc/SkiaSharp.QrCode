@@ -6,8 +6,11 @@
 #:property EnableSingleFileAnalyzer=false
 
 using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.Metadata.Ecma335;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json;
 
 // Prints the exported surface of SkiaSharp.QrCode as a sorted, diffable listing.
 //
@@ -37,6 +40,12 @@ var nullability = new NullabilityInfoContext();
 // Doc text, keyed by the documentation ID the compiler emits.
 var docs = LoadDocs();
 
+// Source links are opt-in because they are only trustworthy at release. SourceLink pins the
+// commit that was built, so a page generated from an unpushed local commit would link to a
+// SHA GitHub has never seen. The release workflow builds at the tag and passes the flag.
+var pdb = args.Contains("--source-links") ? LoadPdb() : null;
+var sourceCommit = pdb is null ? null : ShortCommit();
+
 var keywords = new Dictionary<Type, string>
 {
     [typeof(void)] = "void", [typeof(bool)] = "bool", [typeof(byte)] = "byte", [typeof(sbyte)] = "sbyte",
@@ -53,7 +62,14 @@ var types = assembly.GetExportedTypes()
 // Both renderers read the same model, so the page and the text listing can never disagree
 // about what the surface is.
 var model = types
-    .Select(t => (Type: t, Name: FullName(t), Header: TypeHeader(t), Obsolete: IsObsolete(t), DocId: DocIdOfType(t), Members: MemberEntries(t)))
+    .Select(t => MemberEntries(t) is var members
+        ? (Type: t, Name: FullName(t), Header: TypeHeader(t), Obsolete: IsObsolete(t), DocId: DocIdOfType(t),
+           // A type has no sequence points of its own, so it borrows the file its first member
+           // is in and drops the line: the right file, without claiming to know the exact line
+           // the declaration starts on.
+           Href: members.Select(m => m.Href).FirstOrDefault(h => h is not null)?.Split('#')[0],
+           Members: members)
+        : default)
     .ToArray();
 
 var rendered = wantsHtml ? RenderHtml() : RenderText();
@@ -71,9 +87,9 @@ else
 }
 return 0;
 
-(int Rank, string Kind, string Name, string Text, string DocId)[] MemberEntries(Type type) => type.IsEnum
+(int Rank, string Kind, string Name, string Text, string DocId, string? Href)[] MemberEntries(Type type) => type.IsEnum
     ? [.. type.GetFields(BindingFlags.Public | BindingFlags.Static)
-        .Select(f => (0, "value", f.Name, $"{f.Name} = {Convert.ToInt64(f.GetRawConstantValue())},", DocIdOfField(f)))]
+        .Select(f => (0, "value", f.Name, $"{f.Name} = {Convert.ToInt64(f.GetRawConstantValue())},", DocIdOfField(f), (string?)null))]
     : [.. Members(type)];
 
 // Documentation IDs, as the compiler spells them in the XML file: nested types join with a
@@ -119,6 +135,89 @@ string DocParam(Type type)
     }
 
     return DocTypeName(type);
+}
+
+// The PDB, plus the SourceLink document map read out of it. SourceLink is on by default in the
+// .NET SDK, so this needs no package: the map is one entry, a local path prefix to a
+// raw.githubusercontent URL carrying the commit that was built.
+(MetadataReader Reader, (string Prefix, string Template)[] Map)? LoadPdb()
+{
+    var path = Path.ChangeExtension(assembly.Location, ".pdb");
+    if (!File.Exists(path))
+    {
+        Console.Error.WriteLine($"No PDB beside {Path.GetFileName(assembly.Location)}; source links are omitted.");
+        return null;
+    }
+
+    // The provider owns the memory the reader points into, so it deliberately outlives this
+    // method rather than being disposed here.
+    var reader = MetadataReaderProvider.FromPortablePdbStream(File.OpenRead(path)).GetMetadataReader();
+    var kind = new Guid("CC110556-A091-4D38-9FEC-25AB9A351A6A");
+
+    foreach (var handle in reader.GetCustomDebugInformation(EntityHandle.ModuleDefinition))
+    {
+        var info = reader.GetCustomDebugInformation(handle);
+        if (reader.GetGuid(info.Kind) != kind) continue;
+
+        using var json = JsonDocument.Parse(reader.GetBlobBytes(info.Value));
+        var map = json.RootElement.GetProperty("documents").EnumerateObject()
+            .Select(e => (Prefix: e.Name, Template: e.Value.GetString() ?? ""))
+            .ToArray();
+        if (map.Length > 0) return (reader, map);
+    }
+
+    Console.Error.WriteLine("The PDB carries no SourceLink map; source links are omitted.");
+    return null;
+}
+
+string? ShortCommit()
+{
+    var template = pdb!.Value.Map[0].Template;
+    var parts = template.Replace("https://raw.githubusercontent.com/", "").Split('/');
+    return parts.Length >= 3 && parts[2].Length >= 7 ? parts[2][..7] : null;
+}
+
+// Where a member is declared, as a GitHub blob URL for the built commit. Only members with IL
+// have sequence points, so fields and enum values have no location and get no link.
+string? SourceHref(MethodBase? method)
+{
+    if (pdb is null || method is null) return null;
+
+    try
+    {
+        var (reader, _) = pdb.Value;
+        var debug = reader.GetMethodDebugInformation(MetadataTokens.MethodDebugInformationHandle(method.MetadataToken & 0xFFFFFF));
+        if (debug.Document.IsNil) return null;
+
+        var file = reader.GetString(reader.GetDocument(debug.Document).Name);
+        var line = debug.GetSequencePoints().Where(p => !p.IsHidden).Select(p => p.StartLine).FirstOrDefault();
+        var blob = BlobUrl(file);
+        return blob is null ? null : line > 0 ? $"{blob}#L{line}" : blob;
+    }
+    catch
+    {
+        // A token with no row in the PDB's debug table: no location, not a failure.
+        return null;
+    }
+}
+
+// raw.githubusercontent serves the file; github.com/blob is the page a reader wants, and the
+// only one of the two that honours a #L line anchor.
+string? BlobUrl(string documentPath)
+{
+    foreach (var (prefix, template) in pdb!.Value.Map)
+    {
+        var head = prefix.TrimEnd('*');
+        if (!documentPath.StartsWith(head, StringComparison.OrdinalIgnoreCase)) continue;
+
+        var raw = template.Replace("*", documentPath[head.Length..].Replace('\\', '/'));
+        const string RawHost = "https://raw.githubusercontent.com/";
+        if (!raw.StartsWith(RawHost, StringComparison.Ordinal)) return raw;
+
+        var parts = raw[RawHost.Length..].Split('/', 4);
+        return parts.Length < 4 ? raw : $"https://github.com/{parts[0]}/{parts[1]}/blob/{parts[2]}/{parts[3]}";
+    }
+    return null;
 }
 
 Dictionary<string, (string Summary, string Remarks)> LoadDocs()
@@ -237,7 +336,7 @@ string RenderHtml()
             // Kind first, then the name, then the declaration. Reading "method" or "property"
             // off a heading beats inferring it from whether the signature ends in parentheses
             // or in an accessor list.
-            body.AppendLine($"""          <h3><a class="anchor" href="#{id}" aria-label="Link to {id}">#</a><span class="kind">{TypeKind(type.Type)}</span> <span class="name">{Escape(BareName(type.Type))}</span>{Tag(type.Obsolete)}</h3>""");
+            body.AppendLine($"""          <h3><a class="anchor" href="#{id}" aria-label="Link to {id}">#</a><span class="kind">{TypeKind(type.Type)}</span> {Named(BareName(type.Type), type.Href, "source file")}{Tag(type.Obsolete)}</h3>""");
             body.AppendLine($"""          <pre class="sig"><code>{Escape(type.Header)}</code></pre>""");
             body.Append(Doc(type.DocId, "          "));
 
@@ -255,7 +354,7 @@ string RenderHtml()
                     // would say the same thing twice - so it keeps the compact form.
                     if (member.Kind != "value")
                     {
-                        body.AppendLine($"""              <h4><span class="kind">{member.Kind}</span> <span class="name">{Escape(member.Name)}</span>{Tag(obsolete)}</h4>""");
+                        body.AppendLine($"""              <h4><span class="kind">{member.Kind}</span> {Named(member.Name, member.Href, "source")}{Tag(obsolete)}</h4>""");
                         body.AppendLine($"""              <pre class="sig"><code>{Escape(text)}</code></pre>""");
                     }
                     else
@@ -278,6 +377,12 @@ string RenderHtml()
     return Shell(outline.ToString().TrimEnd(), body.ToString().TrimEnd());
 
     static string Tag(bool obsolete) => obsolete ? """ <span class="tag">obsolete</span>""" : "";
+
+    // The name is a link to the declaration when a location is known, and plain text when it
+    // is not, so a reader never clicks a name that goes nowhere.
+    static string Named(string name, string? href, string what) => href is null
+        ? $"""<span class="name">{Escape(name)}</span>"""
+        : $"""<a class="name" href="{Escape(href)}" title="View {what} on GitHub" target="_blank" rel="noopener noreferrer">{Escape(name)}</a>""";
 
     // Summaries are what a reader scans, so they are always shown. Remarks are the reasoning
     // behind them and often run several times longer, which buries the signatures when left
@@ -306,25 +411,25 @@ string RenderHtml()
 // Members of one type, sorted so the listing is stable across builds. Reflection makes no
 // promise about declaration order, so an unsorted dump would churn on every rebuild and
 // the diff would stop meaning anything.
-IEnumerable<(int Rank, string Kind, string Name, string Text, string DocId)> Members(Type type)
+IEnumerable<(int Rank, string Kind, string Name, string Text, string DocId, string? Href)> Members(Type type)
 {
     const BindingFlags Scope = BindingFlags.Public | BindingFlags.NonPublic
         | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
-    var lines = new List<(int Rank, string Kind, string Name, string Text, string DocId)>();
+    var lines = new List<(int Rank, string Kind, string Name, string Text, string DocId, string? Href)>();
 
     foreach (var field in type.GetFields(Scope))
     {
         if (!Visible(field.IsPublic, field.IsFamily, field.IsFamilyOrAssembly) || Generated(field)) continue;
         var modifier = field.IsLiteral ? "const" : field.IsStatic ? "static" : null;
         var readOnly = field.IsInitOnly ? "readonly" : null;
-        lines.Add((0, field.IsLiteral ? "constant" : "field", field.Name, Line(field, Access(field.IsPublic), modifier, readOnly, TypeName(field.FieldType, FieldNullability(field)), field.Name) + ";", DocIdOfField(field)));
+        lines.Add((0, field.IsLiteral ? "constant" : "field", field.Name, Line(field, Access(field.IsPublic), modifier, readOnly, TypeName(field.FieldType, FieldNullability(field)), field.Name) + ";", DocIdOfField(field), null));
     }
 
     foreach (var ctor in type.GetConstructors(Scope))
     {
         if (!Visible(ctor.IsPublic, ctor.IsFamily, ctor.IsFamilyOrAssembly) || Generated(ctor)) continue;
-        lines.Add((1, "constructor", BareName(type), Line(ctor, Access(ctor.IsPublic), null, null, null, $"{BareName(type)}({Parameters(ctor)})") + ";", DocIdOfMethod(ctor)));
+        lines.Add((1, "constructor", BareName(type), Line(ctor, Access(ctor.IsPublic), null, null, null, $"{BareName(type)}({Parameters(ctor)})") + ";", DocIdOfMethod(ctor), SourceHref(ctor)));
     }
 
     foreach (var property in type.GetProperties(Scope))
@@ -344,14 +449,14 @@ IEnumerable<(int Rank, string Kind, string Name, string Text, string DocId)> Mem
         var anchor = readable ? getter! : setter!;
         var name = property.GetIndexParameters().Length > 0 ? $"this[{Parameters(anchor)}]" : property.Name;
         lines.Add((2, property.GetIndexParameters().Length > 0 ? "indexer" : "property", name, Line(property, Access(anchor.IsPublic), anchor.IsStatic ? "static" : null, null,
-            TypeName(property.PropertyType, PropertyNullability(property)), $"{name} {accessors}"), DocIdOfProperty(property)));
+            TypeName(property.PropertyType, PropertyNullability(property)), $"{name} {accessors}"), DocIdOfProperty(property), SourceHref(anchor)));
     }
 
     foreach (var evt in type.GetEvents(Scope))
     {
         if (evt.AddMethod is not { } add || !Visible(add.IsPublic, add.IsFamily, add.IsFamilyOrAssembly)) continue;
         lines.Add((3, "event", evt.Name, Line(evt, Access(add.IsPublic), add.IsStatic ? "static" : null, null,
-            TypeName(evt.EventHandlerType!, null), $"{evt.Name} {{ add; remove; }}"), DocIdOfEvent(evt)));
+            TypeName(evt.EventHandlerType!, null), $"{evt.Name} {{ add; remove; }}"), DocIdOfEvent(evt), SourceHref(add)));
     }
 
     foreach (var method in type.GetMethods(Scope))
@@ -364,7 +469,7 @@ IEnumerable<(int Rank, string Kind, string Name, string Text, string DocId)> Mem
             : null;
         var name = $"{method.Name}{GenericSuffix(method.GetGenericArguments())}({Parameters(method)})";
         lines.Add((4, method.Name.StartsWith("op_", StringComparison.Ordinal) ? "operator" : "method", method.Name, Line(method, Access(method.IsPublic), modifier, null,
-            TypeName(method.ReturnType, ParameterNullability(method.ReturnParameter)), name) + ";", DocIdOfMethod(method)));
+            TypeName(method.ReturnType, ParameterNullability(method.ReturnParameter)), name) + ";", DocIdOfMethod(method), SourceHref(method)));
     }
 
     return lines.OrderBy(l => l.Rank).ThenBy(l => l.Text, StringComparer.Ordinal);
@@ -683,6 +788,9 @@ string Shell(string outline, string content) => $$"""
            carries the accent because that is what they are looking *for*. */
         .kind { color: var(--text-muted); font-weight: 400; }
         .name { color: var(--accent); }
+        a.name { text-decoration: none; }
+        a.name:hover { text-decoration: underline; }
+        a.name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
         /* Signatures wrap instead of scrolling: a horizontal scrollbar per signature hides
            the end of every long one and makes the reader work for it. C# breaks cleanly at
@@ -773,7 +881,7 @@ string Shell(string outline, string content) => $$"""
       <header class="bar">
         <a class="back" href="../">&#8592; Playground</a>
         <h1>SkiaSharp.QrCode API</h1>
-        <span class="meta">{{assembly.GetName().Version}} &middot; <span id="count">{{model.Length}} types</span></span>
+        <span class="meta">{{assembly.GetName().Version}} &middot; <span id="count">{{model.Length}} types</span>{{(sourceCommit is null ? "" : $" &middot; source {sourceCommit}")}}</span>
       </header>
 
       <div class="layout">

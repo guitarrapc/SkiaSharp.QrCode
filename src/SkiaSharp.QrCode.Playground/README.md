@@ -47,6 +47,20 @@ dotnet run tools/public_api.cs -- --html -o src/SkiaSharp.QrCode.Playground/wwwr
 The release workflow runs the same command before publishing, so the Pages site is always current
 even if the committed copy has drifted. Drop `--html -o ...` for the plain-text listing on stdout.
 
+### Source links
+
+Passing `--source-links` turns every type and member name into a link to its declaration on
+GitHub, line anchor included. The file and line come from the sequence points in the PDB, and the
+repository and commit from the SourceLink map the .NET SDK embeds there, so nothing needs to be
+configured and no package is added.
+
+**Only the release workflow passes it.** SourceLink pins the commit that was built: a page
+generated locally would link to whatever HEAD was at the time, which is often a commit that has
+never been pushed, and every link would 404. The header shows the commit the links point at.
+
+Members without IL have no sequence points, so fields and enum values are never links. A type has
+none of its own either, and links to the file its first member is in, without a line anchor.
+
 Committing a generated file is deliberate. Generating it during the build was tried and does not
 work: `wwwroot` is globbed when the project is evaluated, so a file written by a target is invisible
 to the static web asset pipeline, and the target that would write it runs in more than one project
