@@ -16,7 +16,7 @@ namespace SkiaSharp.QrCode.Internals.ImageDecoders;
 /// form is a single NOT per lane; measured 17-20x over the per-byte loop across
 /// 33k-922k pixels on AVX2. Two vector widths rather than one: 256-bit where it is
 /// accelerated, otherwise 128-bit, which keeps ARM64 (NEON is 128-bit, so
-/// <see cref="Vector256.IsHardwareAccelerated"/> is false there) off the scalar loop.
+/// <c>Vector256.IsHardwareAccelerated</c> is false there) off the scalar loop.
 /// </remarks>
 internal static class LuminanceInverter
 {

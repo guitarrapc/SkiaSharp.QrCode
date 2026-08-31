@@ -628,8 +628,8 @@ internal static partial class RmQRModulePlacer
     /// <summary>
     /// Segmentation the ARM64 store tier consumes: transpose blocks, then the row runs
     /// the blocks did not take, then the isolated modules. Built only where that tier
-    /// can run (<see cref="System.Runtime.Intrinsics.Arm.AdvSimd.Arm64.IsSupported"/> is
-    /// a JIT constant, so other targets neither build nor carry these tables).
+    /// can run (<c>AdvSimd.Arm64.IsSupported</c> is a JIT constant, so other targets
+    /// neither build nor carry these tables).
     /// </summary>
     private static (BlockSegment[] Blocks, RunSegment[] Runs, int[] Singles, byte[] ReverseIndex) BuildNeonTables(RmQRVersion version, int height, int width, List<PairSegment> pairs, int positionCount)
     {
