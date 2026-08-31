@@ -71,9 +71,9 @@ else
 }
 return 0;
 
-(int Rank, string Text, string DocId)[] MemberEntries(Type type) => type.IsEnum
+(int Rank, string Kind, string Name, string Text, string DocId)[] MemberEntries(Type type) => type.IsEnum
     ? [.. type.GetFields(BindingFlags.Public | BindingFlags.Static)
-        .Select(f => (0, $"{f.Name} = {Convert.ToInt64(f.GetRawConstantValue())},", DocIdOfField(f)))]
+        .Select(f => (0, "value", f.Name, $"{f.Name} = {Convert.ToInt64(f.GetRawConstantValue())},", DocIdOfField(f)))]
     : [.. Members(type)];
 
 // Documentation IDs, as the compiler spells them in the XML file: nested types join with a
@@ -231,9 +231,14 @@ string RenderHtml()
             // data-name matches the type alone, data-text matches its members and their doc
             // text too. The filter needs both: a hit on the type name keeps every member, a
             // hit inside one member keeps only that member.
-            var haystack = $"{type.Name} {type.Header} {Summary(type.DocId)} {string.Join(" ", type.Members.Select(m => m.Text + " " + Summary(m.DocId)))}";
+            var haystack = $"{type.Name} {type.Header} {Summary(type.DocId)} {string.Join(" ", type.Members.Select(m => m.Kind + " " + m.Text + " " + Summary(m.DocId)))}";
             body.AppendLine($"""        <article class="type" id="{id}" data-name="{Escape(type.Name.ToLowerInvariant())}" data-text="{Escape(haystack.ToLowerInvariant())}">""");
-            body.AppendLine($"""          <h3><a class="anchor" href="#{id}" aria-label="Link to {id}">#</a><code>{Escape(type.Header)}</code>{Tag(type.Obsolete)}</h3>""");
+
+            // Kind first, then the name, then the declaration. Reading "method" or "property"
+            // off a heading beats inferring it from whether the signature ends in parentheses
+            // or in an accessor list.
+            body.AppendLine($"""          <h3><a class="anchor" href="#{id}" aria-label="Link to {id}">#</a><span class="kind">{TypeKind(type.Type)}</span> <span class="name">{Escape(BareName(type.Type))}</span>{Tag(type.Obsolete)}</h3>""");
+            body.AppendLine($"""          <pre class="sig"><code>{Escape(type.Header)}</code></pre>""");
             body.Append(Doc(type.DocId, "          "));
 
             if (type.Members.Length > 0)
@@ -243,9 +248,21 @@ string RenderHtml()
                 {
                     var obsolete = member.Text.StartsWith("[Obsolete] ", StringComparison.Ordinal);
                     var text = obsolete ? member.Text["[Obsolete] ".Length..] : member.Text;
-                    var searchable = $"{text} {Summary(member.DocId)}".ToLowerInvariant();
+                    var searchable = $"{member.Kind} {text} {Summary(member.DocId)}".ToLowerInvariant();
                     body.AppendLine($"""            <div class="member" data-text="{Escape(searchable)}">""");
-                    body.AppendLine($"""              <code>{Escape(text)}</code>{Tag(obsolete)}""");
+
+                    // An enum value is its own heading - "value Deflate" above "Deflate = 1,"
+                    // would say the same thing twice - so it keeps the compact form.
+                    if (member.Kind != "value")
+                    {
+                        body.AppendLine($"""              <h4><span class="kind">{member.Kind}</span> <span class="name">{Escape(member.Name)}</span>{Tag(obsolete)}</h4>""");
+                        body.AppendLine($"""              <pre class="sig"><code>{Escape(text)}</code></pre>""");
+                    }
+                    else
+                    {
+                        body.AppendLine($"""              <pre class="sig"><code>{Escape(text)}</code></pre>{Tag(obsolete)}""");
+                    }
+
                     body.Append(Doc(member.DocId, "              "));
                     body.AppendLine("            </div>");
                 }
@@ -289,25 +306,25 @@ string RenderHtml()
 // Members of one type, sorted so the listing is stable across builds. Reflection makes no
 // promise about declaration order, so an unsorted dump would churn on every rebuild and
 // the diff would stop meaning anything.
-IEnumerable<(int Rank, string Text, string DocId)> Members(Type type)
+IEnumerable<(int Rank, string Kind, string Name, string Text, string DocId)> Members(Type type)
 {
     const BindingFlags Scope = BindingFlags.Public | BindingFlags.NonPublic
         | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
-    var lines = new List<(int Rank, string Text, string DocId)>();
+    var lines = new List<(int Rank, string Kind, string Name, string Text, string DocId)>();
 
     foreach (var field in type.GetFields(Scope))
     {
         if (!Visible(field.IsPublic, field.IsFamily, field.IsFamilyOrAssembly) || Generated(field)) continue;
         var modifier = field.IsLiteral ? "const" : field.IsStatic ? "static" : null;
         var readOnly = field.IsInitOnly ? "readonly" : null;
-        lines.Add((0, Line(field, Access(field.IsPublic), modifier, readOnly, TypeName(field.FieldType, FieldNullability(field)), field.Name) + ";", DocIdOfField(field)));
+        lines.Add((0, field.IsLiteral ? "constant" : "field", field.Name, Line(field, Access(field.IsPublic), modifier, readOnly, TypeName(field.FieldType, FieldNullability(field)), field.Name) + ";", DocIdOfField(field)));
     }
 
     foreach (var ctor in type.GetConstructors(Scope))
     {
         if (!Visible(ctor.IsPublic, ctor.IsFamily, ctor.IsFamilyOrAssembly) || Generated(ctor)) continue;
-        lines.Add((1, Line(ctor, Access(ctor.IsPublic), null, null, null, $"{BareName(type)}({Parameters(ctor)})") + ";", DocIdOfMethod(ctor)));
+        lines.Add((1, "constructor", BareName(type), Line(ctor, Access(ctor.IsPublic), null, null, null, $"{BareName(type)}({Parameters(ctor)})") + ";", DocIdOfMethod(ctor)));
     }
 
     foreach (var property in type.GetProperties(Scope))
@@ -326,14 +343,14 @@ IEnumerable<(int Rank, string Text, string DocId)> Members(Type type)
 
         var anchor = readable ? getter! : setter!;
         var name = property.GetIndexParameters().Length > 0 ? $"this[{Parameters(anchor)}]" : property.Name;
-        lines.Add((2, Line(property, Access(anchor.IsPublic), anchor.IsStatic ? "static" : null, null,
+        lines.Add((2, property.GetIndexParameters().Length > 0 ? "indexer" : "property", name, Line(property, Access(anchor.IsPublic), anchor.IsStatic ? "static" : null, null,
             TypeName(property.PropertyType, PropertyNullability(property)), $"{name} {accessors}"), DocIdOfProperty(property)));
     }
 
     foreach (var evt in type.GetEvents(Scope))
     {
         if (evt.AddMethod is not { } add || !Visible(add.IsPublic, add.IsFamily, add.IsFamilyOrAssembly)) continue;
-        lines.Add((3, Line(evt, Access(add.IsPublic), add.IsStatic ? "static" : null, null,
+        lines.Add((3, "event", evt.Name, Line(evt, Access(add.IsPublic), add.IsStatic ? "static" : null, null,
             TypeName(evt.EventHandlerType!, null), $"{evt.Name} {{ add; remove; }}"), DocIdOfEvent(evt)));
     }
 
@@ -346,7 +363,7 @@ IEnumerable<(int Rank, string Text, string DocId)> Members(Type type)
             : method.IsVirtual && !method.IsFinal ? "virtual"
             : null;
         var name = $"{method.Name}{GenericSuffix(method.GetGenericArguments())}({Parameters(method)})";
-        lines.Add((4, Line(method, Access(method.IsPublic), modifier, null,
+        lines.Add((4, method.Name.StartsWith("op_", StringComparison.Ordinal) ? "operator" : "method", method.Name, Line(method, Access(method.IsPublic), modifier, null,
             TypeName(method.ReturnType, ParameterNullability(method.ReturnParameter)), name) + ";", DocIdOfMethod(method)));
     }
 
@@ -359,13 +376,15 @@ string Line(MemberInfo member, string access, string? modifier, string? readOnly
     return (IsObsolete(member) ? "[Obsolete] " : "") + string.Join(" ", parts);
 }
 
+string TypeKind(Type type) => type.IsEnum ? "enum"
+    : type.IsInterface ? "interface"
+    : typeof(Delegate).IsAssignableFrom(type) ? "delegate"
+    : type.IsValueType ? "struct"
+    : "class";
+
 string TypeHeader(Type type)
 {
-    var kind = type.IsEnum ? "enum"
-        : type.IsInterface ? "interface"
-        : typeof(Delegate).IsAssignableFrom(type) ? "delegate"
-        : type.IsValueType ? "struct"
-        : "class";
+    var kind = TypeKind(type);
 
     var modifiers = new List<string> { type.IsPublic || type.IsNestedPublic ? "public" : "protected" };
     if (type is { IsAbstract: true, IsSealed: true, IsEnum: false, IsInterface: false }) modifiers.Add("static");
@@ -653,12 +672,29 @@ string Shell(string outline, string content) => $$"""
         .type:last-child { border-bottom: 0; }
         .type[hidden], .member[hidden], .ns[hidden], .toc-item[hidden], .toc-ns[hidden] { display: none; }
 
-        .type > h3 {
+        .type > h3, .member > h4 {
+          margin: 0 0 0.35rem;
+          font-size: 0.95rem;
+          font-weight: 600;
+        }
+        .member > h4 { font-size: 0.88rem; }
+
+        /* The kind is the word a reader is looking for when scanning, so it leads; the name
+           carries the accent because that is what they are looking *for*. */
+        .kind { color: var(--text-muted); font-weight: 400; }
+        .name { color: var(--accent); }
+
+        /* Signatures wrap instead of scrolling: a horizontal scrollbar per signature hides
+           the end of every long one and makes the reader work for it. C# breaks cleanly at
+           the spaces after commas, and the hanging indent keeps continuations distinct. */
+        .sig {
           margin: 0;
-          font-weight: 500;
-          overflow-x: auto;
-          white-space: nowrap;
-          padding-bottom: 0.15rem;
+          padding: 0.35rem 0.6rem 0.35rem 2.4rem;
+          text-indent: -1.8rem;
+          background: var(--sig-bg);
+          border-radius: 4px;
+          white-space: pre-wrap;
+          overflow-wrap: break-word;
         }
 
         .anchor {
@@ -706,19 +742,11 @@ string Shell(string outline, string content) => $$"""
         .members { margin-top: 1rem; }
 
         .member {
-          padding: 0.5rem 0 0.5rem 0.9rem;
+          padding: 0.5rem 0 0.6rem 0.9rem;
           border-left: 2px solid var(--panel-border);
-          margin-bottom: 0.15rem;
+          margin-bottom: 0.35rem;
         }
         .member:hover { border-left-color: var(--accent); }
-        .member > code {
-          display: block;
-          padding: 0.28rem 0.55rem;
-          background: var(--sig-bg);
-          border-radius: 4px;
-          overflow-x: auto;
-          white-space: nowrap;
-        }
 
         .tag {
           display: inline-block;

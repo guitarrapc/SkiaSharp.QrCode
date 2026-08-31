@@ -27,10 +27,14 @@ dotnet serve -d publish/playground/wwwroot   # or: python -m http.server -d publ
 `-p:PlaygroundSoftFingerprint=true` emits both fingerprinted and plain filenames so the page
 works on hosts without import-map rewriting (GitHub Pages, plain static servers).
 
-## Public API page (`/api/`)
+## Public API page (`/api/index.html`)
 
 The **API** link in the header opens a filterable listing of every public type, with the doc
 comments for each, generated from the built assembly by `tools/public_api.cs`.
+
+Link to it as `api/index.html`, never `api/`. The dev server behind F5 and `dotnet run` has no
+default document for a subdirectory and falls back to the Playground page instead, so `api/`
+answers 200 with the wrong page rather than a visible 404. GitHub Pages resolves either form.
 
 `wwwroot/api/index.html` **is committed**, so it is simply there: F5 in Visual Studio, `dotnet
 run`, and `dotnet publish` all serve it with no extra step, on a fresh clone included. Regenerate

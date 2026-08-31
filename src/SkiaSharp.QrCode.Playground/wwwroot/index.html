@@ -57,7 +57,10 @@
         <a id="playground-version" class="version-badge" hidden target="_blank" rel="noopener noreferrer"
           href="https://github.com/guitarrapc/SkiaSharp.QrCode/releases"
           aria-label="Playground build version, GitHub releases"></a>
-        <a class="version-badge" href="api/" aria-label="Public API listing">API</a>
+        <!-- Spelled out rather than "api/": the dev server has no default document for a
+             subdirectory and falls back to this page, so "api/" silently re-serves the
+             Playground. GitHub Pages resolves either form. -->
+        <a class="version-badge" href="api/index.html" aria-label="Public API listing">API</a>
       </div>
       <p class="tagline">QR codes with gradients, shapes and logos, rendered by Skia in your browser</p>
     </header>
