@@ -29,7 +29,7 @@ internal static partial class RmQRBinaryEncoder
     /// <param name="charset">Effective charset: Default / ISO-8859-1 narrow, UTF-8 transcode.</param>
     /// <param name="segments">Planned runs, in order, covering the whole content.</param>
     /// <param name="destination">At least the data codeword count in size.</param>
-    public static int EncodeDataCodewordsSegmented(ReadOnlySpan<char> text, RmQRVersion version, RmQREccLevel eccLevel, EciMode charset, ReadOnlySpan<RmQRSegment> segments, Span<byte> destination)
+    public static int EncodeDataCodewordsSegmented(ReadOnlySpan<char> text, RmQRVersion version, RmQREccLevel eccLevel, EciMode charset, ReadOnlySpan<ModeSegment> segments, Span<byte> destination)
     {
         var codewordCount = RmQRConstants.GetDataCodewordCount(version, eccLevel);
         var capacityBits = codewordCount * 8;

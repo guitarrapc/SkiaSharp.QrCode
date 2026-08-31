@@ -137,7 +137,7 @@ public class QRSegmentPlannerUnitTest
 
         foreach (var version in new[] { 1, 10, 27 })
         {
-            var segments = new QRSegment[content.Length];
+            var segments = new ModeSegment[content.Length];
             if (!QRSegmentPlanner.TryBuildPlan(content, charset, version, ECCLevel.L, segments, out var count))
                 continue; // the plan legitimately does not fit this version
 
@@ -169,7 +169,7 @@ public class QRSegmentPlannerUnitTest
         // optimal plan must switch modes twice. Pins the multi-switch stream shape,
         // which no round-trip test can distinguish from a 2-run plan.
         var content = "abcdefghijkl123456789012mnopqrstuvwx";
-        var segments = new QRSegment[content.Length];
+        var segments = new ModeSegment[content.Length];
         await Assert.That(QRSegmentPlanner.TryBuildPlan(content, EciMode.Default, version: 3, ECCLevel.L, segments, out var count)).IsTrue();
 
         await Assert.That(count).IsEqualTo(3);

@@ -20,11 +20,11 @@ public class RmQRBinaryEncoderSegmentedTest
 
     private static byte[] EncodePlan(string text, RmQRVersion version, RmQREccLevel ecc, EciMode charset, RmQRSegmentPlannerUnitTest.PlannedSegment[] plan)
     {
-        Span<RmQRSegment> segments = stackalloc RmQRSegment[RmQRSegmentPlanner.MaxSegments];
+        Span<ModeSegment> segments = stackalloc ModeSegment[RmQRSegmentPlanner.MaxSegments];
         for (var i = 0; i < plan.Length; i++)
         {
             var modeIndex = RmQRConstants.GetModeIndex(plan[i].Mode);
-            segments[i] = new RmQRSegment(modeIndex, plan[i].Start, plan[i].Length, plan[i].UnitCount);
+            segments[i] = new ModeSegment(modeIndex, plan[i].Start, plan[i].Length, plan[i].UnitCount);
         }
 
         var destination = new byte[RmQRConstants.GetDataCodewordCount(version, ecc)];
@@ -192,7 +192,7 @@ public class RmQRBinaryEncoderSegmentedTest
     // bounds-check per flush.
     // -----------------------------------------------------------------
 
-    private static void EncodeRaw(string text, RmQRVersion version, RmQREccLevel ecc, EciMode charset, RmQRSegment[] segments)
+    private static void EncodeRaw(string text, RmQRVersion version, RmQREccLevel ecc, EciMode charset, ModeSegment[] segments)
     {
         var destination = new byte[RmQRConstants.GetDataCodewordCount(version, ecc)];
         RmQRBinaryEncoder.EncodeDataCodewordsSegmented(text.AsSpan(), version, ecc, charset, segments, destination);
@@ -207,28 +207,28 @@ public class RmQRBinaryEncoderSegmentedTest
     {
         var content = new string('a', 40);
         // R7x43-M holds 5 bytes; a Byte run over 40 characters cannot be written.
-        RmQRSegment[] plan = [new RmQRSegment(2, 0, content.Length, content.Length)];
+        ModeSegment[] plan = [new ModeSegment(2, 0, content.Length, content.Length)];
         await Assert.That(() => EncodeRaw(content, RmQRVersion.R7x43, RmQREccLevel.M, EciMode.Default, plan)).Throws<ArgumentException>();
     }
 
     [Test]
     public async Task EncodeSegmented_PlanWithAGap_Throws()
     {
-        RmQRSegment[] plan = [new RmQRSegment(0, 0, 2, 2), new RmQRSegment(2, 3, 3, 3)];
+        ModeSegment[] plan = [new ModeSegment(0, 0, 2, 2), new ModeSegment(2, 3, 3, 3)];
         await Assert.That(() => EncodeRaw("12abcd", RmQRVersion.R17x139, RmQREccLevel.M, EciMode.Default, plan)).Throws<ArgumentException>();
     }
 
     [Test]
     public async Task EncodeSegmented_PlanThatStopsShort_Throws()
     {
-        RmQRSegment[] plan = [new RmQRSegment(0, 0, 2, 2)];
+        ModeSegment[] plan = [new ModeSegment(0, 0, 2, 2)];
         await Assert.That(() => EncodeRaw("12abcd", RmQRVersion.R17x139, RmQREccLevel.M, EciMode.Default, plan)).Throws<ArgumentException>();
     }
 
     [Test]
     public async Task EncodeSegmented_PlanWithAnEmptyRun_Throws()
     {
-        RmQRSegment[] plan = [new RmQRSegment(0, 0, 0, 0), new RmQRSegment(2, 0, 6, 6)];
+        ModeSegment[] plan = [new ModeSegment(0, 0, 0, 0), new ModeSegment(2, 0, 6, 6)];
         await Assert.That(() => EncodeRaw("12abcd", RmQRVersion.R17x139, RmQREccLevel.M, EciMode.Default, plan)).Throws<ArgumentException>();
     }
 
@@ -246,7 +246,7 @@ public class RmQRBinaryEncoderSegmentedTest
     public async Task EncodeSegmented_UnitCountBelowRunLength_Throws(int modeIndex)
     {
         var content = modeIndex switch { 0 => new string('7', 20), 1 => new string('A', 20), _ => new string('a', 20) };
-        RmQRSegment[] plan = [new RmQRSegment(modeIndex, 0, content.Length, 1)];
+        ModeSegment[] plan = [new ModeSegment(modeIndex, 0, content.Length, 1)];
 
         await Assert.That(() => EncodeRaw(content, RmQRVersion.R7x43, RmQREccLevel.M, EciMode.Default, plan)).Throws<ArgumentException>();
     }
@@ -255,7 +255,7 @@ public class RmQRBinaryEncoderSegmentedTest
     [Test]
     public async Task EncodeSegmented_UnitCountAboveRunLength_Throws()
     {
-        RmQRSegment[] plan = [new RmQRSegment(0, 0, 3, 9)];
+        ModeSegment[] plan = [new ModeSegment(0, 0, 3, 9)];
         await Assert.That(() => EncodeRaw("123", RmQRVersion.R17x139, RmQREccLevel.M, EciMode.Default, plan)).Throws<ArgumentException>();
     }
 
@@ -264,21 +264,21 @@ public class RmQRBinaryEncoderSegmentedTest
     {
         const string content = "日本語";
         // Three characters, nine UTF-8 bytes; a plan claiming three bytes must not write.
-        RmQRSegment[] plan = [new RmQRSegment(2, 0, 3, 3)];
+        ModeSegment[] plan = [new ModeSegment(2, 0, 3, 3)];
         await Assert.That(() => EncodeRaw(content, RmQRVersion.R17x139, RmQREccLevel.M, EciMode.Utf8, plan)).Throws<ArgumentException>();
     }
 
     [Test]
     public async Task EncodeSegmented_UnsupportedCharset_Throws()
     {
-        RmQRSegment[] plan = [new RmQRSegment(0, 0, 3, 3)];
+        ModeSegment[] plan = [new ModeSegment(0, 0, 3, 3)];
         await Assert.That(() => EncodeRaw("123", RmQRVersion.R17x139, RmQREccLevel.M, (EciMode)4, plan)).Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]
     public async Task EncodeSegmented_DestinationTooSmall_Throws()
     {
-        RmQRSegment[] plan = [new RmQRSegment(0, 0, 3, 3)];
+        ModeSegment[] plan = [new ModeSegment(0, 0, 3, 3)];
         await Assert.That(() =>
         {
             var destination = new byte[1];

@@ -323,6 +323,7 @@ public static class QRCodeGenerator
     /// <param name="plainText">The text to encode in the QR code.</param>
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Pass <see cref="QRCodeGeneratorOptions.Default"/> for the defaults.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="QRCodeGeneratorOptions.Segmentation"/> is not a defined value.</exception>
     public static QRCodeData CreateQrCode(string plainText, ECCLevel eccLevel, in QRCodeGeneratorOptions options)
         => CreateQrCode(plainText.AsSpan(), eccLevel, options);
 
@@ -346,6 +347,7 @@ public static class QRCodeGenerator
     /// <param name="eccLevel">Error correction level (L: 7%, M: 15%, Q: 25%, H: 30%).</param>
     /// <param name="destination">The buffer to write the QR code module matrix into.</param>
     /// <param name="options">Encoding, version, quiet zone and segmentation settings. Size <paramref name="destination"/> with the same options.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <see cref="QRCodeGeneratorOptions.Segmentation"/> is not a defined value.</exception>
     public static int CreateQrCode(string plainText, ECCLevel eccLevel, Span<byte> destination, in QRCodeGeneratorOptions options)
         => CreateQrCode(plainText.AsSpan(), eccLevel, destination, options);
 
@@ -963,7 +965,7 @@ public static class QRCodeGenerator
     //
     // Kept in its own non-inlined methods so the single-mode entry points above keep
     // their frame and codegen. The plan buffer lives here rather than in the planner
-    // because a plan is a caller-lent Span<QRSegment> that never escapes: stack for
+    // because a plan is a caller-lent Span<ModeSegment> that never escapes: stack for
     // short content, pooled for long (a plan can never hold more runs than the
     // content has characters, so a text-length buffer always suffices).
     // ---------------------------------------------------------------
@@ -996,10 +998,10 @@ public static class QRCodeGenerator
 
         // The plan buffer is acquired only once a split is known to pay: content no
         // split can help (all-Numeric included) never rents it.
-        QRSegment[]? rentedPlan = null;
-        Span<QRSegment> plan = textSpan.Length <= QRSegmentPlanner.MaxStackSegments
-            ? stackalloc QRSegment[QRSegmentPlanner.MaxStackSegments]
-            : (rentedPlan = ArrayPool<QRSegment>.Shared.Rent(textSpan.Length));
+        ModeSegment[]? rentedPlan = null;
+        Span<ModeSegment> plan = textSpan.Length <= QRSegmentPlanner.MaxStackSegments
+            ? stackalloc ModeSegment[QRSegmentPlanner.MaxStackSegments]
+            : (rentedPlan = ArrayPool<ModeSegment>.Shared.Rent(textSpan.Length));
         try
         {
             var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, plan, ref version, out var segmentCount);
@@ -1028,7 +1030,7 @@ public static class QRCodeGenerator
         finally
         {
             if (rentedPlan is not null)
-                ArrayPool<QRSegment>.Shared.Return(rentedPlan, clearArray: false);
+                ArrayPool<ModeSegment>.Shared.Return(rentedPlan, clearArray: false);
         }
     }
 
@@ -1050,10 +1052,10 @@ public static class QRCodeGenerator
         if (!useSegments)
             return CreateQrCodeCore(textSpan, ResolveSingleLevel(in analysis, eccLevel, version, options.BoostEccLevel), destination, options.Utf8BOM, options.EciMode, version, options.QuietZoneSize, options.MaskPattern ?? AutomaticMask);
 
-        QRSegment[]? rentedPlan = null;
-        Span<QRSegment> plan = textSpan.Length <= QRSegmentPlanner.MaxStackSegments
-            ? stackalloc QRSegment[QRSegmentPlanner.MaxStackSegments]
-            : (rentedPlan = ArrayPool<QRSegment>.Shared.Rent(textSpan.Length));
+        ModeSegment[]? rentedPlan = null;
+        Span<ModeSegment> plan = textSpan.Length <= QRSegmentPlanner.MaxStackSegments
+            ? stackalloc ModeSegment[QRSegmentPlanner.MaxStackSegments]
+            : (rentedPlan = ArrayPool<ModeSegment>.Shared.Rent(textSpan.Length));
         try
         {
             var resolvedEcc = BuildPlanOrFallback(textSpan, eccLevel, in analysis, in options, plan, ref version, out var segmentCount);
@@ -1105,7 +1107,7 @@ public static class QRCodeGenerator
         finally
         {
             if (rentedPlan is not null)
-                ArrayPool<QRSegment>.Shared.Return(rentedPlan, clearArray: false);
+                ArrayPool<ModeSegment>.Shared.Return(rentedPlan, clearArray: false);
         }
     }
 
@@ -1149,7 +1151,7 @@ public static class QRCodeGenerator
     /// segment count means the single-mode stream is what gets emitted. Throws the
     /// canonical "does not fit" errors when the fallback does not fit either.
     /// </summary>
-    private static ECCLevel BuildPlanOrFallback(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Span<QRSegment> plan, ref int version, out int segmentCount)
+    private static ECCLevel BuildPlanOrFallback(ReadOnlySpan<char> textSpan, ECCLevel eccLevel, in TextAnalysisResult analysis, in QRCodeGeneratorOptions options, Span<ModeSegment> plan, ref int version, out int segmentCount)
     {
         if (!QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount))
         {
@@ -1190,10 +1192,10 @@ public static class QRCodeGenerator
         if (!useSegments)
             return true;
 
-        QRSegment[]? rentedPlan = null;
-        Span<QRSegment> plan = textSpan.Length <= QRSegmentPlanner.MaxStackSegments
-            ? stackalloc QRSegment[QRSegmentPlanner.MaxStackSegments]
-            : (rentedPlan = ArrayPool<QRSegment>.Shared.Rent(textSpan.Length));
+        ModeSegment[]? rentedPlan = null;
+        Span<ModeSegment> plan = textSpan.Length <= QRSegmentPlanner.MaxStackSegments
+            ? stackalloc ModeSegment[QRSegmentPlanner.MaxStackSegments]
+            : (rentedPlan = ArrayPool<ModeSegment>.Shared.Rent(textSpan.Length));
         try
         {
             if (QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out _))
@@ -1202,7 +1204,7 @@ public static class QRCodeGenerator
         finally
         {
             if (rentedPlan is not null)
-                ArrayPool<QRSegment>.Shared.Return(rentedPlan, clearArray: false);
+                ArrayPool<ModeSegment>.Shared.Return(rentedPlan, clearArray: false);
         }
 
         return TryGetVersionInRange(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, false, options.Version.Min, options.Version.Max, out version);
@@ -1230,7 +1232,7 @@ public static class QRCodeGenerator
     /// <see cref="WriteCoreModules"/> for a planned mixed-mode split: identical
     /// pipeline, with the segmented data stream in place of the single-mode one.
     /// </summary>
-    private static void WriteCoreModulesPlanned(ReadOnlySpan<char> textSpan, in QRConfiguration config, ReadOnlySpan<QRSegment> segments, Span<byte> coreBuffer, int coreSize, int maskPattern)
+    private static void WriteCoreModulesPlanned(ReadOnlySpan<char> textSpan, in QRConfiguration config, ReadOnlySpan<ModeSegment> segments, Span<byte> coreBuffer, int coreSize, int maskPattern)
     {
         var dataCapacity = CalculateMaxBitStringLength(config.Version, config.EccLevel, config.Encoding);
         var dataBufferSize = (dataCapacity + 7) / 8;
@@ -1255,7 +1257,7 @@ public static class QRCodeGenerator
     /// any), then per run mode indicator + count indicator + payload, then the
     /// shared terminator / padding tail.
     /// </summary>
-    private static int EncodeDataSegmented(ReadOnlySpan<char> textSpan, in QRConfiguration config, ReadOnlySpan<QRSegment> segments, Span<byte> buffer)
+    private static int EncodeDataSegmented(ReadOnlySpan<char> textSpan, in QRConfiguration config, ReadOnlySpan<ModeSegment> segments, Span<byte> buffer)
     {
         var encoder = new QRBinaryEncoder(buffer);
         encoder.WriteSegments(textSpan, segments, config.Version, config.EciMode);

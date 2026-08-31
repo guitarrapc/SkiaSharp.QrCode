@@ -146,7 +146,7 @@ internal ref struct QRBinaryEncoder
     /// <param name="segments">Planned runs, in order, covering the whole content.</param>
     /// <param name="version">Target version (decides the count indicator widths).</param>
     /// <param name="eci">Effective charset: Default / ISO-8859-1 narrow, UTF-8 transcode.</param>
-    public void WriteSegments(ReadOnlySpan<char> text, ReadOnlySpan<QRSegment> segments, int version, EciMode eci)
+    public void WriteSegments(ReadOnlySpan<char> text, ReadOnlySpan<ModeSegment> segments, int version, EciMode eci)
     {
         if (segments.Length == 0)
             throw new ArgumentException("A segmented QR stream needs at least one segment.", nameof(segments));
