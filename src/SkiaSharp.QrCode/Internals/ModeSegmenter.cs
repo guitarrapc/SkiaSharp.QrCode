@@ -12,8 +12,10 @@ namespace SkiaSharp.QrCode.Internals;
 /// </summary>
 /// <remarks>
 /// A run's cost is not a per-character constant, so the dynamic program carries the
-/// packing-group remainder in its state. Micro QR would additionally need
-/// per-version mode availability (M1 is Numeric-only, M2 has no Byte mode).
+/// packing-group remainder in its state. Micro QR restricts modes per version (M1
+/// is Numeric-only, M2 has no Byte mode); its planner disables the missing
+/// transitions via <c>allowAlnum</c>/<c>allowByte</c>, and a character no allowed
+/// mode encodes leaves the cost at <see cref="Unreachable"/>.
 /// </remarks>
 internal static class ModeSegmenter
 {
@@ -22,6 +24,12 @@ internal static class ModeSegmenter
 
     /// <summary>Parent bytes that fit the stack budget (73 characters); longer content rents.</summary>
     public const int MaxStackParents = 512;
+
+    /// <summary>
+    /// Cost returned by <see cref="ComputeCosts"/> when no allowed mode set encodes
+    /// the content; small enough that adding a transition cost cannot overflow.
+    /// </summary>
+    public const int Unreachable = int.MaxValue / 4;
 
     // Numeric and Alphanumeric states carry the number of characters already
     // accumulated into the current packing group.
@@ -32,9 +40,6 @@ internal static class ModeSegmenter
     private const int StateAlnum1 = 4;
     private const int StateByte = 5;
     private const int StateStart = 6;
-
-    /// <summary>Cost of an unreachable state; small enough that adding a transition cost cannot overflow.</summary>
-    private const int Unreachable = int.MaxValue / 4;
 
     // Cheapest bits a single character can cost in any mode, in sixths so the numeric
     // and alphanumeric packing rates stay exact: 10 bits per 3 digits, 11 per 2
@@ -47,11 +52,12 @@ internal static class ModeSegmenter
 
     /// <summary>
     /// Minimal payload bits (excluding any ECI prefix) for the content at the given
-    /// mode indicator and count indicator widths. When <paramref name="parents"/> is
-    /// non-empty it receives one predecessor state per (character, state) pair for
-    /// reconstruction.
+    /// mode indicator and count indicator widths, or a value at or above
+    /// <see cref="Unreachable"/> when a character has no allowed mode. When
+    /// <paramref name="parents"/> is non-empty it receives one predecessor state per
+    /// (character, state) pair for reconstruction.
     /// </summary>
-    public static int ComputeCosts(ReadOnlySpan<char> text, EciMode charset, int modeIndicatorBits, int cciNumeric, int cciAlnum, int cciByte, Span<byte> parents, out int finalState)
+    public static int ComputeCosts(ReadOnlySpan<char> text, EciMode charset, int modeIndicatorBits, int cciNumeric, int cciAlnum, int cciByte, Span<byte> parents, out int finalState, bool allowAlnum = true, bool allowByte = true)
     {
         Debug.Assert(parents.IsEmpty || parents.Length == text.Length * StateCount);
 
@@ -100,7 +106,7 @@ internal static class ModeSegmenter
                     Relax(cur, parents, parentBase, target, cost, from, track);
                 }
 
-                if (isAlnum)
+                if (isAlnum && allowAlnum)
                 {
                     int target, cost;
                     if (from is StateAlnum0 or StateAlnum1)
@@ -117,8 +123,11 @@ internal static class ModeSegmenter
                     Relax(cur, parents, parentBase, target, cost, from, track);
                 }
 
+                if (allowByte)
                 {
-                    // Byte mode encodes every character, so this transition always exists.
+                    // Byte mode encodes every character, so with Byte allowed a plan
+                    // always exists; without it, a character outside the allowed
+                    // alphabets leaves every state unreachable.
                     var cost = from == StateByte ? basis + byteBits : basis + openByte + byteBits;
                     Relax(cur, parents, parentBase, StateByte, cost, from, track);
                 }

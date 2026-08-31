@@ -56,6 +56,7 @@ public class SizingExceptionContractTest
         yield return ("Micro Try / ECC undefined", () => MicroQRCodeGenerator.TryGetRequiredBufferSize("1".AsSpan(), (MicroQREccLevel)9, out _), typeof(ArgumentOutOfRangeException));
         yield return ("Micro Try / version undefined", () => MicroQRCodeGenerator.TryGetRequiredBufferSize("1".AsSpan(), MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Version = (MicroQRVersion)9 }), typeof(ArgumentOutOfRangeException));
         yield return ("Micro Try / M1 with ECC L", () => MicroQRCodeGenerator.TryGetRequiredBufferSize("1".AsSpan(), MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Version = MicroQRVersion.M1 }), typeof(ArgumentException));
+        yield return ("Micro Try / segmentation undefined", () => MicroQRCodeGenerator.TryGetRequiredBufferSize("1".AsSpan(), MicroQREccLevel.L, out _, new MicroQRCodeGeneratorOptions { Segmentation = (MicroQRSegmentation)7 }), typeof(ArgumentOutOfRangeException));
 
         yield return ("rMQR Try / content too long", () => RmQRCodeGenerator.TryGetRequiredBufferSize(TooLong.AsSpan(), RmQREccLevel.M, out _), null);
         yield return ("rMQR Try / quiet zone negative", () => RmQRCodeGenerator.TryGetRequiredBufferSize("1".AsSpan(), RmQREccLevel.M, out _, new RmQRCodeGeneratorOptions { QuietZoneSize = -1 }), typeof(ArgumentOutOfRangeException));

@@ -261,7 +261,7 @@ var rmqr = RmQRCodeGenerator.CreateRmQRCode("content", RmQREccLevel.M, new RmQRC
 | `MaskPattern` | `null` (automatic, 0-7) | `null` (automatic, 0-3) | — |
 | `FitStrategy` | — | — | `MinimizeArea` |
 | `Height` | — | — | `null` (any height) |
-| `Segmentation` | `Single` | — | `Single` |
+| `Segmentation` | `Single` | `Single` | `Single` |
 
 The quiet zone defaults differ because the specifications do: ISO/IEC 18004 requires 4 modules for Standard QR and 2 for Micro QR, ISO/IEC 23941 requires 2 for rMQR. `0` is a valid setting for all three.
 
@@ -346,7 +346,12 @@ var pngBytes = new QRCodeImageBuilder(content)
 
 It is opt-in because planning searches candidate versions; changing the default would also silently move the emitted bit stream for existing callers. The search is cheap by construction — count indicator widths only change at versions 10 and 27, so the optimal bit cost is computed at most three times however many versions are scanned — all-numeric content skips planning entirely (one Numeric run is provably optimal), and a cheap single-pass bound rules out content no split can shrink before any planning runs, so such content costs roughly nothing extra. Planning stays allocation-free for typical content and rents pooled buffers for long content; content longer than 7,089 characters, which no version holds in any mode, is rejected without planning.
 
-Notes that carry over from the general options: size destination buffers with the same `Segmentation` you encode with (`TryGetRequiredBufferSize` honors it, and the two can select different versions), and when `Utf8BOM` would actually write a byte order mark (a UTF-8 Byte-mode stream) the split is disabled — the BOM is a stream-level prefix, and a split would relocate it into the middle of the decoded text — so that combination emits the single-mode stream. rMQR has the same option as `RmQRSegmentation` (see its section below); Micro QR capacities are too small for a split to ever pay for its extra headers.
+Notes that carry over from the general options: size destination buffers with the same `Segmentation` you encode with (`TryGetRequiredBufferSize` honors it, and the two can select different versions), and when `Utf8BOM` would actually write a byte order mark (a UTF-8 Byte-mode stream) the split is disabled — the BOM is a stream-level prefix, and a split would relocate it into the middle of the decoded text — so that combination emits the single-mode stream. All three symbologies carry the option (`QRCodeSegmentation`, `MicroQRSegmentation`, `RmQRSegmentation` — see the rMQR section below); on Micro QR the plan also respects each version's mode set (M1 is Numeric-only, M2 has no Byte mode), and the tiny capacities make even short mixed content win: `"AB" + 17 digits` drops M4 to M3, and `"a" + 20 digits` — which no single mode fits at any version — encodes at M4.
+
+```csharp
+var micro = MicroQRCodeGenerator.CreateMicroQRCode("AB12345678901234567", MicroQREccLevel.L,
+    new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal }); // M3 instead of M4
+```
 
 As with rMQR, the cost is driven by **how much the split helps**: planning runs only where a smaller version is reachable, and where it runs and wins, the Optimal arm also encodes a smaller symbol, so you pay in proportion to what you gain (allocations are zero on both arms):
 

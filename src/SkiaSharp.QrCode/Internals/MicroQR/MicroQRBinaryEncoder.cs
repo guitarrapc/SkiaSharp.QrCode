@@ -46,7 +46,7 @@ namespace SkiaSharp.QrCode.Internals.MicroQR;
 /// (UMAXV) and the appends (XTN narrow; the overlapped vector's low bytes are
 /// the tail), with a 64-bit SWAR variant of the same overlap for 4-7 chars.
 /// </remarks>
-internal static class MicroQRBinaryEncoder
+internal static partial class MicroQRBinaryEncoder
 {
     /// <summary>
     /// Encodes <paramref name="text"/> into data codewords (padding included) and

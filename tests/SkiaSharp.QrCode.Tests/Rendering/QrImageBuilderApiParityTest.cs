@@ -42,16 +42,9 @@ public class QrImageBuilderApiParityTest
         "WithWidth",
     ];
 
-    /// <summary>
-    /// Options Standard QR and rMQR share and Micro QR does not. Mixed-mode
-    /// segmentation needs more than one segment header to pay for itself, and Micro
-    /// QR capacities (M1-M4) are too small for a split to ever win; it can join
-    /// later without changing the contract.
-    /// </summary>
-    private static readonly string[] standardAndRmqrOnlySignatures =
-    [
-        " WithSegmentation(",
-    ];
+    // WithSegmentation is shared by all three builders (each with its own
+    // segmentation enum, canonicalized to SEGMENTATION below), so no per-symbology
+    // exclusion list is needed for it any more.
 
     /// <summary>
     /// Options the two symbologies with a totally ordered version set have and rMQR does
@@ -92,7 +85,7 @@ public class QrImageBuilderApiParityTest
             .ToHashSet();
 
         var failures = new List<string>();
-        Compare("MicroQRCodeImageBuilder", micro, standard.Where(s => !s.Contains(" WithEciMode(") && !standardAndRmqrOnlySignatures.Any(s.Contains)));
+        Compare("MicroQRCodeImageBuilder", micro, standard.Where(s => !s.Contains(" WithEciMode(")));
         Compare("RmQRCodeImageBuilder", rmqr, standard.Where(s => !orderedVersionOnlySignatures.Any(s.Contains) && !standardAndMicroOnlySignatures.Any(s.Contains)));
         if (failures.Count > 0)
             Assert.Fail("Image builder surfaces drifted apart.\n" + string.Join("\n", failures));
@@ -163,11 +156,11 @@ public class QrImageBuilderApiParityTest
     }
 
     [Test]
-    public async Task Segmentation_ExistsOnSymbologiesWhereASplitCanWin()
+    public async Task Segmentation_ExistsOnEveryBuilder()
     {
         await Assert.That(typeof(QRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithSegmentation")).IsTrue();
+        await Assert.That(typeof(MicroQRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithSegmentation")).IsTrue();
         await Assert.That(typeof(RmQRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithSegmentation")).IsTrue();
-        await Assert.That(typeof(MicroQRCodeImageBuilder).GetMethods().Any(m => m.Name == "WithSegmentation")).IsFalse();
     }
 
     [Test]
@@ -225,7 +218,7 @@ public class QrImageBuilderApiParityTest
             return "SYMBOL_DATA";
         if (type == typeof(ECCLevel) || type == typeof(MicroQREccLevel) || type == typeof(RmQREccLevel))
             return "ECC";
-        if (type == typeof(QRCodeSegmentation) || type == typeof(RmQRSegmentation))
+        if (type == typeof(QRCodeSegmentation) || type == typeof(MicroQRSegmentation) || type == typeof(RmQRSegmentation))
             return "SEGMENTATION";
         if (type == typeof(QRCodeImageBuilder) || type == typeof(MicroQRCodeImageBuilder) || type == typeof(RmQRCodeImageBuilder))
             return "SELF";

@@ -38,7 +38,7 @@ if (!MicroQRCodeGenerator.TryGetRequiredBufferSize(userInput, MicroQREccLevel.L,
 - **`false` means the content does not fit, and nothing else.** For Micro QR that includes content whose encoding mode the requested version or ECC level does not offer, since the text is what picks the mode.
 - **Invalid arguments still throw**: an undefined ECC level, a `Version` and `Height` that disagree, a Micro QR version and ECC level that cannot be combined, a negative quiet zone, or `EciMode.Iso8859_1` declared over content that is not Latin-1. This mirrors the BCL's own configurable `Try` overloads (`int.TryParse` with a malformed `NumberStyles`, `Dictionary.TryGetValue` with a null key) and keeps a caller from reporting a configuration mistake as "content too long".
 - **`true` does not promise the following `Create` call cannot throw** — only that no length-related error can. Pass the returned `Version` back through the options struct to skip the fit; a destination buffer that is too small still throws.
-- **Pass `Segmentation` (Standard QR and rMQR) the same value you will encode with**: the two modes can select different versions, so a buffer sized under one can be too small for the other.
+- **Pass `Segmentation` the same value you will encode with** (all three symbologies): the two modes can select different versions, so a buffer sized under one can be too small for the other.
 - **The `options` parameter is optional on all three `TryGetRequiredBufferSize` overloads**, so `TryGetRequiredBufferSize(text, ecc, out var size)` is the shortest correct call. This is possible only because there is exactly one sizing overload per generator; the `Create` overloads still require an explicit options value on Standard QR and Micro QR, where the released parameter lists would otherwise make the call ambiguous.
 
 ## generator options
@@ -128,7 +128,7 @@ There is no version *range* for rMQR. Its 32 versions are not totally ordered (R
 
 ### mixed-mode segmentation
 
-Set `Segmentation = RmQRSegmentation.Optimal` (rMQR) or `Segmentation = QRCodeSegmentation.Optimal` (Standard QR) to let the generator split mixed content into Numeric / Alphanumeric / Byte runs. It never selects a symbol with more core modules (Standard QR: a larger version) than `Single`, it emits the `Single` bit stream verbatim whenever splitting would not shrink it, and it additionally encodes content that overflows every version in a single mode.
+Set `Segmentation = RmQRSegmentation.Optimal` (rMQR), `QRCodeSegmentation.Optimal` (Standard QR) or `MicroQRSegmentation.Optimal` (Micro QR) to let the generator split mixed content into Numeric / Alphanumeric / Byte runs. It never selects a symbol with more core modules (Standard / Micro QR: a larger version) than `Single`, it emits the `Single` bit stream verbatim whenever splitting would not shrink it, and it additionally encodes content that overflows every version in a single mode. On Micro QR the plan respects each version's mode set (M1 is Numeric-only, M2 has no Byte mode).
 
 Two things to know before opting in: on rMQR the quiet zone adds a fixed 4 modules to each dimension, so a symbol with fewer core modules can still render onto a *larger* grid with a different aspect ratio; and on both symbologies `TryGetRequiredBufferSize` must be passed the same `Segmentation` as the encode, or the destination buffer can be too small.
 
