@@ -42,10 +42,10 @@ Run it **before** publishing; the release workflow does the same. The file is ge
 gitignored, and the API link 404s until you have run the command once. Drop `--html -o ...` for the
 plain-text listing on stdout, which is the form to diff.
 
-The doc text comes from an XML documentation file the tool builds for itself, because the library
-does not set `GenerateDocumentationFile`. That also means **the NuGet package ships no XML docs**,
-so consumers get no IntelliSense: worth fixing separately, along with the ~116 doc-completeness
-warnings (`CS1591`, `CS1573`, `CS0419`, `CS1572`) that turning it on reveals.
+The doc text is read from the XML documentation file the library ships, so the page shows exactly
+what a consumer sees in IntelliSense. `<summary>` is always visible; `<remarks>` folds behind a
+**Notes** toggle, because it usually runs several times longer than the summary it explains and
+would otherwise bury the signatures. Filtering opens only the Notes it matched inside.
 
 Nothing validates the listing and no build fails when the surface changes. Breaking changes are
 caught by package validation against the released baseline, which is the only surface check worth

@@ -4,8 +4,6 @@
 #:property EnableAotAnalyzer=false
 #:property EnableTrimAnalyzer=false
 #:property EnableSingleFileAnalyzer=false
-#:property GenerateDocumentationFile=true
-#:property NoWarn=CS1573,CS1591,CS0419,CS1572
 
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -36,8 +34,7 @@ var wantsHtml = args.Contains("--html");
 var assembly = typeof(SkiaSharp.QrCode.QRCodeData).Assembly;
 var nullability = new NullabilityInfoContext();
 
-// Doc text, keyed by the documentation ID the compiler emits. See LoadDocs: the library does
-// not ship an XML documentation file, so this builds one for the tool's own use.
+// Doc text, keyed by the documentation ID the compiler emits.
 var docs = LoadDocs();
 
 var keywords = new Dictionary<Type, string>
@@ -126,18 +123,12 @@ string DocParam(Type type)
 
 Dictionary<string, (string Summary, string Remarks)> LoadDocs()
 {
-    // The library does not ship an XML documentation file - GenerateDocumentationFile is off,
-    // so the package carries no IntelliSense docs either - and the directives at the top of
-    // this script do not reach a referenced project. So build the library once with the
-    // property set and read the file that produces. The build is incremental, so repeat runs
-    // pay almost nothing for it.
-    var root = Path.GetFullPath(Path.Combine(ScriptDirectory(), ".."));
-    var project = Path.Combine(root, "src", "SkiaSharp.QrCode", "SkiaSharp.QrCode.csproj");
-    var path = Path.Combine(root, "src", "SkiaSharp.QrCode", "bin", "Release", "net10.0", "SkiaSharp.QrCode.xml");
-
-    if (!BuildDocumentation(project) || !File.Exists(path))
+    // The library generates its documentation file and ships it in the package, and a project
+    // reference copies it next to the assembly, so there is nothing to build here.
+    var path = Path.ChangeExtension(assembly.Location, ".xml");
+    if (!File.Exists(path))
     {
-        Console.Error.WriteLine("No XML documentation was produced; signatures will carry no doc text.");
+        Console.Error.WriteLine($"No XML documentation beside {Path.GetFileName(assembly.Location)}; signatures will carry no doc text.");
         return [];
     }
 
@@ -147,53 +138,12 @@ Dictionary<string, (string Summary, string Remarks)> LoadDocs()
         var id = member.Attribute("name")?.Value;
         if (id is null) continue;
 
-        // Remarks carry most of the reasoning in this codebase - why a status is distinct,
-        // why a default is what it is - so dropping them would leave the page unable to
-        // answer the questions a reader actually arrives with.
         var summary = member.Element("summary") is { } s ? FlattenDoc(s) : "";
         var remarks = member.Element("remarks") is { } r ? FlattenDoc(r) : "";
         if (summary.Length > 0 || remarks.Length > 0) map[id] = (summary, remarks);
     }
     return map;
 }
-
-// The four suppressed warnings are all doc-completeness complaints (an undocumented member,
-// a missing or stale param tag, an ambiguous cref). They are worth fixing, but in their own
-// pass; they must not stop this tool from reading the docs that do exist.
-bool BuildDocumentation(string project)
-{
-    try
-    {
-        using var build = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("dotnet")
-        {
-            ArgumentList =
-            {
-                "build", project, "-c", "Release", "-f", "net10.0", "--nologo", "-v", "quiet",
-                "-p:GenerateDocumentationFile=true",
-                "-p:NoWarn=CS1573%3BCS1591%3BCS0419%3BCS1572",
-            },
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        });
-
-        if (build is null) return false;
-        build.WaitForExit();
-        if (build.ExitCode == 0) return true;
-
-        Console.Error.WriteLine(build.StandardOutput.ReadToEnd().Trim());
-        return false;
-    }
-    catch (Exception e)
-    {
-        Console.Error.WriteLine($"Could not build the documentation file: {e.Message}");
-        return false;
-    }
-}
-
-// Anchors the repo-relative paths above to this file rather than to the current directory,
-// so the tool works from anywhere.
-static string ScriptDirectory([System.Runtime.CompilerServices.CallerFilePath] string path = "")
-    => Path.GetDirectoryName(path)!;
 
 // Doc XML is mixed content. Keep the prose, and render the references a reader cares about
 // as the short name they would type, dropping the ID prefix the compiler adds.
@@ -312,12 +262,22 @@ string RenderHtml()
 
     static string Tag(bool obsolete) => obsolete ? """ <span class="tag">obsolete</span>""" : "";
 
+    // Summaries are what a reader scans, so they are always shown. Remarks are the reasoning
+    // behind them and often run several times longer, which buries the signatures when left
+    // open, so they fold away behind a toggle. The filter opens the ones it matched inside.
     string Doc(string docId, string indent)
     {
         if (!docs.TryGetValue(docId, out var text)) return "";
+
         var sb = new StringBuilder();
         if (text.Summary.Length > 0) sb.AppendLine($"""{indent}<p class="doc">{Escape(text.Summary)}</p>""");
-        if (text.Remarks.Length > 0) sb.AppendLine($"""{indent}<p class="doc remarks">{Escape(text.Remarks)}</p>""");
+        if (text.Remarks.Length > 0)
+        {
+            sb.AppendLine($"""{indent}<details class="notes" data-text="{Escape(text.Remarks.ToLowerInvariant())}">""");
+            sb.AppendLine($"""{indent}  <summary>Notes</summary>""");
+            sb.AppendLine($"""{indent}  <p class="doc remarks">{Escape(text.Remarks)}</p>""");
+            sb.AppendLine($"""{indent}</details>""");
+        }
         return sb.ToString();
     }
 
@@ -719,7 +679,24 @@ string Shell(string outline, string content) => $$"""
         .type > .doc { margin-bottom: 0.2rem; }
 
         /* Remarks are the reasoning behind the summary, so they sit a step back from it. */
+        .notes { margin-top: 0.3rem; }
+        .notes > summary {
+          display: inline-block;
+          cursor: pointer;
+          font-size: 0.74rem;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          color: var(--text-muted);
+          list-style: none;
+        }
+        .notes > summary::-webkit-details-marker { display: none; }
+        .notes > summary::before { content: "\25B8"; display: inline-block; margin-right: 0.35rem; }
+        .notes[open] > summary::before { content: "\25BE"; }
+        .notes > summary:hover { color: var(--accent); }
+        .notes > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
         .remarks {
+          margin-top: 0.3rem;
           padding-left: 0.7rem;
           border-left: 1px solid var(--panel-border);
           font-size: 0.82rem;
@@ -795,6 +772,7 @@ string Shell(string outline, string content) => $$"""
           var sections = Array.prototype.slice.call(document.querySelectorAll('.ns'));
           var tocItems = Array.prototype.slice.call(document.querySelectorAll('.toc-item'));
           var tocGroups = Array.prototype.slice.call(document.querySelectorAll('.toc-ns'));
+          var notes = Array.prototype.slice.call(document.querySelectorAll('.notes'));
           var tocByType = {};
           tocItems.forEach(function (item) { tocByType[item.dataset.for] = item; });
 
@@ -820,6 +798,13 @@ string Shell(string outline, string content) => $$"""
 
             sections.forEach(function (section) {
               section.hidden = !section.querySelector('.type:not([hidden])');
+            });
+
+            // Open a folded Notes block only when the term is in there, so a search never
+            // leaves the reader wondering where the match was. Clearing the box folds them
+            // back rather than leaving the page expanded.
+            notes.forEach(function (note) {
+              note.open = !!term && note.dataset.text.indexOf(term) !== -1;
             });
 
             // A namespace heading in the outline belongs to the links that follow it.
