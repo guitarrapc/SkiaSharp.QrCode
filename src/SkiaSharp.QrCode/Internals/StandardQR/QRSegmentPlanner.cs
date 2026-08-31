@@ -10,7 +10,7 @@ namespace SkiaSharp.QrCode.Internals.StandardQr;
 /// </summary>
 /// <remarks>
 /// The cost model and reconstruction are <see cref="ModeSegmenter"/>, shared
-/// with the rMQR planner; what lives here is Standard QR's version scan. That scan is
+/// with the Micro QR and rMQR planners; what lives here is Standard QR's version scan. That scan is
 /// cheap by construction: character count indicator widths are constant within the
 /// three ISO/IEC 18004 version bands (1-9 / 10-26 / 27-40), so the optimal cost is
 /// computed at most once per band, and the single-mode fit caps the scan so a plan is
@@ -163,8 +163,9 @@ internal static class QRSegmentPlanner
     /// <summary>
     /// Builds the minimal-cost plan for <paramref name="version"/> into
     /// <paramref name="segments"/>. Returns false when the content is unplannable,
-    /// the plan needs more runs than the caller lent room for, or the exact re-costed
-    /// stream would not fit; the caller answers all three by falling back to the
+    /// the plan needs more runs than the caller lent room for, the plan would be
+    /// misread on decode (a relocated byte order mark), or the exact re-costed
+    /// stream would not fit; the caller answers all four by falling back to the
     /// single-mode stream.
     /// </summary>
     public static bool TryBuildPlan(ReadOnlySpan<char> text, EciMode charset, int version, ECCLevel eccLevel, Span<ModeSegment> segments, out int segmentCount)

@@ -409,16 +409,70 @@ public class MicroQRSegmentationTest
     }
 
     [Test]
+    public async Task Optimal_OverflowWhereEveryCheckedPlanIsMisread_ReportsDoesNotFit()
+    {
+        // 23 UTF-8 bytes fit no single mode, and the minimal-bit plan puts the
+        // trailing U+FEFF at a Byte-run start; the documented outcome is "does not
+        // fit" rather than a symbol that decodes with the character dropped.
+        var content = new string('1', 20) + "\uFEFF";
+        var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
+
+        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(content, MicroQREccLevel.L, out _, options)).IsFalse();
+        Assert.Throws<ArgumentException>(() => MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, options));
+
+        // The sibling without the BOM is rescued, proving the refusal is BOM-driven.
+        await Assert.That(MicroQRCodeGenerator.TryGetRequiredBufferSize(new string('1', 20) + "a", MicroQREccLevel.L, out _, options)).IsTrue();
+    }
+
+#if !DEBUG
+    /// <summary>
+    /// The span destination is the library's zero-allocation path; the mixed-mode
+    /// planner must keep it that way (Micro QR plans are all-stackalloc). Debug
+    /// builds are excluded per repo notes.
+    /// </summary>
+    [Test]
+    public async Task Optimal_SpanDestination_IsAllocationFree()
+    {
+        var mixed = "AB12345678901234567";
+        var latin1 = "é12345";
+        var utf8 = "日本1";
+        var buffer = new byte[1024];
+        var options = new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal };
+
+        for (var i = 0; i < 3; i++)
+        {
+            MicroQRCodeGenerator.CreateMicroQRCode(mixed.AsSpan(), MicroQREccLevel.L, buffer, options);
+            MicroQRCodeGenerator.CreateMicroQRCode(latin1.AsSpan(), MicroQREccLevel.L, buffer, options);
+            MicroQRCodeGenerator.CreateMicroQRCode(utf8.AsSpan(), MicroQREccLevel.L, buffer, options);
+        }
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 16; i++)
+        {
+            MicroQRCodeGenerator.CreateMicroQRCode(mixed.AsSpan(), MicroQREccLevel.L, buffer, options);
+            MicroQRCodeGenerator.CreateMicroQRCode(latin1.AsSpan(), MicroQREccLevel.L, buffer, options);
+            MicroQRCodeGenerator.CreateMicroQRCode(utf8.AsSpan(), MicroQREccLevel.L, buffer, options);
+        }
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        await Assert.That(allocated).IsEqualTo(0);
+    }
+#endif
+
+    [Test]
     public async Task Optimal_LeadingBom_DecodesLikeSingle()
     {
         // A content-leading U+FEFF is stream-initial under Single too, so both arms
         // drop it on decode; the run-at-offset-0 exemption keeps the split allowed
-        // and the two must decode identically (not necessarily to the input).
+        // and the two must decode identically (not necessarily to the input). The
+        // version assertion is strict: the split genuinely wins here, so losing the
+        // exemption (which silently falls back to the identical single-mode
+        // symbol) fails this test instead of passing it vacuously.
         var content = "\uFEFF123456a";
         var single = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, MicroQRCodeGeneratorOptions.Default);
         var optimal = MicroQRCodeGenerator.CreateMicroQRCode(content, MicroQREccLevel.L, new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal });
 
-        await Assert.That((int)optimal.Version).IsLessThanOrEqualTo((int)single.Version);
+        await Assert.That((int)optimal.Version).IsLessThan((int)single.Version);
         await Assert.That(MicroQRCodeDecoder.TryDecode(single, out var singleDecoded)).IsTrue();
         await Assert.That(MicroQRCodeDecoder.TryDecode(optimal, out var optimalDecoded)).IsTrue();
         await Assert.That(optimalDecoded).IsEqualTo(singleDecoded);

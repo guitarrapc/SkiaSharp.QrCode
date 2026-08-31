@@ -376,11 +376,14 @@ public static class RmQRCodeGenerator
 
         if (useSegments && !RmQRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount))
         {
-            // The plan that justified this version could not be rebuilt (it needed
-            // more runs than the buffer holds, or the exact re-cost disagreed with the
-            // dynamic program). Fall back to the single-mode fit, which throws the
-            // ordinary "content is too long" error when there is no such fit — the
-            // honest outcome, because with the plan gone nothing else can be emitted.
+            // The plan for this version could not be built: it needed more runs
+            // than the buffer holds, the decoder would misread it, the exact
+            // re-cost disagreed with the dynamic program, or — for a requested
+            // version, which the scan accepts unpriced — the content is unplannable
+            // or the stream simply does not fit it. Fall back to the single-mode
+            // fit, which throws the ordinary "content is too long" error when there
+            // is no such fit — the honest outcome, because with the plan gone
+            // nothing else can be emitted.
             segmentCount = 0;
             version = RmQRSegmentPlanner.SelectSingle(in analysis, eccLevel, requestedVersion, fitStrategy, height);
         }

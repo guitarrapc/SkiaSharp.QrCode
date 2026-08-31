@@ -1156,10 +1156,11 @@ public static class QRCodeGenerator
         if (!QRSegmentPlanner.TryBuildPlan(textSpan, analysis.EciMode, version, eccLevel, plan, out segmentCount))
         {
             // The plan that justified this version could not be rebuilt (it needed
-            // more runs than the buffer holds, or the exact re-cost disagreed with the
-            // dynamic program). Fall back to the single-mode fit, which reports the
-            // ordinary "does not fit" error when there is no such fit — the honest
-            // outcome, because with the plan gone nothing else can be emitted.
+            // more runs than the buffer holds, the decoder would misread it, or the
+            // exact re-cost disagreed with the dynamic program). Fall back to the
+            // single-mode fit, which reports the ordinary "does not fit" error when
+            // there is no such fit — the honest outcome, because with the plan gone
+            // nothing else can be emitted.
             segmentCount = 0;
             if (!TryGetVersionInRange(analysis.DataLength, analysis.EncodingMode, eccLevel, analysis.EciMode, false, options.Version.Min, options.Version.Max, out version))
                 ThrowDoesNotFit(in analysis, eccLevel, in options);

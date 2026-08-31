@@ -286,7 +286,7 @@ var pinned     = house with { Version = 20 };
 var opts = QRCodeGeneratorOptions.Default with { QuietZoneSize = 0 };
 ```
 
-Value equality comes with the record, and two option sets that behave identically compare equal — writing a default explicitly is the same value as leaving it out, so `new QRCodeGeneratorOptions { QuietZoneSize = 4 } == QRCodeGeneratorOptions.Default`.
+Value equality comes with the record, and two option sets that behave identically compare equal: writing a default explicitly is the same value as leaving it out, so `new QRCodeGeneratorOptions { QuietZoneSize = 4 } == QRCodeGeneratorOptions.Default`.
 
 #### Version ranges
 
@@ -302,9 +302,11 @@ new QRCodeGeneratorOptions { }                                           // auto
 
 The smallest version in the range that holds the content is used; if none does, `TryGetRequiredBufferSize` returns `false` and the `Create` overloads throw. Bounds are inclusive, and are validated when the range is built, so an impossible range is rejected before a generator sees it.
 
+rMQR has no version range: its 32 versions are not ordered by size (R7x43, R9x43 and R7x59 have no min/max relation), so it constrains fit with `FitStrategy` and `Height` instead.
+
 #### Mask pattern pinning
 
-The generator normally scores the data mask patterns the specification defines (eight for Standard QR, four for Micro QR) and applies the best one. `MaskPattern` pins a specific pattern instead; any pattern yields a valid, decodable symbol, the automatic choice merely optimizes scan reliability. Pinning is the way to reproduce a symbol produced elsewhere byte-for-byte — the pattern another encoder chose is reported by `QRCodeDecodeInfo.MaskPattern` / `MicroQRCodeDecodeInfo.MaskPattern` — or to exercise a scanner against every pattern.
+The generator normally scores the data mask patterns the specification defines (eight for Standard QR, four for Micro QR) and applies the best one. `MaskPattern` pins a specific pattern instead; any pattern yields a valid, decodable symbol, the automatic choice merely optimizes scan reliability. Pinning is the way to reproduce a symbol produced elsewhere byte-for-byte (the pattern another encoder chose is reported by `QRCodeDecodeInfo.MaskPattern` / `MicroQRCodeDecodeInfo.MaskPattern`), or to exercise a scanner against every pattern.
 
 ```csharp
 // Reproduce a symbol: decode reports the mask, encode accepts it back
@@ -316,13 +318,13 @@ var png = new QRCodeImageBuilder("content").WithMaskPattern(3).ToByteArray();
 var micro = new MicroQRCodeImageBuilder("12345").WithErrorCorrection(MicroQREccLevel.L).WithMaskPattern(1).ToByteArray();
 ```
 
-`null` (the default) keeps the automatic selection. Values outside the symbology's range (0-7 for Standard QR, 0-3 for Micro QR — the two numberings are unrelated) are rejected when the option is set. rMQR has a single fixed mask (ISO/IEC 23941), so there is nothing to pin.
+`null` (the default) keeps the automatic selection. Values outside the symbology's range (0-7 for Standard QR, 0-3 for Micro QR; the two numberings are unrelated) are rejected when the option is set. rMQR has a single fixed mask (ISO/IEC 23941), so there is nothing to pin.
 
-Because an `int?` converts implicitly, an optional version needs no branch at the call site — that is the job the old `-1` convention did, without the magic number.
+Because an `int?` converts implicitly, an optional version needs no branch at the call site. That is the job the old `-1` convention did, without the magic number.
 
 #### Mixed-mode segmentation (smaller symbols for mixed content)
 
-By default the whole content is encoded in one mode, so a URL prefix pushes an otherwise numeric payload into Byte mode and every digit costs 8 bits instead of 3⅓. `QRCodeSegmentation.Optimal` instead splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits. That does two things: it often drops the symbol by a version or more, and it encodes content that no single mode fits at any version (unless the only fitting plans would be misread on decode — a relocated byte order mark — which report "does not fit" instead of corrupting). It never selects a larger version than the default, and it emits the default bit stream unchanged whenever splitting would not shrink the symbol — same options, same content, same symbol, unless it gets smaller.
+By default the whole content is encoded in one mode, so a URL prefix pushes an otherwise numeric payload into Byte mode. `QRCodeSegmentation.Optimal` splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits, which often drops the symbol by a version or more and can even encode content that no single mode fits at any version. It is safe to turn on: the symbol is never larger than the default, and whenever splitting would not shrink it the default bit stream is emitted unchanged.
 
 ```csharp
 const string content = "https://example.com/item?id=123456789012345678901234567890";
@@ -344,30 +346,18 @@ var pngBytes = new QRCodeImageBuilder(content)
     .ToByteArray();
 ```
 
-It is opt-in because planning searches candidate versions; changing the default would also silently move the emitted bit stream for existing callers. The search is cheap by construction — count indicator widths only change at versions 10 and 27, so the optimal bit cost is computed at most three times however many versions are scanned — all-numeric content skips planning entirely (one Numeric run is provably optimal), and a cheap single-pass bound rules out content no split can shrink before any planning runs, so such content costs roughly nothing extra. Planning stays allocation-free for typical content and rents pooled buffers for long content; content longer than 7,089 characters, which no version holds in any mode, is rejected without planning.
+It is opt-in so existing callers keep their exact bit streams. Planning allocates nothing for typical content and adds noticeable cost only where a split could actually win a smaller version.
 
-Notes that carry over from the general options: size destination buffers with the same `Segmentation` you encode with (`TryGetRequiredBufferSize` honors it, and the two can select different versions), and when `Utf8BOM` would actually write a byte order mark (a UTF-8 Byte-mode stream) the split is disabled — the BOM is a stream-level prefix, and a split would relocate it into the middle of the decoded text — so that combination emits the single-mode stream. All three symbologies carry the option (`QRCodeSegmentation`, `MicroQRSegmentation`, `RmQRSegmentation` — see the rMQR section below); on Micro QR the plan also respects each version's mode set (M1 is Numeric-only, M2 has no Byte mode), and the tiny capacities make even short mixed content win: `"AB" + 17 digits` drops M4 to M3, and `"a" + 20 digits` — which no single mode fits at any version — encodes at M4.
+Three notes:
+
+- Size destination buffers with the same `Segmentation` you encode with, `TryGetRequiredBufferSize` honors it, and the two can select different versions.
+- A split the decoder would misread is never emitted: with `Utf8BOM` writing a byte order mark the single-mode stream is kept, and content only such a split could fit reports "does not fit" instead of corrupting.
+- All three symbologies carry the option (`QRCodeSegmentation`, `MicroQRSegmentation`, `RmQRSegmentation`, see the rMQR section below). On Micro QR the plan respects each version's mode set (M1 is Numeric-only, M2 has no Byte mode), and the tiny capacities make even short mixed content win:
 
 ```csharp
 var micro = MicroQRCodeGenerator.CreateMicroQRCode("AB12345678901234567", MicroQREccLevel.L,
     new MicroQRCodeGeneratorOptions { Segmentation = MicroQRSegmentation.Optimal }); // M3 instead of M4
 ```
-
-Reproduce the Micro QR cost/benefit numbers with `dotnet run -c Release -- --filter "*MicroQRSegmentationEncode*"` in `src/SkiaSharp.QrCode.Benchmark`.
-
-As with rMQR, the cost is driven by **how much the split helps**: planning runs only where a smaller version is reachable, and where it runs and wins, the Optimal arm also encodes a smaller symbol, so you pay in proportion to what you gain (allocations are zero on both arms):
-
-| Content | Single | Optimal | |
-|---|--:|--:|---|
-| 120 digits | 1.66 µs | 1.53 µs | one mode is provably optimal; planning never starts |
-| 120 alphanumeric | 2.00 µs | 2.00 µs | no smaller version is reachable; ruled out without planning |
-| 120 characters alternating `a7` | 2.25 µs | 3.84 µs | planned, and the split loses |
-| URL + 30-digit ID (58 chars) | 1.58 µs | 3.90 µs | planned, and the split wins a version |
-| 60 letters + 60 digits | 2.40 µs | 6.83 µs | planned, and the split wins a version |
-
-Reproduce with `dotnet run -c Release -- --filter "*QRCodeSegmentationEncode*"` in `src/SkiaSharp.QrCode.Benchmark`.
-
-rMQR has no version range: its 32 versions are not ordered by size (R7x43, R9x43 and R7x59 have no min/max relation), so it constrains fit with `FitStrategy` and `Height` instead.
 
 ### Zero-allocation APIs
 
@@ -415,7 +405,7 @@ finally
 }
 ```
 
-`false` means one thing: the content does not fit. Invalid arguments — an undefined ECC level, a `Version` and `Height` that disagree, a negative quiet zone — still throw, so a caller never renders a configuration mistake as "content too long". This matches how the BCL's configurable `Try` overloads behave (`int.TryParse` with a malformed `NumberStyles`, `Dictionary.TryGetValue` with a null key).
+`false` means one thing: the content does not fit. Invalid arguments (an undefined ECC level, a `Version` and `Height` that disagree, a negative quiet zone) still throw, so a caller never renders a configuration mistake as "content too long". This matches how the BCL's configurable `Try` overloads behave (`int.TryParse` with a malformed `NumberStyles`, `Dictionary.TryGetValue` with a null key).
 
 > **`GetRequiredBufferSize` is obsolete.** Standard QR and Micro QR still carry the throwing sizing method released in v1.1.1, marked `[Obsolete]` and scheduled for removal in 2.0.0. rMQR never shipped one. Replace `GetRequiredBufferSize(text, ecc, …)` with `TryGetRequiredBufferSize(text, ecc, out var size, …)`; see [docs/migration.md](docs/migration.md).
 
@@ -670,7 +660,7 @@ QR codes support different encoding modes optimized for specific character types
 > [!NOTE]
 > Kanji is decode only. The decoders read Kanji segments produced by other encoders (JIS X 0208), but the generators always write Japanese text in Byte mode as UTF-8.
 >
-> The mapping is JIS X 0208, not Microsoft CP932. They disagree on seven cells (wave dash, minus sign, the cent / pound / not signs, reverse solidus and the double vertical line), and, within the Kanji-mode range, CP932 additionally defines 83 characters the standard does not: the NEC row 13 block (circled digits, roman numerals, unit ligatures). A symbol whose Kanji segment contains one of those 83 fails to decode with `UnmappedCharacter` — a status distinct from `UnsupportedContent`, so you can tell "a CP932 reader would read this" from "this uses a feature the library does not implement" — rather than being silently rewritten.
+> The mapping is JIS X 0208, not Microsoft CP932. They disagree on seven cells (wave dash, minus sign, the cent / pound / not signs, reverse solidus and the double vertical line), and, within the Kanji-mode range, CP932 additionally defines 83 characters the standard does not: the NEC row 13 block (circled digits, roman numerals, unit ligatures). A symbol whose Kanji segment contains one of those 83 fails to decode with `UnmappedCharacter` rather than being silently rewritten. That status is distinct from `UnsupportedContent`, so you can tell "a CP932 reader would read this" from "this uses a feature the library does not implement".
 
 | Mode | Character Set | Bits per Character | Example |
 |------|--------------|-------------------|---------|
@@ -1022,9 +1012,9 @@ Console.WriteLine(flat.Version); // R7x43
 
 #### Mixed-mode segmentation (smaller symbols for mixed content)
 
-By default the whole content is encoded in one mode, so a single lowercase letter pushes an otherwise numeric payload into Byte mode. `RmQRSegmentation.Optimal` instead splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits. That does two things: it often drops the symbol by a version or more, and it encodes content that no single mode fits at any version (unless the only fitting plans would be misread on decode — a relocated byte order mark — which report "does not fit" instead of corrupting). It never selects a symbol with more core modules than the default, and it emits the default bit stream unchanged whenever splitting would not shrink it.
+By default the whole content is encoded in one mode, so a single lowercase letter pushes an otherwise numeric payload into Byte mode. `RmQRSegmentation.Optimal` splits the content into the Numeric / Alphanumeric / Byte runs that cost the fewest bits, which often drops the symbol by a version or more and can even encode content that no single mode fits at any version. The symbol never has more core modules than the default, and whenever splitting would not shrink it the default bit stream is emitted unchanged.
 
-> **Core modules, not the rendered grid.** `RmQRFitStrategy` ranks by core modules while the quiet zone adds a fixed 4 modules to each dimension, so minimizing `height × width` does not minimize `(height + 4) × (width + 4)`. A flatter, wider symbol can therefore have fewer core modules but a *larger* rendered grid — 24 characters at ECC H go from R15x59 (885 core, 63×19 rendered) to R11x77 (847 core, 81×15 rendered). So a rendered image can get wider, and `TryGetRequiredBufferSize` must be passed the same `Segmentation` as the encode or the destination buffer can be too small.
+> **Core modules, not the rendered grid.** `RmQRFitStrategy` ranks by core modules while the quiet zone adds a fixed 4 modules to each dimension, so minimizing `height × width` does not minimize `(height + 4) × (width + 4)`. A flatter, wider symbol can therefore have fewer core modules but a *larger* rendered grid: 24 characters at ECC H go from R15x59 (885 core, 63×19 rendered) to R11x77 (847 core, 81×15 rendered). So a rendered image can get wider, and `TryGetRequiredBufferSize` must be passed the same `Segmentation` as the encode or the destination buffer can be too small.
 
 ```csharp
 using SkiaSharp.QrCode;
@@ -1051,21 +1041,7 @@ var pngBytes = new RmQRCodeImageBuilder(content)
 
 `Optimal` minimizes bits, not symbol dimensions: the version it lands on is still whichever one `RmQRFitStrategy` ranks best among those the plan fits.
 
-It is opt-in because planning is a search over candidate versions. Planning allocates nothing, but it is not free, and the cost is driven by **how much the split helps**, not by how "mixed" the input looks. The more a split lowers the bit cost, the more candidate versions become plausible and the more of them the search has to price:
-
-| Content | Single | Optimal | |
-|---|--:|--:|---|
-| 120 digits | 512 ns | 496 ns | one mode is provably optimal; planning never starts |
-| 150 lowercase | 1,040 ns | 1,143 ns | no smaller version is reachable; ruled out without planning |
-| 120 characters alternating `a7` | 961 ns | 2,139 ns | planned, and the split loses |
-| 60 lowercase + 60 digits | 930 ns | 4,471 ns | planned, and the split wins a version |
-| 120 characters alternating in tens | 923 ns | 5,917 ns | planned, and the split wins big |
-
-The version a split could reach is bounded before any planning runs, so content no split can shrink mostly costs nothing — the exception is finely alternating content like row 3, where that cheap bound cannot see that switching modes every character never pays. Where planning does run, cost is linear in length at a fixed shape (20 / 60 / 120 / 150 characters of half letters half digits: 0.9 / 2.4 / 4.5 / 5.7 µs). So the expensive cases are the rewarding ones: you pay in proportion to what you gain. Content longer than 361 characters — which no rMQR symbol holds in any mode — is rejected without planning.
-
-Reproduce with `dotnet run -c Release -- --filter "*RmQRSegmentationEncode*"` in `src/SkiaSharp.QrCode.Benchmark`.
-
-Two practical rules: if your payload has a **known shape** (a URL followed by a numeric ID, say), `Optimal` wins every time and the cost is predictable. If it is **arbitrary user input**, decide whether a few microseconds per symbol is worth the chance of a smaller one. Note also that the zero-allocation two-call pattern (`TryGetRequiredBufferSize` then `CreateRmQRCode(span, destination)`) plans once per call, so it pays twice.
+It is opt-in so existing callers keep their exact bit streams. Planning allocates nothing and adds noticeable cost only where a split could actually win a smaller symbol. For a payload with a known mixed shape (a URL followed by a numeric ID, say), `Optimal` wins every time.
 
 #### Decode (matrix and image)
 

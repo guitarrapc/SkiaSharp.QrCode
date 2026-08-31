@@ -15,9 +15,12 @@
 ///   numeric-*  : all digits, one mode is provably optimal, no cost run at all
 ///   alnum-120  : single-mode content the trivial bound rules out without a cost run
 ///   byte-120   : the same, in Byte mode
-///   alt1-120   : alternating every character — the bound's blind spot: it plans
-///                across the bands and gains nothing
-///   mixed-*    : half letters half digits, the common winning shape
+///   alt1-120   : alternating every character — the bound's blind spot: it pays for
+///                a cost run (one, within the 1-9 band its scan window spans) and
+///                gains nothing
+///   mixed-*    : half letters half digits; 120/1000 win a version, mixed-20 does
+///                not (its 140-bit optimum misses v1-M's 128 bits) and emits the
+///                Single stream — the priced-but-no-candidate-fits path
 ///   url-58     : a realistic payload (version 4-M as one run, version 3-M split)
 ///   utf8-60    : multi-byte runs behind an ECI prefix
 ///

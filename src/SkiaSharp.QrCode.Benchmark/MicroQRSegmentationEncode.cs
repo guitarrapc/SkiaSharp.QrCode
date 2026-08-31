@@ -7,8 +7,8 @@
 /// dynamic-program passes; the shapes separate the scan's paths:
 ///
 ///   numeric-20 : all digits, one mode is provably optimal, no cost run at all
-///   alnum-15   : single-mode content where planning runs and gains nothing
-///   byte-12    : the same, in Byte mode
+///   alnum-15   : single-mode content the trivial bound rules out without a cost run
+///   byte-12    : the same, in Byte mode (M2 additionally lacks Byte entirely)
 ///   mixed-8    : "A" + 7 digits, wins M3 -> M2 (the version without Byte mode)
 ///   mixed-19   : "AB" + 17 digits, wins M4 -> M3
 ///

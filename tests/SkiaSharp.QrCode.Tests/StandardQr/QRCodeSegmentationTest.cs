@@ -171,16 +171,72 @@ public class QRCodeSegmentationTest
     {
         // A content-leading U+FEFF is stream-initial under Single too, so both arms
         // drop it on decode; the run-at-offset-0 exemption keeps the split allowed
-        // and the two must decode identically (not necessarily to the input).
+        // and the two must decode identically (not necessarily to the input). The
+        // version assertion is strict: the split genuinely wins here, so losing the
+        // exemption (which silently falls back to the identical single-mode
+        // symbol) fails this test instead of passing it vacuously.
         var content = "\uFEFF" + new string('1', 40) + "a";
         var single = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, QRCodeGeneratorOptions.Default);
         var optimal = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal });
 
-        await Assert.That(optimal.Version).IsLessThanOrEqualTo(single.Version);
+        await Assert.That(optimal.Version).IsLessThan(single.Version);
         await Assert.That(QRCodeDecoder.TryDecode(single, out var singleDecoded)).IsTrue();
         await Assert.That(QRCodeDecoder.TryDecode(optimal, out var optimalDecoded)).IsTrue();
         await Assert.That(optimalDecoded).IsEqualTo(singleDecoded);
     }
+
+    [Test]
+    public async Task Optimal_OverflowWhereEveryCheckedPlanIsMisread_ReportsDoesNotFit()
+    {
+        // No single mode holds 5,001 characters, and the minimal-bit plan puts the
+        // trailing U+FEFF at a Byte-run start, where the decoder would consume it;
+        // the documented outcome is "does not fit" rather than a corrupted symbol.
+        var content = new string('1', 5000) + "\uFEFF";
+        var options = new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal };
+
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(content, ECCLevel.L, out _, options)).IsFalse();
+        Assert.Throws<InvalidOperationException>(() => QRCodeGenerator.CreateQrCode(content, ECCLevel.L, options));
+
+        // The sibling without the BOM is rescued, proving the refusal is BOM-driven.
+        var sibling = new string('1', 5000) + "a";
+        await Assert.That(QRCodeGenerator.TryGetRequiredBufferSize(sibling, ECCLevel.L, out _, options)).IsTrue();
+    }
+
+#if !DEBUG
+    /// <summary>
+    /// The span destination is the library's zero-allocation path; the mixed-mode
+    /// planner must keep it that way, pooled branches included (the plan buffer
+    /// rents above 64 characters, the parent table above 73). Debug builds are
+    /// excluded per repo notes.
+    /// </summary>
+    [Test]
+    public async Task Optimal_SpanDestination_IsAllocationFree()
+    {
+        var url = "https://example.com/item?id=123456789012345678901234567890";
+        var longMixed = new string('a', 100) + new string('1', 100);   // over both stack budgets, so the planner rents
+        var utf8 = "日本語1234567890123456789012345678901234567890";
+        var buffer = new byte[40_000];
+        var options = new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal };
+
+        for (var i = 0; i < 3; i++)
+        {
+            QRCodeGenerator.CreateQrCode(url.AsSpan(), ECCLevel.M, buffer, options);
+            QRCodeGenerator.CreateQrCode(longMixed.AsSpan(), ECCLevel.M, buffer, options);
+            QRCodeGenerator.CreateQrCode(utf8.AsSpan(), ECCLevel.M, buffer, options);
+        }
+
+        var before = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 16; i++)
+        {
+            QRCodeGenerator.CreateQrCode(url.AsSpan(), ECCLevel.M, buffer, options);
+            QRCodeGenerator.CreateQrCode(longMixed.AsSpan(), ECCLevel.M, buffer, options);
+            QRCodeGenerator.CreateQrCode(utf8.AsSpan(), ECCLevel.M, buffer, options);
+        }
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        await Assert.That(allocated).IsEqualTo(0);
+    }
+#endif
 
     [Test]
     public async Task Optimal_EmptyContent_MatchesSingle()

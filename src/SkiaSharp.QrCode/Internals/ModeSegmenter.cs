@@ -6,9 +6,9 @@ namespace SkiaSharp.QrCode.Internals;
 
 /// <summary>
 /// Splits content into the minimal-bit Numeric / Alphanumeric / Byte runs and
-/// reconstructs them as a <see cref="ModeSegment"/> plan. Shared by the Standard QR
-/// and rMQR planners, which differ only in the header widths passed in; version
-/// scans and bounds stay in those planners.
+/// reconstructs them as a <see cref="ModeSegment"/> plan. Shared by the Standard QR,
+/// Micro QR and rMQR planners, which differ in the header widths passed in and
+/// (Micro QR) mode availability; version scans and bounds stay in those planners.
 /// </summary>
 /// <remarks>
 /// A run's cost is not a per-character constant, so the dynamic program carries the
