@@ -16,7 +16,7 @@
     <Copyright>© guitarrapc</Copyright>
     <PackageTags>skia, skiasharp, qrcode, microqr, rmqr</PackageTags>
     <PackageVersion>$(Version)</PackageVersion>
-    <PackageProjectUrl>https://github.com/guitarrapc/Skia.QrCode</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/guitarrapc/SkiaSharp.QrCode</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>$(PackageProjectUrl)</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
