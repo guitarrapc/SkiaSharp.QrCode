@@ -430,7 +430,15 @@ public class MicroQRSegmentationTest
     /// planner must keep it that way (Micro QR plans are all-stackalloc). Debug
     /// builds are excluded per repo notes.
     /// </summary>
+    /// <remarks>
+    /// Runs alone, as its Standard QR and rMQR twins do. Those two rent from
+    /// <see cref="System.Buffers.ArrayPool{T}"/>, whose per-core stacks are shared with every other
+    /// thread, so a concurrently running test can empty the bucket and turn a rent that would have hit
+    /// the cache into a fresh array. Nothing on this path rents today, so the exclusivity is insurance:
+    /// it keeps the assertion honest if Micro QR ever outgrows its stack budgets.
+    /// </remarks>
     [Test]
+    [NotInParallel]
     public async Task Optimal_SpanDestination_IsAllocationFree()
     {
         var mixed = "AB12345678901234567";

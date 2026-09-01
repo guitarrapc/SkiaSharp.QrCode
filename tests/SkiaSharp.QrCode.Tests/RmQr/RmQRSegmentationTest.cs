@@ -803,7 +803,17 @@ public class RmQRSegmentationTest
     /// planner must keep it that way (its parent table rents from the pool rather
     /// than allocating). Debug builds are excluded per repo notes.
     /// </summary>
+    /// <remarks>
+    /// Runs alone. Pooled branches take their buffers from <see cref="System.Buffers.ArrayPool{T}"/>,
+    /// whose per-core stacks are shared with every other thread: a test running concurrently can
+    /// empty the bucket between this thread's return and its next rent, and the rent that would
+    /// have hit the cache allocates a fresh array instead. That shows up here as a multiple of one
+    /// array (measured: 1,048 bytes and up, in a full parallel run roughly one time in three) and it
+    /// is the pool being a shared resource, not the encoder allocating. Exclusivity is the fix rather
+    /// than a tolerance, which would blunt the guard this test exists to be.
+    /// </remarks>
     [Test]
+    [NotInParallel]
     public async Task Optimal_SpanDestination_IsAllocationFree()
     {
         var url = "https://example.com/p/1234567890123456";
