@@ -14,7 +14,7 @@
     <Version>1.2.0</Version>
     <Authors>guitarrapc</Authors>
     <Copyright>© guitarrapc</Copyright>
-    <PackageTags>skia, skiasharp, qrcode, microqr</PackageTags>
+    <PackageTags>skia, skiasharp, qrcode, microqr, rmqr</PackageTags>
     <PackageVersion>$(Version)</PackageVersion>
     <PackageProjectUrl>https://github.com/guitarrapc/Skia.QrCode</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
