@@ -46,6 +46,10 @@ jobs:
             8.0.x
       - name: Build
         run: dotnet build -c Release
+      # Same step release.yaml runs before packing, so a break shows up on the PR that caused it.
+      - name: Trim XML documentation to the public surface
+        shell: bash
+        run: dotnet run tools/filter_public_docs.cs -- src/SkiaSharp.QrCode/bin/Release/*/SkiaSharp.QrCode.xml
       # Package validation (EnablePackageValidation) only runs on Pack, not on Build, so a PR
       # would otherwise never see it. One runner is enough: the comparison is against the
       # baseline package on NuGet and does not depend on the host OS. SBOM generation is off
