@@ -9,6 +9,8 @@
     <PackageVersion Include="PolySharp" Version="1.16.0" />
     <PackageVersion Include="SkiaSharp" Version="4.148.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
+    <!-- Build-time only: reads member visibility out of the compiled assembly so the packed XML documentation carries only the reachable surface. See SkiaSharp.QrCode.csproj. -->
+    <PackageVersion Include="System.Reflection.MetadataLoadContext" Version="10.0.11" />
     <!-- Benchmark -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="Net.Codecrete.QrCodeGenerator" Version="3.0.0" />
