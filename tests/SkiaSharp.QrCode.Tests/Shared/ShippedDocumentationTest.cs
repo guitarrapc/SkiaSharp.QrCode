@@ -1,18 +1,15 @@
-using System.Reflection;
 using System.Xml.Linq;
 
 namespace SkiaSharp.QrCode.Tests;
 
 /// <summary>
 /// The XML documentation file that ships beside the assembly, which is what gives consumers
-/// IntelliSense. The build strips the <c>Internals</c> namespace out of it before it reaches
-/// the output directory, so what the test project receives is what NuGet packs.
+/// IntelliSense.
 /// </summary>
 /// <remarks>
-/// A shape test, not a behaviour test. The strip runs in an MSBuild target keyed on a
-/// namespace string, and nothing else in the build would notice if it stopped matching:
-/// the build still succeeds, the package still validates, and the only symptom is internal
-/// design notes appearing in a published artifact.
+/// Trimming it to the reachable surface is tools/filter_public_docs.cs, which the workflows
+/// run after the build and which checks its own work. Only what holds on an untrimmed file
+/// belongs here, or a local build would be red by default.
 /// </remarks>
 public class ShippedDocumentationTest
 {
@@ -36,39 +33,29 @@ public class ShippedDocumentationTest
     }
 
     /// <summary>
-    /// The strip is keyed on a namespace prefix, so it fails silently: a renamed namespace or
-    /// a broken prefix removes nothing and the build stays green.
+    /// Every publicly reachable type is documented. Undocumented, or dropped by an over-eager
+    /// trim, both leave a consumer hovering a name and seeing nothing.
     /// </summary>
+    /// <remarks>
+    /// Nested protected types count, so this walks the assembly rather than calling
+    /// <c>GetExportedTypes</c>, which leaves them out.
+    /// </remarks>
     [Test]
-    public async Task Documentation_CarriesNoInternalsEntries()
+    public async Task EveryPublicType_IsDocumented()
     {
-        var internals = MemberIds()
-            .Where(name => name.Length > 2 && name[1] == ':'
-                && name[2..].StartsWith("SkiaSharp.QrCode.Internals.", StringComparison.Ordinal))
+        var documented = MemberIds().ToHashSet(StringComparer.Ordinal);
+
+        var undocumented = typeof(QRCodeData).Assembly.GetTypes()
+            .Where(IsVisibleType)
+            .Select(type => $"T:{(type.FullName ?? type.Name).Replace('+', '.')}")
+            .Where(id => !documented.Contains(id))
             .ToArray();
 
-        await Assert.That(internals).IsEmpty()
-            .Because($"{internals.Length} Internals entries survived the strip, starting with: {string.Join(", ", internals.Take(3))}");
+        await Assert.That(undocumented).IsEmpty()
+            .Because($"{undocumented.Length} publicly reachable type(s) have no documentation, starting with: {string.Join(", ", undocumented.Take(5))}");
     }
 
-    /// <summary>
-    /// The other direction: a strip that removed too much, or a public type that was never
-    /// documented, both leave a consumer hovering a name and seeing nothing.
-    /// </summary>
-    [Test]
-    public async Task EveryExportedType_IsDocumented()
-    {
-        var documented = MemberIds()
-            .Where(name => name.StartsWith("T:", StringComparison.Ordinal))
-            .Select(name => name[2..])
-            .ToHashSet(StringComparer.Ordinal);
-
-        var missing = typeof(QRCodeData).Assembly.GetExportedTypes()
-            .Select(t => (t.FullName ?? t.Name).Replace('+', '.'))
-            .Where(name => !documented.Contains(name))
-            .ToArray();
-
-        await Assert.That(missing).IsEmpty()
-            .Because($"exported but undocumented: {string.Join(", ", missing)}");
-    }
+    private static bool IsVisibleType(Type type) => type.IsNested
+        ? (type.IsNestedPublic || type.IsNestedFamily || type.IsNestedFamORAssem) && IsVisibleType(type.DeclaringType!)
+        : type.IsPublic;
 }
