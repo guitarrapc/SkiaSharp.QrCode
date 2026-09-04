@@ -6,11 +6,6 @@
 
     <!-- NuGet -->
     <IsPackable>true</IsPackable>
-    <!-- Off for the packable projects only: with it on, NuGet promotes every pinned transitive package
-         (SkiaSharp native assets, the netstandard Unsafe shim) into this nuspec as a direct dependency,
-         and the package would declare a graph it does not have. tools/check_package_deps.cs asserts the
-         declared graph after pack. -->
-    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>FeatherQR.SkiaSharp</PackageId>
     <Description>SkiaSharp rendering and bitmap decoding for FeatherQR: QR Code, Micro QR and rMQR images (PNG, JPEG, WebP, SVG), canvas rendering, custom shapes, gradients and icons. No GDI, no System.Drawing.</Description>
