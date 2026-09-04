@@ -1,5 +1,5 @@
 using FeatherQR.Internals.ImageDecoders;
-using FeatherQR.SkiaSharp;
+using FeatherQR.SkiaSharp.Internals;
 using SkiaSharp;
 
 namespace FeatherQR.Tests;

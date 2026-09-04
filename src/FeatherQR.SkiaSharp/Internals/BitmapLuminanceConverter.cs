@@ -1,7 +1,7 @@
 using SkiaSharp;
 using FeatherQR.Internals.ImageDecoders;
 
-namespace FeatherQR.SkiaSharp;
+namespace FeatherQR.SkiaSharp.Internals;
 
 /// <summary>
 /// Converts SkiaSharp bitmaps to 8-bit grayscale luminance buffers.

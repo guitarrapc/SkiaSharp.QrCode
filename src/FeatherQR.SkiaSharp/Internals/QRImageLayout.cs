@@ -1,6 +1,6 @@
 using SkiaSharp;
 
-namespace FeatherQR.SkiaSharp;
+namespace FeatherQR.SkiaSharp.Internals;
 
 /// <summary>
 /// Shared canvas layout math for the image builders: resolves the output image

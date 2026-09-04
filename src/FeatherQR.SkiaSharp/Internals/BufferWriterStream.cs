@@ -1,6 +1,6 @@
 using System.Buffers;
 
-namespace FeatherQR.SkiaSharp;
+namespace FeatherQR.SkiaSharp.Internals;
 
 /// <summary>
 /// Write-only stream adapter over an <see cref="IBufferWriter{T}"/>. Data is copied in

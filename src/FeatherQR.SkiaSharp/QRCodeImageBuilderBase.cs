@@ -1,4 +1,5 @@
 using SkiaSharp;
+using FeatherQR.SkiaSharp.Internals;
 using System.Buffers;
 using System.Text;
 
