@@ -12,7 +12,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 
-// Prints the exported surface of SkiaSharp.QrCode as a sorted, diffable listing.
+// Prints the exported surface of FeatherQR and FeatherQR.SkiaSharp as one sorted, diffable listing.
 //
 //   dotnet run tools/public_api.cs                    plain text, to stdout
 //   dotnet run tools/public_api.cs -- -o api.txt      plain text, to a file
@@ -34,17 +34,26 @@ using System.Text.Json;
 
 var outputPath = GetOutputPath(args);
 var wantsHtml = args.Contains("--html");
-var assembly = typeof(FeatherQR.QRCodeData).Assembly;
+// Both shipped assemblies, in the order the packages depend on each other. The project
+// reference to the rendering package brings the core along, so one reference covers both.
+var assemblies = new[] { typeof(FeatherQR.QRCodeData).Assembly, typeof(FeatherQR.SkiaSharp.QRCodeRenderer).Assembly };
+var version = assemblies[0].GetName().Version;
 var nullability = new NullabilityInfoContext();
 
-// Doc text, keyed by the documentation ID the compiler emits.
-var docs = LoadDocs();
+// Doc text, keyed by the documentation ID the compiler emits. Exported types never collide
+// across the two assemblies; the compiler-generated internals both carry (PolySharp's
+// polyfills, Microsoft.CodeAnalysis.EmbeddedAttribute) do, and either copy will do.
+var docs = new Dictionary<string, (string Summary, string Remarks)>(StringComparer.Ordinal);
+foreach (var entry in assemblies.SelectMany(LoadDocs)) docs.TryAdd(entry.Key, entry.Value);
 
 // Source links are opt-in because they are only trustworthy at release. SourceLink pins the
 // commit that was built, so a page generated from an unpushed local commit would link to a
 // SHA GitHub has never seen. The release workflow builds at the tag and passes the flag.
-var pdb = args.Contains("--source-links") ? LoadPdb() : null;
-var sourceCommit = pdb is null ? null : ShortCommit();
+// One PDB per assembly: a method's token only means something in its own PDB.
+var pdbs = args.Contains("--source-links")
+    ? assemblies.Select(a => (Assembly: a, Pdb: LoadPdb(a))).Where(p => p.Pdb is not null).ToDictionary(p => p.Assembly, p => p.Pdb!.Value)
+    : [];
+var sourceCommit = pdbs.Count == 0 ? null : ShortCommit(pdbs.Values.First());
 
 var keywords = new Dictionary<Type, string>
 {
@@ -56,7 +65,7 @@ var keywords = new Dictionary<Type, string>
 
 // Compiler-generated nested types (the unspeakable <G>$hash markers a C# 14 extension block emits)
 // are skipped here as check_public_api.cs and filter_public_docs.cs skip them.
-var types = assembly.GetExportedTypes()
+var types = assemblies.SelectMany(a => a.GetExportedTypes())
     .Where(t => !t.Name.Contains('<'))
     .OrderBy(t => t.Namespace, StringComparer.Ordinal)
     .ThenBy(FullName, StringComparer.Ordinal)
@@ -143,7 +152,7 @@ string DocParam(Type type)
 // The PDB, plus the SourceLink document map read out of it. SourceLink is on by default in the
 // .NET SDK, so this needs no package: the map is one entry, a local path prefix to a
 // raw.githubusercontent URL carrying the commit that was built.
-(MetadataReader Reader, (string Prefix, string Template)[] Map)? LoadPdb()
+(MetadataReader Reader, (string Prefix, string Template)[] Map)? LoadPdb(Assembly assembly)
 {
     var path = Path.ChangeExtension(assembly.Location, ".pdb");
     if (!File.Exists(path))
@@ -173,9 +182,9 @@ string DocParam(Type type)
     return null;
 }
 
-string? ShortCommit()
+string? ShortCommit((MetadataReader Reader, (string Prefix, string Template)[] Map) pdb)
 {
-    var template = pdb!.Value.Map[0].Template;
+    var template = pdb.Map[0].Template;
     var parts = template.Replace("https://raw.githubusercontent.com/", "").Split('/');
     return parts.Length >= 3 && parts[2].Length >= 7 ? parts[2][..7] : null;
 }
@@ -184,17 +193,17 @@ string? ShortCommit()
 // have sequence points, so fields and enum values have no location and get no link.
 string? SourceHref(MethodBase? method)
 {
-    if (pdb is null || method is null) return null;
+    if (method is null || !pdbs.TryGetValue(method.Module.Assembly, out var pdb)) return null;
 
     try
     {
-        var (reader, _) = pdb.Value;
+        var (reader, map) = pdb;
         var debug = reader.GetMethodDebugInformation(MetadataTokens.MethodDebugInformationHandle(method.MetadataToken & 0xFFFFFF));
         if (debug.Document.IsNil) return null;
 
         var file = reader.GetString(reader.GetDocument(debug.Document).Name);
         var line = debug.GetSequencePoints().Where(p => !p.IsHidden).Select(p => p.StartLine).FirstOrDefault();
-        var blob = BlobUrl(file);
+        var blob = BlobUrl(file, map);
         return blob is null ? null : line > 0 ? $"{blob}#L{line}" : blob;
     }
     catch
@@ -206,9 +215,9 @@ string? SourceHref(MethodBase? method)
 
 // raw.githubusercontent serves the file; github.com/blob is the page a reader wants, and the
 // only one of the two that honours a #L line anchor.
-string? BlobUrl(string documentPath)
+string? BlobUrl(string documentPath, (string Prefix, string Template)[] map)
 {
-    foreach (var (prefix, template) in pdb!.Value.Map)
+    foreach (var (prefix, template) in map)
     {
         var head = prefix.TrimEnd('*');
         if (!documentPath.StartsWith(head, StringComparison.OrdinalIgnoreCase)) continue;
@@ -223,7 +232,7 @@ string? BlobUrl(string documentPath)
     return null;
 }
 
-Dictionary<string, (string Summary, string Remarks)> LoadDocs()
+Dictionary<string, (string Summary, string Remarks)> LoadDocs(Assembly assembly)
 {
     // The library generates its documentation file and ships it in the package, and a project
     // reference copies it next to the assembly, so there is nothing to build here.
@@ -291,7 +300,7 @@ string FlattenDoc(System.Xml.Linq.XElement element)
 string RenderText()
 {
     var sb = new StringBuilder();
-    sb.AppendLine($"// {assembly.GetName().Name} {assembly.GetName().Version}");
+    foreach (var assembly in assemblies) sb.AppendLine($"// {assembly.GetName().Name} {assembly.GetName().Version}");
     sb.AppendLine($"// {model.Length} exported types");
 
     foreach (var group in model.GroupBy(m => m.Type.Namespace).OrderBy(g => g.Key, StringComparer.Ordinal))
@@ -609,8 +618,8 @@ string Shell(string outline, string content) => $$"""
 
     <head>
       <meta charset="utf-8" />
-      <title>SkiaSharp.QrCode API</title>
-      <meta name="description" content="Every public type in SkiaSharp.QrCode {{assembly.GetName().Version}}" />
+      <title>FeatherQR API</title>
+      <meta name="description" content="Every public type in FeatherQR and FeatherQR.SkiaSharp {{version}}" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <meta name="color-scheme" id="meta-color-scheme" content="light dark" />
       <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
@@ -887,8 +896,8 @@ string Shell(string outline, string content) => $$"""
     <body>
       <header class="bar">
         <a class="back" href="../">&#8592; Playground</a>
-        <h1>SkiaSharp.QrCode API</h1>
-        <span class="meta">{{assembly.GetName().Version}} &middot; <span id="count">{{model.Length}} types</span>{{(sourceCommit is null ? "" : $" &middot; source {sourceCommit}")}}</span>
+        <h1>FeatherQR API</h1>
+        <span class="meta">{{version}} &middot; <span id="count">{{model.Length}} types</span>{{(sourceCommit is null ? "" : $" &middot; source {sourceCommit}")}}</span>
       </header>
 
       <div class="layout">

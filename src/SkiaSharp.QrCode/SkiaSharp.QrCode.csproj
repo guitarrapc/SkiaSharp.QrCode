@@ -10,6 +10,10 @@
     <!-- NuGet -->
     <IsPackable>true</IsPackable>
     <PackageId>SkiaSharp.QrCode</PackageId>
+    <!-- Its own README says what the package is; the root README describes the library. -->
+    <PackRootReadme>false</PackRootReadme>
+    <!-- As in the two real packages: declare only the dependency this project has. -->
+    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
     <Description>Compatibility metapackage: depends on FeatherQR.SkiaSharp (QR Code, Micro QR and rMQR with SkiaSharp rendering). Reference FeatherQR.SkiaSharp directly in new projects.</Description>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <IncludeSymbols>false</IncludeSymbols>
@@ -22,6 +26,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FeatherQR.SkiaSharp\FeatherQR.SkiaSharp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

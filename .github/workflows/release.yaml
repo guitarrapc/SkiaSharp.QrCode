@@ -115,6 +115,8 @@ jobs:
           dotnet run tools/check_public_api.cs -- --check src/FeatherQR.SkiaSharp/PublicAPI.approved.txt src/FeatherQR.SkiaSharp/bin/Release/*/FeatherQR.SkiaSharp.dll
       # pack (version comes from Directory.Build.props, verified against the tag in validate)
       - run: dotnet pack -c Release --no-build -o ./publish
+      - name: Check package dependencies
+        run: dotnet run tools/check_package_deps.cs -- ./publish
       # attestations
       - name: Generate artifact attestation
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
