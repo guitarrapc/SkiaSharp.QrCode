@@ -555,6 +555,10 @@ string GenericSuffix(Type[] arguments) => arguments.Length == 0 ? "" : $"<{strin
 // Nested types read as Outer.Inner rather than reflection's Outer+Inner.
 string BareName(Type type)
 {
+    // A generic parameter reports the type that declared it as its declaring type, which would
+    // otherwise qualify it as if it were nested: TSelf, not QRCodeImageBuilderBase.TSelf.
+    if (type.IsGenericParameter) return type.Name;
+
     var name = type.Name;
     var tick = name.IndexOf('`');
     if (tick >= 0) name = name[..tick];
