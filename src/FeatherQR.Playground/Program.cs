@@ -4,4 +4,4 @@ using System.Runtime.Versioning;
 [assembly: SupportedOSPlatform("browser")]
 
 // WASM host starts the Mono runtime once; QrInterop is exported to JavaScript.
-Console.WriteLine("SkiaSharp.QrCode Playground WASM runtime initialized.");
+Console.WriteLine("FeatherQR Playground WASM runtime initialized.");

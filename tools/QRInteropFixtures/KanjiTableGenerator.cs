@@ -3,7 +3,7 @@ using System.Text;
 namespace QRInteropFixtures;
 
 /// <summary>
-/// Generates <c>src/SkiaSharp.QrCode/Internals/ShiftJisKanjiTable.cs</c> from the
+/// Generates <c>src/FeatherQR/Internals/ShiftJisKanjiTable.cs</c> from the
 /// Kanji-mode sweep (<c>probe-kanji-sweep</c>).
 ///
 /// Provenance matters more than convenience here: hand-transcribing ~6,900
@@ -59,7 +59,7 @@ public static class KanjiTableGenerator
         if (!Validate(table, cp932, sjisOf, swept))
             return 1;
 
-        var outputPath = Path.Combine(repoRoot, "src", "SkiaSharp.QrCode", "Internals", "ShiftJisKanjiTable.cs");
+        var outputPath = Path.Combine(repoRoot, "src", "FeatherQR", "Internals", "ShiftJisKanjiTable.cs");
         File.WriteAllText(outputPath, Emit(table), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         Console.WriteLine($"wrote {outputPath} ({new FileInfo(outputPath).Length:N0} bytes source, {IndexCount * 2:N0} bytes of table data)");
 
@@ -178,7 +178,7 @@ public static class KanjiTableGenerator
             using System.Buffers.Binary;
             using System.Runtime.CompilerServices;
 
-            namespace SkiaSharp.QrCode.Internals;
+            namespace FeatherQR.Internals;
 
             /// <summary>
             /// JIS X 0208 to Unicode for ISO/IEC 18004 Kanji mode, shared by all three

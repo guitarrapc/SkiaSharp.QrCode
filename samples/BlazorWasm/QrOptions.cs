@@ -5,7 +5,7 @@ namespace BlazorWasm;
 
 /// <summary>
 /// QR generation options bound to the page controls. Mirrors the option set of the
-/// SkiaSharp.QrCode.Playground <c>QrRequest</c>, using library enums directly since
+/// FeatherQR.Playground <c>QrRequest</c>, using library enums directly since
 /// no JS interop boundary is involved.
 /// </summary>
 public sealed class QrOptions

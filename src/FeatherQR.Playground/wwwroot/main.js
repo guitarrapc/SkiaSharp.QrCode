@@ -609,7 +609,7 @@ function handleRuntimeDeath() {
 function syncVersionBadge() {
   if (!exports || !versionEl) return;
   try {
-    const v = exports.SkiaSharp.QrCode.Playground.QrInterop.GetProductVersion();
+    const v = exports.FeatherQR.Playground.QrInterop.GetProductVersion();
     if (typeof v === 'string' && v.length > 0 && v !== 'unknown') {
       versionEl.textContent = `v${v}`;
       versionEl.href = RELEASE_TAG_BASE_URL + encodeURIComponent(v);
@@ -654,7 +654,7 @@ function generate() {
   let bytes;
   const t0 = performance.now();
   try {
-    bytes = exports.SkiaSharp.QrCode.Playground.QrInterop.Generate(JSON.stringify(state), logoBytes);
+    bytes = exports.FeatherQR.Playground.QrInterop.Generate(JSON.stringify(state), logoBytes);
   } catch (err) {
     if (isRuntimeDeadError(err)) {
       handleRuntimeDeath();
@@ -690,7 +690,7 @@ function generate() {
   copyImageBtn.disabled = false;
 
   try {
-    const meta = JSON.parse(exports.SkiaSharp.QrCode.Playground.QrInterop.GetLastMeta());
+    const meta = JSON.parse(exports.FeatherQR.Playground.QrInterop.GetLastMeta());
     const versionLabel = symbolLabel(meta.symbology, meta.qrVersion);
     const matrixLabel = `${meta.matrixSize}×${meta.matrixHeight ?? meta.matrixSize}`;
     statsEl.textContent =
@@ -748,7 +748,7 @@ function runVerifyDecode(pngBytes, expectedText) {
 /** Calls the WASM decoder; returns the parsed result, or null when the runtime died. */
 function callDecode(bytes) {
   try {
-    return JSON.parse(exports.SkiaSharp.QrCode.Playground.QrInterop.Decode(bytes));
+    return JSON.parse(exports.FeatherQR.Playground.QrInterop.Decode(bytes));
   } catch (err) {
     if (isRuntimeDeadError(err)) {
       handleRuntimeDeath();
@@ -890,7 +890,7 @@ downloadSvgBtn.addEventListener('click', () => {
   const logoBytes = state.logo.mode === 'custom' ? customLogoBytes : EMPTY_BYTES;
   let bytes;
   try {
-    bytes = exports.SkiaSharp.QrCode.Playground.QrInterop.GenerateSvg(JSON.stringify(state), logoBytes);
+    bytes = exports.FeatherQR.Playground.QrInterop.GenerateSvg(JSON.stringify(state), logoBytes);
   } catch (err) {
     if (isRuntimeDeadError(err)) {
       handleRuntimeDeath();
@@ -1060,7 +1060,7 @@ async function runBenchmark() {
   try {
     while (done < total && !benchCancelled) {
       const count = Math.min(batch, total - done);
-      const json = exports.SkiaSharp.QrCode.Playground.QrInterop.BenchmarkBatch(optionsJson, mode, done, count, logoBytes);
+      const json = exports.FeatherQR.Playground.QrInterop.BenchmarkBatch(optionsJson, mode, done, count, logoBytes);
       const result = JSON.parse(json);
       if (result.error) {
         benchResult.textContent = `Failed: ${result.error}`;

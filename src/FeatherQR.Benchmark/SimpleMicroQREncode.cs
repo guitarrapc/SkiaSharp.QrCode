@@ -10,9 +10,9 @@ using BenchmarkDotNet.Configs;
 ///
 /// Comparability notes:
 ///
-///   SkiaSharp.QrCode and QRCoder place a quiet zone in the returned matrix; CodeGlyphX
+///   FeatherQR and QRCoder place a quiet zone in the returned matrix; CodeGlyphX
 ///   returns the bare symbol.
-///   SkiaSharp.QrCode picks the encoding mode from the payload, while CodeGlyphX exposes
+///   FeatherQR picks the encoding mode from the payload, while CodeGlyphX exposes
 ///   one entry point per mode, so each row calls the CodeGlyphX method for the mode this
 ///   library would have chosen.
 /// </summary>
@@ -21,17 +21,17 @@ using BenchmarkDotNet.Configs;
 public class SimpleMicroQREncode
 {
     [Benchmark(Baseline = true)]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public MicroQRCodeData SkiaSharpQrCode_Numeric_M2_Encode()
         => MicroQRCodeGenerator.CreateMicroQRCode(MicroQRPayloads.Numeric.AsSpan(), MicroQREccLevel.L);
 
     [Benchmark]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public MicroQRCodeData SkiaSharpQrCode_Alphanumeric_M3_Encode()
         => MicroQRCodeGenerator.CreateMicroQRCode(MicroQRPayloads.Alphanumeric.AsSpan(), MicroQREccLevel.L);
 
     [Benchmark]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public MicroQRCodeData SkiaSharpQrCode_Byte_M4_Encode()
         => MicroQRCodeGenerator.CreateMicroQRCode(MicroQRPayloads.Byte.AsSpan(), MicroQREccLevel.M);
 

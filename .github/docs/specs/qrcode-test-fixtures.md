@@ -13,7 +13,7 @@ The corpus is a set of symbols produced by encoders **other than SkiaSharp.QrCod
 ### Layout
 
 ```
-tests/SkiaSharp.QrCode.Tests/Fixtures/
+tests/FeatherQR.Tests/Fixtures/
 ├── StandardQr/
 │   └── zxing-net/              (one directory per generator)
 │       ├── case-name.json       manifest

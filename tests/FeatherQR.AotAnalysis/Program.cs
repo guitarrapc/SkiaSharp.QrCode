@@ -3,7 +3,7 @@ using FeatherQR;
 // The gate is the publish itself (see the csproj): TrimmerRootAssembly roots the whole library,
 // so ILC analyzes every public and internal member regardless of what runs here.
 // This entry point is a minimal encode/decode smoke so the produced binary is still runnable.
-var content = "SkiaSharp.QrCode AOT analysis gate";
+var content = "FeatherQR AOT analysis gate";
 var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M);
 if (!QRCodeDecoder.TryDecode(qr, out var decoded) || decoded != content)
 {

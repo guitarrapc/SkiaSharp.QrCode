@@ -12,15 +12,15 @@
     <Project Path="samples/SimpleSerialize/SimpleSerialize.csproj" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/SkiaSharp.QrCode.Benchmark/SkiaSharp.QrCode.Benchmark.csproj" />
-    <Project Path="src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj" />
+    <Project Path="src/FeatherQR.Benchmark/FeatherQR.Benchmark.csproj" />
+    <Project Path="src/FeatherQR.Playground/FeatherQR.Playground.csproj" />
     <Project Path="src/FeatherQR.SkiaSharp/FeatherQR.SkiaSharp.csproj" />
     <Project Path="src/FeatherQR/FeatherQR.csproj" />
     <Project Path="src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/SkiaSharp.QrCode.AotAnalysis/SkiaSharp.QrCode.AotAnalysis.csproj" />
-    <Project Path="tests/SkiaSharp.QrCode.Tests/SkiaSharp.QrCode.Tests.csproj" />
+    <Project Path="tests/FeatherQR.AotAnalysis/FeatherQR.AotAnalysis.csproj" />
+    <Project Path="tests/FeatherQR.Tests/FeatherQR.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/QRInteropFixtures/QRInteropFixtures.csproj" />

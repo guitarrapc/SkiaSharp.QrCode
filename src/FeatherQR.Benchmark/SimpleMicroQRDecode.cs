@@ -43,7 +43,7 @@ public class SimpleMicroQRDecode
     }
 
     [Benchmark(Baseline = true)]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public string SkiaSharpQrCode_Numeric_M2_Decode()
     {
         MicroQRCodeDecoder.TryDecode(_numericModules, _numericSize, out var text, out _);
@@ -51,7 +51,7 @@ public class SimpleMicroQRDecode
     }
 
     [Benchmark]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public string SkiaSharpQrCode_Alphanumeric_M3_Decode()
     {
         MicroQRCodeDecoder.TryDecode(_alphanumericModules, _alphanumericSize, out var text, out _);
@@ -59,7 +59,7 @@ public class SimpleMicroQRDecode
     }
 
     [Benchmark]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public string SkiaSharpQrCode_Byte_M4_Decode()
     {
         MicroQRCodeDecoder.TryDecode(_byteModules, _byteSize, out var text, out _);

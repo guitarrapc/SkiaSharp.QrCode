@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "SkiaSharp.QrCode.Playground": {
+    "FeatherQR.Playground": {
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {

@@ -44,7 +44,7 @@ public class SimpleRmQRDecode
     }
 
     [Benchmark(Baseline = true)]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public string SkiaSharpQrCode_Numeric_R7x43_Decode()
     {
         RmQRCodeDecoder.TryDecode(_numericModules, _numericExtent.width, _numericExtent.height, out var text, out _);
@@ -52,7 +52,7 @@ public class SimpleRmQRDecode
     }
 
     [Benchmark]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public string SkiaSharpQrCode_Alphanumeric_R11x59_Decode()
     {
         RmQRCodeDecoder.TryDecode(_alphanumericModules, _alphanumericExtent.width, _alphanumericExtent.height, out var text, out _);
@@ -60,7 +60,7 @@ public class SimpleRmQRDecode
     }
 
     [Benchmark]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public string SkiaSharpQrCode_Byte_R17x139_Decode()
     {
         RmQRCodeDecoder.TryDecode(_byteModules, _byteExtent.width, _byteExtent.height, out var text, out _);

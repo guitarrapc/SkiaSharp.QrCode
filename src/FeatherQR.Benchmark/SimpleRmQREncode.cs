@@ -12,7 +12,7 @@ using BenchmarkDotNet.Configs;
 ///
 /// Comparability notes:
 ///
-///   SkiaSharp.QrCode places a quiet zone in the returned matrix; CodeGlyphX returns the
+///   FeatherQR places a quiet zone in the returned matrix; CodeGlyphX returns the
 ///   bare symbol.
 ///   Both libraries pick one mode for the whole payload by default, so the rows do the
 ///   same work.
@@ -22,17 +22,17 @@ using BenchmarkDotNet.Configs;
 public class SimpleRmQREncode
 {
     [Benchmark(Baseline = true)]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public RmQRCodeData SkiaSharpQrCode_Numeric_R7x43_Encode()
         => RmQRCodeGenerator.CreateRmQRCode(RmQRPayloads.Numeric.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R7x43 });
 
     [Benchmark]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public RmQRCodeData SkiaSharpQrCode_Alphanumeric_R11x59_Encode()
         => RmQRCodeGenerator.CreateRmQRCode(RmQRPayloads.Alphanumeric.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x59 });
 
     [Benchmark]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public RmQRCodeData SkiaSharpQrCode_Byte_R17x139_Encode()
         => RmQRCodeGenerator.CreateRmQRCode(RmQRPayloads.Byte.AsSpan(), RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R17x139 });
 

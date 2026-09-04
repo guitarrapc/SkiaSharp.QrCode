@@ -1,4 +1,4 @@
-# SkiaSharp.QrCode.Playground
+# FeatherQR.Playground
 
 Browser playground for SkiaSharp.QrCode, published to GitHub Pages: https://guitarrapc.github.io/SkiaSharp.QrCode/
 
@@ -18,7 +18,7 @@ always go through `dotnet publish`:
 dotnet workload install wasm-tools
 
 # fast inner loop (no AOT, no trimming)
-dotnet publish src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj -c Debug -p:PlaygroundSoftFingerprint=true -o publish/playground
+dotnet publish src/FeatherQR.Playground/FeatherQR.Playground.csproj -c Debug -p:PlaygroundSoftFingerprint=true -o publish/playground
 
 # serve the static output (any static file server works)
 dotnet serve -d publish/playground/wwwroot   # or: python -m http.server -d publish/playground/wwwroot
@@ -41,7 +41,7 @@ run`, and `dotnet publish` all serve it with no extra step, on a fresh clone inc
 it after changing the public API:
 
 ```bash
-dotnet run tools/public_api.cs -- --html -o src/SkiaSharp.QrCode.Playground/wwwroot/api/index.html
+dotnet run tools/public_api.cs -- --html -o src/FeatherQR.Playground/wwwroot/api/index.html
 ```
 
 The release workflow runs the same command before publishing, so the Pages site is always current
@@ -91,7 +91,7 @@ and the relinked publish-phase native bundles, two `dotnet.native.*.wasm` files,
 The production build adds AOT + full trimming:
 
 ```bash
-dotnet publish src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj -c Release -p:PlaygroundSoftFingerprint=true -o publish/playground
+dotnet publish src/FeatherQR.Playground/FeatherQR.Playground.csproj -c Release -p:PlaygroundSoftFingerprint=true -o publish/playground
 ```
 
 Do not pass `-r browser-wasm`: the WebAssembly SDK already defaults to it, and as a CLI global

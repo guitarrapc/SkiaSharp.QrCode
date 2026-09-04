@@ -8,9 +8,10 @@ WORKDIR /app
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
-COPY ["Directory.Build.props", "."]
+COPY ["Directory.Build.props", "Directory.Packages.props", "."]
 COPY ["samples/NanoServerGenerate80/NanoServerGenerate80.csproj", "samples/NanoServerGenerate80/"]
-COPY ["src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj", "src/SkiaSharp.QrCode/"]
+COPY ["src/FeatherQR/FeatherQR.csproj", "src/FeatherQR/"]
+COPY ["src/FeatherQR.SkiaSharp/FeatherQR.SkiaSharp.csproj", "src/FeatherQR.SkiaSharp/"]
 RUN dotnet restore "samples/NanoServerGenerate80/NanoServerGenerate80.csproj"
 COPY . .
 WORKDIR "/src/samples/NanoServerGenerate80"

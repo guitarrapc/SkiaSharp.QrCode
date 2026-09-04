@@ -30,9 +30,9 @@ using SkiaSharp;
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 public class SimpleDecode
 {
-    private const string SkiaMatrix = "SkiaSharp.QrCode (matrix)";
+    private const string SkiaMatrix = "FeatherQR (matrix)";
     private const string GlyphMatrix = "CodeGlyphX (matrix)";
-    private const string SkiaImage = "SkiaSharp.QrCode (image)";
+    private const string SkiaImage = "FeatherQR (image)";
     private const string GlyphImage = "CodeGlyphX (image)";
     private const string ZxingImage = "Zxing (image)";
 
@@ -99,7 +99,7 @@ public class SimpleDecode
         }
     }
 
-    // SkiaSharp.QrCode, matrix
+    // FeatherQR, matrix
 
     [Benchmark(Baseline = true)]
     [BenchmarkCategory(SkiaMatrix)]
@@ -143,7 +143,7 @@ public class SimpleDecode
     [BenchmarkCategory(GlyphMatrix)]
     public string CodeGlyphX_Wifi_MatrixDecode() => GlyphDecodeMatrix(Wifi);
 
-    // SkiaSharp.QrCode, image
+    // FeatherQR, image
 
     [Benchmark(Baseline = true)]
     [BenchmarkCategory(SkiaImage)]

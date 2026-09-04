@@ -10,10 +10,10 @@ using SkiaSharp;
 /// the same amount of data into the same symbol size. Two differences are inherent to
 /// the libraries and are not normalized away:
 ///
-///   Segmentation - SkiaSharp.QrCode encodes the payload in a single mode by default,
+///   Segmentation - FeatherQR encodes the payload in a single mode by default,
 ///     while Net.Codecrete.QrCodeGenerator, QRCoder and CodeGlyphX plan mixed-mode
 ///     segments by default. The version comes out the same for these payloads either way.
-///   Quiet zone - SkiaSharp.QrCode and QRCoder place a quiet zone in the returned matrix;
+///   Quiet zone - FeatherQR and QRCoder place a quiet zone in the returned matrix;
 ///     Net.Codecrete.QrCodeGenerator and CodeGlyphX return the bare symbol.
 ///
 /// ZXing is configured to match this library's ECI behavior (Latin-1 for the ASCII
@@ -65,38 +65,38 @@ public class SimpleEncode
         };
     }
 
-    // SkiaSharp.QrCode
+    // FeatherQR
 
     [Benchmark(Baseline = true)]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public QRCodeData SkiaSharpQrCode_Number_Encode()
     {
         return FeatherQR.QRCodeGenerator.CreateQrCode(_textNumber.AsSpan(), ECCLevel.L);
     }
 
     [Benchmark]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public QRCodeData SkiaSharpQrCode_Alphanumeric_Encode()
     {
         return FeatherQR.QRCodeGenerator.CreateQrCode(_textAlphanumeric.AsSpan(), ECCLevel.L);
     }
 
     [Benchmark]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public QRCodeData SkiaSharpQrCode_Url_Encode()
     {
         return FeatherQR.QRCodeGenerator.CreateQrCode(_textUrl.AsSpan(), ECCLevel.L);
     }
 
     [Benchmark]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public QRCodeData SkiaSharpQrCode_Unicode_Encode()
     {
         return FeatherQR.QRCodeGenerator.CreateQrCode(_textUnicode.AsSpan(), ECCLevel.L);
     }
 
     [Benchmark]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public QRCodeData SkiaSharpQrCode_Wifi_Encode()
     {
         return FeatherQR.QRCodeGenerator.CreateQrCode(_textWifi.AsSpan(), ECCLevel.L);
@@ -105,35 +105,35 @@ public class SimpleEncode
     // Span-destination (zero-allocation) variants
 
     [Benchmark(Description = "SkiaSharpQrCode_Number_Encode (Span)")]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public int SkiaSharpQrCode_Number_EncodeSpan()
     {
         return FeatherQR.QRCodeGenerator.CreateQrCode(_textNumber.AsSpan(), ECCLevel.L, _spanDestination);
     }
 
     [Benchmark(Description = "SkiaSharpQrCode_Alphanumeric_Encode (Span)")]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public int SkiaSharpQrCode_Alphanumeric_EncodeSpan()
     {
         return FeatherQR.QRCodeGenerator.CreateQrCode(_textAlphanumeric.AsSpan(), ECCLevel.L, _spanDestination);
     }
 
     [Benchmark(Description = "SkiaSharpQrCode_Url_Encode (Span)")]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public int SkiaSharpQrCode_Url_EncodeSpan()
     {
         return FeatherQR.QRCodeGenerator.CreateQrCode(_textUrl.AsSpan(), ECCLevel.L, _spanDestination);
     }
 
     [Benchmark(Description = "SkiaSharpQrCode_Unicode_Encode (Span)")]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public int SkiaSharpQrCode_Unicode_EncodeSpan()
     {
         return FeatherQR.QRCodeGenerator.CreateQrCode(_textUnicode.AsSpan(), ECCLevel.L, _spanDestination);
     }
 
     [Benchmark(Description = "SkiaSharpQrCode_Wifi_Encode (Span)")]
-    [BenchmarkCategory("SkiaSharp.QrCode")]
+    [BenchmarkCategory("FeatherQR")]
     public int SkiaSharpQrCode_Wifi_EncodeSpan()
     {
         return FeatherQR.QRCodeGenerator.CreateQrCode(_textWifi.AsSpan(), ECCLevel.L, _spanDestination);
