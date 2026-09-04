@@ -83,7 +83,7 @@ public class SimpleDecode
         for (var i = 0; i < _texts.Length; i++)
         {
             (_modules[i], _moduleSizes[i]) = BuildModules(_texts[i]);
-            _glyphMatrices[i] = ToBitMatrix(_modules[i], _moduleSizes[i]);
+            _glyphMatrices[i] = GlyphBitMatrix.From(_modules[i], _moduleSizes[i], _moduleSizes[i]);
             (_bitmaps[i], _rgba[i], _imageSizes[i]) = RenderImage(_texts[i]);
         }
 
@@ -270,19 +270,6 @@ public class SimpleDecode
         var buffer = new byte[calculated.BufferSize];
         QRCodeGenerator.CreateQrCode(content.AsSpan(), ECCLevel.L, buffer, quietZoneSize: 0);
         return (buffer, calculated.QrSize);
-    }
-
-    private static CodeGlyphX.BitMatrix ToBitMatrix(byte[] modules, int size)
-    {
-        var matrix = new CodeGlyphX.BitMatrix(size, size);
-        for (var y = 0; y < size; y++)
-        {
-            for (var x = 0; x < size; x++)
-            {
-                matrix.Set(x, y, modules[y * size + x] != 0);
-            }
-        }
-        return matrix;
     }
 
     private static (SKBitmap bitmap, byte[] rgba, int size) RenderImage(string content)
