@@ -10,7 +10,10 @@
 
 SkiaSharp.QrCode generates, renders, and decodes QR codes with [SkiaSharp](https://github.com/mono/SkiaSharp).
 
-![Performance Benchmark](assets/benchmark_simpleencode_net10.0.png)
+<div style="display: flex; align-items: flex-start;">
+  <img src="assets/benchmark_simpleencode_net10.0.png" width="600" alt="Encode Performance"/>
+  <img src="assets/benchmark_simpledecode_net10.0.png" width="600" alt="Decode Performance"/>
+</div>
 
 > Benchmark results comparing SkiaSharp.QrCode with other libraries. See [src/SkiaSharp.QrCode.Benchmark](src/SkiaSharp.QrCode.Benchmark) for details. Above results are generated on .NET 10 with AMD Ryzen 9 7950X3D CPU, with GFNI and AVX2 enabled.
 
@@ -65,20 +68,20 @@ SkiaSharp.QrCode supports Standard QR, Micro QR, and rMQR. Examples use Standard
 | Micro QR (M1–M4) | ISO/IEC 18004 | ✅ | ✅ |
 | rMQR (R7x43–R17x139) | ISO/IEC 23941 | ✅ | ✅ |
 
-<p float="left">
+<div style="display: flex; align-items: flex-start;">
   <img src="assets/benchmark_standardqr_encode.png" width="600" alt="Standard QR Encode"/>
   <img src="assets/benchmark_standardqr_decode.png" width="600" alt="Standard QR Decode"/>
-</p>
+</div>
 
-<p float="left">
+<div style="display: flex; align-items: flex-start;">
   <img src="assets/benchmark_microqr_encode.png" width="600" alt="Micro QR Encode"/>
   <img src="assets/benchmark_microqr_decode.png" width="600" alt="Micro QR Decode"/>
-</p>
+</div>
 
-<p float="left">
+<div style="display: flex; align-items: flex-start;">
   <img src="assets/benchmark_rmqr_encode.png" width="600" alt="rMQR Encode"/>
   <img src="assets/benchmark_rmqr_decode.png" width="600" alt="rMQR Decode"/>
-</p>
+</div>
 
 
 ## Installation
