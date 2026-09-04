@@ -50,6 +50,14 @@ jobs:
       - name: Trim XML documentation to the public surface
         shell: bash
         run: dotnet run tools/filter_public_docs.cs -- src/SkiaSharp.QrCode/bin/Release/*/SkiaSharp.QrCode.xml
+      # The listing is what package validation cannot report: an addition breaks nobody, so it
+      # passes there and lands unreviewed. Every target framework is read, because the surface
+      # has to be the same on all of them. One runner is enough - the comparison is against a
+      # file in the repository and does not depend on the host OS.
+      - name: Check the public API against the approved listing
+        if: ${{ matrix.rid == 'linux-x64' }}
+        shell: bash
+        run: dotnet run tools/check_public_api.cs -- --check src/SkiaSharp.QrCode/PublicAPI.approved.txt src/SkiaSharp.QrCode/bin/Release/*/SkiaSharp.QrCode.dll
       # Package validation (EnablePackageValidation) only runs on Pack, not on Build, so a PR
       # would otherwise never see it. One runner is enough: the comparison is against the
       # baseline package on NuGet and does not depend on the host OS. SBOM generation is off

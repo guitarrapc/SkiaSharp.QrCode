@@ -1,2 +1,3 @@
 * test=auto
 *.sh eol=lf
+PublicAPI.approved.txt eol=lf
