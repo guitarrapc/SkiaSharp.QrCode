@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>SkiaSharp.QrCode.Playground</RootNamespace>
-    <AssemblyName>SkiaSharp.QrCode.Playground</AssemblyName>
+    <RootNamespace>FeatherQR.Playground</RootNamespace>
+    <AssemblyName>FeatherQR.Playground</AssemblyName>
     <!-- Required by the [JSExport] source generator (SYSLIB1075) -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>

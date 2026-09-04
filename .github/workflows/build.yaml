@@ -8,9 +8,11 @@ on:
   push:
     branches:
       - "main"
+      - "v2"
   pull_request:
     branches:
       - "main"
+      - "v2"
 
 jobs:
   build:
@@ -131,7 +133,7 @@ jobs:
           chmod +x ConsoleAppNativeAOT${{ matrix.ext }}
           ./ConsoleAppNativeAOT${{ matrix.ext }}
 
-  # NativeAOT compatibility gate: publish tests/SkiaSharp.QrCode.AotAnalysis, which roots the
+  # NativeAOT compatibility gate: publish tests/FeatherQR.AotAnalysis, which roots the
   # whole library (TrimmerRootAssembly) so ILC analyzes every member, and fails on any trim/AOT
   # warning (TreatWarningsAsErrors in that csproj). One runner is enough: IL-level analysis does
   # not depend on the host OS; the `run` job already exercises real AOT publish+run per RID.
@@ -148,9 +150,9 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - name: Publish AOT analysis gate
-        run: dotnet publish tests/SkiaSharp.QrCode.AotAnalysis/SkiaSharp.QrCode.AotAnalysis.csproj -c Release -r linux-x64 -o publish/aot-analysis/
+        run: dotnet publish tests/FeatherQR.AotAnalysis/FeatherQR.AotAnalysis.csproj -c Release -r linux-x64 -o publish/aot-analysis/
       - name: Run AOT analysis binary
-        run: ./publish/aot-analysis/SkiaSharp.QrCode.AotAnalysis
+        run: ./publish/aot-analysis/FeatherQR.AotAnalysis
 
   # Playground native relink (SkiaSharp + Emscripten) only happens on publish, so the
   # matrix `dotnet build` above stays managed-only. Verify the publish path on one leg.
@@ -172,7 +174,7 @@ jobs:
       # No -r browser-wasm: it would propagate to the multi-targeted library reference
       # and require the wasm-tools-net8 workload; the WebAssembly SDK defaults the RID anyway.
       - name: Publish Playground (browser-wasm Release, no AOT)
-        run: dotnet publish src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj -c Release -p:RunAOTCompilation=false -p:PlaygroundSoftFingerprint=true -o publish/playground/
+        run: dotnet publish src/FeatherQR.Playground/FeatherQR.Playground.csproj -c Release -p:RunAOTCompilation=false -p:PlaygroundSoftFingerprint=true -o publish/playground/
 
   build-complete:
     needs: [build, run, aot-analysis, build-playground]

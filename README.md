@@ -15,7 +15,7 @@ SkiaSharp.QrCode generates, renders, and decodes QR codes with [SkiaSharp](https
   <img src="assets/benchmark_simpledecode_net10.0.png" width="600" alt="Decode Performance"/>
 </div>
 
-> Benchmark results comparing SkiaSharp.QrCode with other libraries. See [src/SkiaSharp.QrCode.Benchmark](src/SkiaSharp.QrCode.Benchmark) for details. Above results are generated on .NET 10 with AMD Ryzen 9 7950X3D CPU, with GFNI and AVX2 enabled.
+> Benchmark results comparing SkiaSharp.QrCode with other libraries. See [src/FeatherQR.Benchmark](src/FeatherQR.Benchmark) for details. Above results are generated on .NET 10 with AMD Ryzen 9 7950X3D CPU, with GFNI and AVX2 enabled.
 
 Many existing QR code libraries rely on System.Drawing, which has well-known GDI+ limitations and cross-platform issues. SkiaSharp.QrCode was created to provide high performance, minimum memory allocation, a simpler and more intuitive API while leveraging SkiaSharp's cross-platform capabilities. Generate a QR code in a single line, or customize every detail - the choice is yours.
 
@@ -42,7 +42,7 @@ See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these 
 
 Try SkiaSharp.QrCode in your browser, no install required: **[SkiaSharp.QrCode Playground](https://guitarrapc.github.io/SkiaSharp.QrCode/)**
 
-The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or SVG, or share your settings as a permalink. Every generated code is decoded back in-browser by the library's own decoder as a self-check, and the *Decode an image* panel reads QR codes from your own image files. Source lives in [src/SkiaSharp.QrCode.Playground](src/SkiaSharp.QrCode.Playground); it is deployed to GitHub Pages by [release.yaml](.github/workflows/release.yaml) as part of every release.
+The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or SVG, or share your settings as a permalink. Every generated code is decoded back in-browser by the library's own decoder as a self-check, and the *Decode an image* panel reads QR codes from your own image files. Source lives in [src/FeatherQR.Playground](src/FeatherQR.Playground); it is deployed to GitHub Pages by [release.yaml](.github/workflows/release.yaml) as part of every release.
 
 ## Overview
 
@@ -524,7 +524,7 @@ Benchmark results show SkiaSharp.QrCode outperforming other popular .NET QR code
 - **Lowest Memory Usage**: Minimal allocations reduce GC overhead
 - **Consistent Performance**: Predictable performance across different QR code sizes and complexity
 
-For detailed benchmark code and results, see the [src/SkiaSharp.QrCode.Benchmark](src/SkiaSharp.QrCode.Benchmark) directory.
+For detailed benchmark code and results, see the [src/FeatherQR.Benchmark](src/FeatherQR.Benchmark) directory.
 
 ## FAQ
 
@@ -562,11 +562,11 @@ app.MapGet("/qr.svg", (string url) =>
 Yes, SkiaSharp.QrCode works in Blazor WebAssembly & Pure WebAssembly.
 
 - See the [samples/BlazorWasm](samples/BlazorWasm) folder for a Blazor WebAssembly example.
-- See [src/SkiaSharp.QrCode.Playground](src/SkiaSharp.QrCode.Playground) for Pure WebAssembly usage.
+- See [src/FeatherQR.Playground](src/FeatherQR.Playground) for Pure WebAssembly usage.
 
 ### What about NativeAOT and trimming?
 
-Yes, fully supported and verified in CI: the library sets `IsAotCompatible`, and every change publishes a NativeAOT analysis gate ([tests/SkiaSharp.QrCode.AotAnalysis](tests/SkiaSharp.QrCode.AotAnalysis)) that treats trim/AOT warnings as errors. See the [Platform-Specific Considerations](#platform-specific-considerations) section for details on required native assets.
+Yes, fully supported and verified in CI: the library sets `IsAotCompatible`, and every change publishes a NativeAOT analysis gate ([tests/FeatherQR.AotAnalysis](tests/FeatherQR.AotAnalysis)) that treats trim/AOT warnings as errors. See the [Platform-Specific Considerations](#platform-specific-considerations) section for details on required native assets.
 
 ### Are ISO-8859-2 and other encodings supported?
 

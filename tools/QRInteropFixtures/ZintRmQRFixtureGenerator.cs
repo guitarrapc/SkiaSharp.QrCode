@@ -6,7 +6,7 @@ namespace QRInteropFixtures;
 /// <summary>
 /// rMQR fixture generator backed by libzint (zxing-cpp's writer, compiled into the
 /// pinned ZXingCpp native binary), a zint-lineage ENCODER independent of both
-/// SkiaSharp.QrCode and the zxing-cpp reader used as the sanity gate. libzint's
+/// FeatherQR and the zxing-cpp reader used as the sanity gate. libzint's
 /// <c>version=N</c> is the ISO/IEC 23941 version index + 1 (verified by
 /// <c>probe-rmqr</c>: 1 = R7x43 … 32 = R17x139).
 /// </summary>

@@ -5,10 +5,10 @@ using System.Reflection;
 using System.Runtime.InteropServices.JavaScript;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using FeatherQR;
 using FeatherQR.SkiaSharp;
+using SkiaSharp;
 
-namespace SkiaSharp.QrCode.Playground;
+namespace FeatherQR.Playground;
 
 /// <summary>
 /// Browser-callable QR generation API. Invoked by the host script after <c>runMain()</c> completes.

@@ -22,7 +22,7 @@ Before writing any production code, create tests that demonstrate the current be
 Run the failing test to confirm:
 
 ```shell
-dotnet test --project tests/SkiaSharp.QrCode.Tests --treenode-filter /*/*/YourTestClass/YourTestMethod*
+dotnet test --project tests/FeatherQR.Tests --treenode-filter /*/*/YourTestClass/YourTestMethod*
 ```
 
 ### 2. Implement (Green)
@@ -62,7 +62,7 @@ Regression test patterns by change type:
 When changing hot-path encode, decode, image-render, or SIMD code, run benchmarks:
 
 ```shell
-cd src/SkiaSharp.QrCode.Benchmark
+cd src/FeatherQR.Benchmark
 dotnet run -c Release
 ```
 
@@ -102,7 +102,7 @@ Follow the [document-spec-policy](https://github.com/guitarrapc/SkiaSharp.QrCode
 
 ## Test Project Layout
 
-Single test assembly: `tests/SkiaSharp.QrCode.Tests`.
+Single test assembly: `tests/FeatherQR.Tests`.
 
 The library exposes `InternalsVisibleTo` for this assembly, so internal encode/decode components can be tested directly when the public API is not the right seam.
 
@@ -125,13 +125,13 @@ The library exposes `InternalsVisibleTo` for this assembly, so internal encode/d
 
 ```shell
 # Run all tests in a class
-dotnet test --project tests/SkiaSharp.QrCode.Tests --treenode-filter /*/*/QRCodeDecoderRoundTripTest/*
+dotnet test --project tests/FeatherQR.Tests --treenode-filter /*/*/QRCodeDecoderRoundTripTest/*
 
 # Run a single test method (prefix match)
-dotnet test --project tests/SkiaSharp.QrCode.Tests --treenode-filter /*/*/QRCodeDecoderRoundTripTest/RoundTrip_Numeric*
+dotnet test --project tests/FeatherQR.Tests --treenode-filter /*/*/QRCodeDecoderRoundTripTest/RoundTrip_Numeric*
 
 # Run all parity tests in one class
-dotnet test --project tests/SkiaSharp.QrCode.Tests --treenode-filter /*/*/EccBinaryEncoderKernelParityTest/*
+dotnet test --project tests/FeatherQR.Tests --treenode-filter /*/*/EccBinaryEncoderKernelParityTest/*
 ```
 
 Tests run on both `net8.0` and `net10.0`; a SIMD-only code path may pass on one TFM and exercise a different kernel on the other.
@@ -168,7 +168,7 @@ Use `IsEqualTo` for scalars and strings; use `IsEquivalentTo` for collections an
 
 Source and test files use CRLF on Windows checkout. Bulk `sed`/`perl` edits anchored on `\n` may silently fail against CRLF files, verify with `grep` after mechanical edits.
 
-## Playground (`src/SkiaSharp.QrCode.Playground`)
+## Playground (`src/FeatherQR.Playground`)
 
 There is **no automated Playground test project**. Playground changes touch the WASM host (`QrInterop`), `wwwroot/` UI, and SkiaSharp native relink on publish.
 
@@ -180,10 +180,10 @@ There is **no automated Playground test project**. Playground changes touch the 
 dotnet workload install wasm-tools
 
 # Fast inner loop (no AOT)
-dotnet publish src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj -c Debug -p:PlaygroundSoftFingerprint=true -o publish/playground
+dotnet publish src/FeatherQR.Playground/FeatherQR.Playground.csproj -c Debug -p:PlaygroundSoftFingerprint=true -o publish/playground
 
 # Production-like (AOT + trimming)
-dotnet publish src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj -c Release -p:PlaygroundSoftFingerprint=true -o publish/playground
+dotnet publish src/FeatherQR.Playground/FeatherQR.Playground.csproj -c Release -p:PlaygroundSoftFingerprint=true -o publish/playground
 ```
 
 2. **Serve** `publish/playground/wwwroot` and manually verify encode, decode preview, benchmark panel, and share-link round-trip.

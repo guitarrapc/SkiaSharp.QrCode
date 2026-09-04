@@ -46,7 +46,9 @@ static void PrintUsage()
     Console.Error.WriteLine("Usage: dotnet ./tools/bump_version.cs <major|minor|patch>");
     Console.Error.WriteLine();
     Console.Error.WriteLine("  Reads the latest X.Y.Z or vX.Y.Z git tag, bumps the version, and updates");
-    Console.Error.WriteLine("  Directory.Build.props and SkiaSharp.QrCode PackageReference examples in README.md.");
+    Console.Error.WriteLine("  Directory.Build.props and the PackageReference examples in README.md (FeatherQR,");
+    Console.Error.WriteLine("  FeatherQR.SkiaSharp and the SkiaSharp.QrCode metapackage). Prerelease versions such as");
+    Console.Error.WriteLine("  2.0.0-preview.1 are edited by hand; this tool only produces X.Y.Z.");
 }
 
 static string GetRepoRoot()
@@ -60,7 +62,7 @@ static string GetRepoRoot()
         directory = directory.Parent;
     }
 
-    throw new InvalidOperationException("Repository root not found (.git missing). Run from the SkiaSharp.QrCode repository.");
+    throw new InvalidOperationException("Repository root not found (.git missing). Run from inside the repository.");
 }
 
 static string GetLatestTag(string repoRoot)
@@ -114,17 +116,32 @@ static string ReplacePropsVersion(string text, string current, string next)
     throw new InvalidOperationException($"Directory.Build.props contains neither version {current} nor {next}.");
 }
 
+// The three packages ship at one lockstep version, so every install line in the README moves together.
+static readonly string[] PackageIds = ["FeatherQR", "FeatherQR.SkiaSharp", "SkiaSharp.QrCode"];
+
 static string ReplaceReadmeVersions(string text, string current, string next)
 {
-    var currentReference = $"<PackageReference Include=\"SkiaSharp.QrCode\" Version=\"{current}\" />";
-    var nextReference = $"<PackageReference Include=\"SkiaSharp.QrCode\" Version=\"{next}\" />";
-    if (text.Contains(currentReference, StringComparison.Ordinal))
-        return text.Replace(currentReference, nextReference, StringComparison.Ordinal);
+    var replaced = false;
+    var alreadyNext = false;
+    foreach (var id in PackageIds)
+    {
+        var currentReference = $"<PackageReference Include=\"{id}\" Version=\"{current}\" />";
+        var nextReference = $"<PackageReference Include=\"{id}\" Version=\"{next}\" />";
+        if (text.Contains(currentReference, StringComparison.Ordinal))
+        {
+            text = text.Replace(currentReference, nextReference, StringComparison.Ordinal);
+            replaced = true;
+        }
+        else if (text.Contains(nextReference, StringComparison.Ordinal))
+        {
+            alreadyNext = true;
+        }
+    }
 
-    if (text.Contains(nextReference, StringComparison.Ordinal))
+    if (replaced || alreadyNext)
         return text;
 
-    throw new InvalidOperationException($"README.md contains no SkiaSharp.QrCode PackageReference for version {current} or {next}.");
+    throw new InvalidOperationException($"README.md contains no PackageReference ({string.Join(", ", PackageIds)}) for version {current} or {next}.");
 }
 
 static void WriteFileIfChanged(string path, string original, string updated, List<string> changedFiles, string repoRoot)

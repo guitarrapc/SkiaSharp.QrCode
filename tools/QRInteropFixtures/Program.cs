@@ -5,8 +5,8 @@ using QRInteropFixtures;
 // Kanji-mode cases silently fall back to Byte mode.
 _ = KanjiPayload.ShiftJis;
 
-// Regenerates the committed fixture corpus under tests/SkiaSharp.QrCode.Tests/Fixtures/.
-// Fixtures are produced by external (non-SkiaSharp.QrCode) encoders so the corpus can
+// Regenerates the committed fixture corpus under tests/FeatherQR.Tests/Fixtures/.
+// Fixtures are produced by external (non-FeatherQR) encoders so the corpus can
 // serve as an independent conformance oracle. See
 // .github/docs/specs/qrcode-test-fixtures.md for the format and the oracle matrix.
 //
@@ -15,7 +15,7 @@ _ = KanjiPayload.ShiftJis;
 var command = args.Length == 0 ? "regenerate" : args[0];
 if (command == "spot-check-microqr")
 {
-    // Decodes SkiaSharp.QrCode-generated Micro QR symbols with zxing-cpp.
+    // Decodes FeatherQR-generated Micro QR symbols with zxing-cpp.
     return MicroQRSpotCheck.Run();
 }
 if (command == "probe-creator")
@@ -25,7 +25,7 @@ if (command == "probe-creator")
 }
 if (command == "spot-check-rmqr")
 {
-    // Decodes SkiaSharp.QrCode-generated rMQR symbols (all versions × ECC × modes) with zxing-cpp.
+    // Decodes FeatherQR-generated rMQR symbols (all versions × ECC × modes) with zxing-cpp.
     return RmQRSpotCheck.Run();
 }
 if (command == "probe-rmqr")
@@ -43,7 +43,7 @@ if (command == "probe-rmqr-capacity")
 }
 if (command == "generate-kanji-table")
 {
-    // Emits src/SkiaSharp.QrCode/Internals/ShiftJisKanjiTable.cs from the sweep data.
+    // Emits src/FeatherQR/Internals/ShiftJisKanjiTable.cs from the sweep data.
     return KanjiTableGenerator.Run(FindRepoRoot());
 }
 if (command == "probe-kanji-sweep")
@@ -69,7 +69,7 @@ if (command != "regenerate")
 }
 
 var repoRoot = FindRepoRoot();
-var fixturesBase = Path.Combine(repoRoot, "tests", "SkiaSharp.QrCode.Tests", "Fixtures");
+var fixturesBase = Path.Combine(repoRoot, "tests", "FeatherQR.Tests", "Fixtures");
 var standardQrRoot = Path.Combine(fixturesBase, "StandardQr");
 
 var generators = new IFixtureGenerator[]
@@ -196,10 +196,10 @@ static string FindRepoRoot()
     var dir = new DirectoryInfo(AppContext.BaseDirectory);
     while (dir is not null)
     {
-        if (File.Exists(Path.Combine(dir.FullName, "SkiaSharp.QrCode.slnx")))
+        if (File.Exists(Path.Combine(dir.FullName, "FeatherQR.slnx")))
             return dir.FullName;
         dir = dir.Parent;
     }
 
-    throw new InvalidOperationException("Repository root (SkiaSharp.QrCode.slnx) not found above the tool output directory.");
+    throw new InvalidOperationException("Repository root (FeatherQR.slnx) not found above the tool output directory.");
 }

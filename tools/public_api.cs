@@ -22,7 +22,7 @@ using System.Text.Json;
 // at it: it is there when the Playground runs locally, and publish copies it to the Pages
 // site. That path is generated, so it is gitignored rather than committed:
 //
-//   dotnet run tools/public_api.cs -- --html -o src/SkiaSharp.QrCode.Playground/wwwroot/api/index.html
+//   dotnet run tools/public_api.cs -- --html -o src/FeatherQR.Playground/wwwroot/api/index.html
 //
 // This is a viewer, not a gate. Nothing in CI validates it and nothing fails when the
 // surface changes: breaking changes are already caught by package validation against the

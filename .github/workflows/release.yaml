@@ -154,13 +154,13 @@ jobs:
       # at the tag, so every link resolves. A local build would pin whatever HEAD happens to be,
       # which may never have been pushed, so the committed copy of the page carries no links.
       - name: Generate public API page
-        run: dotnet run tools/public_api.cs -- --html --source-links -o src/SkiaSharp.QrCode.Playground/wwwroot/api/index.html
+        run: dotnet run tools/public_api.cs -- --html --source-links -o src/FeatherQR.Playground/wwwroot/api/index.html
       # Version for the in-page badge (AssemblyInformationalVersion) comes from Directory.Build.props.
       # No -r browser-wasm: the WebAssembly SDK defaults to it, and passing it as a global
       # property would force the multi-targeted library reference to need wasm-tools-net8.
       - name: Publish Playground (browser-wasm Release)
         run: |
-          dotnet publish src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj -c Release -p:PlaygroundSoftFingerprint=true -o publish/
+          dotnet publish src/FeatherQR.Playground/FeatherQR.Playground.csproj -c Release -p:PlaygroundSoftFingerprint=true -o publish/
       - name: Add .nojekyll
         run: touch publish/wwwroot/.nojekyll
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
