@@ -1,5 +1,4 @@
 using System.Buffers;
-using FeatherQR.Internals.ImageDecoders;
 using FeatherQR.Internals.MicroQR;
 
 namespace FeatherQR;
@@ -151,7 +150,7 @@ public static class MicroQRCodeDecoder
     /// <summary>
     /// Detects and decodes a Micro QR code from grayscale image pixels.
     /// </summary>
-    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes.</param>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and a symbol composited against black is not detected.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
@@ -182,7 +181,7 @@ public static class MicroQRCodeDecoder
     /// Detects and decodes a Micro QR code from grayscale image pixels into a
     /// caller-provided buffer without per-call heap allocation.
     /// </summary>
-    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes.</param>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and a symbol composited against black is not detected.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> to size it.</param>

@@ -144,7 +144,7 @@ public static class RmQRCodeDecoder
     /// <summary>
     /// Detects and decodes an rMQR Code from grayscale image pixels.
     /// </summary>
-    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes.</param>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and a symbol composited against black is not detected.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="text">Decoded text, or an empty string when decoding fails.</param>
@@ -175,7 +175,7 @@ public static class RmQRCodeDecoder
     /// Detects and decodes an rMQR Code from grayscale image pixels into a
     /// caller-provided buffer without per-call heap allocation.
     /// </summary>
-    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes.</param>
+    /// <param name="luminance">Grayscale pixels (0 = black, 255 = white), flat row-major order, width × height bytes. Transparent source pixels must be composited against white before conversion: the quiet zone is white by definition, and a symbol composited against black is not detected.</param>
     /// <param name="width">Image width in pixels.</param>
     /// <param name="height">Image height in pixels.</param>
     /// <param name="destination">Destination buffer for decoded characters. Use <see cref="GetMaxDecodedLength"/> (with <see cref="RmQRVersion.R17x139"/> when the version is unknown) to size it.</param>

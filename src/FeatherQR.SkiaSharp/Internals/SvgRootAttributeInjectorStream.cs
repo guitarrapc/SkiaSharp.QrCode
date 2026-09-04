@@ -1,7 +1,7 @@
 using SkiaSharp;
 using System.Text;
 
-namespace FeatherQR.SkiaSharp;
+namespace FeatherQR.SkiaSharp.Internals;
 
 /// <summary>
 /// Write-only stream that forwards to an inner stream, injecting extra root element

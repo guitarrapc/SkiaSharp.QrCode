@@ -1,4 +1,5 @@
 using SkiaSharp;
+using FeatherQR.SkiaSharp.Internals;
 using FeatherQR.SkiaSharp;
 using FeatherQR.Internals.ImageDecoders;
 
