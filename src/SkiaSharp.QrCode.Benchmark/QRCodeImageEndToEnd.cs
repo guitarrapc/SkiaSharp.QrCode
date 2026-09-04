@@ -1,4 +1,3 @@
-using SkiaSharp.QrCode.Image;
 using System.Text;
 
 /// <summary>

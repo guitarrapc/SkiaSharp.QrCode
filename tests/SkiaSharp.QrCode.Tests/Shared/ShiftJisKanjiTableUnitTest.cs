@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals;
+using FeatherQR.Internals;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// The Kanji-mode Shift_JIS table, checked against JIS X 0208 itself rather than

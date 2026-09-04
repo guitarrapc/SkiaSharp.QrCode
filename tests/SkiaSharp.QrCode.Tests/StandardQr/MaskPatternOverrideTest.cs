@@ -1,7 +1,9 @@
+using FeatherQR.SkiaSharp;
+using SkiaSharp;
 using ZXing;
 using ZXing.SkiaSharp;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="QRCodeGeneratorOptions.MaskPattern"/>: pinning one of the eight
@@ -170,9 +172,9 @@ public class MaskPatternOverrideTest
         // Internal seam guard: without it, an out-of-range pattern silently
         // applies no mask (GetMaskBit's default arm) while the caller still
         // writes format information claiming that pattern.
-        var layout = SkiaSharp.QrCode.Internals.StandardQr.ModulePlacer.GetLayout(1);
+        var layout = FeatherQR.Internals.StandardQr.ModulePlacer.GetLayout(1);
         var buffer = new byte[21 * 21];
-        await Assert.That(() => SkiaSharp.QrCode.Internals.StandardQr.ModulePlacer.ApplyMaskPattern(buffer, 21, layout.BlockedMask, patternIndex))
+        await Assert.That(() => FeatherQR.Internals.StandardQr.ModulePlacer.ApplyMaskPattern(buffer, 21, layout.BlockedMask, patternIndex))
             .Throws<ArgumentOutOfRangeException>();
     }
 
@@ -181,7 +183,7 @@ public class MaskPatternOverrideTest
     [Test]
     public async Task Builder_WithMaskPattern_PinsTheMask()
     {
-        using var bitmap = new Image.QRCodeImageBuilder(Content)
+        using var bitmap = new QRCodeImageBuilder(Content)
             .WithMaskPattern(3)
             .WithModulePixelSize(10)
             .ToBitmap();
@@ -196,14 +198,14 @@ public class MaskPatternOverrideTest
     [Arguments(8)]
     public async Task Builder_WithMaskPattern_OutOfRange_Throws(int maskPattern)
     {
-        await Assert.That(() => new Image.QRCodeImageBuilder(Content).WithMaskPattern(maskPattern)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new QRCodeImageBuilder(Content).WithMaskPattern(maskPattern)).Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]
     public async Task Builder_WithMaskPattern_OnPrebuiltData_Throws()
     {
         var qr = QRCodeGenerator.CreateQrCode(Content, ECCLevel.M);
-        await Assert.That(() => new Image.QRCodeImageBuilder(qr).WithMaskPattern(3)).Throws<InvalidOperationException>();
+        await Assert.That(() => new QRCodeImageBuilder(qr).WithMaskPattern(3)).Throws<InvalidOperationException>();
     }
 
     // ---- independent reader ----------------------------------------------------------

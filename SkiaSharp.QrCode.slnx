@@ -14,6 +14,8 @@
   <Folder Name="/src/">
     <Project Path="src/SkiaSharp.QrCode.Benchmark/SkiaSharp.QrCode.Benchmark.csproj" />
     <Project Path="src/SkiaSharp.QrCode.Playground/SkiaSharp.QrCode.Playground.csproj" />
+    <Project Path="src/FeatherQR.SkiaSharp/FeatherQR.SkiaSharp.csproj" />
+    <Project Path="src/FeatherQR/FeatherQR.csproj" />
     <Project Path="src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj" />
   </Folder>
   <Folder Name="/tests/">

@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals;
+using FeatherQR.Internals;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Verifies that the ARM64 NEON text analysis (TextAnalyzer.AnalyzeAdvSimd)
@@ -21,7 +21,7 @@ public class TextAnalyzerAdvSimdParityTest
         "01234567890123456789012345678901234567890123456789",           // Numeric, multi-block
         "HELLO WORLD $%*+-./:",                                         // Alphanumeric incl. all specials
         "TICKET-2026/07 GATE A SEAT 42 PRICE $35.00 :*+",               // Alphanumeric, realistic
-        "https://github.com/guitarrapc/SkiaSharp.QrCode?tab=readme#qr", // Byte + ASCII (lowercase)
+        "https://github.com/guitarrapc/FeatherQR?tab=readme#qr", // Byte + ASCII (lowercase)
         "café au lait été",                                             // Byte + ISO-8859-1
         "QRコード日本語テスト",                                          // Byte + UTF-8
         "0123456789012345X",                                            // Numeric flips only in scalar tail

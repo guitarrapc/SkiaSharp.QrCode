@@ -1,4 +1,6 @@
-namespace SkiaSharp.QrCode.Tests;
+using FeatherQR.SkiaSharp;
+using SkiaSharp;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Image-level decode tests (Tier 1): rendered bitmaps, scaling, rotation,
@@ -60,7 +62,7 @@ public class QRCodeDecoderImageTest
         // the pixel-quantized module-size measurement must not snap the dimension
         // estimate to a neighboring version (regression: v14/v17/v18/v20 read as
         // one version lower and failed with DataUncorrectable).
-        var content = "https://github.com/guitarrapc/SkiaSharp.QrCode";
+        var content = "https://github.com/guitarrapc/FeatherQR";
         var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.H, requestedVersion: version, quietZoneSize: 4);
         using var bitmap = new SKBitmap(new SKImageInfo(512, 512, SKColorType.Bgra8888, SKAlphaType.Premul));
         using (var canvas = new SKCanvas(bitmap))

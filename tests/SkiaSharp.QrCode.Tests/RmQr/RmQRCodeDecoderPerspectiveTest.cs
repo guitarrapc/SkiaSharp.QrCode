@@ -1,4 +1,6 @@
-namespace SkiaSharp.QrCode.Tests;
+using FeatherQR.SkiaSharp;
+using SkiaSharp;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Tier-2 rMQR image decoding: mild perspective (keystone along either symbol

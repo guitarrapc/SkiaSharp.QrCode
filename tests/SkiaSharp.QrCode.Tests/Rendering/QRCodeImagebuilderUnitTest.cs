@@ -1,11 +1,12 @@
-using SkiaSharp.QrCode.Image;
+using SkiaSharp;
+using FeatherQR.SkiaSharp;
 using System.Buffers;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 public class QRCodeImageBuilderTest
 {
-    private const string TestContent = "https://github.com/guitarrapc/SkiaSharp.QrCode";
+    private const string TestContent = "https://github.com/guitarrapc/FeatherQR";
 
     #region Constructor Tests
 

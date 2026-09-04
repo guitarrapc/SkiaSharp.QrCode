@@ -1,5 +1,3 @@
-using SkiaSharp.QrCode;
-
 /// <summary>
 /// Buffer sizing for benchmark setup, where the content is chosen by the benchmark and
 /// therefore known to fit.

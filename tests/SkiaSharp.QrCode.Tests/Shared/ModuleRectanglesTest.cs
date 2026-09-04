@@ -1,4 +1,4 @@
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// The renderer-neutral geometry surface (<c>GetModuleRectangles</c> family) across all

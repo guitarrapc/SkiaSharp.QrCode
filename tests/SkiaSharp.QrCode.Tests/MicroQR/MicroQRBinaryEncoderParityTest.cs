@@ -1,8 +1,8 @@
 using System.Text;
-using SkiaSharp.QrCode.Internals;
-using SkiaSharp.QrCode.Internals.MicroQR;
+using FeatherQR.Internals;
+using FeatherQR.Internals.MicroQR;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Parity tests for the optimized MicroQRBinaryEncoder against an independent

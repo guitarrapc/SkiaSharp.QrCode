@@ -1,8 +1,8 @@
-using SkiaSharp.QrCode.Internals;
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
-using SkiaSharp.QrCode.Internals.RmQr;
+using FeatherQR.Internals;
+using FeatherQR.Internals.BinaryEncoders;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// rMQR final message (ISO/IEC 23941 7.5-7.6): per-block Reed-Solomon ECC over the

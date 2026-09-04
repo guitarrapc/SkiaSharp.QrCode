@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals.StandardQr;
+using FeatherQR.Internals.StandardQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// The table-driven Standard QR placer (<see cref="ModulePlacer.GetLayout"/>:

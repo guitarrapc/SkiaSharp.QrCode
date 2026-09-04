@@ -1,4 +1,6 @@
-namespace SkiaSharp.QrCode.Tests;
+using FeatherQR.SkiaSharp;
+using SkiaSharp;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Decodes the committed external-encoder fixture corpus (Fixtures/StandardQr/)

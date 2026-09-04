@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals;
+using FeatherQR.Internals;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="QRCodeVersionRange"/> and <see cref="MicroQRVersionRange"/>, the version

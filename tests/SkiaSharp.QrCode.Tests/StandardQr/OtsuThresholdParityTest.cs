@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals.ImageDecoders;
+using FeatherQR.Internals.ImageDecoders;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Parity test for the run-aggregated Otsu histogram fill: the wide-load walk in

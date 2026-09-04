@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals.RmQr;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Public rMQR generator surface (design record: signatures frozen in Phase 5.0):

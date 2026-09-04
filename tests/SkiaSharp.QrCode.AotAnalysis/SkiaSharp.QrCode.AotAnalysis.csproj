@@ -17,7 +17,8 @@
 
   <ItemGroup>
     <!-- Analyze the whole library surface, including code the entry point does not reach. -->
-    <TrimmerRootAssembly Include="SkiaSharp.QrCode" />
+    <TrimmerRootAssembly Include="FeatherQR" />
+    <TrimmerRootAssembly Include="FeatherQR.SkiaSharp" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,7 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\SkiaSharp.QrCode\SkiaSharp.QrCode.csproj" />
+    <ProjectReference Include="..\..\src\FeatherQR.SkiaSharp\FeatherQR.SkiaSharp.csproj" />
   </ItemGroup>
 
 </Project>

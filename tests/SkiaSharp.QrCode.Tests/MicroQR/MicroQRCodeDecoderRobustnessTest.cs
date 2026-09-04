@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals.MicroQR;
+using FeatherQR.Internals.MicroQR;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Decoder behavior under damage, by equivalence class of the error-correction

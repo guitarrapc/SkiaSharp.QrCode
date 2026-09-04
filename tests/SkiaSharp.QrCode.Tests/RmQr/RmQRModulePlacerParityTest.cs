@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals.RmQr;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="RmQRModulePlacer.PlaceSymbol"/> (fast path: cached per-version tables,

@@ -1,6 +1,7 @@
+using FeatherQR.SkiaSharp;
 using SkiaSharp;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="MicroQRSegmentation.Optimal"/> end to end. The three properties every
@@ -217,7 +218,7 @@ public class MicroQRSegmentationTest
     public async Task Builder_WithSegmentation_ProducesADecodableImage()
     {
         var content = "AB12345678901234567";
-        var png = new Image.MicroQRCodeImageBuilder(content)
+        var png = new MicroQRCodeImageBuilder(content)
             .WithErrorCorrection(MicroQREccLevel.L)
             .WithSegmentation(MicroQRSegmentation.Optimal)
             .ToByteArray();
@@ -226,9 +227,9 @@ public class MicroQRSegmentationTest
         await Assert.That(MicroQRCodeDecoder.TryDecode(bitmap, out var decoded)).IsTrue();
         await Assert.That(decoded).IsEqualTo(content);
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => new Image.MicroQRCodeImageBuilder("12345").WithSegmentation((MicroQRSegmentation)5));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new MicroQRCodeImageBuilder("12345").WithSegmentation((MicroQRSegmentation)5));
         var data = MicroQRCodeGenerator.CreateMicroQRCode("12345", MicroQREccLevel.L);
-        Assert.Throws<InvalidOperationException>(() => new Image.MicroQRCodeImageBuilder(data).WithSegmentation(MicroQRSegmentation.Optimal));
+        Assert.Throws<InvalidOperationException>(() => new MicroQRCodeImageBuilder(data).WithSegmentation(MicroQRSegmentation.Optimal));
     }
 
     [Test]

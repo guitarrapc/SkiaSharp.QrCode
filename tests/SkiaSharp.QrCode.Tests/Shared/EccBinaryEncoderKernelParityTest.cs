@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals;
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
+using FeatherQR.Internals;
+using FeatherQR.Internals.BinaryEncoders;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Verifies that every ECC kernel (scalar, SSSE3, GFNI, NEON) produces byte-identical

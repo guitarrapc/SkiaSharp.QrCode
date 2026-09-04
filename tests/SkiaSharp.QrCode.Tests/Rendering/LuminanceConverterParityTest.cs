@@ -1,7 +1,8 @@
+using SkiaSharp;
 using TUnit.Assertions.Enums;
-using SkiaSharp.QrCode.Internals.ImageDecoders;
+using FeatherQR.Internals.ImageDecoders;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Whichever <see cref="LuminanceConverter"/> vector tier this machine runs (the AVX2

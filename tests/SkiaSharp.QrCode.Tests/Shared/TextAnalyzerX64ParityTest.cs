@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals;
+using FeatherQR.Internals;
 using System.Runtime.Intrinsics.X86;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Verifies that the x64 text analysis tiers (TextAnalyzer.AnalyzeAvx2, 16 chars per
@@ -31,7 +31,7 @@ public class TextAnalyzerX64ParityTest
         "01234567890123456789012345678901234567890123456789",           // Numeric, multi-block
         "HELLO WORLD $%*+-./:",                                         // Alphanumeric incl. all specials
         "TICKET-2026/07 GATE A SEAT 42 PRICE $35.00 :*+",               // Alphanumeric, realistic
-        "https://github.com/guitarrapc/SkiaSharp.QrCode?tab=readme#qr", // Byte + ASCII (lowercase)
+        "https://github.com/guitarrapc/FeatherQR?tab=readme#qr", // Byte + ASCII (lowercase)
         "café au lait été",                              // Byte + ISO-8859-1
         "QRコード日本語",                       // Byte + UTF-8
         "PHOTO 📷 GALLERY 2026 OPEN",                         // Byte + surrogate pair, past the block grain

@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals.StandardQr;
+using FeatherQR.Internals.StandardQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Robustness tests for the public decode API: adversarial argument values and

@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="Compression"/> names a serialization feature that no longer exists:

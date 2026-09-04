@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Image;
+using FeatherQR.SkiaSharp;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// ECC boost (<see cref="QRCodeGeneratorOptions.BoostEccLevel"/>): the version is chosen

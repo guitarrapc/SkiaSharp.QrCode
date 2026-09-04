@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals.MicroQR;
+using FeatherQR.Internals.MicroQR;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 public class MicroQRCodeGeneratorUnitTest
 {

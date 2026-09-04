@@ -1,5 +1,5 @@
 using System.Text;
-using SkiaSharp.QrCode;
+using FeatherQR;
 using ZXingCpp;
 
 namespace QRInteropFixtures;

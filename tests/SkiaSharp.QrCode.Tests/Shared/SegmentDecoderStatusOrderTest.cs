@@ -1,8 +1,9 @@
-using SkiaSharp.QrCode.Image;
-using SkiaSharp.QrCode.Internals.MicroQR;
-using SkiaSharp.QrCode.Internals.RmQr;
+using SkiaSharp;
+using FeatherQR.SkiaSharp;
+using FeatherQR.Internals.MicroQR;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <c>DestinationTooSmall</c> must mean "the symbol was read and only your buffer was
@@ -55,7 +56,7 @@ public class SegmentDecoderStatusOrderTest
         var data = RmQRCodeGenerator.CreateRmQRCode("123456", RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = RmQRVersion.R11x27 });
         using var bitmap = new RmQRCodeImageBuilder(data).WithModulePixelSize(8).ToBitmap();
         var luminance = new byte[bitmap.Width * bitmap.Height];
-        Internals.ImageDecoders.LuminanceConverter.Convert(bitmap, luminance);
+        BitmapLuminanceConverter.Convert(bitmap, luminance);
 
         var status = RmQRCodeDecoder.TryDecodeImage(luminance, bitmap.Width, bitmap.Height, new char[3], out _, out var info);
         await Assert.That(status).IsFalse();
@@ -78,7 +79,7 @@ public class SegmentDecoderStatusOrderTest
         var data = MicroQRCodeGenerator.CreateMicroQRCode(content, ecc, version);
         using var bitmap = new MicroQRCodeImageBuilder(data).WithModulePixelSize(8).ToBitmap();
         var luminance = new byte[bitmap.Width * bitmap.Height];
-        Internals.ImageDecoders.LuminanceConverter.Convert(bitmap, luminance);
+        BitmapLuminanceConverter.Convert(bitmap, luminance);
 
         for (var length = 1; length < expectedLength; length++)
         {
@@ -125,7 +126,7 @@ public class SegmentDecoderStatusOrderTest
         }
 
         var luminance = new byte[width * height];
-        Internals.ImageDecoders.LuminanceConverter.Convert(scene, luminance);
+        BitmapLuminanceConverter.Convert(scene, luminance);
         var decoded = MicroQRCodeDecoder.TryDecodeImage(luminance, width, height, new char[1], out _, out var info);
 
         await Assert.That(decoded).IsFalse();
@@ -160,7 +161,7 @@ public class SegmentDecoderStatusOrderTest
         }
 
         var luminance = new byte[width * height];
-        Internals.ImageDecoders.LuminanceConverter.Convert(scene, luminance);
+        BitmapLuminanceConverter.Convert(scene, luminance);
         var decoded = QRCodeDecoder.TryDecodeImage(luminance, width, height, new char[1], out _, out var info);
 
         await Assert.That(decoded).IsFalse();

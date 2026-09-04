@@ -1,7 +1,8 @@
-using SkiaSharp.QrCode.Image;
-using SkiaSharp.QrCode.Internals.MicroQR;
+using SkiaSharp;
+using FeatherQR.SkiaSharp;
+using FeatherQR.Internals.MicroQR;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Image-path decoding tests for <see cref="MicroQRCodeDecoder"/>: clean rendered

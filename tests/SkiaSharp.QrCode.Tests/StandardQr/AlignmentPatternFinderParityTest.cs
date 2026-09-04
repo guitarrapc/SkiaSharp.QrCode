@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals.StandardQr;
+using FeatherQR.Internals.StandardQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Parity test for the alignment-pattern row-scan kernels: the SIMD mask walk

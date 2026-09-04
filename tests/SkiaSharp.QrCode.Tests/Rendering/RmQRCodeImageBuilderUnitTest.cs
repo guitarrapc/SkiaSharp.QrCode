@@ -1,8 +1,9 @@
+using SkiaSharp;
 using System.Buffers;
 using System.Text;
-using SkiaSharp.QrCode.Image;
+using FeatherQR.SkiaSharp;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="RmQRCodeImageBuilder"/>: full-matrix module-to-pixel parity for every

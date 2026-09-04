@@ -49,12 +49,14 @@ jobs:
       # Same step release.yaml runs before packing, so a break shows up on the PR that caused it.
       - name: Trim XML documentation to the public surface
         shell: bash
-        run: dotnet run tools/filter_public_docs.cs -- src/SkiaSharp.QrCode/bin/Release/*/SkiaSharp.QrCode.xml
+        run: dotnet run tools/filter_public_docs.cs -- src/FeatherQR/bin/Release/*/FeatherQR.xml src/FeatherQR.SkiaSharp/bin/Release/*/FeatherQR.SkiaSharp.xml
       # The surface that ships is the one that was reviewed. A release built from a branch that never went through the PR gate would otherwise be the one way past it.
       - name: Check the public API against the approved listing
         if: ${{ matrix.rid == 'linux-x64' }}
         shell: bash
-        run: dotnet run tools/check_public_api.cs -- --check src/SkiaSharp.QrCode/PublicAPI.approved.txt src/SkiaSharp.QrCode/bin/Release/*/SkiaSharp.QrCode.dll
+        run: |
+          dotnet run tools/check_public_api.cs -- --check src/FeatherQR/PublicAPI.approved.txt src/FeatherQR/bin/Release/*/FeatherQR.dll
+          dotnet run tools/check_public_api.cs -- --check src/FeatherQR.SkiaSharp/PublicAPI.approved.txt src/FeatherQR.SkiaSharp/bin/Release/*/FeatherQR.SkiaSharp.dll
       # Package validation (EnablePackageValidation) only runs on Pack, not on Build, so a PR
       # would otherwise never see it. One runner is enough: the comparison is against the
       # baseline package on NuGet and does not depend on the host OS. SBOM generation is off

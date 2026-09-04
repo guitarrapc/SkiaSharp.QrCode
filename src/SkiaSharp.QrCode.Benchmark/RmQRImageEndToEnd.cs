@@ -1,5 +1,4 @@
 using SkiaSharp;
-using SkiaSharp.QrCode.Image;
 
 /// <summary>
 /// End-to-end PNG image generation and image decoding through the public rMQR API.

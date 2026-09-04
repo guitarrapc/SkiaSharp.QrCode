@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
-using SkiaSharp.QrCode.Internals.RmQr;
+using FeatherQR.Internals.BinaryEncoders;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Full-pipeline extraction (encoder-side consistency guard, independent of any

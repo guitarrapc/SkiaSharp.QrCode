@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
 using System.Text;
-using SkiaSharp.QrCode.Internals.RmQr;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Every <see cref="RmQRBinaryEncoder"/> segment writer against an independently

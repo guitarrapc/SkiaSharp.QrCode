@@ -1,4 +1,4 @@
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="QRCodeGeneratorOptions"/> and <see cref="MicroQRCodeGeneratorOptions"/>,

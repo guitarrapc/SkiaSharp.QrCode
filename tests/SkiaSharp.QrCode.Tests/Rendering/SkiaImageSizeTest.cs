@@ -1,4 +1,5 @@
-namespace SkiaSharp.QrCode.Tests;
+using SkiaSharp;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Visual compatibility test using pixel compatison instead of binary comparison.

@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals.ImageDecoders;
-using SkiaSharp.QrCode.Internals.RmQr;
+using FeatherQR.Internals.ImageDecoders;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// The rMQR Vector128 grid sampler against the scalar reference, byte for byte, for

@@ -74,6 +74,6 @@ public class MicroQREncodeEndToend
     [Benchmark(Description = "StandardQr_Numeric_V1_Encode (Span)")]
     public int StandardQr_Numeric_V1_EncodeSpan()
     {
-        return SkiaSharp.QrCode.QRCodeGenerator.CreateQrCode(_numeric.AsSpan(), ECCLevel.L, _spanDestination);
+        return FeatherQR.QRCodeGenerator.CreateQrCode(_numeric.AsSpan(), ECCLevel.L, _spanDestination);
     }
 }

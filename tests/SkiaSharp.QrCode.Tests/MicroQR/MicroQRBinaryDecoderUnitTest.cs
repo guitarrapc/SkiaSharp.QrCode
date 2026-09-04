@@ -1,8 +1,8 @@
-using SkiaSharp.QrCode.Internals;
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
-using SkiaSharp.QrCode.Internals.MicroQR;
+using FeatherQR.Internals;
+using FeatherQR.Internals.BinaryEncoders;
+using FeatherQR.Internals.MicroQR;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Bitstream decoding: corrected Micro QR data codewords back to text. Golden

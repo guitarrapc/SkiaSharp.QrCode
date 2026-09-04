@@ -1,8 +1,8 @@
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
-using SkiaSharp.QrCode.Internals;
-using static SkiaSharp.QrCode.Internals.StandardQr.QRCodeConstants;
+using FeatherQR.Internals.BinaryEncoders;
+using FeatherQR.Internals;
+using static FeatherQR.Internals.StandardQr.QRCodeConstants;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 public class BinaryInterleaverUnitTest
 {

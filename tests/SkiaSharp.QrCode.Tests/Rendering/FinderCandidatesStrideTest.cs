@@ -1,7 +1,8 @@
-using SkiaSharp.QrCode.Image;
-using SkiaSharp.QrCode.Internals.ImageDecoders;
+using SkiaSharp;
+using FeatherQR.SkiaSharp;
+using FeatherQR.Internals.ImageDecoders;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="FinderPatternFinder.FindCandidates"/> (strided) against
@@ -29,7 +30,7 @@ public class FinderCandidatesStrideTest
     private static (byte[] Luminance, int Width, int Height, byte Threshold) ToLuminance(SKBitmap bitmap)
     {
         var luminance = new byte[bitmap.Width * bitmap.Height];
-        LuminanceConverter.Convert(bitmap, luminance);
+        BitmapLuminanceConverter.Convert(bitmap, luminance);
         return (luminance, bitmap.Width, bitmap.Height, Binarizer.ComputeOtsuThreshold(luminance));
     }
 

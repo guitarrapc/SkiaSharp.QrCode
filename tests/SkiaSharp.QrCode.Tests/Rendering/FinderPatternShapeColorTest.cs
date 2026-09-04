@@ -1,6 +1,7 @@
-using SkiaSharp.QrCode.Image;
+using SkiaSharp;
+using FeatherQR.SkiaSharp;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 public class FinderPatternShapeColorTest
 {

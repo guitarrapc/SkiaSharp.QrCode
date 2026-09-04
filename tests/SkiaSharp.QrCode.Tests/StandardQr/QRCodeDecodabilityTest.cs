@@ -1,7 +1,8 @@
+using SkiaSharp;
 using ZXing;
 using ZXing.SkiaSharp;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 public class QRCodeDecodabilityTest
 {

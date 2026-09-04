@@ -1,4 +1,6 @@
-namespace SkiaSharp.QrCode.Tests;
+using FeatherQR.SkiaSharp;
+using SkiaSharp;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// The Kanji-mode guarantee, stated once and explicitly: Japanese symbols produced

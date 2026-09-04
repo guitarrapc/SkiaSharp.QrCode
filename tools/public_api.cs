@@ -1,6 +1,6 @@
 #:sdk Microsoft.NET.Sdk
 #:property TargetFramework=net10.0
-#:project ../src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj
+#:project ../src/FeatherQR.SkiaSharp/FeatherQR.SkiaSharp.csproj
 #:property EnableAotAnalyzer=false
 #:property EnableTrimAnalyzer=false
 #:property EnableSingleFileAnalyzer=false
@@ -34,7 +34,7 @@ using System.Text.Json;
 
 var outputPath = GetOutputPath(args);
 var wantsHtml = args.Contains("--html");
-var assembly = typeof(SkiaSharp.QrCode.QRCodeData).Assembly;
+var assembly = typeof(FeatherQR.QRCodeData).Assembly;
 var nullability = new NullabilityInfoContext();
 
 // Doc text, keyed by the documentation ID the compiler emits.
@@ -54,7 +54,10 @@ var keywords = new Dictionary<Type, string>
     [typeof(double)] = "double", [typeof(decimal)] = "decimal", [typeof(string)] = "string", [typeof(object)] = "object",
 };
 
+// Compiler-generated nested types (the unspeakable <G>$hash markers a C# 14 extension block emits)
+// are skipped here as check_public_api.cs and filter_public_docs.cs skip them.
 var types = assembly.GetExportedTypes()
+    .Where(t => !t.Name.Contains('<'))
     .OrderBy(t => t.Namespace, StringComparer.Ordinal)
     .ThenBy(FullName, StringComparer.Ordinal)
     .ToArray();

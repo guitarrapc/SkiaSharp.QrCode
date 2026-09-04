@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals.MicroQR;
+using FeatherQR.Internals.MicroQR;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Format information decoding: the single 15-bit Micro QR copy is matched
