@@ -64,6 +64,12 @@ jobs:
       - name: Validate package API compatibility
         if: ${{ matrix.rid == 'linux-x64' }}
         run: dotnet pack -c Release --no-build -o ./artifacts -p:GenerateSBOM=false
+      # The split's artifact-level guard: the three nuspecs declare exactly the dependency graph the
+      # plan fixes (core: BCL shims on netstandard only; rendering: FeatherQR + SkiaSharp; metapackage:
+      # FeatherQR.SkiaSharp, no lib/). A stray PackageReference passes build and test and shows up here.
+      - name: Check package dependencies
+        if: ${{ matrix.rid == 'linux-x64' }}
+        run: dotnet run tools/check_package_deps.cs -- ./artifacts
       - name: Test
         # skip output with multiple modules may stuck test
         run: dotnet test -c Release --no-build --max-parallel-test-modules 1 --timeout 8m
