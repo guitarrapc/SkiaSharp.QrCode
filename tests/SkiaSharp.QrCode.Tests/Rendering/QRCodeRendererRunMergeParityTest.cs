@@ -1,6 +1,7 @@
-using SkiaSharp.QrCode.Image;
+using SkiaSharp;
+using FeatherQR.SkiaSharp;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// The renderer collapses horizontal runs of dark modules into single rects for the
@@ -22,7 +23,7 @@ public class QRCodeRendererRunMergeParityTest
     [Arguments("HELLO WORLD 2026", 0, 290)] // v1-2, no quiet zone, exact multiple
     [Arguments("HELLO WORLD 2026", 4, 290)] // v1-2, standard quiet zone
     [Arguments("HELLO WORLD 2026", 4, 411)] // fractional cell size
-    [Arguments("https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md?foo=sample&bar=dummy", 4, 512)] // v~5
+    [Arguments("https://github.com/guitarrapc/FeatherQR/blob/main/README.md?foo=sample&bar=dummy", 4, 512)] // v~5
     public async Task MergedRuns_MatchPerModuleRendering(string content, int quietZone, int imageSize)
     {
         var qr = QRCodeGenerator.CreateQrCode(content, ECCLevel.M, quietZoneSize: quietZone);

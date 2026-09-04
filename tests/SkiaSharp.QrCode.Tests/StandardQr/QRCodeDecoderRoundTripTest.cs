@@ -1,4 +1,4 @@
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Encode 驕ｶ鄙ｫ繝ｻdecode round-trip tests: every QR produced by <see cref="QRCodeGenerator"/>

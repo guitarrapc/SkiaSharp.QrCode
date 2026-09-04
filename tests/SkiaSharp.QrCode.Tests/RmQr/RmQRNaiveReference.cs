@@ -1,4 +1,4 @@
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Independent, deliberately naive rMQR reference helpers for tests: a

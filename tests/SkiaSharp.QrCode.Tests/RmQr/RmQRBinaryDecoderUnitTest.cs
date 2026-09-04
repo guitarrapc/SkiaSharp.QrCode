@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals;
-using SkiaSharp.QrCode.Internals.RmQr;
+using FeatherQR.Internals;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// rMQR bit-stream decoding (ISO/IEC 23941 7.4): 3-bit mode indicators, per-version

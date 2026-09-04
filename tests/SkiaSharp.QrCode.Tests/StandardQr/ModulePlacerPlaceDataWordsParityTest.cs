@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals.StandardQr;
-using SkiaSharp.QrCode.Internals;
+using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Verifies that the accumulator-based PlaceDataWords (sequential 64-bit stream

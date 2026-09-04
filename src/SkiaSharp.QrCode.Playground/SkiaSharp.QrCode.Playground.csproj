@@ -42,7 +42,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SkiaSharp.QrCode\SkiaSharp.QrCode.csproj" />
+    <ProjectReference Include="..\FeatherQR.SkiaSharp\FeatherQR.SkiaSharp.csproj" />
     <StaticWebAssetFingerprintPattern Include="JS" Pattern="*.js" Expression="#[.{fingerprint}]$(PlaygroundFingerprintSuffix)" />
     <StaticWebAssetFingerprintPattern Include="CSS" Pattern="*.css" Expression="#[.{fingerprint}]$(PlaygroundFingerprintSuffix)" />
   </ItemGroup>

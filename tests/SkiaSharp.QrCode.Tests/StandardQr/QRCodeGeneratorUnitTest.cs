@@ -1,8 +1,8 @@
 using System.Text;
-using SkiaSharp.QrCode.Internals;
-using static SkiaSharp.QrCode.QRCodeGenerator;
+using FeatherQR.Internals;
+using static FeatherQR.QRCodeGenerator;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 // NOTE: Actual QR Code size is always same for same version and ECC level,
 //

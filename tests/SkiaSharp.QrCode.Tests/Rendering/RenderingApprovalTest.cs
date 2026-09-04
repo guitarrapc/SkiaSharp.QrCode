@@ -1,7 +1,8 @@
+using SkiaSharp;
 using System.Runtime.CompilerServices;
-using SkiaSharp.QrCode.Image;
+using FeatherQR.SkiaSharp;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Approval tests for the styled rendering surface (module shapes, gradients,

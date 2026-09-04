@@ -1,5 +1,3 @@
-using SkiaSharp.QrCode.Image;
-
 /// <summary>
 /// End-to-end PNG image generation through the public Micro QR API
 /// (MicroQRCodeImageBuilder.GetPngBytes). MicroQRCodeData is pre-generated in

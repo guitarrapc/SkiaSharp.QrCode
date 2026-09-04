@@ -1,7 +1,7 @@
 using System.Reflection;
-using SkiaSharp.QrCode.Image;
+using FeatherQR.SkiaSharp;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Guards the intended 1:1 correspondence between the symbology-specific image

@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SkiaSharp.QrCode\SkiaSharp.QrCode.csproj" />
+    <ProjectReference Include="..\FeatherQR.SkiaSharp\FeatherQR.SkiaSharp.csproj" />
   </ItemGroup>
 
 </Project>

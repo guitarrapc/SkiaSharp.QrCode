@@ -1,4 +1,4 @@
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// The exception type every argument-error path of the sizing surface actually raises,

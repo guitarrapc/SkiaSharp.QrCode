@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Image;
+using FeatherQR.SkiaSharp;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// The range-taking <c>WithVersion</c> overload on the Standard QR and Micro QR image

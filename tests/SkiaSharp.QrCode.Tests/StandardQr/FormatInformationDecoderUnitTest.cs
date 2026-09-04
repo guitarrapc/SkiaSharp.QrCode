@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals.StandardQr;
+using FeatherQR.Internals.StandardQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Unit tests for format information decoding: exact match for all 32 valid

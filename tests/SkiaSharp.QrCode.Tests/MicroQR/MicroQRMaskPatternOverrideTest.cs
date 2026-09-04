@@ -1,4 +1,5 @@
-namespace SkiaSharp.QrCode.Tests;
+using FeatherQR.SkiaSharp;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="MicroQRCodeGeneratorOptions.MaskPattern"/>: pinning one of the four
@@ -148,7 +149,7 @@ public class MicroQRMaskPatternOverrideTest
     [Test]
     public async Task Builder_WithMaskPattern_PinsTheMask()
     {
-        using var bitmap = new Image.MicroQRCodeImageBuilder(Content)
+        using var bitmap = new MicroQRCodeImageBuilder(Content)
             .WithErrorCorrection(MicroQREccLevel.L)
             .WithMaskPattern(1)
             .WithModulePixelSize(10)
@@ -164,13 +165,13 @@ public class MicroQRMaskPatternOverrideTest
     [Arguments(4)]
     public async Task Builder_WithMaskPattern_OutOfRange_Throws(int maskPattern)
     {
-        await Assert.That(() => new Image.MicroQRCodeImageBuilder(Content).WithMaskPattern(maskPattern)).Throws<ArgumentOutOfRangeException>();
+        await Assert.That(() => new MicroQRCodeImageBuilder(Content).WithMaskPattern(maskPattern)).Throws<ArgumentOutOfRangeException>();
     }
 
     [Test]
     public async Task Builder_WithMaskPattern_OnPrebuiltData_Throws()
     {
         var qr = MicroQRCodeGenerator.CreateMicroQRCode(Content, MicroQREccLevel.L);
-        await Assert.That(() => new Image.MicroQRCodeImageBuilder(qr).WithMaskPattern(1)).Throws<InvalidOperationException>();
+        await Assert.That(() => new MicroQRCodeImageBuilder(qr).WithMaskPattern(1)).Throws<InvalidOperationException>();
     }
 }

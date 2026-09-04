@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals;
-using SkiaSharp.QrCode.Internals.MicroQR;
+using FeatherQR.Internals;
+using FeatherQR.Internals.MicroQR;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Unit tests for <see cref="MicroQRSegmentPlanner"/>: the dynamic program is held to

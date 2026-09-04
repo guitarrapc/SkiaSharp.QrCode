@@ -1,7 +1,7 @@
 using TUnit.Assertions.Enums;
-using SkiaSharp.QrCode.Internals.RmQr;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// All three <see cref="RmQRMatrixDecoder.ExtractCodewords(ReadOnlySpan{byte}, int, int, RmQRVersion, Span{byte}, RmQRMatrixDecoder.ExtractKernel)"/>

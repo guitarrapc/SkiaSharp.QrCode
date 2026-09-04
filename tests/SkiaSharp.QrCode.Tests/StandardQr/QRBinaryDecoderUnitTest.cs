@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals.StandardQr;
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
+using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.BinaryEncoders;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Branch-level tests for the bitstream decoder using handcrafted segment streams

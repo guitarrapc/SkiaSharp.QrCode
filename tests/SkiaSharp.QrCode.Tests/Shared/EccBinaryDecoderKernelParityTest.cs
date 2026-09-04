@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals;
-using SkiaSharp.QrCode.Internals.BinaryDecoders;
+using FeatherQR.Internals;
+using FeatherQR.Internals.BinaryDecoders;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Parity tests for the syndrome-pass kernels: the scalar log-domain kernel is

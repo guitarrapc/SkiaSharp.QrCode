@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Manifest for one committed fixture case (case-name.json), produced by

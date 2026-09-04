@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals.StandardQr;
-using SkiaSharp.QrCode.Internals.ImageDecoders;
+using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals.ImageDecoders;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Parity test for the grid sampling kernels: the SIMD path (net8.0+, AVX2) must

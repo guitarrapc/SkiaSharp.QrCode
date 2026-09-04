@@ -1,7 +1,7 @@
 using TUnit.Assertions.Enums;
-using SkiaSharp.QrCode.Internals.ImageDecoders;
+using FeatherQR.Internals.ImageDecoders;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="LuminanceInverter"/> against the per-byte reference, over the lengths

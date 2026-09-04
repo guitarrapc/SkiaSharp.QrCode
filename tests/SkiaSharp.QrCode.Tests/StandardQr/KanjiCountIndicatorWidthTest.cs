@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
-using SkiaSharp.QrCode.Internals.StandardQr;
+using FeatherQR.Internals.BinaryEncoders;
+using FeatherQR.Internals.StandardQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Standard QR Kanji character count indicator widths (ISO/IEC 18004 Table 3):

@@ -30,4 +30,8 @@ Design records and spec-to-code maps for shipped behavior, organized symbology-f
 
 Forward-looking strategy; durable decisions graduate into `specs/` after implementation, and the plan is then deleted rather than kept as a parallel history.
 
-**There are no open plans.** The Micro QR / rMQR implementation and test-strategy plans, the Kanji mode decode plan and the generator API options plan all completed and were folded into the specs above. What survived them lives in: the API and options rules, the Kanji mapping decision and the scope table in [qrcode-symbologies.md](specs/qrcode-symbologies.md); the oracle landscape, test-layer reasoning and fixture lessons in [qrcode-test-fixtures.md](specs/qrcode-test-fixtures.md); and the per-symbology encoder and decoder records.
+| Document | Covers |
+|---|---|
+| [featherqr-core-split-plan.md](plans/featherqr-core-split-plan.md) | The 2.0.0 core split: `FeatherQR` (dependency-free core), `FeatherQR.SkiaSharp` (renderer), `SkiaSharp.QrCode` (metapackage); decisions, phase order, CI gate changes, repository rename; research in [plans/references/](plans/references/) |
+
+Earlier plans are closed. The Micro QR / rMQR implementation and test-strategy plans, the Kanji mode decode plan and the generator API options plan all completed and were folded into the specs above. What survived them lives in: the API and options rules, the Kanji mapping decision and the scope table in [qrcode-symbologies.md](specs/qrcode-symbologies.md); the oracle landscape, test-layer reasoning and fixture lessons in [qrcode-test-fixtures.md](specs/qrcode-test-fixtures.md); and the per-symbology encoder and decoder records.

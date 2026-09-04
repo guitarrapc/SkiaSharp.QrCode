@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals.StandardQr;
-using SkiaSharp.QrCode.Internals;
+using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Verifies that the bit-packed MaskCode (single-word and triple-word paths)

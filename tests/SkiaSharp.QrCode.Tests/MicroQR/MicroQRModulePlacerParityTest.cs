@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals.MicroQR;
+using FeatherQR.Internals.MicroQR;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Parity guard for the optimized Micro QR placement pipeline

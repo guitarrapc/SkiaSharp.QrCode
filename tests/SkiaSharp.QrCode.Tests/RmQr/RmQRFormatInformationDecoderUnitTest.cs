@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals.RmQr;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// rMQR format information decoding: each 18-bit copy is matched against the 64

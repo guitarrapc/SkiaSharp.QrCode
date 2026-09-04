@@ -1,8 +1,8 @@
-using SkiaSharp.QrCode.Internals.BinaryDecoders;
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
-using SkiaSharp.QrCode.Internals.StandardQr;
+using FeatherQR.Internals.BinaryDecoders;
+using FeatherQR.Internals.BinaryEncoders;
+using FeatherQR.Internals.StandardQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// The byte-segment charset resolution and ECI designator parsing in

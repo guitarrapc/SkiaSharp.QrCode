@@ -1,4 +1,4 @@
-using SkiaSharp.QrCode;
+using FeatherQR;
 
 // The gate is the publish itself (see the csproj): TrimmerRootAssembly roots the whole library,
 // so ILC analyzes every public and internal member regardless of what runs here.

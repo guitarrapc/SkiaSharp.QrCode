@@ -3,7 +3,7 @@ using ZXing.Common;
 using ZXing.QrCode;
 using ZXing.QrCode.Internal;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Cross-validation against ZXing.Net: QR codes produced by a completely independent

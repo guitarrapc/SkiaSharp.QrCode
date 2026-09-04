@@ -1,7 +1,8 @@
-using SkiaSharp.QrCode.Image;
+using SkiaSharp;
+using FeatherQR.SkiaSharp;
 using System.Buffers;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 public class MicroQRCodeImageBuilderUnitTest
 {

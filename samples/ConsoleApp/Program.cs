@@ -1,6 +1,6 @@
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 

@@ -1,9 +1,10 @@
+using SkiaSharp;
 using System.Buffers;
 using System.Text;
 using System.Xml.Linq;
-using SkiaSharp.QrCode.Image;
+using FeatherQR.SkiaSharp;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// SVG output goes through <see cref="SKSvgCanvas"/> instead of a raster surface,

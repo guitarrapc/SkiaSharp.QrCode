@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
-using SkiaSharp.QrCode.Internals.RmQr;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Vectorized segment writers of <see cref="RmQRBinaryEncoder"/> (x64 SSSE3/SSE4.1

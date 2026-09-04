@@ -1,8 +1,9 @@
-using SkiaSharp.QrCode.Image;
-using SkiaSharp.QrCode.Internals;
-using SkiaSharp.QrCode.Internals.RmQr;
+using SkiaSharp;
+using FeatherQR.SkiaSharp;
+using FeatherQR.Internals;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="RmQRSegmentation.Optimal"/> end to end. The three properties every

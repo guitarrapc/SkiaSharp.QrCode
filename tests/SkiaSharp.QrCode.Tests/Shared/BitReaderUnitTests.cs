@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
+using FeatherQR.Internals.BinaryEncoders;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 public class BitReaderUnitTests
 {

@@ -32,7 +32,7 @@ public class MicroQRDecodeEndToEnd
 
         var calculated = Sizing.Required("0123456789", ECCLevel.L, 0);
         _standardModules = new byte[calculated.BufferSize];
-        SkiaSharp.QrCode.QRCodeGenerator.CreateQrCode("0123456789", ECCLevel.L, _standardModules, quietZoneSize: 0);
+        FeatherQR.QRCodeGenerator.CreateQrCode("0123456789", ECCLevel.L, _standardModules, quietZoneSize: 0);
         _standardSize = calculated.QrSize;
         _standardChars = new char[QRCodeDecoder.GetMaxDecodedLength(1)];
     }

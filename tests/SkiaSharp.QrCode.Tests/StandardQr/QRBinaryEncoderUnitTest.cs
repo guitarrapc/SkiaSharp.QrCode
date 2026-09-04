@@ -1,8 +1,8 @@
-using SkiaSharp.QrCode.Internals.StandardQr;
-using SkiaSharp.QrCode.Internals;
+using FeatherQR.Internals.StandardQr;
+using FeatherQR.Internals;
 using System.Text;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 public class QRBinaryEncoderUnitTest
 {

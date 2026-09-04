@@ -1,4 +1,4 @@
-using SkiaSharp.QrCode;
+using FeatherQR;
 
 namespace QRInteropFixtures;
 

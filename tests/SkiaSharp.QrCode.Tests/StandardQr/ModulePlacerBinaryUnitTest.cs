@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals.StandardQr;
-using Rectangle = SkiaSharp.QrCode.Internals.Rectangle;
+using FeatherQR.Internals.StandardQr;
+using Rectangle = FeatherQR.Internals.Rectangle;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 public class ModulePlacerBinaryUnitTest
 {

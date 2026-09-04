@@ -1,3 +1,4 @@
 global using BenchmarkDotNet.Attributes;
 global using BenchmarkDotNet.Jobs;
-global using SkiaSharp.QrCode;
+global using FeatherQR;
+global using FeatherQR.SkiaSharp;

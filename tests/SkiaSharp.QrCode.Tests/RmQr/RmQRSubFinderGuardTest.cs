@@ -1,8 +1,8 @@
-using SkiaSharp.QrCode.Image;
-using SkiaSharp.QrCode.Internals.ImageDecoders;
-using SkiaSharp.QrCode.Internals.RmQr;
+using FeatherQR.SkiaSharp;
+using FeatherQR.Internals.ImageDecoders;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// The two guards that make a failed <see cref="RmQRImageDecoder.TryLocateSubFinder"/>
@@ -26,7 +26,7 @@ public class RmQRSubFinderGuardTest
         var data = RmQRCodeGenerator.CreateRmQRCode(content, RmQREccLevel.M, new RmQRCodeGeneratorOptions { Version = version });
         using var bitmap = new RmQRCodeImageBuilder(data).WithModulePixelSize(modulePixelSize).ToBitmap();
         var luminance = new byte[bitmap.Width * bitmap.Height];
-        LuminanceConverter.Convert(bitmap, luminance);
+        BitmapLuminanceConverter.Convert(bitmap, luminance);
         return (luminance, bitmap.Width, bitmap.Height, Binarizer.ComputeOtsuThreshold(luminance), modulePixelSize);
     }
 

@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals;
-using SkiaSharp.QrCode.Internals.MicroQR;
+using FeatherQR.Internals;
+using FeatherQR.Internals.MicroQR;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 public class MicroQRBinaryEncoderUnitTest
 {

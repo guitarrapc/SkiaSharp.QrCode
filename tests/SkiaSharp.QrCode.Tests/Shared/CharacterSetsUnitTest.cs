@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals;
+using FeatherQR.Internals;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 public class CharacterSetsUnitTest
 {

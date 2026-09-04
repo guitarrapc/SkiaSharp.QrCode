@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// The shape of the sizing surface, as decided in specs/qrcode-symbologies.md: asking

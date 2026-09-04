@@ -1,6 +1,7 @@
-using SkiaSharp.QrCode.Image;
+using SkiaSharp;
+using FeatherQR.SkiaSharp;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// The builder skips the initial canvas clear when the clear color cannot remain

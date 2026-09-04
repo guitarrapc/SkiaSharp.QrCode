@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals.BinaryDecoders;
-using SkiaSharp.QrCode.Internals.BinaryEncoders;
+using FeatherQR.Internals.BinaryDecoders;
+using FeatherQR.Internals.BinaryEncoders;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// The bit-sufficiency boundary of every segment payload decoder, from both sides:

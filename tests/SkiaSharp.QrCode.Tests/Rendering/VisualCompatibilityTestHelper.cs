@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 public static class VisualCompatibilityTestHelper
 {

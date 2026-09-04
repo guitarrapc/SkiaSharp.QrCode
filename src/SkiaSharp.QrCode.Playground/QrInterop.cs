@@ -5,7 +5,8 @@ using System.Reflection;
 using System.Runtime.InteropServices.JavaScript;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 namespace SkiaSharp.QrCode.Playground;
 

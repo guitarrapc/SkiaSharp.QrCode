@@ -1,4 +1,4 @@
-using SkiaSharp.QrCode.Image;
+using FeatherQR.SkiaSharp;
 using System.Reflection;
 
 if (args.Length < 2)

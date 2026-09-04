@@ -1,4 +1,4 @@
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// When an argument is invalid <em>and</em> the content does not fit, the argument error is

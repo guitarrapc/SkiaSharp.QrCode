@@ -1,4 +1,4 @@
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="RmQRCodeGeneratorOptions"/>, the options struct that replaced the rMQR

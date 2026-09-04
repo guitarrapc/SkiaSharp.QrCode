@@ -75,12 +75,12 @@ public class QRCodeSegmentationEncode
     [Benchmark(Baseline = true, Description = "Single")]
     public int SingleEncodeSpan()
     {
-        return SkiaSharp.QrCode.QRCodeGenerator.CreateQrCode(_content.AsSpan(), ECCLevel.M, _spanDestination);
+        return FeatherQR.QRCodeGenerator.CreateQrCode(_content.AsSpan(), ECCLevel.M, _spanDestination);
     }
 
     [Benchmark(Description = "Optimal")]
     public int OptimalEncodeSpan()
     {
-        return SkiaSharp.QrCode.QRCodeGenerator.CreateQrCode(_content.AsSpan(), ECCLevel.M, _spanDestination, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal });
+        return FeatherQR.QRCodeGenerator.CreateQrCode(_content.AsSpan(), ECCLevel.M, _spanDestination, new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal });
     }
 }

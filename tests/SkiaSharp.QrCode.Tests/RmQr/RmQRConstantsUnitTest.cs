@@ -1,7 +1,7 @@
-using SkiaSharp.QrCode.Internals;
-using SkiaSharp.QrCode.Internals.RmQr;
+using FeatherQR.Internals;
+using FeatherQR.Internals.RmQr;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Structural invariants of the rMQR symbol tables (ISO/IEC 23941), pinned so a

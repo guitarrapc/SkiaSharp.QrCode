@@ -1,7 +1,8 @@
+using SkiaSharp;
 using System.Text;
-using SkiaSharp.QrCode.Image;
+using FeatherQR.SkiaSharp;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// Pins the XY orientation of every raster render path against the matrix

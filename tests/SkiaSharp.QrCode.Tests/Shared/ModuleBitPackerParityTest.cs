@@ -1,6 +1,6 @@
-using SkiaSharp.QrCode.Internals;
+using FeatherQR.Internals;
 
-namespace SkiaSharp.QrCode.Tests;
+namespace FeatherQR.Tests;
 
 /// <summary>
 /// <see cref="ModuleBitPacker"/> (byte-per-module ↔ MSB-first bit-packed, the storage
