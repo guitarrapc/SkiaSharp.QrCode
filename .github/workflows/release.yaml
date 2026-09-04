@@ -108,8 +108,7 @@ jobs:
       - run: dotnet build -c Release
       - name: Trim XML documentation to the public surface
         run: dotnet run tools/filter_public_docs.cs -- src/SkiaSharp.QrCode/bin/Release/*/SkiaSharp.QrCode.xml
-      # The surface that ships is the one that was reviewed. A release built from a branch that
-      # never went through the PR gate would otherwise be the one way past it.
+      # The surface that ships is the one that was reviewed. A release built from a branch that never went through the PR gate would otherwise be the one way past it.
       - name: Check the public API against the approved listing
         run: dotnet run tools/check_public_api.cs -- --check src/SkiaSharp.QrCode/PublicAPI.approved.txt src/SkiaSharp.QrCode/bin/Release/*/SkiaSharp.QrCode.dll
       # pack (version comes from Directory.Build.props, verified against the tag in validate)

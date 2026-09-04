@@ -50,10 +50,7 @@ jobs:
       - name: Trim XML documentation to the public surface
         shell: bash
         run: dotnet run tools/filter_public_docs.cs -- src/SkiaSharp.QrCode/bin/Release/*/SkiaSharp.QrCode.xml
-      # The listing is what package validation cannot report: an addition breaks nobody, so it
-      # passes there and lands unreviewed. Every target framework is read, because the surface
-      # has to be the same on all of them. One runner is enough - the comparison is against a
-      # file in the repository and does not depend on the host OS.
+      # The surface that ships is the one that was reviewed. A release built from a branch that never went through the PR gate would otherwise be the one way past it.
       - name: Check the public API against the approved listing
         if: ${{ matrix.rid == 'linux-x64' }}
         shell: bash
