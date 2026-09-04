@@ -4,23 +4,79 @@ using System.Runtime.InteropServices;
 namespace FeatherQR.Internals.ImageDecoders;
 
 /// <summary>
-/// Converts pixel buffers to 8-bit grayscale luminance buffers.
+/// Converts pixel buffers to the 8-bit grayscale luminance the image decoders read
+/// (<c>TryDecodeImage</c> on <see cref="QRCodeDecoder"/>, <see cref="MicroQRCodeDecoder"/>
+/// and <see cref="RmQRCodeDecoder"/>).
 /// </summary>
 /// <remarks>
-/// The kernels cover the pixel layouts QR sources actually use (Gray8, BGRA8888,
-/// RGBA8888, RGB888x, premultiplied or straight alpha). Transparent pixels are
-/// composited against white: QR quiet zones are white by definition, and
-/// transparent-background PNGs are a common input. This type knows no image
-/// library; a rendering package (FeatherQR.SkiaSharp) reads the pixel layout out of
-/// its bitmap type and hands the bytes here.
+/// <para>
+/// Internal, reached by the first-party rendering package through
+/// <c>InternalsVisibleTo</c>: an adapter reads the pixel layout out of its bitmap type
+/// and hands the raw bytes here. The layouts are the ones QR sources actually use
+/// (<see cref="PixelLayout"/>); anything else is converted by the caller first. A
+/// third-party decoder adapter produces luminance itself and calls <c>TryDecodeImage</c>;
+/// this type is not public so that the surface does not grow ahead of a concrete need.
+/// </para>
+/// <para>
+/// Luminance is ITU-R BT.601, (77 R + 150 G + 29 B) / 256. Transparent pixels are
+/// composited against white before weighting: QR quiet zones are white by definition,
+/// and transparent-background PNGs are a common input. The kernels run in three tiers
+/// (AVX2, NEON, portable scalar) that produce identical bytes.
+/// </para>
 /// </remarks>
 internal static partial class LuminanceConverter
 {
+    /// <summary>
+    /// Converts pixels to luminance: width × height bytes, row-major, no padding.
+    /// </summary>
+    /// <param name="pixels">Source pixels, rows of <paramref name="rowBytes"/> bytes; the last row may end after its <paramref name="width"/> pixels.</param>
+    /// <param name="width">Image width in pixels.</param>
+    /// <param name="height">Image height in pixels.</param>
+    /// <param name="rowBytes">Stride between rows in bytes, at least <paramref name="width"/> × bytes per pixel.</param>
+    /// <param name="layout">Channel order and depth of <paramref name="pixels"/>.</param>
+    /// <param name="premultipliedAlpha">Whether the color channels are premultiplied by alpha. Ignored for layouts without alpha.</param>
+    /// <param name="luminance">Destination, at least width × height bytes (<see cref="ImageDimensions.TryGetPixelCount"/>).</param>
+    /// <remarks>A zero width or height converts nothing and does not touch either buffer.</remarks>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="layout"/> is not a defined value, a dimension is negative, or <paramref name="rowBytes"/> is negative or shorter than one row.</exception>
+    /// <exception cref="ArgumentException"><paramref name="pixels"/> or <paramref name="luminance"/> is too short for the dimensions.</exception>
+    public static void Convert(ReadOnlySpan<byte> pixels, int width, int height, int rowBytes, PixelLayout layout, bool premultipliedAlpha, Span<byte> luminance)
+    {
+        if (width < 0)
+            throw new ArgumentOutOfRangeException(nameof(width), width, "Width must not be negative.");
+        if (height < 0)
+            throw new ArgumentOutOfRangeException(nameof(height), height, "Height must not be negative.");
+        var bytesPerPixel = layout switch
+        {
+            PixelLayout.Gray8 => 1,
+            PixelLayout.Rgba8888 or PixelLayout.Bgra8888 or PixelLayout.Rgb888x => 4,
+            _ => throw new ArgumentOutOfRangeException(nameof(layout), layout, "Unknown pixel layout."),
+        };
+        if (width > 0 && height > 0 && rowBytes < width * (long)bytesPerPixel)
+            throw new ArgumentOutOfRangeException(nameof(rowBytes), rowBytes, $"Row stride must cover a row of {width} pixels at {bytesPerPixel} bytes each.");
+
+        switch (layout)
+        {
+            case PixelLayout.Gray8:
+                ConvertGray8(pixels, luminance, width, height, rowBytes);
+                break;
+            case PixelLayout.Rgba8888:
+                ConvertRgba(pixels, luminance, width, height, rowBytes, redOffset: 0, greenOffset: 1, blueOffset: 2, alphaOffset: 3, premultipliedAlpha);
+                break;
+            case PixelLayout.Bgra8888:
+                ConvertRgba(pixels, luminance, width, height, rowBytes, redOffset: 2, greenOffset: 1, blueOffset: 0, alphaOffset: 3, premultipliedAlpha);
+                break;
+            default:
+                ConvertRgba(pixels, luminance, width, height, rowBytes, redOffset: 0, greenOffset: 1, blueOffset: 2, alphaOffset: -1, premultiplied: false);
+                break;
+        }
+    }
+
     /// <summary>
     /// 8-bit grayscale pixels to luminance: a row-by-row copy that drops the row padding.
     /// </summary>
     internal static void ConvertGray8(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes)
     {
+        ValidateExtents(pixels, luminance, width, height, rowBytes, bytesPerPixel: 1);
         for (var y = 0; y < height; y++)
         {
             pixels.Slice(y * rowBytes, width).CopyTo(luminance.Slice(y * width, width));
@@ -42,7 +98,7 @@ internal static partial class LuminanceConverter
     /// </remarks>
     internal static void ConvertRgba(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int redOffset, int greenOffset, int blueOffset, int alphaOffset, bool premultiplied, bool forceScalar = false)
     {
-        ValidateExtents(pixels, luminance, width, height, rowBytes);
+        ValidateExtents(pixels, luminance, width, height, rowBytes, bytesPerPixel: 4);
 #if NET8_0_OR_GREATER
         // One predicate, shared with the parity tests. Written as a second copy of this
         // condition it would be free to drift, and a drifted copy makes every pinned
@@ -98,7 +154,7 @@ internal static partial class LuminanceConverter
 #endif
 
     /// <summary>Extents for a ref-walking tier; see the remarks on <see cref="ConvertRgba"/>.</summary>
-    private static void ValidateExtents(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes)
+    private static void ValidateExtents(ReadOnlySpan<byte> pixels, Span<byte> luminance, int width, int height, int rowBytes, int bytesPerPixel)
     {
         // Nothing is walked, and a negative extent would make every comparison below
         // vacuously true; the loops run zero iterations either way.
@@ -109,7 +165,7 @@ internal static partial class LuminanceConverter
 
         if (!ImageDimensions.TryGetPixelCount(width, height, out var pixelCount) || luminance.Length < pixelCount)
             throw new ArgumentException($"Luminance buffer too small: required {(long)width * height} bytes ({width}x{height}), got {luminance.Length}.", nameof(luminance));
-        var requiredPixels = (long)(height - 1) * rowBytes + (long)width * 4;
+        var requiredPixels = (long)(height - 1) * rowBytes + (long)width * bytesPerPixel;
         if (pixels.Length < requiredPixels)
             throw new ArgumentException($"Pixel buffer too small: required {requiredPixels} bytes ({width}x{height}, rowBytes {rowBytes}), got {pixels.Length}.", nameof(pixels));
     }

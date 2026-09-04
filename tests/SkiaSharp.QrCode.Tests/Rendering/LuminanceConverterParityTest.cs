@@ -1,4 +1,3 @@
-using SkiaSharp;
 using TUnit.Assertions.Enums;
 using FeatherQR.Internals.ImageDecoders;
 

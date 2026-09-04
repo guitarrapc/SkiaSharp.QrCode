@@ -1,6 +1,5 @@
 using SkiaSharp;
 using System.Buffers;
-using FeatherQR.Internals.RmQr;
 
 namespace FeatherQR.SkiaSharp;
 
@@ -55,7 +54,7 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
     /// </summary>
     /// <param name="content">The text to encode.</param>
     /// <exception cref="ArgumentException">Thrown when <paramref name="content"/> is empty or only whitespace.</exception>
-    public RmQRCodeImageBuilder(string content) : base(defaultQuietZoneSize: RmQRConstants.QuietZoneModules)
+    public RmQRCodeImageBuilder(string content) : base(defaultQuietZoneSize: default(RmQRCodeGeneratorOptions).QuietZoneSize)
     {
         if (string.IsNullOrWhiteSpace(content))
             throw new ArgumentException("Content cannot be empty", nameof(content));
@@ -70,7 +69,7 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
     /// </summary>
     /// <param name="rmQrCodeData">The rMQR code to draw.</param>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="rmQrCodeData"/> is null.</exception>
-    public RmQRCodeImageBuilder(RmQRCodeData rmQrCodeData) : base(defaultQuietZoneSize: RmQRConstants.QuietZoneModules)
+    public RmQRCodeImageBuilder(RmQRCodeData rmQrCodeData) : base(defaultQuietZoneSize: default(RmQRCodeGeneratorOptions).QuietZoneSize)
     {
         if (rmQrCodeData is null)
             throw new ArgumentNullException(nameof(rmQrCodeData));
@@ -378,7 +377,7 @@ public class RmQRCodeImageBuilder : QRCodeImageBuilderBase<RmQRCodeImageBuilder>
     {
         if (_data is not null)
             throw new InvalidOperationException("WithVersion cannot be used when RmQRCodeData is provided directly.");
-        if (!RmQRConstants.IsValidVersion(version))
+        if (!Enum.IsDefined(typeof(RmQRVersion), version))
             throw new ArgumentOutOfRangeException(nameof(version), $"Invalid rMQR version: {version}");
 
         _requestedVersion = version;
