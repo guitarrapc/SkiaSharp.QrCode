@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="CodeGlyphX" />
     <PackageReference Include="Net.Codecrete.QrCodeGenerator" />
     <PackageReference Include="QRCoder" />
     <PackageReference Include="ZXing.Net" />

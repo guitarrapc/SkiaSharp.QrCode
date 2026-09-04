@@ -1,6 +1,24 @@
 using BenchmarkDotNet.Configs;
 using SkiaSharp;
 
+/// <summary>
+/// Cross-library Standard QR encoding: the shortest call each library offers for
+/// "text in, module matrix out", over five representative payloads.
+///
+/// Comparability: every library selects the same QR version for every payload here
+/// (numeric 1, alphanumeric 2, url 3, unicode 4, wifi 3 at ECC L), so each row encodes
+/// the same amount of data into the same symbol size. Two differences are inherent to
+/// the libraries and are not normalized away:
+///
+///   Segmentation - SkiaSharp.QrCode encodes the payload in a single mode by default,
+///     while Net.Codecrete.QrCodeGenerator, QRCoder and CodeGlyphX plan mixed-mode
+///     segments by default. The version comes out the same for these payloads either way.
+///   Quiet zone - SkiaSharp.QrCode and QRCoder place a quiet zone in the returned matrix;
+///     Net.Codecrete.QrCodeGenerator and CodeGlyphX return the bare symbol.
+///
+/// ZXing is configured to match this library's ECI behavior (Latin-1 for the ASCII
+/// payloads, UTF-8 for the unicode one) rather than left on its own default.
+/// </summary>
 [MemoryDiagnoser]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 public class SimpleEncode
@@ -193,6 +211,43 @@ public class SimpleEncode
     public QRCoder.QRCodeData QRCoder_Wifi_Encode()
     {
         return QRCoder.QRCodeGenerator.GenerateQrCode(_textWifi, QRCoder.QRCodeGenerator.ECCLevel.L);
+    }
+
+    // CodeGlyphX
+
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("CodeGlyphX")]
+    public CodeGlyphX.QrCode CodeGlyphX_Number_Encode()
+    {
+        return CodeGlyphX.QrCodeEncoder.EncodeText(_textNumber, CodeGlyphX.QrErrorCorrectionLevel.L);
+    }
+
+    [Benchmark]
+    [BenchmarkCategory("CodeGlyphX")]
+    public CodeGlyphX.QrCode CodeGlyphX_Alphanumeric_Encode()
+    {
+        return CodeGlyphX.QrCodeEncoder.EncodeText(_textAlphanumeric, CodeGlyphX.QrErrorCorrectionLevel.L);
+    }
+
+    [Benchmark]
+    [BenchmarkCategory("CodeGlyphX")]
+    public CodeGlyphX.QrCode CodeGlyphX_Url_Encode()
+    {
+        return CodeGlyphX.QrCodeEncoder.EncodeText(_textUrl, CodeGlyphX.QrErrorCorrectionLevel.L);
+    }
+
+    [Benchmark]
+    [BenchmarkCategory("CodeGlyphX")]
+    public CodeGlyphX.QrCode CodeGlyphX_Unicode_Encode()
+    {
+        return CodeGlyphX.QrCodeEncoder.EncodeText(_textUnicode, CodeGlyphX.QrErrorCorrectionLevel.L);
+    }
+
+    [Benchmark]
+    [BenchmarkCategory("CodeGlyphX")]
+    public CodeGlyphX.QrCode CodeGlyphX_Wifi_Encode()
+    {
+        return CodeGlyphX.QrCodeEncoder.EncodeText(_textWifi, CodeGlyphX.QrErrorCorrectionLevel.L);
     }
 
     // Zxing
