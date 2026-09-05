@@ -1,17 +1,15 @@
 # Migration
 
-- **2.0.0 splits the library into three packages and renames the namespaces.** `SkiaSharp.QrCode` and `SkiaSharp.QrCode.Image` become `FeatherQR` (core, no dependencies) and `FeatherQR.SkiaSharp` (rendering and bitmap decoding). The `SkiaSharp.QrCode` package keeps restoring as an empty package that depends on `FeatherQR.SkiaSharp`, so the install line still works and only `using` lines change. The `SKBitmap` decode overloads move to `QRCodeImageDecoder` and friends. See [2.0.0](#200) below.
-- **v1.2.0 decodes Kanji mode segments, and adds `QRCodeDecodeStatus.UnmappedCharacter`.** Behaviour change in the decoders: symbols that previously returned `UnsupportedContent` now return `Success` with text, or `UnmappedCharacter` when a character has no JIS X 0208 mapping. The new enum member is appended, so existing values keep their numbers. See [Kanji mode decoding](#kanji-mode-decoding).
-- **v1.2.0 adds generator options structs and version ranges.** Purely additive for Standard QR and Micro QR: every existing overload keeps its signature, exceptions and output. See [generator options](#generator-options) below.
-- **v1.2.0 introduces rMQR**, whose generator takes `RmQRCodeGeneratorOptions` rather than a parameter list. New in this release, so there is nothing to migrate from. See [rMQR](#rmqr) below.
-- **v1.2.0 makes buffer sizing `Try`-only.** `TryGetRequiredBufferSize` is on all three generators; `GetRequiredBufferSize` is `[Obsolete]` on Standard QR and Micro QR and will be removed in 2.0.0. A warning, not a break. See [sizing is Try-only](#sizing-is-try-only) below.
-- **v1.2.0 deprecates the `Compression` enum.** No API has ever accepted or returned it: the serialization feature it named was removed before 1.0.0 and the enum was left behind. `[Obsolete]` now, removed in 2.0.0. Compress the bytes from `GetRawData()` yourself, as shown under [removed features](#-removed-features).
-- **v1.2.0 removes the `EciModeExtensions` class from the public API.** It was public through 1.1.1 with every member internal, so nothing could be called on it and nothing can break. It is internal now rather than deprecated.
-- **v1.2.0 ships XML documentation in the package.** Editors now show summaries, parameter help and exceptions for every public type, where earlier releases showed only signatures. Nothing to migrate. Everything you cannot reach is removed before packing, internal types and private helpers alike, so only what you can call is described.
-- **After v1.1.0, the image builders share a common base class.** Source compatible; recompile if you referenced the binary. See [image builder base class](#image-builder-base-class) below.
-- **v1.0.0 removes the obsolete `QrCode` class.** If you still use `QrCode`, see [from before v1.0.0 to v1.0.0](#from-before-v100-to-v100) below.
-- v0.11.0 introduces further improvements to Icon handling. See the IconData section below.
-- v0.9.0 introduces significant performance improvements and API changes. Here's what you need to know to upgrade:
+One section per release, newest first. Each section lists what changed in that release and only that release; read the sections between your version and the one you are moving to.
+
+| Upgrading to | What it means for existing code |
+|---|---|
+| [2.0.0](#200) | **Breaking.** Three packages instead of one, new namespaces (`FeatherQR`, `FeatherQR.SkiaSharp`), `TryDecode(SKBitmap)` moved to the rendering package. The `SkiaSharp.QrCode` install line keeps working. Previews are out; the type renames and the announced removals follow in the same major |
+| [1.2.0](#120) | **Additive**, one decoder behaviour change (Kanji segments decode instead of failing). rMQR, generator options structs, version ranges, `Try`-only sizing, two `[Obsolete]` warnings |
+| [1.1.0](#110) | Source compatible, **binary breaking**: the image builders share a base class, recompile |
+| [1.0.0](#100) | **Breaking.** The obsolete `QrCode` class is removed |
+| [0.11.0](#0110) | Icon handling changes (`IconData` takes an `IconShape`) |
+| [0.9.0](#090) | **Breaking.** `QrCode` becomes `QRCodeImageBuilder`; namespaces and removed features |
 
 ## 2.0.0
 
@@ -60,11 +58,20 @@ The classes are `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeIma
 
 The luminance overloads, `TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, …)`, are unchanged and remain in the core; they are the way to decode from any image library other than SkiaSharp. Composite transparent pixels against white before converting.
 
-### Still scheduled for 2.0.0
+### Not yet in the 2.0.0 previews
 
-The removals announced in 1.2.0 (`GetRequiredBufferSize`, the `Compression` enum) and the type renames (the `QR` casing rule, `ECCLevel` to `QREccLevel` and friends) land in the same major and are documented here when they do.
+Two more changes land in the same major before 2.0.0 final and will be documented in this section when they do:
 
-## Kanji mode decoding
+- The removals announced in [1.2.0](#120): `GetRequiredBufferSize` on `QRCodeGenerator` and `MicroQRCodeGenerator` (use `TryGetRequiredBufferSize`), and the `Compression` enum.
+- The type renames (the `QR` casing rule, `ECCLevel` to `QREccLevel` and friends).
+
+Until then the previews carry the 1.2.0 surface under the new names, with the `[Obsolete]` members still present.
+
+## 1.2.0
+
+Additive except for one decoder behaviour change. Nothing in 1.2.0 breaks source or binary compatibility; the two `[Obsolete]` warnings announce removals that land in 2.0.0.
+
+### Kanji mode decoding
 
 `QRCodeDecoder`, `MicroQRCodeDecoder` and `RmQRCodeDecoder` now read ISO/IEC 18004 Kanji mode segments (Standard QR all versions, Micro QR M3 / M4, rMQR all versions). Nothing about encoding changed: the generators still write Japanese text as UTF-8 in Byte mode.
 
@@ -73,7 +80,7 @@ The removals announced in 1.2.0 (`GetRequiredBufferSize`, the `Compression` enum
 - **CP932-only characters are rejected, not substituted.** Within the Kanji-mode range CP932 defines 83 characters JIS X 0208 does not: the NEC row 13 block (circled digits, roman numerals, unit ligatures). A Kanji segment containing one fails the whole symbol with the new `QRCodeDecodeStatus.UnmappedCharacter`, which is deliberately distinct from `UnsupportedContent` so a caller can route just these symbols to a CP932-capable reader.
 - **ECI 20 (Shift_JIS) Byte segments are still unsupported** and still report `UnsupportedContent`.
 
-## sizing is Try-only
+### sizing is Try-only
 
 **`GetRequiredBufferSize` is `[Obsolete]` on `QRCodeGenerator` and `MicroQRCodeGenerator`, and will be removed in 2.0.0.** `TryGetRequiredBufferSize` replaces it on all three generators. rMQR has no throwing sizing method at all — it was never released with one.
 
@@ -96,7 +103,7 @@ if (!MicroQRCodeGenerator.TryGetRequiredBufferSize(userInput, MicroQREccLevel.L,
 - **Pass `Segmentation` the same value you will encode with** (all three symbologies): the two modes can select different versions, so a buffer sized under one can be too small for the other.
 - **The `options` parameter is optional on all three `TryGetRequiredBufferSize` overloads**, so `TryGetRequiredBufferSize(text, ecc, out var size)` is the shortest correct call. This is possible only because there is exactly one sizing overload per generator; the `Create` overloads still require an explicit options value on Standard QR and Micro QR, where the released parameter lists would otherwise make the call ambiguous.
 
-## generator options
+### generator options
 
 `QRCodeGenerator` and `MicroQRCodeGenerator` gained an overload of every entry point that takes an options struct instead of a parameter list. **No behaviour changed**: the parameter list overloads keep their signatures, their exceptions and their output, and the options overloads are an additional way to spell the same calls.
 
@@ -118,7 +125,7 @@ New options go on the struct from now on; the parameter lists are frozen at thei
 
 The options parameter has **no default value** on these two symbologies, so pass `QRCodeGeneratorOptions.Default` explicitly if you want the defaults through that overload. Giving it one would make `CreateQrCode(text, eccLevel)` ambiguous between the two sets.
 
-### version ranges
+#### version ranges
 
 `QRCodeGeneratorOptions.Version` is a `QRCodeVersionRange`, not a single version, and Micro QR has `MicroQRVersionRange`. A pinned version is the degenerate case, so there is one setting rather than two that could contradict each other.
 
@@ -139,7 +146,7 @@ Two things behave differently from the `requestedVersion` parameter, and only th
 
 `-1` means automatic only in `QRCodeImageBuilder.WithVersion(int)`, which is unchanged. It is **not** accepted by the range type: use `null`, or leave `Version` unset. A `-1` that reached a range would otherwise silently produce an automatically sized symbol where a pinned one was asked for.
 
-### ecc boost
+#### ecc boost
 
 `QRCodeGeneratorOptions.BoostEccLevel` (Standard QR only, off by default) treats the requested ECC level as a minimum: the version is chosen for it as before, then the level is raised as far as that version's spare capacity allows. The symbol size never changes, and sizing is unaffected — only the emitted format information (and possibly the mask) differs. `QRCodeImageBuilder` exposes the same switch as `WithErrorCorrectionBoost()`, which pairs well with `WithIcon`.
 
@@ -151,19 +158,19 @@ var data = QRCodeGenerator.CreateQrCode("https://example.com", ECCLevel.M,
 
 Nothing to migrate: with the option unset, every call produces the exact symbol it produced before.
 
-### mask pattern pinning
+#### mask pattern pinning
 
 `QRCodeGeneratorOptions.MaskPattern` and `MicroQRCodeGeneratorOptions.MaskPattern` (`null` = automatic) pin a specific data mask pattern instead of the automatic selection — one of eight for Standard QR (penalty-scored), one of four for Micro QR (edge-scored); the two numberings are unrelated. Any pattern is a valid symbol; pinning exists to reproduce a symbol produced elsewhere byte-for-byte (`QRCodeDecodeInfo.MaskPattern` / `MicroQRCodeDecodeInfo.MaskPattern` report the pattern a decoder saw) and to exercise scanners against every pattern. The builders expose the same setting as `WithMaskPattern(int?)`. Values outside the symbology's range are rejected when the option is set, like `Version`. rMQR has a single fixed mask, so it has no such option.
 
 Nothing to migrate: with the option unset, every call produces the exact symbol it produced before.
 
-### image builders
+#### image builders
 
 `QRCodeImageBuilder.WithVersion` and the Micro QR equivalent gained an overload taking the range type. `WithVersion(int)` and `WithVersion(MicroQRVersion)` are unchanged, including `WithVersion(-1)` meaning automatic.
 
 One behaviour change: `WithVersion(n)` followed by `ToByteArray()` with content too large for version *n* now throws an `ArgumentException` that names the problem, where it previously failed inside the encoder with `ArgumentOutOfRangeException (Parameter 'length')`.
 
-## rMQR
+### rMQR
 
 rMQR (ISO/IEC 23941) is new in v1.2.0, so nothing here is a migration. Its generator takes an options struct rather than a parameter list, and unlike the other two it has no parameter list overloads at all:
 
@@ -181,7 +188,7 @@ Because there is nothing to collide with, the options parameter is defaulted her
 
 There is no version *range* for rMQR. Its 32 versions are not totally ordered (R7x43, R9x43 and R7x59 have no min/max relation), so fit is constrained with `FitStrategy` and `Height` instead.
 
-### mixed-mode segmentation
+#### mixed-mode segmentation
 
 Set `Segmentation = RmQRSegmentation.Optimal` (rMQR), `QRCodeSegmentation.Optimal` (Standard QR) or `MicroQRSegmentation.Optimal` (Micro QR) to let the generator split mixed content into Numeric / Alphanumeric / Byte runs. It never selects a symbol with more core modules (Standard / Micro QR: a larger version) than `Single`, it emits the `Single` bit stream verbatim whenever splitting would not shrink it, and it additionally encodes content that overflows every version in a single mode — unless the minimal-bit plan would be misread on decode (a relocated byte order mark, or on Micro QR a Latin-1 run its charset heuristic would read as UTF-8), in which case it reports "does not fit" instead of corrupting; only that one plan is considered, so a costlier safe split is not searched for. On Micro QR the plan also respects each version's mode set (M1 is Numeric-only, M2 has no Byte mode).
 
@@ -199,7 +206,15 @@ var standard = QRCodeGenerator.CreateQrCode(
     new QRCodeGeneratorOptions { Segmentation = QRCodeSegmentation.Optimal });   // version 3 instead of 4
 ```
 
-## image builder base class
+### other 1.2.0 changes
+
+- **The `Compression` enum is `[Obsolete]`, removed in 2.0.0.** No API has ever accepted or returned it: the serialization feature it named was removed before 1.0.0 and the enum was left behind. Compress the bytes from `GetRawData()` yourself, as shown under [removed features](#-removed-features).
+- **`EciModeExtensions` is no longer public.** It was public through 1.1.1 with every member internal, so nothing could be called on it and nothing can break. It is internal now rather than deprecated.
+- **XML documentation ships in the package.** Editors now show summaries, parameter help and exceptions for every public type, where earlier releases showed only signatures. Nothing to migrate.
+
+## 1.1.0
+
+### image builder base class
 
 `QRCodeImageBuilder` and `MicroQRCodeImageBuilder` now derive from `QRCodeImageBuilderBase<TSelf>`, which carries the options every symbology shares (`WithSize`, `WithModulePixelSize`, `WithFormat`, `WithQuietZone`, `WithColors`, `WithModuleShape`, `WithGradient`) and the complete output surface (`SaveTo`, `SaveToSvg`, `ToSvgString`, `ToByteArray`, `ToImage`, `ToBitmap`). Symbology-specific options (`WithErrorCorrection`, `WithVersion`, and on Standard QR `WithIcon`, `WithFinderPatternShape`, `WithEciMode`) stay on the concrete builders.
 
@@ -207,7 +222,7 @@ var standard = QRCodeGenerator.CreateQrCode(
 - **Binary breaking**, the shared members moved to the base class, so assemblies compiled against an older version must be recompiled (no code changes needed).
 - `WithQuietZone` no longer declares a default argument value (it was 4 for Standard QR, 2 for Micro QR, a value the builder already starts with). Calling `WithQuietZone()` with no argument no longer compiles; simply remove the call.
 
-## from before v1.0.0 to v1.0.0
+## 1.0.0
 
 The `QrCode` class has been **removed** in v1.0.0. It was marked obsolete in v0.9.0; use `QRCodeImageBuilder` instead.
 
@@ -326,7 +341,7 @@ using var output = File.OpenWrite(path);
 data.SaveTo(output);
 ```
 
-## from 0.10.0 to 0.11.0 and higher
+## 0.11.0
 
 Take advantage of new capabilities:
 
@@ -375,7 +390,7 @@ var icon = new IconData
 };
 ```
 
-## from 0.8.0 to 0.9.0 and higher
+## 0.9.0
 
 Take advantage of new capabilities:
 
@@ -387,7 +402,7 @@ For complete migration details and examples, see [Release 0.9.0](https://github.
 
 ### 🔄 Primary API Change: `QrCode` → `QRCodeImageBuilder`
 
-The `QrCode` class was marked **obsolete** in v0.9.0 and **removed** in v1.0.0. Replace it with `QRCodeImageBuilder`. For full migration examples (stream output, format/quality, base-image overlay, and more), see [from before v1.0.0 to v1.0.0](#from-before-v100-to-v100).
+The `QrCode` class was marked **obsolete** in v0.9.0 and **removed** in v1.0.0. Replace it with `QRCodeImageBuilder`. For full migration examples (stream output, format/quality, base-image overlay, and more), see [from before v1.0.0 to v1.0.0](#100).
 
 ### 🗑️ Remove `using` Statements
 
@@ -406,7 +421,7 @@ var qrCodeData = QRCodeGenerator.CreateQrCode("Hello", ECCLevel.L);
 QRCodeRenderer.Render(...);  // Now a static method
 ```
 
-## 📦 Update Namespace for IconData
+### 📦 Update Namespace for IconData
 
 If using icons in QR codes:
 
