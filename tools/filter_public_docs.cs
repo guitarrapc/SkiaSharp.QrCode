@@ -166,11 +166,14 @@ bool Process(string documentationPath, bool verifyOnly)
         return space.Length == 0 ? name : $"{space}.{name}";
     }
 
-    // Nested protected counts as reachable: a consumer gets at those by deriving.
+    // Nested protected counts as reachable: a consumer gets at those by deriving. Compiler-generated
+    // nested types do not: a C# 14 extension block emits public marker types with unspeakable names
+    // (<G>$hash, <M>$hash) that no caller can spell and no documentation can name.
     bool IsVisibleType(TypeDefinition type)
     {
         var visibility = type.Attributes & TypeAttributes.VisibilityMask;
         if (!type.IsNested) return visibility == TypeAttributes.Public;
+        if (reader.GetString(type.Name).Contains('<')) return false;
         return visibility is TypeAttributes.NestedPublic or TypeAttributes.NestedFamily or TypeAttributes.NestedFamORAssem
             && IsVisibleType(reader.GetTypeDefinition(type.GetDeclaringType()));
     }

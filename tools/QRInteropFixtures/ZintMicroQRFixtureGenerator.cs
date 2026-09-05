@@ -6,7 +6,7 @@ namespace QRInteropFixtures;
 /// <summary>
 /// Micro QR fixture generator backed by libzint, zxing-cpp's writer is libzint
 /// compiled into the pinned ZXingCpp native binary, so this is a zint-lineage
-/// ENCODER (independent of both SkiaSharp.QrCode and the zxing-cpp reader used
+/// ENCODER (independent of both FeatherQR and the zxing-cpp reader used
 /// as the sanity gate) with no external toolchain. Capability verified by
 /// <c>probe-creator</c>.
 /// </summary>

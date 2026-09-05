@@ -210,11 +210,15 @@ static string Render(string assemblyPath)
         return sb.ToString();
     }
 
-    // Nested protected counts as reachable: a consumer gets at those by deriving.
+    // Nested protected counts as reachable: a consumer gets at those by deriving. Compiler-generated
+    // nested types do not: a C# 14 extension block emits public marker types with unspeakable names
+    // (<G>$hash, <M>$hash) that no caller can spell; the members themselves are listed on the
+    // enclosing class, which is where a caller finds them.
     bool IsVisibleType(TypeDefinition type)
     {
         var visibility = type.Attributes & TypeAttributes.VisibilityMask;
         if (!type.IsNested) return visibility == TypeAttributes.Public;
+        if (reader.GetString(type.Name).Contains('<')) return false;
         return visibility is TypeAttributes.NestedPublic or TypeAttributes.NestedFamily or TypeAttributes.NestedFamORAssem
             && IsVisibleType(reader.GetTypeDefinition(type.GetDeclaringType()));
     }

@@ -1,9 +1,9 @@
 # Library Design
 
-SkiaSharp.QrCode aims to be the best QR code library for C#.
+FeatherQR aims to be the best QR code library for C#.
 We pursue encoding and decoding implemented in pure C#, first-class support for NativeAOT and WebAssembly, performance backed by measurement, and an API that feels good from the very first line of code.
 
-This document defines the design principles that make SkiaSharp.QrCode what it is. Design details for individual features and implementations are documented in [specs/](specs/).
+This document defines the design principles that make FeatherQR what it is. Design details for individual features and implementations are documented in [specs/](specs/).
 
 ## Principles
 
@@ -11,6 +11,7 @@ This document defines the design principles that make SkiaSharp.QrCode what it i
 
 The core QR code encoding and decoding algorithms depend only on the BCL, while SkiaSharp is responsible solely for rendering and image I/O.
 The core remains pure C#: rather than adding external dependencies, we implement the algorithms we need ourselves.
+The package boundary enforces this: `FeatherQR` is the core and declares no dependency, `FeatherQR.SkiaSharp` is the rendering layer and is the only package that references SkiaSharp. A build that adds a dependency to the core fails the gate that checks the packaged dependency graph.
 
 ### Zero Allocation
 
@@ -41,10 +42,10 @@ Its AOT-compiled WebAssembly performs encoding and decoding entirely in the brow
 
 # ライブラリデザイン
 
-SkiaSharp.QrCodeは、C#における最高のQRコードライブラリを目指します。
+FeatherQRは、C#における最高のQRコードライブラリを目指します。
 純粋なC#によるエンコードとデコード、NativeAOTとWebAssemblyへの対応、計測に裏付けられた性能、そして最初の1行から気持ちよく使えるAPIを追求します。
 
-この文書は、SkiaSharp.QrCodeがこのライブラリであり続けるためのデザイン原則を記録するものです。個々の機能や実装の設計については[specs/](specs/)に記録します。
+この文書は、FeatherQRがこのライブラリであり続けるためのデザイン原則を記録するものです。個々の機能や実装の設計については[specs/](specs/)に記録します。
 
 ## 原則
 
@@ -52,6 +53,7 @@ SkiaSharp.QrCodeは、C#における最高のQRコードライブラリを目指
 
 QRコードのエンコードとデコードのコアはBCLだけで完結し、SkiaSharpは描画と画像の入出力だけを担います。
 コアは純粋なC#であり続け、外部依存を増やすのではなく、必要なアルゴリズムは自ら実装します。
+この境界はパッケージで強制します。`FeatherQR`がコアであり依存を宣言せず、`FeatherQR.SkiaSharp`が描画層でありSkiaSharpを参照する唯一のパッケージです。コアに依存が加わるビルドは、パッケージの依存グラフを検査するゲートで止まります。
 
 ### ゼロアロケーション
 

@@ -11,7 +11,7 @@
 
     <!-- NuGet -->
     <IsPackable>false</IsPackable>
-    <Version>1.2.0</Version>
+    <Version>2.0.0-preview.1</Version>
     <Authors>guitarrapc</Authors>
     <Copyright>© guitarrapc</Copyright>
     <PackageTags>skia, skiasharp, qrcode, microqr, rmqr</PackageTags>
@@ -25,7 +25,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Condition="'$(PackRootReadme)' != 'false'" />
     <EmbeddedResource Include="$(MSBuildThisFileDirectory)LICENSE" />
   </ItemGroup>
 </Project>

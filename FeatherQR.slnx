@@ -1,0 +1,28 @@
+<Solution>
+  <Folder Name="/.props/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/BlazorWasm/BlazorWasm.csproj" Id="d1437501-8214-4f19-b99f-aa3210ea3a32" />
+    <Project Path="samples/ConsoleApp/ConsoleApp.csproj" />
+    <Project Path="samples/ConsoleAppNativeAOT/ConsoleAppNativeAOT.csproj" />
+    <Project Path="samples/NanoServerGenerate/NanoServerGenerate.csproj" />
+    <Project Path="samples/SimpleGenerate/SimpleGenerate.csproj" />
+    <Project Path="samples/SimpleSerialize/SimpleSerialize.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/FeatherQR.Benchmark/FeatherQR.Benchmark.csproj" />
+    <Project Path="src/FeatherQR.Playground/FeatherQR.Playground.csproj" />
+    <Project Path="src/FeatherQR.SkiaSharp/FeatherQR.SkiaSharp.csproj" />
+    <Project Path="src/FeatherQR/FeatherQR.csproj" />
+    <Project Path="src/SkiaSharp.QrCode/SkiaSharp.QrCode.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FeatherQR.AotAnalysis/FeatherQR.AotAnalysis.csproj" />
+    <Project Path="tests/FeatherQR.Tests/FeatherQR.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/QRInteropFixtures/QRInteropFixtures.csproj" />
+  </Folder>
+</Solution>

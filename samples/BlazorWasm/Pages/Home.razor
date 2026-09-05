@@ -1,13 +1,13 @@
 @page "/"
 @using System.Diagnostics
 @using SkiaSharp
-@using SkiaSharp.QrCode
-@using SkiaSharp.QrCode.Image
+@using FeatherQR
+@using FeatherQR.SkiaSharp
 @using SkiaSharp.Views.Blazor
 @inject IJSRuntime JS
 @implements IDisposable
 
-<PageTitle>SkiaSharp.QrCode Blazor Sample</PageTitle>
+<PageTitle>FeatherQR Blazor Sample</PageTitle>
 
 <section id="playground">
     <div class="controls-column">
@@ -383,7 +383,7 @@
         StateHasChanged(); // paint runs outside Blazor's render cycle; publish stats/error to the DOM
     }
 
-    /// <summary>PNG export via <see cref="SkiaSharp.QrCode.Image.QRCodeImageBuilder"/> at the selected export size.</summary>
+    /// <summary>PNG export via <see cref="FeatherQR.SkiaSharp.QRCodeImageBuilder"/> at the selected export size.</summary>
     private async Task DownloadPngAsync()
     {
         try

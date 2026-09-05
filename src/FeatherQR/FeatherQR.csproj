@@ -1,0 +1,62 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0;net10.0</TargetFrameworks>
+    <RootNamespace>FeatherQR</RootNamespace>
+
+    <!-- NuGet -->
+    <IsPackable>true</IsPackable>
+    <!-- Ships the XML documentation beside the assembly so consumers get IntelliSense.
+         This lives here rather than in Directory.Build.props because the doc-completeness
+         warnings it enables are only worth answering for the surface that ships: on the
+         whole solution it produces ~5,000 of them, almost all from public test classes. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>FeatherQR</PackageId>
+    <Description>QR Code, Micro QR and rMQR encoder and decoder for .NET. Zero dependencies, zero allocations on the hot paths, trim and NativeAOT safe. Rendering lives in FeatherQR.SkiaSharp.</Description>
+
+    <!-- API compatibility. Runs at Pack: compares this package against the last released one and reports
+         any breaking change. No baseline until 2.0.0 ships; set PackageValidationBaselineVersion then. -->
+    <EnablePackageValidation>true</EnablePackageValidation>
+
+    <!-- Trimming/NativeAOT. IsAotCompatible turns on the trim/AOT/single-file analyzers and stamps the
+         package metadata; it is only valid for net7.0+, so the netstandard targets are excluded.
+         The authoritative whole-library check is tests/FeatherQR.AotAnalysis, gated in CI. -->
+    <IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net7.0'))">true</IsAotCompatible>
+
+    <!-- SBOM -->
+    <GenerateSBOM>true</GenerateSBOM>
+    <SbomGenerationFetchLicenseInformation>true</SbomGenerationFetchLicenseInformation>
+    <SbomGenerationEnablePackageMetadataParsing>true</SbomGenerationEnablePackageMetadataParsing>
+    <SbomGenerationManifestInfo>SPDX:2.2</SbomGenerationManifestInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The rendering package reaches the module-run enumerator and the luminance kernels
+         through internals during the split; every use is enumerated in the architecture
+         record and gets a public replacement or a recorded reason. -->
+    <InternalsVisibleTo Include="FeatherQR.SkiaSharp, PublicKey=00240000048000009400000006020000002400005253413100040000010001007de4a83ad446c6d7c9e85de8a1c654096808b127b9cfc0db4931e3062bffea0daa74fa7c584ee37c9d0dee5c86f42e3b88be303692712c9198ab19665680d2bca6d91f48a3c76980c8d0a90248c3b535a935612525b79b9bbc152e7e297a004bd17e2b24767fadde2a5174f9a50e297e724637f498777d14a62223f4db932dbc" />
+    <InternalsVisibleTo Include="FeatherQR.Tests, PublicKey=00240000048000009400000006020000002400005253413100040000010001007de4a83ad446c6d7c9e85de8a1c654096808b127b9cfc0db4931e3062bffea0daa74fa7c584ee37c9d0dee5c86f42e3b88be303692712c9198ab19665680d2bca6d91f48a3c76980c8d0a90248c3b535a935612525b79b9bbc152e7e297a004bd17e2b24767fadde2a5174f9a50e297e724637f498777d14a62223f4db932dbc" />
+  </ItemGroup>
+
+  <!-- No SkiaSharp here, by design. tests/.../CoreAssemblyDependencyTest asserts it from metadata
+       on every target framework. The netstandard targets need the BCL shims that used to arrive
+       through SkiaSharp: Span/ArrayPool/Unsafe live in packages there and in the framework on net8.0+. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="System.Memory" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Sbom.Targets">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="PolySharp">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

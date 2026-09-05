@@ -33,7 +33,7 @@ Internals are split into shared primitives and per-symbology pipelines.
 | `BinaryInterleaver` | Block interleaving of data then ECC codewords depends only on the `ECCInfo` block structure; Standard QR and rMQR interleave identically (Micro QR has one block). Lifted from `Internals.StandardQr` to `Internals.BinaryEncoders` when rMQR became the second consumer (rMQR Phase 5.4); the only symbology-specific input, the remainder-bit count, is passed in by the caller |
 | `EncodingMode`, `TextAnalyzer`, `CharacterSets` | Mode alphabet definitions (Numeric / Alphanumeric / Byte character classes, alphanumeric encoding values) are shared; only indicator widths and legality differ per symbology |
 | `SegmentDecoders` | Segment payload bit groups (numeric 10/7/4, alphanumeric 11/6, byte 8·count), the byte-charset heuristics (UTF-8 validation, BOM, Latin-1 widening) and the ECI designator reader (lifted from `QRBinaryDecoder` when rMQR became its second consumer, Phase 6) are identical across symbologies; the mode/count indicator framing that differs stays in each symbology's bitstream decoder (lifted out of `QRBinaryDecoder` in Phase 3 when the second consumer appeared) |
-| `LuminanceConverter`, `PerspectiveTransform` | Image preprocessing and geometry are symbology-independent |
+| `LuminanceConverter`, `PixelLayout`, `PerspectiveTransform` | Image preprocessing and geometry are symbology-independent. The luminance kernels are the seam the first-party image adapter feeds (see the package seam below) |
 | `Point`, `Rectangle` | Plain geometry types |
 | `ModuleRunScanner`, `ModuleRunEnumerator<TView>` | Merging dark modules into horizontal runs depends only on the `IModuleMatrixView` shape, not the symbology. One implementation serves both the renderer's merged-run drawing path and the public `GetModuleRectangles` surface on all three data types, so the geometry the public API reports is by construction the geometry the renderer draws |
 
@@ -53,6 +53,56 @@ Two detection primitives were lifted from `Internals.StandardQr` to the shared `
 - `FinderPatternFinder`, the 1:1:3:1:1 run-ratio scan and cross-checks; Micro QR and rMQR use the same finder pattern shape (single finder instead of three) via `FindCandidates` (all cross-checked candidates), while Standard QR keeps its best-three selection in `TryFind`
 - `FinderAxisEstimator`, single-finder local module scale and axis recovery (axis-aligned dark-light-dark runs, angular sweep), lifted from the Micro QR image decoder when rMQR image detection (Phase 7) became its second consumer; the Micro QR image benchmark stayed flat
 
+### Package architecture
+
+Since 2.0.0 the library ships as three NuGet packages built from two assemblies in this repository (the core split, 2026-09):
+
+| Package | Assembly | Contents | Depends on |
+|---|---|---|---|
+| `FeatherQR` | `FeatherQR.dll` | Generators, decoders, data types, options, segmentation, `ModuleRect` geometry, the luminance kernels | Nothing on net8.0 and net10.0; `System.Memory` (netstandard2.0) and `System.Runtime.CompilerServices.Unsafe` (netstandard2.1) |
+| `FeatherQR.SkiaSharp` | `FeatherQR.SkiaSharp.dll` | `QRCodeRenderer`, the `SKCanvas` extensions, the image builders, `IconData` and shapes, `SKBitmap` decoding as extension members on the core decoders | `FeatherQR`, `SkiaSharp` |
+| `SkiaSharp.QrCode` | none | An empty compatibility metapackage: the ID the library shipped under through 1.x keeps restoring | `FeatherQR.SkiaSharp` |
+
+Namespaces follow the packages: `FeatherQR` and `FeatherQR.SkiaSharp`, with the internals of each under `FeatherQR.Internals` and `FeatherQR.SkiaSharp.Internals`. The former `SkiaSharp.QrCode.Image` sub-namespace is folded into `FeatherQR.SkiaSharp`; one namespace per package is the cheapest shape to explain in a major that changes every `using` line anyway.
+
+**Dependency rules.**
+
+- The core references no package that is not a BCL shim, and the shims only where the framework lacks `Span<T>`, `ArrayPool<T>` and `Unsafe`. Two guards hold this: `CoreAssemblyDependencyTest` reads the core assembly's references from metadata for every target framework, and `tools/check_package_deps.cs` reads the packed nuspecs (see "Package graph" below). A dependency that slips in passes build and test and fails both.
+- The rendering package reaches the core through the public surface, plus the enumerated `InternalsVisibleTo` uses recorded below ("Package seam"). The core never references the rendering package.
+- Skia types appear only in the rendering assembly. Inside `namespace FeatherQR.SkiaSharp` the simple name `SkiaSharp` binds to that namespace, so `using SkiaSharp;` sits above the file-scoped namespace declaration and qualified `SkiaSharp.SKBitmap` spellings are not used.
+- No unified `Create(symbology, ...)` entry point is ever added. The three generators, decoders and data types do not reference each other, and that is what makes trimming precise: a consumer that uses one symbology keeps one symbology.
+
+**What the split buys, measured.** With `PublishTrimmed` (`TrimMode=full`) on a console app, measured on 2026-09-04 on the pre-split assembly:
+
+| Consumer profile | Trimmed managed assembly |
+|---:|---:|
+| QR encode only | 95 KB |
+| All three symbologies, encode | 153 KB |
+| All three, encode and decode, including `TryDecode(SKBitmap)` | 229 KB |
+| Untrimmed net10.0 | 384 KB |
+
+The managed assembly was never the cost. `libSkiaSharp` is 11.9 MB per RID, cannot be trimmed, and is deployed whether or not a single Skia call survives; only a package boundary removes it, and only for consumers that reference `FeatherQR` alone. A per-symbology package split was rejected: it would save untrimmed consumers roughly 100 to 130 KB, cost a four-package core with a public surface for the shared kernels, and buy nothing for trimmed consumers, who already get the numbers above.
+
+**What "lightweight" means.** The brand word is defined as zero dependencies in the core, zero allocations on the hot paths, and trim and NativeAOT safety. It is not a claim about assembly bytes: at 300 to 390 KB the core is larger than single-symbology libraries because it carries three symbologies, the decoders and the SIMD tiers. The README states the definition in its first lines so the name never has to be defended against a byte count.
+
+### Package seam: what the rendering package reaches through `InternalsVisibleTo`
+
+`FeatherQR` grants `InternalsVisibleTo` to `FeatherQR.SkiaSharp`. The rule is that a third-party renderer must be writable against the public surface alone, so every internal the first-party renderer still uses is listed here with either its public replacement or the reason it stays internal. The list is checked by building the rendering project with the grant removed: whatever fails to compile is the list.
+
+| Internal | Used by | Decision |
+|---|---|---|
+| `LuminanceConverter.Convert(pixels, width, height, rowBytes, PixelLayout, premultipliedAlpha, luminance)`, `PixelLayout`, `ImageDimensions.TryGetPixelCount` | `Internals.BitmapLuminanceConverter` and the `SKBitmap` decode overloads | **Stays internal, by decision (core split Phase 2).** The public decode seam is `TryDecodeImage(luminance, width, height, ...)`, which already lets a third-party adapter decode from any image library; what it does not get is the SIMD conversion and the white-compositing behavior for free, and no such adapter has been asked for. Publishing the kernels is a one-way door (removing an API needs a major, adding one needs a minor), so they stay internal until a concrete request exists. The `TryDecodeImage` documentation states the white-compositing expectation so a hand-written converter does not composite transparent pixels against black. The rendering package keeps a single-entry adapter, `FeatherQR.SkiaSharp.Internals.BitmapLuminanceConverter` (`SKColorType` to `PixelLayout` over `SKPixmap.GetPixelSpan()`), so promoting the seam later is a visibility change, not a redesign |
+| `RmQRConstants.QuietZoneModules`, `RmQRConstants.IsValidVersion` | `RmQRCodeImageBuilder` | **Replaced.** The builder reads the specified quiet zone from `default(RmQRCodeGeneratorOptions).QuietZoneSize`, which is the same constant behind a public property, and validates a requested version with `Enum.IsDefined`, which the contiguous `RmQRVersion` enum makes exact |
+| `IModuleMatrixView`, `StandardQrMatrixView` / `MicroQRMatrixView` / `RmQRMatrixView`, `ModuleRunEnumerator<TView>` | `QRCodeRenderer` merged-run and per-module drawing loops | **Stays internal, by decision.** The public equivalent is `GetModuleRectangles` / `TryGetModuleRectangles` on the three data types, built on the same `ModuleRunScanner`, so a third-party renderer draws exactly the geometry the first-party one does. The first-party renderer keeps the streaming enumerator because it draws each run as it is found with no rectangle buffer; going through the public surface would add a `GetModuleRectanglesMaxCount()`-sized rental per render (up to ~15,700 rectangles for version 40) to the one path that is measured as allocation-free. Exposing the struct-generic view machinery itself would freeze an implementation detail as API for one caller |
+
+### Package graph: what each nuspec declares
+
+Three packages ship from one `dotnet pack` at one lockstep version (`Directory.Build.props`): `FeatherQR` (core), `FeatherQR.SkiaSharp` (rendering, depends on `FeatherQR` and `SkiaSharp`) and `SkiaSharp.QrCode` (an empty compatibility metapackage that depends on `FeatherQR.SkiaSharp` and carries no `lib/`). `tools/check_package_deps.cs` opens the packed nupkgs and asserts the exact dependency group of every target framework after every pack in CI; the expectation is a literal table in the tool, so a change to the graph is a diff someone accepts on purpose.
+
+**The core is dependency-free where the framework carries `Span<T>`, `ArrayPool<T>` and `Unsafe`, and depends on the BCL shims where it does not.** net8.0 and net10.0 groups are empty; netstandard2.0 depends on `System.Memory` and netstandard2.1 on `System.Runtime.CompilerServices.Unsafe`. Before the split these arrived transitively through SkiaSharp, which is why removing SkiaSharp broke only the netstandard builds. "Zero dependencies" in the package description means this.
+
+**Transitive pinning is off for the whole repository.** `CentralPackageTransitivePinningEnabled` promotes every transitive package that has a `PackageVersion` entry into the nuspec as a direct dependency, which for 1.x meant `SkiaSharp.NativeAssets.Win32` and `.macOS` beside `SkiaSharp`, and would have meant `SkiaSharp` and the native assets beside `FeatherQR.SkiaSharp` in the metapackage. The promotion changes nothing a consumer resolves (SkiaSharp brings its native assets itself) but makes the package declare a graph it does not have and the assertion above meaningless. The other half of the feature, forcing a transitive version floor on applications, has no use here: the test, benchmark, playground and sample projects are not shipped products, `NuGetAudit` reports a vulnerable resolution, and a direct `PackageReference` raises a transitive version when one ever needs raising. One setting in `Directory.Packages.props` is therefore simpler than a per-project exception that every future packable project would have to remember.
+
 ### Public API direction
 
 Each symbology gets its own generator entry point with symbology-typed version and error-correction parameters. `QRCodeGenerator.CreateQrCode` and its overloads remain unchanged, Standard QR users see no difference.
@@ -61,7 +111,7 @@ Each symbology gets its own generator entry point with symbology-typed version a
 
 **The reshaping was possible only because of a release window, and that window is now closed.** No rMQR API had ever been in a NuGet package, so its surface could be fixed by deletion at zero compatibility cost; Standard QR and Micro QR had no such freedom and kept their released overloads. Package validation against the last published package is what enforced the difference (`EnablePackageValidation` with `PackageValidationBaselineVersion`), and the baseline is bumped on every release, so from 1.2.0 onward the reshaped surface is frozen the same way. Anything that would have wanted this kind of change again has to go through an obsolete cycle instead.
 
-**Package validation only polices the half of a change that breaks somebody, so the exported surface is also held to a listing in the repository.** Validation answers "would this break a caller who compiled against the last release", and a new public member never does: it lands unreviewed, which is the wrong default for a library whose next release is a rename. `src/SkiaSharp.QrCode/PublicAPI.approved.txt` records every exported type and member and is regenerated by `tools/check_public_api.cs`, gated on pull requests and again at release. Changing the surface is therefore a diff someone accepts deliberately, and the 2.0.0 reshaping arrives as one reviewable file rather than as a claim in a pull request description.
+**Package validation only polices the half of a change that breaks somebody, so the exported surface is also held to a listing in the repository.** Validation answers "would this break a caller who compiled against the last release", and a new public member never does: it lands unreviewed, which is the wrong default for a library whose next release is a rename. `src/FeatherQR/PublicAPI.approved.txt` and `src/FeatherQR.SkiaSharp/PublicAPI.approved.txt` record every exported type and member of the two assemblies and are regenerated by `tools/check_public_api.cs`, gated on pull requests and again at release. Changing the surface is therefore a diff someone accepts deliberately, and the 2.0.0 reshaping arrives as one reviewable file rather than as a claim in a pull request description.
 
 **The listing is read from every target framework, which turned an assumption into a fact.** The library builds for four, nothing had ever compared them, and the claim that no exported member is framework-conditional lived only in a tool comment. It held when the gate was introduced, and a build where it stops holding now fails instead of shipping. Two renderers of the same surface exist on purpose, the reflection one behind the Playground's API page and the metadata one behind the gate, and their agreeing line for line is what keeps either from drifting unnoticed.
 

@@ -8,12 +8,12 @@ Design record for the committed fixture corpus and its generator (`tools/QRInter
 
 ### Purpose
 
-The corpus is a set of symbols produced by encoders **other than SkiaSharp.QrCode**, committed to the repository so that PR CI can verify this library's decoder against independent implementations without requiring external toolchains at test time. It exists to break the shared-bug blind spot of round-trip-only testing: if our encoder and decoder agree on the same mistake, round-trips still pass, externally generated fixtures do not.
+The corpus is a set of symbols produced by encoders **other than FeatherQR**, committed to the repository so that PR CI can verify this library's decoder against independent implementations without requiring external toolchains at test time. It exists to break the shared-bug blind spot of round-trip-only testing: if our encoder and decoder agree on the same mistake, round-trips still pass, externally generated fixtures do not.
 
 ### Layout
 
 ```
-tests/SkiaSharp.QrCode.Tests/Fixtures/
+tests/FeatherQR.Tests/Fixtures/
 ├── StandardQr/
 │   └── zxing-net/              (one directory per generator)
 │       ├── case-name.json       manifest

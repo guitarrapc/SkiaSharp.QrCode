@@ -1,13 +1,20 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    <!-- Keep it off to prevent NuGet from promoting transitive dependencies into the nuspec of packable projects -->
+    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
     <NoWarn>$(NoWarn);NU1507</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <!-- Core -->
     <PackageVersion Include="PolySharp" Version="1.16.0" />
     <PackageVersion Include="SkiaSharp" Version="4.148.0" />
+    <!-- BCL shims for the netstandard targets of the core (Span, ArrayPool, Unsafe). These are
+         framework surface, not a dependency in the sense the split removes: net8.0 and net10.0
+         builds carry none. The versions match what SkiaSharp 4.148 pins, so a consumer that
+         also installs FeatherQR.SkiaSharp resolves one copy. -->
+    <PackageVersion Include="System.Memory" Version="4.6.3" />
+    <PackageVersion Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
     <!-- Benchmark -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />

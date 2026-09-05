@@ -1,11 +1,11 @@
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 namespace BlazorWasm;
 
 /// <summary>
-/// Translates <see cref="QrOptions"/> into SkiaSharp.QrCode API calls, shared by the
+/// Translates <see cref="QrOptions"/> into FeatherQR API calls, shared by the
 /// live <c>SKCanvasView</c> preview (<see cref="QRCodeRenderer"/>) and the PNG/SVG
 /// exports (<see cref="QRCodeImageBuilder"/>).
 /// </summary>
