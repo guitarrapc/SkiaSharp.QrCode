@@ -332,7 +332,7 @@ Take advantage of new capabilities:
 
 - **Logo customization** - Now you can customize center placed logos. Library offers icons with both images and text.
 
-For complete migration details and examples, see [Release 0.11.0](https://github.com/guitarrapc/SkiaSharp.QrCode/releases/tag/0.11.0).
+For complete migration details and examples, see [Release 0.11.0](https://github.com/guitarrapc/FeatherQR/releases/tag/0.11.0).
 
 ### ⚠️ IconData.Data changed Icon from SKBitmap to IconShape
 
@@ -383,7 +383,7 @@ Take advantage of new capabilities:
 - **Enhanced customization** - More control over module shapes and colors
 - **Better performance** - Dramatically faster generation with lower memory usage
 
-For complete migration details and examples, see [Release 0.9.0](https://github.com/guitarrapc/SkiaSharp.QrCode/releases/tag/0.9.0).
+For complete migration details and examples, see [Release 0.9.0](https://github.com/guitarrapc/FeatherQR/releases/tag/0.9.0).
 
 ### 🔄 Primary API Change: `QrCode` → `QRCodeImageBuilder`
 

@@ -580,7 +580,7 @@ let exports = null;
 let runtimeReady = false;
 let runtimeAlive = true;
 
-const RELEASE_TAG_BASE_URL = 'https://github.com/guitarrapc/SkiaSharp.QrCode/releases/tag/';
+const RELEASE_TAG_BASE_URL = 'https://github.com/guitarrapc/FeatherQR/releases/tag/';
 
 function isRuntimeDeadError(err) {
   if (!err) return false;

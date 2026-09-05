@@ -28,7 +28,7 @@ public class QRCodeEncodeEndToEnd
     {
         _numeric = "0123456789"; // version 1-L, numeric mode
         _alphanumeric = "HELLO WORLD 2026"; // version 1-M, alphanumeric mode
-        _byteUrl = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md?foo=sample&bar=dummy"; // version 6-M, byte mode
+        _byteUrl = "https://github.com/guitarrapc/FeatherQR/blob/main/README.md?foo=sample&bar=dummy"; // version 6-M, byte mode
         _byteMidM = BuildDeterministicText(620); // version 20-M byte mode (max 666)
         _byteLongL = BuildDeterministicText(2900); // version 40-L byte mode (max 2953)
         _byteLongH = BuildDeterministicText(1200); // version 40-H byte mode (max 1273)

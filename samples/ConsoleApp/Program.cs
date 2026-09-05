@@ -29,7 +29,7 @@ var iconPath = Path.Combine(outputDir, "test.png");
 // Square Instagram logo (128x128). Prefer over samples/insta.png (133x135, non-square).
 var iconInstaPath = Path.Combine(outputDir, "instarich-logo.png");
 
-var content = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md";
+var content = "https://github.com/guitarrapc/FeatherQR/blob/main/README.md";
 
 // prepare
 Directory.CreateDirectory(outputDir);
