@@ -53,6 +53,38 @@ Two detection primitives were lifted from `Internals.StandardQr` to the shared `
 - `FinderPatternFinder`, the 1:1:3:1:1 run-ratio scan and cross-checks; Micro QR and rMQR use the same finder pattern shape (single finder instead of three) via `FindCandidates` (all cross-checked candidates), while Standard QR keeps its best-three selection in `TryFind`
 - `FinderAxisEstimator`, single-finder local module scale and axis recovery (axis-aligned dark-light-dark runs, angular sweep), lifted from the Micro QR image decoder when rMQR image detection (Phase 7) became its second consumer; the Micro QR image benchmark stayed flat
 
+### Package architecture
+
+Since 2.0.0 the library ships as three NuGet packages built from two assemblies in this repository (the core split, 2026-09):
+
+| Package | Assembly | Contents | Depends on |
+|---|---|---|---|
+| `FeatherQR` | `FeatherQR.dll` | Generators, decoders, data types, options, segmentation, `ModuleRect` geometry, the luminance kernels | Nothing on net8.0 and net10.0; `System.Memory` (netstandard2.0) and `System.Runtime.CompilerServices.Unsafe` (netstandard2.1) |
+| `FeatherQR.SkiaSharp` | `FeatherQR.SkiaSharp.dll` | `QRCodeRenderer`, the `SKCanvas` extensions, the image builders, `IconData` and shapes, `SKBitmap` decoding as extension members on the core decoders | `FeatherQR`, `SkiaSharp` |
+| `SkiaSharp.QrCode` | none | An empty compatibility metapackage: the ID the library shipped under through 1.x keeps restoring | `FeatherQR.SkiaSharp` |
+
+Namespaces follow the packages: `FeatherQR` and `FeatherQR.SkiaSharp`, with the internals of each under `FeatherQR.Internals` and `FeatherQR.SkiaSharp.Internals`. The former `SkiaSharp.QrCode.Image` sub-namespace is folded into `FeatherQR.SkiaSharp`; one namespace per package is the cheapest shape to explain in a major that changes every `using` line anyway.
+
+**Dependency rules.**
+
+- The core references no package that is not a BCL shim, and the shims only where the framework lacks `Span<T>`, `ArrayPool<T>` and `Unsafe`. Two guards hold this: `CoreAssemblyDependencyTest` reads the core assembly's references from metadata for every target framework, and `tools/check_package_deps.cs` reads the packed nuspecs (see "Package graph" below). A dependency that slips in passes build and test and fails both.
+- The rendering package reaches the core through the public surface, plus the enumerated `InternalsVisibleTo` uses recorded below ("Package seam"). The core never references the rendering package.
+- Skia types appear only in the rendering assembly. Inside `namespace FeatherQR.SkiaSharp` the simple name `SkiaSharp` binds to that namespace, so `using SkiaSharp;` sits above the file-scoped namespace declaration and qualified `SkiaSharp.SKBitmap` spellings are not used.
+- No unified `Create(symbology, ...)` entry point is ever added. The three generators, decoders and data types do not reference each other, and that is what makes trimming precise: a consumer that uses one symbology keeps one symbology.
+
+**What the split buys, measured.** With `PublishTrimmed` (`TrimMode=full`) on a console app, measured on 2026-09-04 on the pre-split assembly:
+
+| Consumer profile | Trimmed managed assembly |
+|---:|---:|
+| QR encode only | 95 KB |
+| All three symbologies, encode | 153 KB |
+| All three, encode and decode, including `TryDecode(SKBitmap)` | 229 KB |
+| Untrimmed net10.0 | 384 KB |
+
+The managed assembly was never the cost. `libSkiaSharp` is 11.9 MB per RID, cannot be trimmed, and is deployed whether or not a single Skia call survives; only a package boundary removes it, and only for consumers that reference `FeatherQR` alone. A per-symbology package split was rejected: it would save untrimmed consumers roughly 100 to 130 KB, cost a four-package core with a public surface for the shared kernels, and buy nothing for trimmed consumers, who already get the numbers above.
+
+**What "lightweight" means.** The brand word is defined as zero dependencies in the core, zero allocations on the hot paths, and trim and NativeAOT safety. It is not a claim about assembly bytes: at 300 to 390 KB the core is larger than single-symbology libraries because it carries three symbologies, the decoders and the SIMD tiers. The README states the definition in its first lines so the name never has to be defended against a byte count.
+
 ### Package seam: what the rendering package reaches through `InternalsVisibleTo`
 
 `FeatherQR` grants `InternalsVisibleTo` to `FeatherQR.SkiaSharp`. The rule is that a third-party renderer must be writable against the public surface alone, so every internal the first-party renderer still uses is listed here with either its public replacement or the reason it stays internal. The list is checked by building the rendering project with the grant removed: whatever fails to compile is the list.

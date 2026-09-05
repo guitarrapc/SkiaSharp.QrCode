@@ -1,6 +1,6 @@
 # BlazorWasm sample
 
-Blazor WebAssembly sample for SkiaSharp.QrCode. The UI mirrors
+Blazor WebAssembly sample for FeatherQR (the SkiaSharp.QrCode package). The UI mirrors
 [FeatherQR.Playground](../../src/FeatherQR.Playground) (the pure-WASM
 [GitHub Pages playground](https://guitarrapc.github.io/SkiaSharp.QrCode/)), but demonstrates
 the Blazor-specific integration:

@@ -1,5 +1,6 @@
 # Migration
 
+- **2.0.0 splits the library into three packages and renames the namespaces.** `SkiaSharp.QrCode` and `SkiaSharp.QrCode.Image` become `FeatherQR` (core, no dependencies) and `FeatherQR.SkiaSharp` (rendering and bitmap decoding). The `SkiaSharp.QrCode` package keeps restoring as an empty package that depends on `FeatherQR.SkiaSharp`, so the install line still works and only `using` lines change. The `SKBitmap` decode overloads move to `QRCodeImageDecoder` and friends. See [2.0.0](#200) below.
 - **v1.2.0 decodes Kanji mode segments, and adds `QRCodeDecodeStatus.UnmappedCharacter`.** Behaviour change in the decoders: symbols that previously returned `UnsupportedContent` now return `Success` with text, or `UnmappedCharacter` when a character has no JIS X 0208 mapping. The new enum member is appended, so existing values keep their numbers. See [Kanji mode decoding](#kanji-mode-decoding).
 - **v1.2.0 adds generator options structs and version ranges.** Purely additive for Standard QR and Micro QR: every existing overload keeps its signature, exceptions and output. See [generator options](#generator-options) below.
 - **v1.2.0 introduces rMQR**, whose generator takes `RmQRCodeGeneratorOptions` rather than a parameter list. New in this release, so there is nothing to migrate from. See [rMQR](#rmqr) below.
@@ -11,6 +12,57 @@
 - **v1.0.0 removes the obsolete `QrCode` class.** If you still use `QrCode`, see [from before v1.0.0 to v1.0.0](#from-before-v100-to-v100) below.
 - v0.11.0 introduces further improvements to Icon handling. See the IconData section below.
 - v0.9.0 introduces significant performance improvements and API changes. Here's what you need to know to upgrade:
+
+## 2.0.0
+
+The library that shipped as one `SkiaSharp.QrCode` package is now a dependency-free core plus a SkiaSharp rendering package, so a project that only needs module matrices no longer carries the SkiaSharp native library. Nothing about encoding or decoding behavior changed; the work is in `using` lines and, if you want it, the package reference.
+
+### Packages
+
+| Package | Contents | Depends on |
+|---|---|---|
+| `FeatherQR` | Generators, decoders, data types, options, `GetModuleRectangles` | nothing on .NET 8+; `System.Memory` / `System.Runtime.CompilerServices.Unsafe` on .NET Standard |
+| `FeatherQR.SkiaSharp` | Image builders, `QRCodeRenderer`, `SKCanvas` extensions, `IconData` and shapes, `SKBitmap` decoding | `FeatherQR`, `SkiaSharp` |
+| `SkiaSharp.QrCode` | Nothing. A compatibility metapackage | `FeatherQR.SkiaSharp` |
+
+An existing `<PackageReference Include="SkiaSharp.QrCode" />` keeps working: it now resolves `FeatherQR.SkiaSharp` and `FeatherQR` transitively. Switch the reference to `FeatherQR.SkiaSharp` when convenient, or to `FeatherQR` alone if you never render images. All three ship at the same version from the same release.
+
+### Namespaces
+
+The root namespace `SkiaSharp.QrCode` is gone from the assemblies, and `SkiaSharp.QrCode.Image` is folded into the rendering package:
+
+| 1.x | 2.0.0 |
+|---|---|
+| `using SkiaSharp.QrCode;` | `using FeatherQR;` |
+| `using SkiaSharp.QrCode.Image;` | `using FeatherQR.SkiaSharp;` |
+
+Type names are unchanged in this step. Inside your own `namespace FeatherQR.Something` a bare `SkiaSharp` would bind to `FeatherQR.SkiaSharp`; put `using SkiaSharp;` above the namespace declaration, as usual, and nothing changes.
+
+### `TryDecode(SKBitmap)` moved
+
+The bitmap overloads are no longer static members of `QRCodeDecoder`, `MicroQRCodeDecoder` and `RmQRCodeDecoder`, because those types live in the core package that knows nothing about SkiaSharp. They are C# 14 extension members in `FeatherQR.SkiaSharp`:
+
+```csharp
+using SkiaSharp;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
+
+using var bitmap = SKBitmap.Decode("qr.png");
+
+// Every language version: the enclosing class name.
+if (QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info)) { }
+
+// C# 14 (net10.0 default, or <LangVersion>14</LangVersion>): the 1.x spelling still compiles.
+if (QRCodeDecoder.TryDecode(bitmap, out text, out info)) { }
+```
+
+The classes are `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`; both overloads (`out string` and `out string, out …DecodeInfo`) exist on each. A net8.0 project defaults to C# 12, so if the 1.x spelling stops compiling there, either add `using FeatherQR.SkiaSharp;` and switch to the class name, or raise `LangVersion`. This is not a missing overload.
+
+The luminance overloads, `TryDecodeImage(ReadOnlySpan<byte> luminance, int width, int height, …)`, are unchanged and remain in the core; they are the way to decode from any image library other than SkiaSharp. Composite transparent pixels against white before converting.
+
+### Still scheduled for 2.0.0
+
+The removals announced in 1.2.0 (`GetRequiredBufferSize`, the `Compression` enum) and the type renames (the `QR` casing rule, `ECCLevel` to `QREccLevel` and friends) land in the same major and are documented here when they do.
 
 ## Kanji mode decoding
 

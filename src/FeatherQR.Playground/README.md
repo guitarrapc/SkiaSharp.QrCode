@@ -1,6 +1,6 @@
 # FeatherQR.Playground
 
-Browser playground for SkiaSharp.QrCode, published to GitHub Pages: https://guitarrapc.github.io/SkiaSharp.QrCode/
+Browser playground for FeatherQR, published to GitHub Pages: https://guitarrapc.github.io/SkiaSharp.QrCode/
 
 A static `Microsoft.NET.Sdk.WebAssembly` app (no Blazor, no server). The page script loads the
 .NET runtime via `_framework/dotnet.js` and calls `[JSExport]` methods on `QrInterop` to render

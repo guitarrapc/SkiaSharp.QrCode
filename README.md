@@ -2,22 +2,26 @@
 [![release](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/release.yaml/badge.svg)](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/release.yaml)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![NuGet](https://img.shields.io/nuget/v/SkiaSharp.QrCode.svg?label=SkiaSharp%2EQrCode%20nuget)](https://www.nuget.org/packages/SkiaSharp.QrCode)
+[![NuGet FeatherQR](https://img.shields.io/nuget/v/FeatherQR.svg?label=FeatherQR%20nuget)](https://www.nuget.org/packages/FeatherQR)
+[![NuGet FeatherQR.SkiaSharp](https://img.shields.io/nuget/v/FeatherQR.SkiaSharp.svg?label=FeatherQR%2ESkiaSharp%20nuget)](https://www.nuget.org/packages/FeatherQR.SkiaSharp)
+[![NuGet SkiaSharp.QrCode](https://img.shields.io/nuget/v/SkiaSharp.QrCode.svg?label=SkiaSharp%2EQrCode%20nuget)](https://www.nuget.org/packages/SkiaSharp.QrCode)
 
-# SkiaSharp.QrCode
+# FeatherQR
 
 [Migration](docs/migration.md) | [Data Capacity](docs/data-capacity.md) | [Design Docs](.github/docs)
 
-SkiaSharp.QrCode generates, renders, and decodes QR codes with [SkiaSharp](https://github.com/mono/SkiaSharp).
+FeatherQR is a lightweight QR Code, Micro QR and rMQR library for .NET. Lightweight means three things: the core package has no dependencies, the hot paths allocate nothing, and every build is trim and NativeAOT safe. It is not a claim about assembly bytes; the core carries three symbologies, decoders and SIMD paths.
+
+`FeatherQR` generates and decodes module matrices with the BCL alone. `FeatherQR.SkiaSharp` adds rendering and image decoding with [SkiaSharp](https://github.com/mono/SkiaSharp): PNG, JPEG, WebP and SVG output, canvas rendering, gradients, module shapes, finder patterns and logos. `SkiaSharp.QrCode`, the name this library shipped under through 1.x, is now an empty package that depends on `FeatherQR.SkiaSharp`, so an existing install line keeps working.
 
 <div style="display: flex; align-items: flex-start;">
   <img src="assets/benchmark_simpleencode_net10.0.png" width="600" alt="Encode Performance"/>
   <img src="assets/benchmark_simpledecode_net10.0.png" width="600" alt="Decode Performance"/>
 </div>
 
-> Benchmark results comparing SkiaSharp.QrCode with other libraries. See [src/FeatherQR.Benchmark](src/FeatherQR.Benchmark) for details. Above results are generated on .NET 10 with AMD Ryzen 9 7950X3D CPU, with GFNI and AVX2 enabled.
+> Benchmark results comparing FeatherQR with other libraries. See [src/FeatherQR.Benchmark](src/FeatherQR.Benchmark) for details. Above results are generated on .NET 10 with AMD Ryzen 9 7950X3D CPU, with GFNI and AVX2 enabled.
 
-Many existing QR code libraries rely on System.Drawing, which has well-known GDI+ limitations and cross-platform issues. SkiaSharp.QrCode was created to provide high performance, minimum memory allocation, a simpler and more intuitive API while leveraging SkiaSharp's cross-platform capabilities. Generate a QR code in a single line, or customize every detail - the choice is yours.
+Many existing QR code libraries rely on System.Drawing, which has well-known GDI+ limitations and cross-platform issues. FeatherQR was created to provide high performance, minimum memory allocation, a simpler and more intuitive API while leveraging SkiaSharp's cross-platform capabilities. Generate a QR code in a single line, or customize every detail - the choice is yours.
 
 Create Standard QR, Micro QR, and rMQR images with a few lines of code.
 
@@ -40,27 +44,27 @@ See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these 
 
 ## Playground
 
-Try SkiaSharp.QrCode in your browser, no install required: **[SkiaSharp.QrCode Playground](https://guitarrapc.github.io/SkiaSharp.QrCode/)**
+Try FeatherQR in your browser, no install required: **[FeatherQR Playground](https://guitarrapc.github.io/SkiaSharp.QrCode/)**
 
 The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or SVG, or share your settings as a permalink. Every generated code is decoded back in-browser by the library's own decoder as a self-check, and the *Decode an image* panel reads QR codes from your own image files. Source lives in [src/FeatherQR.Playground](src/FeatherQR.Playground); it is deployed to GitHub Pages by [release.yaml](.github/workflows/release.yaml) as part of every release.
 
 ## Overview
 
-SkiaSharp.QrCode is a modern, high-performance QR code generation library built on SkiaSharp. SkiaSharp.QrCode allocates memory only for the actual QR code data, with zero additional allocations during processing.
+FeatherQR is a modern, high-performance QR code library. It allocates memory only for the actual QR code data, with zero additional allocations during processing, and renders through SkiaSharp when you want images.
 
 - **Simple API**: One-liner QR code generation with sensible defaults
 - **High Performance**: Optimal speed and minimum memory allocation
 - **Highly Customizable**: Gradients, icons, custom shapes, colors, and more
 - **Raster & Vector Output**: PNG, JPEG, WebP, and SVG (scales without quality loss)
 - **Cross-Platform**: Windows, Linux, macOS, iOS, Android, WebAssembly
-- **Zero Dependencies**: QR generation without external libraries (SkiaSharp for rendering only)
+- **Zero Dependencies**: The `FeatherQR` core package depends on nothing on .NET 8+ (BCL shims only on .NET Standard); SkiaSharp is pulled in only by `FeatherQR.SkiaSharp`
 - **No System.Drawing**: Avoids GDI+ issues and Windows dependencies
 - **NativeAOT Ready**: Full support for .NET Native AOT compilation
 - **Modern .NET**: .NET Standard 2.0, 2.1, .NET 8+
 
 ## Supported Symbologies
 
-SkiaSharp.QrCode supports Standard QR, Micro QR, and rMQR. Examples use Standard QR unless noted otherwise.
+FeatherQR supports Standard QR, Micro QR, and rMQR. Examples use Standard QR unless noted otherwise.
 
 | Symbology | Standard | Generate | Decode |
 |---|---|---|---|
@@ -86,11 +90,19 @@ SkiaSharp.QrCode supports Standard QR, Micro QR, and rMQR. Examples use Standard
 
 ## Installation
 
-Visit [SkiaSharp.QrCode on NuGet.org](https://www.nuget.org/packages/SkiaSharp.QrCode)
+Pick the package for what you need. All three ship together at the same version.
+
+| Package | Install when | Namespaces |
+|---|---|---|
+| [FeatherQR.SkiaSharp](https://www.nuget.org/packages/FeatherQR.SkiaSharp) | You want images: PNG, JPEG, WebP, SVG, canvas rendering, or decoding from an `SKBitmap`. Brings `FeatherQR` and SkiaSharp | `FeatherQR`, `FeatherQR.SkiaSharp` |
+| [FeatherQR](https://www.nuget.org/packages/FeatherQR) | You only need module matrices or decoding from your own pixel data, with no image library at all | `FeatherQR` |
+| [SkiaSharp.QrCode](https://www.nuget.org/packages/SkiaSharp.QrCode) | You are upgrading an existing project and want to keep its install line. An empty package that depends on `FeatherQR.SkiaSharp` | same as `FeatherQR.SkiaSharp` |
 
 ```bash
-dotnet add package SkiaSharp.QrCode
+dotnet add package FeatherQR.SkiaSharp
 ```
+
+SkiaSharp needs a native asset package per platform on Linux and for NativeAOT; see [Platform-Specific Considerations](#platform-specific-considerations).
 
 ## Quick Start
 
@@ -99,7 +111,7 @@ dotnet add package SkiaSharp.QrCode
 Single line QR code generation:
 
 ```csharp
-using SkiaSharp.QrCode.Image;
+using FeatherQR.SkiaSharp;
 
 // one-liner save to file
 File.WriteAllBytes("qrcode.png", QRCodeImageBuilder.GetPngBytes("Hello"));
@@ -133,8 +145,8 @@ File.WriteAllText("qrcode.svg", QRCodeImageBuilder.GetSvgString("https://example
 Generate with Custom Settings.
 
 ```csharp
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(512, 512)
@@ -145,8 +157,8 @@ var qrCode = new QRCodeImageBuilder("https://example.com")
 Boost Error Correction if possible. The version (symbol size) is chosen for the level you request; when that version has spare capacity, `WithErrorCorrectionBoost` raises the level as far as the capacity allows - without changing the symbol size. Recommended whenever robustness matters more than an exact ECC level, and especially with icons.
 
 ```csharp
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 // Requests M as the minimum; the symbol may come out as Q or H at the same size.
 var qrCode = new QRCodeImageBuilder("https://example.com")
@@ -161,8 +173,8 @@ var qrData = QRCodeGenerator.CreateQrCode("https://example.com", ECCLevel.M, new
 Save Directly to Stream
 
 ```csharp
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 using var stream = File.OpenWrite("qrcode.png");
 QRCodeImageBuilder.SavePng("Your content here", stream, ECCLevel.M, size: 512);
@@ -170,7 +182,7 @@ QRCodeImageBuilder.SavePng("Your content here", stream, ECCLevel.M, size: 512);
 
 ## Migration
 
-See [Migration Guide](docs/migration.md) for details on migrating from older versions of SkiaSharp.QrCode.
+2.0.0 renames the packages and namespaces: `SkiaSharp.QrCode` and `SkiaSharp.QrCode.Image` become `FeatherQR` and `FeatherQR.SkiaSharp`. See the [Migration Guide](docs/migration.md) for the 2.0.0 changes and for older versions.
 
 ## API Overview
 
@@ -201,7 +213,8 @@ See the [Standard QR](#standard-qr), [Micro QR](#micro-qr), and [rMQR](#rmqr) ex
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
 var canvas = surface.Canvas;
@@ -213,7 +226,7 @@ QRCodeRenderer.Render(canvas, area, qrData, SKColors.Black, SKColors.White);
 Generators create module matrices without rendering them. Use them for custom output such as ASCII art or LED displays, or as input to `QRCodeRenderer`.
 
 ```csharp
-using SkiaSharp.QrCode;
+using FeatherQR;
 
 var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M, quietZoneSize: 4);
 var isDark = qrData[row, col];
@@ -370,7 +383,7 @@ Size the generation buffer with `TryGetRequiredBufferSize`:
 
 ```csharp
 using System.Buffers;
-using SkiaSharp.QrCode;
+using FeatherQR;
 
 if (!QRCodeGenerator.TryGetRequiredBufferSize("content", ECCLevel.M, out var calculated))
     return "Content does not fit a QR symbol at this ECC level.";
@@ -414,13 +427,14 @@ finally
 
 ### Decoders
 
-Use the decoder that matches the expected symbol type. Each decoder accepts generated data, a byte-per-module matrix, an `SKBitmap`, or a grayscale luminance span.
+Use the decoder that matches the expected symbol type. Each decoder in `FeatherQR` accepts generated data, a byte-per-module matrix, or a grayscale luminance span. `FeatherQR.SkiaSharp` adds decoding from an `SKBitmap`.
 
 Image decoding is intended for screenshots, generated images, and clean scans. For camera images with strong perspective, uneven lighting, or blur, use a dedicated scanner such as ZXing.Net.
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 var qrData = QRCodeGenerator.CreateQrCode("content", ECCLevel.M);
 if (QRCodeDecoder.TryDecode(qrData, out var text))
@@ -429,11 +443,15 @@ if (QRCodeDecoder.TryDecode(qrData, out var text))
 }
 
 using var bitmap = SKBitmap.Decode("qr.png");
-if (QRCodeDecoder.TryDecode(bitmap, out var text, out var info))
+if (QRCodeImageDecoder.TryDecode(bitmap, out var text, out var info))
 {
     Console.WriteLine($"{text} (version {info.Version}, ECC {info.EccLevel})");
 }
 ```
+
+The bitmap overloads live in `QRCodeImageDecoder`, `MicroQRCodeImageDecoder` and `RmQRCodeImageDecoder`. With C# 14 (the default for net10.0, or `<LangVersion>14</LangVersion>`) they are also reachable on the core decoders, so `QRCodeDecoder.TryDecode(bitmap, out var text)` compiles too; C# 12 and 13 use the class names above.
+
+To decode from any other image source, convert the pixels to 8-bit luminance yourself, compositing transparent pixels against white, and call `TryDecodeImage(luminance, width, height, ...)` on the decoder.
 
 The returned decode information includes a status when decoding fails.
 
@@ -452,7 +470,7 @@ sudo apt update && apt install -y libfontconfig1
 ```
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="2.0.0-preview.1" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.1" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.148.0" />
 ```
 
@@ -461,7 +479,7 @@ sudo apt update && apt install -y libfontconfig1
 If you don't need advanced font operations:
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="2.0.0-preview.1" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.1" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
@@ -471,7 +489,7 @@ If you don't need advanced font operations:
 
 ### NativeAOT Support
 
-SkiaSharp.QrCode fully supports .NET NativeAOT. The library is marked `IsAotCompatible`, and CI publishes a NativeAOT gate project that roots the whole library and fails on any trim/AOT analysis warning, so this claim is toolchain-verified on every change. You need to include platform-specific native assets:
+FeatherQR fully supports .NET NativeAOT. The library is marked `IsAotCompatible`, and CI publishes a NativeAOT gate project that roots the whole library and fails on any trim/AOT analysis warning, so this claim is toolchain-verified on every change. You need to include platform-specific native assets:
 
 ```xml
 <PropertyGroup>
@@ -487,27 +505,27 @@ SkiaSharp.QrCode fully supports .NET NativeAOT. The library is marked `IsAotComp
 #### Windows
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="2.0.0-preview.1" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.1" />
 <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
 ```
 
 #### Linux
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="2.0.0-preview.1" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.1" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
 #### macOS
 
 ```xml
-<PackageReference Include="SkiaSharp.QrCode" Version="2.0.0-preview.1" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.1" />
 <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 
 ## Performance
 
-SkiaSharp.QrCode is designed with performance as a top priority. The library minimizes memory allocations and maximizes throughput for QR code generation.
+FeatherQR is designed with performance as a top priority. The library minimizes memory allocations and maximizes throughput for QR code generation.
 
 ### Key Performance Characteristics
 
@@ -518,7 +536,7 @@ SkiaSharp.QrCode is designed with performance as a top priority. The library min
 
 ### Benchmark Results
 
-Benchmark results show SkiaSharp.QrCode outperforming other popular .NET QR code libraries in both speed and memory usage.
+Benchmark results show FeatherQR outperforming other popular .NET QR code libraries in both speed and memory usage.
 
 - **Fastest Generation**: Outperforms other .NET QR code libraries in most scenarios
 - **Lowest Memory Usage**: Minimal allocations reduce GC overhead
@@ -528,10 +546,9 @@ For detailed benchmark code and results, see the [src/FeatherQR.Benchmark](src/F
 
 ## FAQ
 
-### Why choose SkiaSharp.QrCode?
+### Why choose FeatherQR?
 
-SkiaSharp offers several advantages for QR code generation:
-
+- **Lightweight core**: `FeatherQR` has no dependencies on .NET 8+, allocates nothing on the hot paths, and is trim and NativeAOT safe. Rendering is a separate package, so a project that needs only module matrices never ships a native library
 - **Performance**: Native-level performance with hardware acceleration support
 - **Cross-Platform**: Runs on Windows, Linux, macOS, iOS, Android, and WebAssembly
 - **Modern .NET Support**: First-class support for .NET 6+ and .NET Core
@@ -541,7 +558,7 @@ SkiaSharp offers several advantages for QR code generation:
 
 ### Can I use this in ASP.NET Core?
 
-Yes, SkiaSharp.QrCode works great in ASP.NET Core. SkiaSharp.QrCode also supports `IBufferWriter` for efficient memory usage.
+Yes, FeatherQR works great in ASP.NET Core. FeatherQR also supports `IBufferWriter` for efficient memory usage.
 
 ```csharp
 app.MapGet("/qr", (string url) =>
@@ -559,7 +576,7 @@ app.MapGet("/qr.svg", (string url) =>
 
 ### Does it support Blazor WebAssembly?
 
-Yes, SkiaSharp.QrCode works in Blazor WebAssembly & Pure WebAssembly.
+Yes, FeatherQR works in Blazor WebAssembly & Pure WebAssembly.
 
 - See the [samples/BlazorWasm](samples/BlazorWasm) folder for a Blazor WebAssembly example.
 - See [src/FeatherQR.Playground](src/FeatherQR.Playground) for Pure WebAssembly usage.
@@ -570,7 +587,7 @@ Yes, fully supported and verified in CI: the library sets `IsAotCompatible`, and
 
 ### Are ISO-8859-2 and other encodings supported?
 
-Encoding: SkiaSharp.QrCode writes ISO-8859-1 and UTF-8. Other encodings (e.g. ISO-8859-2, Shift JIS) are not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice.
+Encoding: FeatherQR writes ISO-8859-1 and UTF-8. Other encodings (e.g. ISO-8859-2, Shift JIS) are not written, mainly because almost all QR code use cases are UTF-8 compatible nowadays and other legacy encodings are rarely used in practice.
 
 Decoding is wider: the decoders also read Kanji mode segments (Shift JIS, JIS X 0208) produced by other encoders. ECI 20 (Shift_JIS) Byte segments are still not read.
 
@@ -583,7 +600,7 @@ Decoding is wider: the decoders also read Kanji mode segments (Shift JIS, JIS X 
 
 ### Does SVG output require SkiaSharp.Svg or other packages?
 
-No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional dependencies. Note that SkiaSharp.QrCode outputs SVG only; it does not read or render existing SVG files.
+No. SVG output uses `SKSvgCanvas` from the core SkiaSharp package, no additional dependencies. Note that FeatherQR outputs SVG only; it does not read or render existing SVG files.
 
 ### Any plan to support QR code scanning?
 
@@ -602,8 +619,8 @@ For optimal scan reliability, we recommend:
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 // Best reliability - default settings with rectangular modules
 var pngBytes = QRCodeImageBuilder.GetPngBytes("https://example.com");
@@ -658,7 +675,7 @@ QR codes support four levels of error correction, which allow the code to remain
 
 ### Encoding Modes
 
-QR codes support different encoding modes optimized for specific character types. SkiaSharp.QrCode automatically selects the most efficient mode for your content.
+QR codes support different encoding modes optimized for specific character types. FeatherQR automatically selects the most efficient mode for your content.
 
 > [!NOTE]
 > Kanji is decode only. The decoders read Kanji segments produced by other encoders (JIS X 0208), but the generators always write Japanese text in Byte mode as UTF-8.
@@ -694,8 +711,8 @@ Each symbology has its own API surface, see [Supported Symbologies](#supported-s
 #### Image Builder
 
 ```csharp
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
@@ -711,8 +728,8 @@ Default format is PNG. Switch with `WithFormat()`, quality (0–100) applies to 
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 // PNG (default)
 var pngBytes = new QRCodeImageBuilder("https://example.com")
@@ -742,8 +759,8 @@ SVG output draws the QR code as vector shapes, so it scales to any size without 
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 // One-liner: save to stream
 using var stream = File.Create("qrcode.svg");
@@ -776,8 +793,8 @@ Size options define the SVG viewport rather than pixels. `WithFormat()` does not
 Use module-based sizing when sharp edges and logo alignment matter:
 
 ```csharp
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithModulePixelSize(10) // content = (QR matrix size in modules) * 10
@@ -793,8 +810,8 @@ var pngBytes = qrCode.ToByteArray();
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 new QRCodeImageBuilder("abc")
     .WithSize(512, 512)
@@ -806,8 +823,8 @@ new QRCodeImageBuilder("abc")
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
@@ -822,7 +839,7 @@ new QRCodeImageBuilder("https://example.com")
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode.Image;
+using FeatherQR.SkiaSharp;
 
 var gradient = new GradientOptions(
     [
@@ -851,8 +868,8 @@ Prefer module-based sizing so the logo sits on the QR grid. See [Choosing Image 
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 using var logo = SKBitmap.Decode(File.ReadAllBytes("logo.png"));
 
@@ -875,8 +892,8 @@ var pngBytes = qrCode.ToByteArray();
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 using var logo = SKBitmap.Decode(File.ReadAllBytes("logo.png"));
 using var font = new SKFont
@@ -903,7 +920,7 @@ var pngBytes = qrCode.ToByteArray();
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode.Image;
+using FeatherQR.SkiaSharp;
 
 var qrCode = new QRCodeImageBuilder("https://example.com")
     .WithSize(800, 800)
@@ -931,8 +948,8 @@ Use Micro QR for short data that needs a smaller square symbol. The generator se
 #### One-liner (PNG)
 
 ```csharp
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 var pngBytes = MicroQRCodeImageBuilder.GetPngBytes("01234567", MicroQREccLevel.L, size: 256);
 File.WriteAllBytes("microqr.png", pngBytes);
@@ -942,8 +959,8 @@ File.WriteAllBytes("microqr.png", pngBytes);
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 var gradient = new GradientOptions(
     [SKColor.Parse("00B894"), SKColor.Parse("0984E3")],
@@ -962,7 +979,8 @@ var pngBytes = new MicroQRCodeImageBuilder("SKU-42")
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 var micro = MicroQRCodeGenerator.CreateMicroQRCode("01234567", MicroQREccLevel.L);
 if (MicroQRCodeDecoder.TryDecode(micro, out var text, out var info))
@@ -984,8 +1002,8 @@ Use rMQR when a rectangular symbol fits the available space better than a square
 #### One-liner (PNG)
 
 ```csharp
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 // size sets the width; the height follows the symbol's aspect ratio
 var pngBytes = RmQRCodeImageBuilder.GetPngBytes("https://example.com/r/12345", RmQREccLevel.M, size: 512);
@@ -996,8 +1014,8 @@ File.WriteAllBytes("rmqr.png", pngBytes);
 
 ```csharp
 using SkiaSharp;
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 // Fix the symbol height; the width is selected automatically
 var pngBytes = new RmQRCodeImageBuilder("https://example.com/r/12345")
@@ -1020,8 +1038,8 @@ By default the whole content is encoded in one mode, so a single lowercase lette
 > **Core modules, not the rendered grid.** `RmQRFitStrategy` ranks by core modules while the quiet zone adds a fixed 4 modules to each dimension, so minimizing `height × width` does not minimize `(height + 4) × (width + 4)`. A flatter, wider symbol can therefore have fewer core modules but a *larger* rendered grid: 24 characters at ECC H go from R15x59 (885 core, 63×19 rendered) to R11x77 (847 core, 81×15 rendered). So a rendered image can get wider, and `TryGetRequiredBufferSize` must be passed the same `Segmentation` as the encode or the destination buffer can be too small.
 
 ```csharp
-using SkiaSharp.QrCode;
-using SkiaSharp.QrCode.Image;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 const string content = "https://example.com/p/1234567890123456";
 
@@ -1049,7 +1067,9 @@ It is opt-in so existing callers keep their exact bit streams. Planning allocate
 #### Decode (matrix and image)
 
 ```csharp
-using SkiaSharp.QrCode;
+using SkiaSharp;
+using FeatherQR;
+using FeatherQR.SkiaSharp;
 
 var rmqr = RmQRCodeGenerator.CreateRmQRCode("012345678901", RmQREccLevel.M);
 if (RmQRCodeDecoder.TryDecode(rmqr, out var text, out var info))
@@ -1068,13 +1088,15 @@ Runnable examples: [ConsoleApp patterns 27–29](samples/ConsoleApp).
 
 When releasing a new version, follow these steps:
 
-1. (manual) From the repository root, bump version strings in `.props`, `.md` files.
+1. (manual) From the repository root, bump version strings in `.props`, `.md` files. The three packages (`FeatherQR`, `FeatherQR.SkiaSharp`, `SkiaSharp.QrCode`) share one version and are packed and pushed together.
 
 ```sh
 dotnet ./tools/bump_version.cs patch   # e.g. 0.1.0 → 0.1.1
 dotnet ./tools/bump_version.cs minor   # e.g. 0.1.0 → 0.2.0
 dotnet ./tools/bump_version.cs major   # e.g. 0.1.0 → 1.0.0
 ```
+
+Prerelease versions such as `2.0.0-preview.1` are edited by hand in `Directory.Build.props` and the install lines in this file; the tool only produces `X.Y.Z`.
 
 2. (manual) Commit the version bump with a message like `chore: Bump version to 0.1.1` and push to the main branch.
 3. (manual) Create new tag with the new version (e.g. `git tag 0.1.1`) and push the tag (`git push origin 0.1.1`).
