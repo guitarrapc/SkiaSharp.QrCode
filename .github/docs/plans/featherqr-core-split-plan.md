@@ -294,3 +294,14 @@ Entries are appended per phase: Done, Lessons Learned, benchmark delta (or why n
 - **Samples that compiled by accident are found by renaming.** The rMQR image-decode sample in the README had no `using SkiaSharp;`; it read correctly only because nobody compiled it. Every sample in the README now carries the usings it needs.
 
 **Benchmark delta.** None applies: documentation only.
+
+### Release 2.0.0-preview.1 (2026-09-05): the Phase 3 exit, verified
+
+The maintainer tagged `2.0.0-preview.1` on main after Phases 1 to 5 merged (#394); the release run succeeded end to end (build, docs trim, API check, pack, dependency guard, attestation, Trusted Publishing push, Playground deploy). Verified against nuget.org afterwards, from an empty package folder with nuget.org as the only source:
+
+- All three IDs exist at `2.0.0-preview.1`; the pushed nuspecs pass `tools/check_package_deps.cs` unchanged (core: net8.0 and net10.0 empty, `System.Memory` on netstandard2.0, `System.Runtime.CompilerServices.Unsafe` on netstandard2.1; rendering: `FeatherQR` + `SkiaSharp`; metapackage: `FeatherQR.SkiaSharp`, no `lib/`). The metapackage carries its own README; the two real packages carry the root README with the 2.0.0 text.
+- A net10.0 console app referencing only `FeatherQR` resolves `FeatherQR` and nothing else, and encodes and decodes. One referencing `SkiaSharp.QrCode` resolves `FeatherQR.SkiaSharp`, `FeatherQR`, `SkiaSharp` and SkiaSharp's own native assets, and decodes a rendered bitmap through `QRCodeImageDecoder`. One referencing `FeatherQR.SkiaSharp` renders and decodes rMQR. A netstandard2.0 library referencing `FeatherQR` resolves `System.Memory` and its own closure (`System.Buffers`, `System.Numerics.Vectors`, `System.Runtime.CompilerServices.Unsafe`) beside `NETStandard.Library`, which is the BCL shim graph the plan describes and nothing more.
+- The Pages site serves "FeatherQR Playground" and the API page lists 60 types from both assemblies; the 1.2.0 listing of `SkiaSharp.QrCode` is untouched beside the preview.
+- The GitHub release was left as a draft by the workflow, as designed, and was not flagged prerelease; it was marked prerelease (still a draft) so that publishing it does not present a preview as the latest release.
+
+Open until Phase 6: the published nuspecs carry `RepositoryUrl` and `PackageProjectUrl` of the old repository name, which is what `2.0.0-preview.2` after the rename corrects.
