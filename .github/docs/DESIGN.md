@@ -12,6 +12,7 @@ This document defines the design principles that make FeatherQR what it is. Desi
 The core QR code encoding and decoding algorithms depend only on the BCL, while SkiaSharp is responsible solely for rendering and image I/O.
 The core remains pure C#: rather than adding external dependencies, we implement the algorithms we need ourselves.
 The package boundary enforces this: `FeatherQR` is the core and declares no dependency, `FeatherQR.SkiaSharp` is the rendering layer and is the only package that references SkiaSharp. A build that adds a dependency to the core fails the gate that checks the packaged dependency graph.
+This is what the name means. Lightweight is no dependencies in the core, no allocations on the hot paths, and safety under trimming and NativeAOT. It is not a claim about assembly size.
 
 ### Zero Allocation
 
@@ -54,6 +55,7 @@ FeatherQRは、C#における最高のQRコードライブラリを目指しま�
 QRコードのエンコードとデコードのコアはBCLだけで完結し、SkiaSharpは描画と画像の入出力だけを担います。
 コアは純粋なC#であり続け、外部依存を増やすのではなく、必要なアルゴリズムは自ら実装します。
 この境界はパッケージで強制します。`FeatherQR`がコアであり依存を宣言せず、`FeatherQR.SkiaSharp`が描画層でありSkiaSharpを参照する唯一のパッケージです。コアに依存が加わるビルドは、パッケージの依存グラフを検査するゲートで止まります。
+名前の意味もここにあります。軽量とは、コアに依存がないこと、ホットパスで割り当てをしないこと、トリミングとNativeAOTで安全に動くことです。アセンブリの大きさの主張ではありません。
 
 ### ゼロアロケーション
 
