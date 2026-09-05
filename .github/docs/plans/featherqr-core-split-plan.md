@@ -305,3 +305,25 @@ The maintainer tagged `2.0.0-preview.1` on main after Phases 1 to 5 merged (#394
 - The GitHub release was left as a draft by the workflow, as designed, and was not flagged prerelease; it was marked prerelease (still a draft) so that publishing it does not present a preview as the latest release.
 
 Open until Phase 6: the published nuspecs carry `RepositoryUrl` and `PackageProjectUrl` of the old repository name, which is what `2.0.0-preview.2` after the rename corrects.
+
+### Phase 6: Rename the repository (2026-09-06, release pending)
+
+**Done.** The repository is `github.com/guitarrapc/FeatherQR` (renamed by the maintainer; `FeatherQR` was unused on GitHub). The nuget.org Trusted Publishing policy was updated to the new name by the maintainer. #395 (merged) moved every repository and Pages URL in the tree to the new name (`Directory.Build.props`, README badges and links, the Playground `og:url` and release/license links, the samples, the migration guide, the skill file) and set `<Version>` to `2.0.0-preview.2` with the README install lines; only the plan, its references and the `dotnet-script` samples still spell the old URL. The Pages fallback is in place: `SkiaSharp.QrCode/index.html` and `SkiaSharp.QrCode/api/index.html` on `master` of `guitarrapc/guitarrapc.github.io` (a dormant, hand-committed static site, so nothing regenerates over them). The root stub forwards the remaining path, the query and the hash by script, so shared Playground permalinks (settings live in the hash) survive; a meta refresh to the new root is the no-script fallback; both stubs are `noindex` with a canonical link.
+
+**Verified.**
+
+| Check | Result |
+|---|---|
+| Old web URL `github.com/guitarrapc/SkiaSharp.QrCode` | 301 to `guitarrapc/FeatherQR` |
+| Old `git` remote (`ls-remote` on the old URL) | works |
+| Old Playground `guitarrapc.github.io/SkiaSharp.QrCode/` | was 404 after the rename; serves the stub (200) once pushed; a request with `?x=1#share-test-hash` lands on `guitarrapc.github.io/FeatherQR/?x=1#share-test-hash` |
+| Old API page `…/SkiaSharp.QrCode/api/` | stub (200), forwards to `…/FeatherQR/api/` |
+| New Playground and API page | 200 |
+| CodeQL and the build workflow on the renamed repository | green on `main` |
+
+**Pending.** `2.0.0-preview.2` tag and release run by the maintainer, then the check that the published nuspecs carry the new `RepositoryUrl`; the local working directory and the assistant memory directory rename.
+
+**Lessons learned.**
+
+- **The Playground's share links are the reason the stub is a script, not a meta refresh.** A meta refresh drops the fragment, and every shared permalink stores its settings in the fragment. The plan called for a meta refresh; the implementation keeps it only as the fallback for clients without script.
+- **"Put a file on the user site" needs the resolution order spelled out.** `user.github.io/<name>/` resolves to the project site `<name>` first and to the user site's `<name>/` folder second; the stub is invisible until the project site is gone, which is expected, not a deployment failure.
