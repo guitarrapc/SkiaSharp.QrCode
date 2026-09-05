@@ -2,7 +2,7 @@ using SkiaSharp;
 using FeatherQR;
 using FeatherQR.SkiaSharp;
 
-var content = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md?foo=sample&bar=dummy";
+var content = "https://github.com/guitarrapc/FeatherQR/blob/main/README.md?foo=sample&bar=dummy";
 var outputDir = "bin/output";
 
 // prepare

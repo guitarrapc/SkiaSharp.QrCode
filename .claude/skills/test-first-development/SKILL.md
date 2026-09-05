@@ -98,7 +98,7 @@ If the implementation changes observable behavior or adds new functionality, upd
 - Public API or migration notes → `docs/migration.md`
 - Capacity tables → `docs/data-capacity.md`
 
-Follow the [document-spec-policy](https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/.github/docs/docs_authoring_guidelines.md) rules: specs document **WHAT** and **WHY**, not step-by-step implementation HOW (that belongs in code comments).
+Follow the [document-spec-policy](https://github.com/guitarrapc/FeatherQR/blob/main/.github/docs/docs_authoring_guidelines.md) rules: specs document **WHAT** and **WHY**, not step-by-step implementation HOW (that belongs in code comments).
 
 ## Test Project Layout
 

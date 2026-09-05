@@ -44,7 +44,7 @@ public class QRCodeDecodeEndToEnd
     {
         (_numericModules, _numericSize) = BuildModules("0123456789", ECCLevel.L);
         (_alphanumericModules, _alphanumericSize) = BuildModules("HELLO WORLD 2026", ECCLevel.M);
-        _byteUrl = "https://github.com/guitarrapc/SkiaSharp.QrCode/blob/main/README.md?foo=sample&bar=dummy";
+        _byteUrl = "https://github.com/guitarrapc/FeatherQR/blob/main/README.md?foo=sample&bar=dummy";
         (_byteUrlModules, _byteUrlSize) = BuildModules(_byteUrl, ECCLevel.M);
         _byteLongL = BuildDeterministicText(2900);
         _byteLongH = BuildDeterministicText(1200);

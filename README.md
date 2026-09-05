@@ -1,5 +1,5 @@
-[![Build](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/build.yaml/badge.svg)](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/build.yaml)
-[![release](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/release.yaml/badge.svg)](https://github.com/guitarrapc/SkiaSharp.QrCode/actions/workflows/release.yaml)
+[![Build](https://github.com/guitarrapc/FeatherQR/actions/workflows/build.yaml/badge.svg)](https://github.com/guitarrapc/FeatherQR/actions/workflows/build.yaml)
+[![release](https://github.com/guitarrapc/FeatherQR/actions/workflows/release.yaml/badge.svg)](https://github.com/guitarrapc/FeatherQR/actions/workflows/release.yaml)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![NuGet FeatherQR](https://img.shields.io/nuget/v/FeatherQR.svg?label=FeatherQR%20nuget)](https://www.nuget.org/packages/FeatherQR)
@@ -44,7 +44,7 @@ See [samples/ConsoleApp](samples/ConsoleApp) for code examples generating these 
 
 ## Playground
 
-Try FeatherQR in your browser, no install required: **[FeatherQR Playground](https://guitarrapc.github.io/SkiaSharp.QrCode/)**
+Try FeatherQR in your browser, no install required: **[FeatherQR Playground](https://guitarrapc.github.io/FeatherQR/)**
 
 The playground runs the actual library compiled to WebAssembly (GitHub Pages, fully static). Tune gradients, module shapes, finder patterns and logos in realtime, then download the PNG or SVG, or share your settings as a permalink. Every generated code is decoded back in-browser by the library's own decoder as a self-check, and the *Decode an image* panel reads QR codes from your own image files. Source lives in [src/FeatherQR.Playground](src/FeatherQR.Playground); it is deployed to GitHub Pages by [release.yaml](.github/workflows/release.yaml) as part of every release.
 
@@ -470,7 +470,7 @@ sudo apt update && apt install -y libfontconfig1
 ```
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.1" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.148.0" />
 ```
 
@@ -479,7 +479,7 @@ sudo apt update && apt install -y libfontconfig1
 If you don't need advanced font operations:
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.1" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
@@ -505,21 +505,21 @@ FeatherQR fully supports .NET NativeAOT. The library is marked `IsAotCompatible`
 #### Windows
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.1" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
 <PackageReference Include="SkiaSharp.NativeAssets.Win32" Version="4.148.0" />
 ```
 
 #### Linux
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.1" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
 <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.148.0" />
 ```
 
 #### macOS
 
 ```xml
-<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.1" />
+<PackageReference Include="FeatherQR.SkiaSharp" Version="2.0.0-preview.2" />
 <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.148.0" />
 ```
 
@@ -1101,7 +1101,7 @@ Prerelease versions such as `2.0.0-preview.1` are edited by hand in `Directory.B
 2. (manual) Commit the version bump with a message like `chore: Bump version to 0.1.1` and push to the main branch.
 3. (manual) Create new tag with the new version (e.g. `git tag 0.1.1`) and push the tag (`git push origin 0.1.1`).
 4. (auto) GitHub Actions will trigger on the new tag, build the release artifacts, publish new Playground, and create a draft release with the new version. The release notes will be auto-generated based on merged PRs since the last release.
-5. (manual) Check draft release created by GitHub Actions in the [Releases page](https://github.com/guitarrapc/SkiaSharp.QrCode/releases). If the release notes look good, publish the release.
+5. (manual) Check draft release created by GitHub Actions in the [Releases page](https://github.com/guitarrapc/FeatherQR/releases). If the release notes look good, publish the release.
 
 ## License
 

@@ -10,7 +10,7 @@ namespace BlazorWasm;
 /// </summary>
 public sealed class QrOptions
 {
-    public string Content { get; set; } = "https://github.com/guitarrapc/SkiaSharp.QrCode";
+    public string Content { get; set; } = "https://github.com/guitarrapc/FeatherQR";
     /// <summary>Symbology: Standard QR (versions 1-40), Micro QR (M1-M4) or rMQR (R7x43-R17x139).</summary>
     public SymbologyKind Symbology { get; set; } = SymbologyKind.QrCode;
     /// <summary>Error correction level. H is recommended when a logo overlays the code.</summary>
